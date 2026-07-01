@@ -1,0 +1,509 @@
+// Package store is otium's SQLite persistence layer. It owns the schema
+// (embedded, applied idempotently on Open) and all queries. otium is
+// single-replica, so a plain *sql.DB against a WAL-mode SQLite file is enough;
+// there is no connection-pool contention to design around.
+package store
+
+import (
+	"context"
+	"database/sql"
+	_ "embed"
+	"fmt"
+	"strings"
+	"time"
+
+	_ "modernc.org/sqlite"
+)
+
+//go:embed schema.sql
+var schemaSQL string
+
+type DB struct {
+	sql *sql.DB
+}
+
+// Open opens (creating if needed) the SQLite database at path and applies the
+// schema. path may be a file path or ":memory:" for tests.
+func Open(path string) (*DB, error) {
+	dsn := path + "?_pragma=busy_timeout(5000)&_pragma=foreign_keys(1)&_pragma=journal_mode(WAL)"
+	sdb, err := sql.Open("sqlite", dsn)
+	if err != nil {
+		return nil, fmt.Errorf("open sqlite: %w", err)
+	}
+	sdb.SetMaxOpenConns(1) // single writer; avoids SQLITE_BUSY under WAL for a homelab load
+	if _, err := sdb.ExecContext(context.Background(), schemaSQL); err != nil {
+		sdb.Close()
+		return nil, fmt.Errorf("apply schema: %w", err)
+	}
+	return &DB{sql: sdb}, nil
+}
+
+func (db *DB) Close() error { return db.sql.Close() }
+
+// --- users ---
+
+func (db *DB) UpsertUserByUsername(ctx context.Context, username, email string) (*User, error) {
+	_, err := db.sql.ExecContext(ctx,
+		`INSERT INTO users (username, email) VALUES (?, ?)
+		 ON CONFLICT(username) DO UPDATE SET email=excluded.email WHERE excluded.email <> ''`,
+		username, email)
+	if err != nil {
+		return nil, err
+	}
+	var u User
+	var created string
+	err = db.sql.QueryRowContext(ctx,
+		`SELECT id, username, email, name, created_at FROM users WHERE username = ?`, username).
+		Scan(&u.ID, &u.Username, &u.Email, &u.Name, &created)
+	if err != nil {
+		return nil, err
+	}
+	u.CreatedAt = parseTime(created)
+	return &u, nil
+}
+
+// --- feeds ---
+
+func (db *DB) ListFeeds(ctx context.Context, userID int64) ([]Feed, error) {
+	rows, err := db.sql.QueryContext(ctx,
+		`SELECT f.id, f.name, f.slug, f.color, f.sort, f.created_at,
+		        (SELECT COUNT(*) FROM feed_sources fs WHERE fs.feed_id = f.id) AS source_count
+		 FROM feeds f WHERE f.user_id = ? ORDER BY f.sort, f.name`, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []Feed
+	for rows.Next() {
+		var f Feed
+		var created string
+		if err := rows.Scan(&f.ID, &f.Name, &f.Slug, &f.Color, &f.Sort, &created, &f.SourceCount); err != nil {
+			return nil, err
+		}
+		f.CreatedAt = parseTime(created)
+		out = append(out, f)
+	}
+	return out, rows.Err()
+}
+
+func (db *DB) CreateFeed(ctx context.Context, userID int64, name, slug, color string) (*Feed, error) {
+	res, err := db.sql.ExecContext(ctx,
+		`INSERT INTO feeds (user_id, name, slug, color) VALUES (?, ?, ?, ?)`,
+		userID, name, slug, color)
+	if err != nil {
+		return nil, err
+	}
+	id, _ := res.LastInsertId()
+	return &Feed{ID: id, UserID: userID, Name: name, Slug: slug, Color: color}, nil
+}
+
+// SetFeedSources replaces the source membership of a feed.
+func (db *DB) SetFeedSources(ctx context.Context, userID, feedID int64, sourceIDs []int64) error {
+	tx, err := db.sql.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	if _, err := tx.ExecContext(ctx, `DELETE FROM feed_sources WHERE feed_id = ?`, feedID); err != nil {
+		return err
+	}
+	for _, sid := range sourceIDs {
+		if _, err := tx.ExecContext(ctx,
+			`INSERT OR IGNORE INTO feed_sources (feed_id, source_id) VALUES (?, ?)`, feedID, sid); err != nil {
+			return err
+		}
+	}
+	return tx.Commit()
+}
+
+// --- sources ---
+
+func (db *DB) ListSources(ctx context.Context, userID int64) ([]Source, error) {
+	rows, err := db.sql.QueryContext(ctx,
+		`SELECT s.id, s.kind, s.title, s.feed_url, s.homepage_url, s.icon_url, s.weight,
+		        s.state, s.trial_until, s.per_session_cap, s.added_at, s.last_fetch_at, s.fetch_error,
+		        (SELECT COUNT(*) FROM items i WHERE i.source_id = s.id) AS item_count,
+		        (SELECT COUNT(*) FROM items i WHERE i.source_id = s.id
+		           AND NOT EXISTS (SELECT 1 FROM item_state st WHERE st.item_id = i.id AND st.user_id = ?)) AS unseen_count
+		 FROM sources s WHERE s.user_id = ? ORDER BY s.title`, userID, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []Source
+	byID := map[int64]*Source{}
+	for rows.Next() {
+		s, err := scanSource(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, *s)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	for i := range out {
+		byID[out[i].ID] = &out[i]
+	}
+	// attach feed slugs
+	frows, err := db.sql.QueryContext(ctx,
+		`SELECT fs.source_id, f.slug FROM feed_sources fs
+		 JOIN feeds f ON f.id = fs.feed_id WHERE f.user_id = ?`, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer frows.Close()
+	for frows.Next() {
+		var sid int64
+		var slug string
+		if err := frows.Scan(&sid, &slug); err != nil {
+			return nil, err
+		}
+		if s := byID[sid]; s != nil {
+			s.FeedSlugs = append(s.FeedSlugs, slug)
+		}
+	}
+	return out, frows.Err()
+}
+
+type rowScanner interface {
+	Scan(dest ...any) error
+}
+
+func scanSource(r rowScanner) (*Source, error) {
+	var s Source
+	var added string
+	var trialUntil, lastFetch sql.NullString
+	if err := r.Scan(&s.ID, &s.Kind, &s.Title, &s.FeedURL, &s.HomepageURL, &s.IconURL, &s.Weight,
+		&s.State, &trialUntil, &s.PerSessionCap, &added, &lastFetch, &s.FetchError,
+		&s.ItemCount, &s.UnseenCount); err != nil {
+		return nil, err
+	}
+	s.AddedAt = parseTime(added)
+	if trialUntil.Valid {
+		t := parseTime(trialUntil.String)
+		s.TrialUntil = &t
+	}
+	if lastFetch.Valid {
+		t := parseTime(lastFetch.String)
+		s.LastFetchAt = &t
+	}
+	return &s, nil
+}
+
+func (db *DB) CreateSource(ctx context.Context, s *Source) (*Source, error) {
+	res, err := db.sql.ExecContext(ctx,
+		`INSERT INTO sources (user_id, kind, title, feed_url, homepage_url, icon_url, weight, state, per_session_cap)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		s.UserID, def(s.Kind, "rss"), s.Title, s.FeedURL, s.HomepageURL, s.IconURL,
+		defF(s.Weight, 1.0), def(s.State, "followed"), defI(s.PerSessionCap, 2))
+	if err != nil {
+		return nil, err
+	}
+	id, _ := res.LastInsertId()
+	s.ID = id
+	return s, nil
+}
+
+// UpdateSource patches weight, state, per_session_cap, title. Only non-nil
+// fields are applied.
+func (db *DB) UpdateSource(ctx context.Context, userID, id int64, weight *float64, state *string, cap *int, title *string) error {
+	var sets []string
+	var args []any
+	if weight != nil {
+		sets = append(sets, "weight = ?")
+		args = append(args, *weight)
+	}
+	if state != nil {
+		sets = append(sets, "state = ?")
+		args = append(args, *state)
+	}
+	if cap != nil {
+		sets = append(sets, "per_session_cap = ?")
+		args = append(args, *cap)
+	}
+	if title != nil {
+		sets = append(sets, "title = ?")
+		args = append(args, *title)
+	}
+	if len(sets) == 0 {
+		return nil
+	}
+	args = append(args, id, userID)
+	_, err := db.sql.ExecContext(ctx,
+		`UPDATE sources SET `+strings.Join(sets, ", ")+` WHERE id = ? AND user_id = ?`, args...)
+	return err
+}
+
+func (db *DB) DeleteSource(ctx context.Context, userID, id int64) error {
+	_, err := db.sql.ExecContext(ctx, `DELETE FROM sources WHERE id = ? AND user_id = ?`, id, userID)
+	return err
+}
+
+// SourcesToFetch returns non-archived sources for a user, for the ingest loop.
+func (db *DB) SourcesToFetch(ctx context.Context, userID int64) ([]Source, error) {
+	rows, err := db.sql.QueryContext(ctx,
+		`SELECT id, kind, title, feed_url, homepage_url, icon_url, weight, state, per_session_cap
+		 FROM sources WHERE user_id = ? AND state != 'archived'`, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []Source
+	for rows.Next() {
+		var s Source
+		s.UserID = userID
+		if err := rows.Scan(&s.ID, &s.Kind, &s.Title, &s.FeedURL, &s.HomepageURL, &s.IconURL,
+			&s.Weight, &s.State, &s.PerSessionCap); err != nil {
+			return nil, err
+		}
+		out = append(out, s)
+	}
+	return out, rows.Err()
+}
+
+// --- items ---
+
+// UpsertItem inserts an item if its (source_id, external_id) is new. Returns
+// true if a new row was created.
+func (db *DB) UpsertItem(ctx context.Context, it *Item) (bool, error) {
+	res, err := db.sql.ExecContext(ctx,
+		`INSERT INTO items (source_id, external_id, url, title, summary, author, thumbnail_url, media_type, duration_sec, published_at)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		 ON CONFLICT(source_id, external_id) DO NOTHING`,
+		it.SourceID, it.ExternalID, it.URL, it.Title, it.Summary, it.Author, it.ThumbnailURL,
+		def(it.MediaType, "unknown"), it.DurationSec, it.PublishedAt.UTC().Format(time.RFC3339))
+	if err != nil {
+		return false, err
+	}
+	n, _ := res.RowsAffected()
+	return n > 0, nil
+}
+
+func (db *DB) MarkFetched(ctx context.Context, sourceID int64, fetchErr string) error {
+	_, err := db.sql.ExecContext(ctx,
+		`UPDATE sources SET last_fetch_at = datetime('now'), fetch_error = ? WHERE id = ?`,
+		fetchErr, sourceID)
+	return err
+}
+
+// ListRecentItemsBySource returns the newest items for a single source, for the
+// "catch up on this creator" drill-in view.
+func (db *DB) ListRecentItemsBySource(ctx context.Context, userID, sourceID int64, limit int) ([]Item, error) {
+	rows, err := db.sql.QueryContext(ctx,
+		`SELECT id, source_id, url, title, summary, author, thumbnail_url, media_type, duration_sec, published_at, fetched_at
+		 FROM items WHERE source_id = ? ORDER BY published_at DESC LIMIT ?`, sourceID, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	return scanItems(rows)
+}
+
+// Candidates returns unseen items from the given sources (or all followed
+// sources if sourceIDs is empty), newest first, as ranker input. It computes
+// each source's recent cadence in the same pass.
+func (db *DB) Candidates(ctx context.Context, userID int64, sourceIDs []int64, sinceDays, limit int) ([]Candidate, error) {
+	q := `SELECT i.id, i.source_id, i.url, i.title, i.summary, i.author, i.thumbnail_url,
+	             i.media_type, i.duration_sec, i.published_at, i.fetched_at,
+	             s.title, s.weight, s.per_session_cap,
+	             (SELECT COUNT(*) FROM items i2 WHERE i2.source_id = s.id
+	                AND i2.published_at >= datetime('now', ?)) / CAST(? AS REAL) AS cadence
+	      FROM items i
+	      JOIN sources s ON s.id = i.source_id
+	      WHERE s.user_id = ? AND s.state IN ('followed','trial')
+	        AND NOT EXISTS (SELECT 1 FROM item_state st WHERE st.item_id = i.id AND st.user_id = ?)`
+	args := []any{fmt.Sprintf("-%d days", sinceDays), sinceDays, userID, userID}
+	if len(sourceIDs) > 0 {
+		q += ` AND s.id IN (` + placeholders(len(sourceIDs)) + `)`
+		for _, id := range sourceIDs {
+			args = append(args, id)
+		}
+	}
+	q += ` ORDER BY i.published_at DESC LIMIT ?`
+	args = append(args, limit)
+
+	rows, err := db.sql.QueryContext(ctx, q, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []Candidate
+	for rows.Next() {
+		var c Candidate
+		var pub, fetched string
+		if err := rows.Scan(&c.ID, &c.SourceID, &c.URL, &c.Title, &c.Summary, &c.Author, &c.ThumbnailURL,
+			&c.MediaType, &c.DurationSec, &pub, &fetched,
+			&c.SourceTitle, &c.SourceWeight, &c.PerSessionCap, &c.SourceCadence); err != nil {
+			return nil, err
+		}
+		c.PublishedAt = parseTime(pub)
+		c.FetchedAt = parseTime(fetched)
+		out = append(out, c)
+	}
+	return out, rows.Err()
+}
+
+// SourceIDsForFeeds resolves feed slugs to the set of source ids in them.
+func (db *DB) SourceIDsForFeeds(ctx context.Context, userID int64, slugs []string) ([]int64, error) {
+	if len(slugs) == 0 {
+		return nil, nil
+	}
+	q := `SELECT DISTINCT fs.source_id FROM feed_sources fs
+	      JOIN feeds f ON f.id = fs.feed_id
+	      WHERE f.user_id = ? AND f.slug IN (` + placeholders(len(slugs)) + `)`
+	args := []any{userID}
+	for _, s := range slugs {
+		args = append(args, s)
+	}
+	rows, err := db.sql.QueryContext(ctx, q, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []int64
+	for rows.Next() {
+		var id int64
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		out = append(out, id)
+	}
+	return out, rows.Err()
+}
+
+func (db *DB) ItemsByIDs(ctx context.Context, ids []int64) ([]Item, error) {
+	if len(ids) == 0 {
+		return nil, nil
+	}
+	q := `SELECT id, source_id, url, title, summary, author, thumbnail_url, media_type, duration_sec, published_at, fetched_at
+	      FROM items WHERE id IN (` + placeholders(len(ids)) + `)`
+	args := make([]any, len(ids))
+	for i, id := range ids {
+		args[i] = id
+	}
+	rows, err := db.sql.QueryContext(ctx, q, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	return scanItems(rows)
+}
+
+func scanItems(rows *sql.Rows) ([]Item, error) {
+	var out []Item
+	for rows.Next() {
+		var it Item
+		var pub, fetched string
+		if err := rows.Scan(&it.ID, &it.SourceID, &it.URL, &it.Title, &it.Summary, &it.Author,
+			&it.ThumbnailURL, &it.MediaType, &it.DurationSec, &pub, &fetched); err != nil {
+			return nil, err
+		}
+		it.PublishedAt = parseTime(pub)
+		it.FetchedAt = parseTime(fetched)
+		out = append(out, it)
+	}
+	return out, rows.Err()
+}
+
+// --- item state + events ---
+
+func (db *DB) SetItemState(ctx context.Context, userID, itemID int64, state string) error {
+	_, err := db.sql.ExecContext(ctx,
+		`INSERT INTO item_state (user_id, item_id, state, acted_at) VALUES (?, ?, ?, datetime('now'))
+		 ON CONFLICT(user_id, item_id) DO UPDATE SET state=excluded.state, acted_at=excluded.acted_at`,
+		userID, itemID, state)
+	return err
+}
+
+// MarkSurfaced records that a set of items was shown in a session (state
+// 'surfaced', not overwriting a stronger state like 'liked').
+func (db *DB) MarkSurfaced(ctx context.Context, userID int64, itemIDs []int64) error {
+	tx, err := db.sql.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	for _, id := range itemIDs {
+		if _, err := tx.ExecContext(ctx,
+			`INSERT INTO item_state (user_id, item_id, state, surfaced_at)
+			 VALUES (?, ?, 'surfaced', datetime('now'))
+			 ON CONFLICT(user_id, item_id) DO UPDATE SET surfaced_at=COALESCE(item_state.surfaced_at, excluded.surfaced_at)`,
+			userID, id); err != nil {
+			return err
+		}
+	}
+	return tx.Commit()
+}
+
+func (db *DB) LogEvent(ctx context.Context, userID int64, typ string, itemID, sourceID *int64, sessionID, detail string) error {
+	_, err := db.sql.ExecContext(ctx,
+		`INSERT INTO events (user_id, type, item_id, source_id, session_id, detail) VALUES (?, ?, ?, ?, ?, ?)`,
+		userID, typ, nullInt(itemID), nullInt(sourceID), nullStr(sessionID), detail)
+	return err
+}
+
+// --- sessions ---
+
+func (db *DB) SaveSession(ctx context.Context, id string, userID int64, low, high int, themes string, itemIDs []int64) error {
+	_, err := db.sql.ExecContext(ctx,
+		`INSERT INTO sessions (id, user_id, min_low, min_high, themes, item_ids) VALUES (?, ?, ?, ?, ?, ?)`,
+		id, userID, low, high, themes, joinInts(itemIDs))
+	return err
+}
+
+// --- helpers ---
+
+func parseTime(s string) time.Time {
+	for _, layout := range []string{time.RFC3339, "2006-01-02 15:04:05", "2006-01-02T15:04:05Z"} {
+		if t, err := time.Parse(layout, s); err == nil {
+			return t.UTC()
+		}
+	}
+	return time.Time{}
+}
+
+func placeholders(n int) string {
+	if n <= 0 {
+		return ""
+	}
+	return strings.TrimSuffix(strings.Repeat("?,", n), ",")
+}
+
+func def(v, d string) string {
+	if v == "" {
+		return d
+	}
+	return v
+}
+func defF(v, d float64) float64 {
+	if v == 0 {
+		return d
+	}
+	return v
+}
+func defI(v, d int) int {
+	if v == 0 {
+		return d
+	}
+	return v
+}
+func nullInt(v *int64) any {
+	if v == nil {
+		return nil
+	}
+	return *v
+}
+func nullStr(s string) any {
+	if s == "" {
+		return nil
+	}
+	return s
+}
+func joinInts(ids []int64) string {
+	parts := make([]string, len(ids))
+	for i, id := range ids {
+		parts[i] = fmt.Sprintf("%d", id)
+	}
+	return strings.Join(parts, ",")
+}

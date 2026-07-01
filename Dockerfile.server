@@ -1,0 +1,17 @@
+FROM golang:1.26-alpine AS builder
+WORKDIR /src
+COPY go.mod go.sum ./
+RUN go mod download
+COPY . .
+# CGO off: modernc.org/sqlite is pure Go, so the binary stays static.
+RUN CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /bin/server ./cmd/server
+
+FROM alpine:3.21
+RUN apk add --no-cache ca-certificates tzdata
+COPY --from=builder /bin/server /bin/server
+# Data (SQLite file) lives on a mounted volume in prod.
+VOLUME ["/data"]
+ENV OTIUM_DB_PATH=/data/otium.db
+EXPOSE 8080
+USER 1000:1000
+ENTRYPOINT ["/bin/server"]
