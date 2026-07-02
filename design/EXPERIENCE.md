@@ -118,17 +118,35 @@ center origin to the knob so displacement is legible. Release holds the value
 (it does not spring back - you're setting an intent, not firing a control).
 
 **Axes:**
-- **Vertical** = session length. Down = quick (≈5 min), up = long (≈60 min).
-- **Horizontal** = variety/spread. Left = focused (tight range, fewer sources),
-  right = varied (wide range, more sources).
+- **Horizontal** = session length. Left ≈ 5 min, right ≈ 60 min. This is the
+  primary choice: how long do you want to be here.
+- **Vertical** = flexibility of that length. Bottom = an *exact* target ("just 5
+  minutes"); dragging up *fans the range out* around the center (e.g. center 15
+  min at full flex → ~5-25 min). At the short end there's little room to fan, so
+  short sessions are inherently near-exact.
+
+We do **not** show a predicted item count. Content length varies too much (a
+30s skit vs a 40-min longform) to gauge items honestly, and the choice the user
+is actually making is *time*, not quantity. The readout is a **minute range**.
+
+**Why flexibility is a real knob (it changes the builder's job):** an exact
+target is a hard constraint - to land near a precise duration the builder may be
+forced to include a weaker short item just to fill the gap, trading content
+quality for precision. A wide range is slack - the builder takes the
+best-scoring items that fit anywhere in the window and stops when it's in range,
+optimizing rank instead of hitting a number. So flexibility trades
+duration-precision for content-quality. (v1 does greedy-by-score within the
+window; treating it as "maximize value subject to fitting the window" - a small
+knapsack - is a clean later refinement.)
 
 **Feedback (this is what makes it teach itself):**
-- Four corner labels name the moods: `quick·focused`, `quick·varied`,
-  `long·focused`, `long·varied`. The corner **nearest the knob brightens**.
-- A plain-language **descriptor** updates live ("A quick, focused skim" → "A
-  long, wide-ranging session"), so the abstract 2-axis space is always narrated
-  in words.
-- The **readout** (minutes + item estimate) updates continuously.
+- Edge labels name the axes: `5 min`↔`1 hr` (left/right) and `exact`/`flexible`
+  (bottom/top). The label the knob is nearest **brightens** on each axis.
+- A plain-language **descriptor** updates live ("Exactly 5 minutes" → "About 15
+  minutes, give or take" → "Anywhere from 5 to 25 minutes"), narrating the
+  gesture in words.
+- The **readout** is the minute range (a single number when exact), updating
+  continuously.
 - **Tap the descriptor (or center) to recenter.**
 
 **Touch requirements:**

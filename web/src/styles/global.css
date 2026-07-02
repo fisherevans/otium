@@ -159,34 +159,40 @@ h1.display {
   background-position: center;
   opacity: 0.5;
 }
-.pad-corner {
+/* axis edge labels: X = session length, Y = flexibility of the range */
+.pad-edge {
   position: absolute;
   color: var(--ink-faint);
   font-size: 11px;
-  letter-spacing: 0.03em;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
   pointer-events: none;
   transition: color 0.15s ease, opacity 0.15s ease;
-  opacity: 0.7;
+  opacity: 0.6;
 }
-.pad-corner.on {
+.pad-edge.on {
   color: var(--accent);
   opacity: 1;
 }
-.pad-corner.tl {
+.pad-edge.left {
   left: 12px;
-  top: 12px;
+  top: 50%;
+  transform: translateY(-50%);
 }
-.pad-corner.tr {
+.pad-edge.right {
   right: 12px;
-  top: 12px;
+  top: 50%;
+  transform: translateY(-50%);
 }
-.pad-corner.bl {
-  left: 12px;
-  bottom: 12px;
+.pad-edge.top {
+  top: 10px;
+  left: 50%;
+  transform: translateX(-50%);
 }
-.pad-corner.br {
-  right: 12px;
-  bottom: 12px;
+.pad-edge.bottom {
+  bottom: 10px;
+  left: 50%;
+  transform: translateX(-50%);
 }
 /* tether: a line from the center origin out to the knob (analog-stick feel) */
 .pad-tether {

@@ -2,27 +2,28 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { api, type Feed, type Source } from "@/api/client";
 
-// The pad turns one gesture into an intent: vertical = how long, horizontal =
-// how varied. Fisher's idea - "I have five minutes" is a flick up a little;
-// "half an hour on the couch" is up and to the right.
-function padToRange(x: number, y: number): [number, number] {
-  const center = Math.round(5 + y * 55); // 5..60 min at the middle of the range
-  const spread = 0.12 + x * 0.6; // tight (12%) to loose (72%)
-  const low = Math.max(2, Math.round(center * (1 - spread / 2)));
-  const high = Math.round(center * (1 + spread / 2));
-  return [low, high];
+const round5 = (v: number) => Math.max(0, Math.round(v / 5) * 5);
+
+// The pad encodes an intent in one gesture:
+//   X (left->right) = session length, ~5 min to ~60 min.
+//   Y (bottom->top) = how flexible that length is. Bottom = an exact target;
+//     drag up and the range fans out around the center (e.g. center 15 min at
+//     full flex -> 5-25 min). A wider range gives the session builder slack to
+//     optimize *which* items it stages instead of being forced to hit a number.
+function padToRange(x: number, y: number): { low: number; high: number; center: number; h: number } {
+  const center = Math.max(5, round5(5 + x * 55)); // 5..60
+  const hmax = Math.min(center - 5, 20); // how far the range can fan at this length
+  const h = round5(y * hmax);
+  const low = Math.max(2, center - h);
+  const high = center + h;
+  return { low, high, center, h };
 }
 
-// Plain-language descriptor of the current pad position - the pad teaches itself
-// as you drag rather than making you decode two axes.
-function describe(xHigh: boolean, yHigh: boolean): string {
-  if (yHigh && xHigh) return "A long, wide-ranging session";
-  if (yHigh && !xHigh) return "A long, focused sit";
-  if (!yHigh && xHigh) return "A quick, varied sampler";
-  return "A quick, focused skim";
+function describe(low: number, high: number, center: number, h: number): string {
+  if (h === 0) return `Exactly ${center} minutes`;
+  if (h <= 10) return `About ${center} minutes, give or take`;
+  return `Anywhere from ${low} to ${high} minutes`;
 }
-
-const AVG_ITEM_MIN = 4.5; // rough mixed avg (short 1m, article 4m, long 10m)
 
 export default function HomePage() {
   const nav = useNavigate();
@@ -39,24 +40,19 @@ export default function HomePage() {
     api.sources().then(setSources).catch(() => setSources([]));
   }, []);
 
-  const [low, high] = padToRange(pos.x, pos.y);
-  const xHigh = pos.x >= 0.5;
-  const yHigh = pos.y >= 0.5;
+  const { low, high, center, h } = padToRange(pos.x, pos.y);
+  const xRight = pos.x >= 0.5;
+  const yUp = pos.y >= 0.5;
 
-  // How much unseen supply the current theme selection actually has, so the
-  // item estimate is honest instead of a made-up number.
+  // Unseen supply for the current theme selection - used only to disable Build
+  // (and say so) when there's genuinely nothing new. Not shown as a count.
   const unseenForSelection = useMemo(() => {
     const match = picked.length
       ? sources.filter((s) => (s.feed_slugs ?? []).some((slug) => picked.includes(slug)))
       : sources;
     return match.reduce((n, s) => n + (s.unseen_count ?? 0), 0);
   }, [sources, picked]);
-
-  const itemsEst = useMemo(() => {
-    const mid = (low + high) / 2;
-    const raw = Math.max(1, Math.round(mid / AVG_ITEM_MIN));
-    return sources.length ? Math.min(raw, unseenForSelection) : raw;
-  }, [low, high, unseenForSelection, sources.length]);
+  const nothingNew = sources.length > 0 && unseenForSelection === 0;
 
   function moveFrom(e: React.PointerEvent) {
     const el = padRef.current;
@@ -67,9 +63,6 @@ export default function HomePage() {
     setPos({ x, y });
   }
 
-  // Analog-stick drag: all handlers stay on the pad element (more reliable on
-  // mobile than window listeners), pointer capture keeps the drag alive if the
-  // finger slides off the pad.
   function onDown(e: React.PointerEvent) {
     padRef.current?.setPointerCapture(e.pointerId);
     setDragging(true);
@@ -97,13 +90,10 @@ export default function HomePage() {
     nav(`/session?${qs.toString()}`);
   }
 
-  // Which corner label is "active" - the mood nearest the knob, brightened.
-  const activeCorner = `${yHigh ? "t" : "b"}${xHigh ? "r" : "l"}`;
-
   return (
     <div>
       <h1 className="display">How much time?</h1>
-      <p className="sub">Drag up for longer, right for a wider mix.</p>
+      <p className="sub">Left to right: how long. Up: how flexible the range.</p>
 
       <div className="pad-wrap">
         <div
@@ -115,11 +105,11 @@ export default function HomePage() {
           onPointerCancel={onUp}
         >
           <div className="pad-grid" />
-          <span className={`pad-corner tl ${activeCorner === "tl" ? "on" : ""}`}>long · focused</span>
-          <span className={`pad-corner tr ${activeCorner === "tr" ? "on" : ""}`}>long · varied</span>
-          <span className={`pad-corner bl ${activeCorner === "bl" ? "on" : ""}`}>quick · focused</span>
-          <span className={`pad-corner br ${activeCorner === "br" ? "on" : ""}`}>quick · varied</span>
-          {/* tether from the center origin to the knob - the analog-stick look */}
+          {/* axis labels: X = length, Y = flexibility */}
+          <span className={`pad-edge left ${!xRight ? "on" : ""}`}>5 min</span>
+          <span className={`pad-edge right ${xRight ? "on" : ""}`}>1 hr</span>
+          <span className={`pad-edge bottom ${!yUp ? "on" : ""}`}>exact</span>
+          <span className={`pad-edge top ${yUp ? "on" : ""}`}>flexible</span>
           <svg className="pad-tether" viewBox="0 0 100 100" preserveAspectRatio="none">
             <circle className="pad-origin" cx="50" cy="50" r="1.4" />
             <line x1="50" y1="50" x2={pos.x * 100} y2={(1 - pos.y) * 100} />
@@ -130,17 +120,17 @@ export default function HomePage() {
           />
         </div>
         <p className="pad-descriptor" onClick={recenter} title="tap to recenter">
-          {describe(xHigh, yHigh)}
+          {describe(low, high, center, h)}
         </p>
         <div className="pad-readout">
-          <span className="big">
-            {low}–{high}
-          </span>
+          <span className="big">{h === 0 ? center : `${low}–${high}`}</span>
           <span className="small">min</span>
-          <span className="dot">·</span>
-          <span className="small">
-            {sources.length && unseenForSelection === 0 ? "nothing unseen" : `~${itemsEst} item${itemsEst === 1 ? "" : "s"}`}
-          </span>
+          {h > 0 && (
+            <>
+              <span className="dot">·</span>
+              <span className="small">flexible</span>
+            </>
+          )}
         </div>
       </div>
 
@@ -164,8 +154,8 @@ export default function HomePage() {
         </>
       )}
 
-      <button className="btn" onClick={build} disabled={busy || (sources.length > 0 && unseenForSelection === 0)}>
-        Build my session
+      <button className="btn" onClick={build} disabled={busy || nothingNew}>
+        {nothingNew ? "Nothing new right now" : "Build my session"}
       </button>
     </div>
   );
