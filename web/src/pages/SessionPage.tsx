@@ -1,10 +1,50 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { api, type Selected } from "@/api/client";
+import { api, type Item, type Selected } from "@/api/client";
 
-function fmtMin(sec: number) {
+function clock(sec: number) {
+  const m = Math.floor(sec / 60);
+  const s = Math.round(sec % 60);
+  return `${m}:${String(s).padStart(2, "0")}`;
+}
+function mins(sec: number) {
   const m = Math.round(sec / 60);
   return m < 1 ? "<1 min" : `${m} min`;
+}
+
+// Media preview, rendered as e-ink: real thumbnail (grayscaled) when we have one,
+// otherwise a dithered placeholder, with the right aspect + affordances per type.
+function Media({ item }: { item: Item }) {
+  const t = item.media_type;
+  if (t === "audio") {
+    return (
+      <div className="wave" aria-label="audio">
+        {Array.from({ length: 40 }, (_, i) => (
+          <i key={i} style={{ height: `${20 + Math.abs(Math.sin(i * 1.7)) * 60}%` }} />
+        ))}
+      </div>
+    );
+  }
+  if (t === "short" || t === "long" || t === "live") {
+    const vertical = t === "short";
+    return (
+      <div className={`media ${vertical ? "v" : "h"}`}>
+        {item.thumbnail_url ? <img src={item.thumbnail_url} alt="" loading="lazy" /> : <div className="dither" />}
+        <div className="dither" />
+        <div className="play" />
+        {item.duration_sec > 0 && <span className="dur">{clock(item.duration_sec)}</span>}
+      </div>
+    );
+  }
+  if (t === "article" && item.thumbnail_url) {
+    return (
+      <div className="media h">
+        <img src={item.thumbnail_url} alt="" loading="lazy" />
+        <div className="dither" />
+      </div>
+    );
+  }
+  return null; // quote / plain text: no media
 }
 
 type Checkin = null | "low" | "high" | "fast";
@@ -19,20 +59,24 @@ export default function SessionPage() {
   const highSec = high * 60;
 
   const [items, setItems] = useState<Selected[]>([]);
-  const [i, setI] = useState(0); // index of the one item on screen
+  const [current, setCurrent] = useState(0);
   const [sessionId, setSessionId] = useState("");
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const [exhausted, setExhausted] = useState(false);
   const [err, setErr] = useState("");
-  const [acted, setActed] = useState<Record<number, string>>({});
+  const [liked, setLiked] = useState<Set<number>>(new Set());
+  const [saved, setSaved] = useState<Set<number>>(new Set());
 
   const [elapsed, setElapsed] = useState(0);
   const [checkin, setCheckin] = useState<Checkin>(null);
+  const [flash, setFlash] = useState(0);
   const ackLow = useRef(false);
   const ackHigh = useRef(false);
-  const skipTimes = useRef<number[]>([]);
+  const advances = useRef<number[]>([]);
   const shownIds = useRef<Set<number>>(new Set());
+  const stageRef = useRef<HTMLDivElement>(null);
+  const itemEls = useRef<(HTMLDivElement | null)[]>([]);
 
   const build = useCallback(
     async (append: boolean): Promise<number> => {
@@ -57,17 +101,16 @@ export default function SessionPage() {
     [params.toString()],
   );
 
-  // Fresh session on intent change.
   useEffect(() => {
     setItems([]);
-    setI(0);
+    setCurrent(0);
     setExhausted(false);
     setErr("");
     setLoading(true);
     setElapsed(0);
     ackLow.current = false;
     ackHigh.current = false;
-    skipTimes.current = [];
+    advances.current = [];
     shownIds.current = new Set();
     build(false).finally(() => setLoading(false));
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -81,16 +124,6 @@ export default function SessionPage() {
     return () => window.clearInterval(id);
   }, []);
 
-  // The item currently on screen is, by definition, seen.
-  const current = items[i];
-  useEffect(() => {
-    if (!current) return;
-    if (!shownIds.current.has(current.item.id)) {
-      shownIds.current.add(current.item.id);
-      api.itemEvent(current.item.id, "seen", sessionId).catch(() => {});
-    }
-  }, [current, sessionId]);
-
   // Pacing check-ins.
   useEffect(() => {
     if (checkin) return;
@@ -103,6 +136,36 @@ export default function SessionPage() {
     }
   }, [elapsed, lowSec, highSec, low, high, checkin]);
 
+  // Scroll-snap: an IntersectionObserver marks the centered item as current,
+  // marks it seen, tracks advance pace (fast-flicking check-in), and refills.
+  useEffect(() => {
+    const stage = stageRef.current;
+    if (!stage) return;
+    const obs = new IntersectionObserver(
+      (entries) => {
+        for (const en of entries) {
+          if (!en.isIntersecting) continue;
+          const idx = Number((en.target as HTMLElement).dataset.idx);
+          if (Number.isNaN(idx)) continue;
+          setCurrent(idx);
+          const it = items[idx];
+          if (it && !shownIds.current.has(it.item.id)) {
+            shownIds.current.add(it.item.id);
+            api.itemEvent(it.item.id, "seen", sessionId).catch(() => {});
+            const now = Date.now();
+            advances.current = [...advances.current, now].slice(-4);
+            if (advances.current.filter((t) => now - t < 8000).length >= 3 && !checkin) setCheckin("fast");
+          }
+          if (idx >= items.length - 1 && elapsed < highSec && !exhausted && !loadingMore) void loadMore();
+        }
+      },
+      { root: stage, threshold: 0.6 },
+    );
+    itemEls.current.forEach((el) => el && obs.observe(el));
+    return () => obs.disconnect();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [items, sessionId, elapsed, exhausted, loadingMore]);
+
   async function loadMore(): Promise<number> {
     if (loadingMore || exhausted) return 0;
     setLoadingMore(true);
@@ -111,169 +174,147 @@ export default function SessionPage() {
     return n;
   }
 
-  // Advance to the next item. A `skip` carries a negative signal; a plain next is
-  // neutral. Refills when we run off the end and there's still time.
-  async function advance(signal?: "skip" | "like") {
-    const cur = items[i];
-    if (cur && signal) {
-      setActed((a) => ({ ...a, [cur.item.id]: signal }));
-      api.itemEvent(cur.item.id, signal, sessionId).catch(() => {});
-      if (signal === "skip") {
-        const now = Date.now();
-        skipTimes.current = [...skipTimes.current, now].slice(-4);
-        if (skipTimes.current.filter((t) => now - t < 8000).length >= 3 && !checkin) {
-          setCheckin("fast");
-          return; // hold on the current item until they answer
-        }
-      }
-    }
-    const next = i + 1;
-    if (next < items.length) {
-      setI(next);
-      return;
-    }
-    // Off the end: refill if we're still inside the budget.
-    if (!exhausted && elapsed < highSec) {
-      const got = await loadMore();
-      if (got > 0) setI(next);
-      else setI(next); // exhausted now -> end screen
-    } else {
-      setI(next);
+  function scrollTo(idx: number) {
+    const el = itemEls.current[idx];
+    if (el) {
+      setFlash((f) => f + 1);
+      el.scrollIntoView({ behavior: "smooth", block: "center" });
     }
   }
 
-  function openItem() {
-    const cur = items[i];
+  const cur = items[current];
+  const atEnd = current >= items.length;
+
+  function open() {
     if (!cur) return;
-    setActed((a) => ({ ...a, [cur.item.id]: "open" }));
     api.itemEvent(cur.item.id, "open", sessionId).catch(() => {});
     window.open(cur.item.url, "_blank", "noopener");
   }
-
+  function like() {
+    if (!cur) return;
+    setLiked((s) => {
+      const n = new Set(s);
+      n.has(cur.item.id) ? n.delete(cur.item.id) : n.add(cur.item.id);
+      return n;
+    });
+    api.itemEvent(cur.item.id, "like", sessionId).catch(() => {});
+  }
+  function save() {
+    if (!cur) return;
+    setSaved((s) => {
+      const n = new Set(s);
+      n.has(cur.item.id) ? n.delete(cur.item.id) : n.add(cur.item.id);
+      return n;
+    });
+    api.itemEvent(cur.item.id, "save", sessionId).catch(() => {});
+  }
+  function next() {
+    if (current < items.length - 1) scrollTo(current + 1);
+    else if (!exhausted && elapsed < highSec) loadMore().then(() => scrollTo(current + 1));
+    else scrollTo(items.length); // end panel
+  }
   function dismissCheckin() {
     setCheckin(null);
-    skipTimes.current = [];
+    advances.current = [];
   }
 
   if (err) return <div className="err">Couldn't build a session: {err}</div>;
   if (loading) return <div className="spinner">composing…</div>;
-
-  const budgetLabel = low === high ? `${low} min` : `${low}–${high} min`;
-  const progress = Math.min(1, elapsed / highSec);
-
-  const timeHeader = (
-    <>
-      <div className="timebar">
-        <div className="timebar-fill" style={{ width: `${progress * 100}%` }} />
-      </div>
-      <div className="section-label" style={{ marginTop: 8 }}>
-        {fmtMin(elapsed)} of {budgetLabel}
-        {themes.length > 0 && ` · ${themes.join(", ")}`}
-      </div>
-    </>
-  );
-
-  const checkinBanner = checkin && (
-    <div className="checkin">
-      {checkin === "low" && (
-        <>
-          <p>You've spent about {low} min. Keep going, or wrap up?</p>
-          <div className="checkin-actions">
-            <button className="act" onClick={dismissCheckin}>Keep going</button>
-            <button className="act open" onClick={() => nav("/")}>Wrap up</button>
-          </div>
-        </>
-      )}
-      {checkin === "high" && (
-        <>
-          <p>That's about {high} min — your session's worth. Done, or a few more?</p>
-          <div className="checkin-actions">
-            <button className="act" onClick={dismissCheckin}>A few more</button>
-            <button className="act open" onClick={() => nav("/")}>Done</button>
-          </div>
-        </>
-      )}
-      {checkin === "fast" && (
-        <>
-          <p>Flicking past these? Want a different mix, or keep going?</p>
-          <div className="checkin-actions">
-            <button className="act" onClick={dismissCheckin}>Keep going</button>
-            <button className="act open" onClick={() => nav("/")}>Change mix</button>
-          </div>
-        </>
-      )}
-    </div>
-  );
-
-  // Ran off the end of the queue.
-  if (!current) {
-    if (loadingMore) {
-      return (
-        <div>
-          {timeHeader}
-          <div className="spinner">finding more…</div>
-        </div>
-      );
-    }
+  if (items.length === 0) {
     return (
-      <div>
-        {timeHeader}
-        <div className="center">
-          <p className="display">{exhausted ? "That's everything new." : "That's your session."}</p>
-          <p style={{ color: "var(--ink-soft)" }}>
-            {exhausted
-              ? `You're caught up on ${themes.length ? themes.join(", ") : "everything you follow"}.`
-              : `You've spent about ${fmtMin(elapsed)}.`}
-          </p>
-          {!exhausted && (
-            <button className="btn ghost" onClick={() => advance()}>A few more</button>
-          )}
-          <button className="btn" onClick={() => nav("/")}>Done</button>
-        </div>
+      <div className="center">
+        <p className="display">Nothing new to surface.</p>
+        <p>You're caught up on {themes.length ? themes.join(", ") : "everything you follow"}.</p>
+        <button className="btn ghost" onClick={() => nav("/")}>Back to intent</button>
       </div>
     );
   }
 
-  const state = acted[current.item.id];
+  const progress = Math.min(1, elapsed / highSec);
+  const isLastReal = current === items.length - 1;
+
   return (
-    <div>
-      {timeHeader}
-      {checkinBanner}
-
-      <article className="card focus">
-        <span className="reason">{current.reason}</span>
-        <h3>{current.item.title}</h3>
-        <div className="meta">
-          <span>{current.source_title}</span>
-          <span>·</span>
-          <span>{fmtMin(current.est_duration_sec)}</span>
-          {current.item.media_type !== "unknown" && (
-            <>
-              <span>·</span>
-              <span>{current.item.media_type}</span>
-            </>
-          )}
+    <div className="focus-session">
+      {flash > 0 && <span className="eink-flash" key={flash} />}
+      <div className="timestrip">
+        <div className="timebar">
+          <div className="timebar-fill" style={{ width: `${progress * 100}%` }} />
         </div>
-        {current.item.summary && <p className="summary">{current.item.summary}</p>}
+        <span className="clock">
+          {mins(elapsed)} / {low === high ? `${low}m` : `${low}–${high}m`}
+        </span>
+      </div>
 
-        <div className="focus-open">
-          <button className="btn" onClick={openItem}>Open ↗</button>
+      {checkin && (
+        <div className="checkin">
+          {checkin === "low" && <p>You've spent about {low} min. Keep going, or wrap up?</p>}
+          {checkin === "high" && <p>That's about {high} min — your session's worth.</p>}
+          {checkin === "fast" && <p>Flicking past these? Want a different mix?</p>}
+          <div className="checkin-actions">
+            <button className="mini" onClick={dismissCheckin}>
+              {checkin === "fast" ? "Keep going" : "Keep going"}
+            </button>
+            <button className="mini solid" onClick={() => nav("/")}>
+              {checkin === "fast" ? "Change mix" : checkin === "high" ? "Done" : "Wrap up"}
+            </button>
+          </div>
         </div>
-        <div className="actions">
-          <button className="act" onClick={() => advance("skip")}>Skip</button>
-          <button
-            className={`act ${state === "like" ? "on" : ""}`}
-            onClick={() => advance("like")}
+      )}
+
+      <div className="stage" ref={stageRef}>
+        {items.map((it, i) => (
+          <div
+            className={`snap ${i === current ? "" : "away"}`}
+            key={`${it.item.id}-${i}`}
+            data-idx={i}
+            ref={(el) => {
+              itemEls.current[i] = el;
+            }}
           >
-            Like
-          </button>
-          <button className="act open" onClick={() => advance()}>Next →</button>
+            <span className="reason">{it.reason}</span>
+            <Media item={it.item} />
+            <h3>{it.item.title}</h3>
+            <div className="meta">
+              <span>{it.source_title}</span>
+              <span>·</span>
+              <span>{it.item.media_type === "audio" ? mins(it.item.duration_sec || it.est_duration_sec) : it.item.media_type}</span>
+            </div>
+            {it.item.summary && <p className="excerpt">{it.item.summary}</p>}
+          </div>
+        ))}
+        {/* end panel */}
+        <div
+          className="snap"
+          data-idx={items.length}
+          ref={(el) => {
+            itemEls.current[items.length] = el;
+          }}
+        >
+          <div className="center" style={{ padding: "20px 0" }}>
+            <p className="display">{exhausted ? "That's everything new." : "That's your session."}</p>
+            <p>{exhausted ? `Caught up on ${themes.length ? themes.join(", ") : "everything"}.` : `About ${mins(elapsed)} spent.`}</p>
+            {!exhausted && (
+              <button className="btn ghost" onClick={() => loadMore().then(() => scrollTo(current))}>A few more</button>
+            )}
+            <button className="btn" onClick={() => nav("/")}>Done</button>
+          </div>
         </div>
-      </article>
+      </div>
 
-      <p className="center" style={{ color: "var(--ink-faint)", fontSize: 12, padding: "6px 0 0" }}>
-        one at a time · {state ? state : "unread"}
-      </p>
+      <div className="actionbar">
+        <button className="act-btn" onClick={open} disabled={atEnd}>
+          <span className="ic">↗</span>Open
+        </button>
+        <button className={`act-btn ${cur && liked.has(cur.item.id) ? "on" : ""}`} onClick={like} disabled={atEnd}>
+          <span className="ic">♥</span>Like
+        </button>
+        <button className={`act-btn ${cur && saved.has(cur.item.id) ? "on" : ""}`} onClick={save} disabled={atEnd}>
+          <span className="ic">▣</span>Save
+        </button>
+        <button className="act-btn" onClick={next}>
+          <span className="ic">↓</span>{isLastReal && !exhausted ? "More" : atEnd ? "Done" : "Next"}
+        </button>
+      </div>
     </div>
   );
 }

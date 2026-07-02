@@ -1,26 +1,31 @@
-/* otium - the visual language is calm, warm, and deliberate. Ink on warm paper,
-   a serif for display (this is a reading app, and otium is a classical word),
-   generous space, no urgency. Mobile-first: Fisher uses it on his phone. */
+/* otium - e-ink theme.
+ *
+ * The chosen visual language: ink on paper. Pure grayscale, crisp serif body,
+ * a Didot display, hard hairline rules, dithered media, and a deliberately slow
+ * "e-ink refresh" feel. This is the real theme wired in from the design study
+ * (design/prototypes/eink/eink-refined.html). Mobile-first; the app fills the
+ * phone (no device frame - that was only for desktop previews). */
 
 :root {
-  --bg: #17150f;
-  --bg-raised: #1f1c15;
-  --bg-card: #221f17;
-  --ink: #ece4d3;
-  --ink-soft: #b6ac96;
-  --ink-faint: #7d7460;
-  --line: #33302610;
-  --border: #3a352a;
-  --accent: #c9a227; /* muted gold - otium/leisure, not alarm */
-  --accent-soft: #c9a2271f;
-  --good: #7fa66a;
-  --radius: 14px;
-  --serif: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, "Times New Roman", serif;
-  --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --paper: #f4f2ec;
+  --paper-2: #efece3;
+  --paper-3: #e7e3d6;
+  --ink: #1a1815;
+  --ink-soft: #4b4740;
+  --ink-mute: #8b857a;
+  --rule: #c9c3b5;
+  --rule-hard: #1a1815;
+  --hair: #d9d4c8;
+  --serif: "Charter", "Iowan Old Style", "Georgia", serif;
+  --grot: "Helvetica Neue", "Arial", sans-serif;
+  --mono: "SF Mono", "Menlo", ui-monospace, monospace;
+  --didot: "Didot", "Hoefler Text", "Baskerville", serif;
+  --bar-h: 58px;
 }
 
 * {
   box-sizing: border-box;
+  -webkit-tap-highlight-color: transparent;
 }
 
 html,
@@ -31,21 +36,23 @@ body,
 }
 
 body {
-  background: var(--bg);
+  background: var(--paper);
   color: var(--ink);
-  font-family: var(--sans);
+  font-family: var(--serif);
   -webkit-font-smoothing: antialiased;
   line-height: 1.5;
+  /* faint paper grain */
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='140' height='140'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/><feColorMatrix type='saturate' values='0'/></filter><rect width='140' height='140' filter='url(%23n)' opacity='0.045'/></svg>");
 }
 
 a {
   color: inherit;
   text-decoration: none;
 }
-
 button {
   font-family: inherit;
   cursor: pointer;
+  color: inherit;
 }
 
 .app {
@@ -62,26 +69,33 @@ button {
   display: flex;
   align-items: baseline;
   justify-content: space-between;
-  padding: 22px 20px 10px;
+  padding: 18px 20px 10px;
+  border-bottom: 1.5px solid var(--rule-hard);
 }
 .wordmark {
-  font-family: var(--serif);
-  font-size: 26px;
-  letter-spacing: 0.02em;
-  font-style: italic;
-}
-.wordmark::first-letter {
-  color: var(--accent);
+  font-family: var(--didot);
+  font-size: 30px;
+  line-height: 0.9;
+  letter-spacing: 0.01em;
 }
 .tagline {
-  font-size: 12px;
-  color: var(--ink-faint);
-  letter-spacing: 0.04em;
+  font-family: var(--grot);
+  font-size: 10px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--ink-mute);
 }
 
 .content {
   flex: 1;
-  padding: 8px 20px 96px;
+  padding: 14px 20px 96px;
+  min-height: 0;
+}
+/* focused session route: no padding, no bottom nav - the session fills it */
+.content-session {
+  flex: 1;
+  padding: 0;
+  min-height: 0;
 }
 
 /* --- bottom nav --- */
@@ -89,112 +103,110 @@ button {
   position: sticky;
   bottom: 0;
   display: flex;
-  gap: 4px;
-  background: color-mix(in srgb, var(--bg) 88%, transparent);
-  backdrop-filter: blur(10px);
-  border-top: 1px solid var(--border);
-  padding: 8px 12px calc(8px + env(safe-area-inset-bottom));
+  background: var(--paper);
+  border-top: 1.5px solid var(--rule-hard);
+  padding: 0 0 env(safe-area-inset-bottom);
 }
 .nav a {
   flex: 1;
   text-align: center;
-  padding: 8px 4px;
-  font-size: 12px;
-  letter-spacing: 0.05em;
-  text-transform: lowercase;
-  color: var(--ink-faint);
-  border-radius: 10px;
+  padding: 13px 4px;
+  font-family: var(--grot);
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ink-mute);
+}
+.nav a + a {
+  border-left: 1px solid var(--hair);
 }
 .nav a.active {
   color: var(--ink);
-  background: var(--accent-soft);
+  background: var(--paper-3);
 }
 
 /* --- headings --- */
 h1.display {
-  font-family: var(--serif);
+  font-family: var(--didot);
   font-weight: 400;
   font-size: 30px;
-  line-height: 1.15;
-  margin: 14px 0 4px;
+  line-height: 1.0;
+  margin: 12px 0 8px;
 }
 .sub {
   color: var(--ink-soft);
-  font-size: 15px;
-  margin: 0 0 20px;
+  font-family: var(--grot);
+  font-size: 13px;
+  margin: 0 0 18px;
 }
 .section-label {
-  font-size: 12px;
-  letter-spacing: 0.12em;
+  font-family: var(--grot);
+  font-size: 10px;
+  letter-spacing: 0.16em;
   text-transform: uppercase;
-  color: var(--ink-faint);
-  margin: 24px 0 10px;
+  color: var(--ink-mute);
+  border-bottom: 1px solid var(--hair);
+  padding-bottom: 6px;
+  margin: 22px 0 12px;
 }
 
-/* --- duration pad (the two-axis intent control) --- */
+/* --- intent pad --- */
 .pad-wrap {
-  margin: 8px 0 6px;
+  margin: 6px 0;
 }
 .pad {
   position: relative;
   width: 100%;
   aspect-ratio: 3 / 2;
-  background: radial-gradient(120% 120% at 100% 0%, var(--accent-soft), transparent 55%),
-    linear-gradient(180deg, var(--bg-raised), var(--bg-card));
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
+  background: var(--paper-2);
+  border: 1.5px solid var(--rule-hard);
   overflow: hidden;
   touch-action: none;
   user-select: none;
 }
-/* subtle 2x2 map: one vertical + one horizontal hairline through the middle,
-   so the four "mood" quadrants read at a glance. */
 .pad-grid {
   position: absolute;
   inset: 0;
   pointer-events: none;
-  background-image: linear-gradient(var(--border) 1px, transparent 1px),
-    linear-gradient(90deg, var(--border) 1px, transparent 1px);
+  background-image: linear-gradient(var(--hair) 1px, transparent 1px),
+    linear-gradient(90deg, var(--hair) 1px, transparent 1px);
   background-size: 50% 50%;
   background-position: center;
-  opacity: 0.5;
 }
-/* axis edge labels: X = session length, Y = flexibility of the range */
 .pad-edge {
   position: absolute;
-  color: var(--ink-faint);
-  font-size: 11px;
-  letter-spacing: 0.06em;
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
+  color: var(--ink-mute);
   pointer-events: none;
-  transition: color 0.15s ease, opacity 0.15s ease;
-  opacity: 0.6;
+  transition: color 0.2s steps(2);
 }
 .pad-edge.on {
-  color: var(--accent);
-  opacity: 1;
+  color: var(--ink);
+  font-weight: 700;
 }
 .pad-edge.left {
-  left: 12px;
+  left: 8px;
   top: 50%;
   transform: translateY(-50%);
 }
 .pad-edge.right {
-  right: 12px;
+  right: 8px;
   top: 50%;
   transform: translateY(-50%);
 }
 .pad-edge.top {
-  top: 10px;
+  top: 8px;
   left: 50%;
   transform: translateX(-50%);
 }
 .pad-edge.bottom {
-  bottom: 10px;
+  bottom: 8px;
   left: 50%;
   transform: translateX(-50%);
 }
-/* tether: a line from the center origin out to the knob (analog-stick feel) */
 .pad-tether {
   position: absolute;
   inset: 0;
@@ -203,35 +215,34 @@ h1.display {
   pointer-events: none;
 }
 .pad-tether line {
-  stroke: var(--accent);
-  stroke-width: 0.6;
-  opacity: 0.5;
+  stroke: var(--ink);
+  stroke-width: 1;
+  stroke-dasharray: 3 3;
   vector-effect: non-scaling-stroke;
 }
 .pad-origin {
-  fill: var(--ink-faint);
+  fill: var(--ink-mute);
 }
 .pad-knob {
   position: absolute;
-  width: 46px;
-  height: 46px;
-  margin: -23px 0 0 -23px;
+  width: 42px;
+  height: 42px;
+  margin: -21px 0 0 -21px;
   border-radius: 50%;
-  background: radial-gradient(circle at 35% 30%, #e6c04a, var(--accent));
-  box-shadow: 0 6px 18px #00000055, 0 0 0 6px var(--accent-soft);
+  background: var(--ink);
+  border: 2px solid var(--paper);
+  box-shadow: 0 0 0 1.5px var(--ink);
   pointer-events: none;
-  transition: box-shadow 0.12s ease, transform 0.05s ease;
+  transition: transform 0.06s steps(2);
 }
 .pad.dragging .pad-knob {
-  box-shadow: 0 8px 24px #00000066, 0 0 0 10px var(--accent-soft);
-  transform: scale(1.06);
+  transform: scale(1.08);
 }
 .pad-descriptor {
   text-align: center;
   font-family: var(--serif);
   font-style: italic;
   font-size: 17px;
-  color: var(--ink);
   margin: 14px 0 2px;
 }
 .pad-readout {
@@ -240,18 +251,17 @@ h1.display {
   gap: 8px;
   justify-content: center;
   margin: 2px 0;
+  font-family: var(--mono);
 }
 .pad-readout .big {
-  font-family: var(--serif);
+  font-family: var(--didot);
   font-size: 26px;
-  color: var(--accent);
 }
 .pad-readout .small {
-  color: var(--ink-faint);
-  font-size: 13px;
-}
-.pad-readout .dot {
-  color: var(--ink-faint);
+  color: var(--ink-mute);
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
 }
 
 /* --- theme chips --- */
@@ -261,156 +271,45 @@ h1.display {
   gap: 8px;
 }
 .chip {
-  padding: 9px 14px;
-  border-radius: 999px;
-  border: 1px solid var(--border);
-  background: var(--bg-card);
-  color: var(--ink-soft);
-  font-size: 14px;
+  padding: 8px 14px;
+  border: 1.5px solid var(--rule-hard);
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--grot);
+  font-size: 13px;
 }
 .chip.on {
-  color: var(--bg);
-  background: var(--accent);
-  border-color: var(--accent);
-  font-weight: 600;
+  background: var(--ink);
+  color: var(--paper);
 }
 
-/* --- primary button --- */
+/* --- buttons --- */
 .btn {
   display: block;
   width: 100%;
-  padding: 16px;
-  margin-top: 24px;
-  border: none;
-  border-radius: var(--radius);
-  background: var(--accent);
-  color: #1a160a;
-  font-size: 16px;
+  padding: 15px;
+  margin-top: 22px;
+  border: 1.5px solid var(--rule-hard);
+  background: var(--ink);
+  color: var(--paper);
+  font-family: var(--grot);
+  font-size: 14px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
   font-weight: 700;
-  letter-spacing: 0.02em;
+}
+.btn:active {
+  background: var(--ink-soft);
 }
 .btn:disabled {
   opacity: 0.4;
 }
 .btn.ghost {
-  background: transparent;
-  color: var(--ink-soft);
-  border: 1px solid var(--border);
-}
-
-/* --- session cards --- */
-.card {
-  background: var(--bg-card);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  padding: 16px;
-  margin-bottom: 14px;
-}
-.card .reason {
-  display: inline-block;
-  font-size: 11px;
-  letter-spacing: 0.04em;
-  color: var(--accent);
-  background: var(--accent-soft);
-  padding: 3px 9px;
-  border-radius: 999px;
-  margin-bottom: 10px;
-}
-.card h3 {
-  font-family: var(--serif);
-  font-weight: 400;
-  font-size: 19px;
-  line-height: 1.25;
-  margin: 0 0 8px;
-}
-.card .meta {
-  display: flex;
-  gap: 10px;
-  font-size: 12px;
-  color: var(--ink-faint);
-  margin-bottom: 12px;
-}
-.card .summary {
-  color: var(--ink-soft);
-  font-size: 14px;
-  margin: 0 0 14px;
-}
-.card .actions {
-  display: flex;
-  gap: 8px;
-}
-.act {
-  flex: 1;
-  padding: 10px;
-  border-radius: 10px;
-  border: 1px solid var(--border);
-  background: var(--bg-raised);
-  color: var(--ink-soft);
-  font-size: 13px;
-}
-.act.open {
-  color: var(--ink);
-  border-color: var(--accent);
-}
-.act.on {
-  color: var(--good);
-  border-color: var(--good);
-}
-
-/* --- session pacing: time budget bar + check-in --- */
-.timebar {
-  height: 4px;
-  border-radius: 999px;
-  background: var(--bg-card);
-  overflow: hidden;
-  margin-top: 4px;
-}
-.timebar-fill {
-  height: 100%;
-  background: var(--accent);
-  transition: width 0.9s linear;
-}
-.checkin {
-  background: var(--accent-soft);
-  border: 1px solid var(--accent);
-  border-radius: var(--radius);
-  padding: 14px 16px;
-  margin: 4px 0 16px;
-}
-.checkin p {
-  margin: 0 0 12px;
-  font-size: 15px;
+  background: var(--paper);
   color: var(--ink);
 }
-.checkin-actions {
-  display: flex;
-  gap: 8px;
-}
-.checkin-actions .act {
-  flex: 1;
-}
-
-/* single-item focus card: one piece of content dominates the screen */
-.card.focus {
-  display: flex;
-  flex-direction: column;
-  min-height: 60vh;
-  padding: 20px;
-}
-.card.focus h3 {
-  font-size: 22px;
-  line-height: 1.28;
-}
-.card.focus .summary {
-  flex: 1;
-  font-size: 15px;
-}
-.focus-open {
-  margin-top: 8px;
-  margin-bottom: 10px;
-}
-.focus-open .btn {
-  margin-top: 0;
+.btn.ghost:active {
+  background: var(--paper-3);
 }
 
 /* --- source library rows --- */
@@ -418,8 +317,8 @@ h1.display {
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 14px 4px;
-  border-bottom: 1px solid var(--border);
+  padding: 13px 2px;
+  border-bottom: 1px solid var(--hair);
 }
 .row .title {
   flex: 1;
@@ -433,53 +332,337 @@ h1.display {
   text-overflow: ellipsis;
 }
 .row .title span {
-  font-size: 12px;
-  color: var(--ink-faint);
+  font-family: var(--grot);
+  font-size: 11px;
+  color: var(--ink-mute);
 }
 .weight-pill {
-  font-size: 12px;
-  padding: 4px 8px;
-  border-radius: 8px;
-  background: var(--bg-raised);
-  border: 1px solid var(--border);
-  color: var(--ink-soft);
+  font-family: var(--mono);
+  font-size: 11px;
+  padding: 5px 9px;
+  background: var(--paper);
+  border: 1.5px solid var(--rule-hard);
+  color: var(--ink);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
 }
 
 /* --- forms --- */
 .field {
   width: 100%;
-  padding: 13px;
+  padding: 12px;
   margin-bottom: 10px;
-  background: var(--bg-card);
-  border: 1px solid var(--border);
-  border-radius: 10px;
+  background: var(--paper);
+  border: 1.5px solid var(--rule-hard);
   color: var(--ink);
+  font-family: var(--serif);
   font-size: 15px;
 }
 .field::placeholder {
-  color: var(--ink-faint);
+  color: var(--ink-mute);
 }
 
 /* --- misc --- */
 .center {
   text-align: center;
   color: var(--ink-soft);
-  padding: 60px 20px;
+  padding: 50px 20px;
 }
 .center .display {
-  font-family: var(--serif);
-  font-size: 22px;
+  font-family: var(--didot);
+  font-size: 24px;
   color: var(--ink);
 }
 .spinner {
-  color: var(--ink-faint);
+  color: var(--ink-mute);
   text-align: center;
   padding: 80px;
   font-family: var(--serif);
   font-style: italic;
 }
 .err {
-  color: #d98b6a;
+  color: var(--ink);
+  background: var(--paper-3);
+  border-left: 3px solid var(--ink);
+  padding: 10px 12px;
   font-size: 13px;
-  margin: 8px 0;
+  margin: 10px 0;
+}
+
+/* ============================================================
+   Session - scroll-snap column, one item per screen, compact
+   bottom action bar. Mirrors eink-refined.html.
+   ============================================================ */
+
+.focus-session {
+  display: flex;
+  flex-direction: column;
+  /* fill the viewport below the topbar (nav is hidden on this route) */
+  height: calc(100dvh - 61px);
+}
+.timestrip {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 16px;
+  border-bottom: 1px solid var(--hair);
+}
+.timebar {
+  flex: 1;
+  height: 3px;
+  background: var(--paper-3);
+  overflow: hidden;
+}
+.timebar-fill {
+  height: 100%;
+  background: var(--ink);
+  transition: width 0.9s linear;
+}
+.timestrip .clock {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--ink-mute);
+  white-space: nowrap;
+}
+
+.stage {
+  flex: 1;
+  overflow-y: auto;
+  scroll-snap-type: y mandatory;
+  -webkit-overflow-scrolling: touch;
+}
+.snap {
+  min-height: 100%;
+  scroll-snap-align: center;
+  scroll-snap-stop: always;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: 20px;
+  border-bottom: 1px solid var(--hair);
+  transition: opacity 0.3s steps(3);
+}
+.snap.away {
+  opacity: 0.35;
+}
+.snap .reason {
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-mute);
+  border: 1px solid var(--rule);
+  padding: 3px 7px;
+  align-self: flex-start;
+  margin-bottom: 12px;
+}
+.snap h3 {
+  font-family: var(--serif);
+  font-weight: 600;
+  font-size: 23px;
+  line-height: 1.24;
+  margin: 0 0 10px;
+}
+.snap .meta {
+  display: flex;
+  gap: 8px;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--ink-mute);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-bottom: 14px;
+}
+.snap .excerpt {
+  color: var(--ink-soft);
+  font-size: 15px;
+  margin: 12px 0 0;
+}
+.snap .excerpt::first-letter {
+  font-family: var(--didot);
+  font-size: 44px;
+  float: left;
+  line-height: 0.8;
+  padding: 4px 8px 0 0;
+}
+
+/* --- media previews (dithered e-ink) --- */
+.media {
+  position: relative;
+  background: var(--paper-3);
+  border: 1.5px solid var(--rule-hard);
+  overflow: hidden;
+  margin: 4px 0 6px;
+}
+.media.h {
+  aspect-ratio: 16 / 9;
+}
+.media.v {
+  aspect-ratio: 9 / 16;
+  max-height: 46vh;
+  width: auto;
+  align-self: flex-start;
+}
+.media.sq {
+  aspect-ratio: 1 / 1;
+  max-height: 42vh;
+}
+.media img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  filter: grayscale(1) contrast(1.15);
+  /* dithered feel: blend the grain over the image */
+  mix-blend-mode: multiply;
+}
+.media .dither {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='120' height='120'><filter id='d'><feTurbulence type='fractalNoise' baseFrequency='0.7' numOctaves='2'/><feColorMatrix type='saturate' values='0'/></filter><rect width='120' height='120' filter='url(%23d)' opacity='0.12'/></svg>");
+}
+.media .play {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 46px;
+  height: 46px;
+  border-radius: 50%;
+  background: var(--paper);
+  border: 1.5px solid var(--ink);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.media .play::after {
+  content: "";
+  border-left: 14px solid var(--ink);
+  border-top: 9px solid transparent;
+  border-bottom: 9px solid transparent;
+  margin-left: 3px;
+}
+.media .dur {
+  position: absolute;
+  right: 6px;
+  bottom: 6px;
+  background: var(--ink);
+  color: var(--paper);
+  font-family: var(--mono);
+  font-size: 10px;
+  padding: 2px 6px;
+}
+.media .dots {
+  position: absolute;
+  left: 8px;
+  bottom: 8px;
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--paper);
+  background: var(--ink);
+  padding: 2px 6px;
+}
+/* audio waveform */
+.wave {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  height: 66px;
+  padding: 0 12px;
+  border: 1.5px solid var(--rule-hard);
+  background: var(--paper-2);
+  margin: 4px 0 6px;
+}
+.wave i {
+  flex: 1;
+  background: var(--ink);
+  opacity: 0.5;
+}
+
+/* --- compact bottom action bar --- */
+.actionbar {
+  flex: 0 0 var(--bar-h);
+  display: flex;
+  border-top: 1.5px solid var(--rule-hard);
+  background: var(--paper);
+}
+.act-btn {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  background: transparent;
+  border: none;
+  border-left: 1px solid var(--hair);
+  font-family: var(--grot);
+  font-size: 9px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+  padding: 6px 2px;
+}
+.act-btn:first-child {
+  border-left: none;
+}
+.act-btn:active {
+  background: var(--paper-3);
+}
+.act-btn.on {
+  background: var(--ink);
+  color: var(--paper);
+}
+.act-btn:disabled {
+  opacity: 0.3;
+}
+.act-btn .ic {
+  font-size: 16px;
+  line-height: 1;
+}
+
+/* pacing check-in */
+.checkin {
+  border: 1.5px solid var(--rule-hard);
+  background: var(--paper-3);
+  padding: 14px 16px;
+  margin: 12px 16px;
+}
+.checkin p {
+  margin: 0 0 12px;
+  font-size: 15px;
+}
+.checkin-actions {
+  display: flex;
+  gap: 8px;
+}
+.checkin-actions .mini {
+  flex: 1;
+  padding: 10px;
+  border: 1.5px solid var(--rule-hard);
+  background: var(--paper);
+  font-family: var(--grot);
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+.checkin-actions .mini.solid {
+  background: var(--ink);
+  color: var(--paper);
+}
+
+/* e-ink refresh flash on advance */
+@keyframes einkflash {
+  0% { opacity: 0; }
+  40% { opacity: 0.9; }
+  100% { opacity: 0; }
+}
+.eink-flash {
+  position: fixed;
+  inset: 0;
+  background: var(--ink);
+  z-index: 50;
+  pointer-events: none;
+  animation: einkflash 0.28s steps(3) forwards;
 }

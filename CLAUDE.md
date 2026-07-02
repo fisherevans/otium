@@ -52,12 +52,14 @@ The Go module is standalone (not in `~/dev/go.work`). Build/test/run it with
 
 - Go: 4-space indent via gofmt, same-line braces, explicit errors, short names
   in tight scopes. `make fmt` before committing.
-- TS/React: mobile-first (Fisher tests on his phone). The current styling in
-  `web/src/styles/global.css` is a **placeholder** - the real visual language is
-  being chosen from `design/` (see the Design system milestone / issue #1).
-  Whatever the skin, keep it calm: no urgency, no badges, no unread counts, no
-  infinite scroll. [design/EXPERIENCE.md](design/EXPERIENCE.md) is the
-  theme-independent contract (IA, the intent-pad spec, touch rules,
+- TS/React: mobile-first (Fisher tests on his phone). The visual language is
+  **E-Ink** - ink on paper, Charter serif, Didot display, hard hairline rules,
+  dithered media, deliberately slow "e-ink refresh" transitions. Tokens +
+  components live in `web/src/styles/global.css`; the reference is
+  `design/prototypes/eink/eink-refined.html` (scroll-snap session + compact
+  bottom bar + media reel). Keep it calm: no urgency, no badges, no unread
+  counts, no infinite scroll. [design/EXPERIENCE.md](design/EXPERIENCE.md) is
+  the theme-independent contract (IA, the intent-pad spec, touch rules,
   anti-patterns) the app must honor.
 - The SPA calls relative `/api/v1` and `/auth/*` - never a build-time base URL.
   Dev proxy and prod nginx both do the split.
