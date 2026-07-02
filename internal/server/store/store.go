@@ -113,6 +113,37 @@ func (db *DB) GetOrCreateFeed(ctx context.Context, userID int64, name, slug, col
 	return db.CreateFeed(ctx, userID, name, slug, color)
 }
 
+// SetSourceFeeds replaces the set of feeds a source belongs to (source-centric
+// assignment, for the library UI). Feeds are given by slug; unknown slugs are
+// ignored.
+func (db *DB) SetSourceFeeds(ctx context.Context, userID, sourceID int64, slugs []string) error {
+	tx, err := db.sql.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	// verify the source belongs to the user before touching memberships
+	var owner int64
+	if err := tx.QueryRowContext(ctx, `SELECT user_id FROM sources WHERE id = ?`, sourceID).Scan(&owner); err != nil {
+		return err
+	}
+	if owner != userID {
+		return fmt.Errorf("source %d not owned by user", sourceID)
+	}
+	if _, err := tx.ExecContext(ctx, `DELETE FROM feed_sources WHERE source_id = ?`, sourceID); err != nil {
+		return err
+	}
+	for _, slug := range slugs {
+		if _, err := tx.ExecContext(ctx,
+			`INSERT OR IGNORE INTO feed_sources (feed_id, source_id)
+			 SELECT id, ? FROM feeds WHERE user_id = ? AND slug = ?`,
+			sourceID, userID, slug); err != nil {
+			return err
+		}
+	}
+	return tx.Commit()
+}
+
 // AddFeedSource adds a source to a feed without disturbing existing members.
 func (db *DB) AddFeedSource(ctx context.Context, feedID, sourceID int64) error {
 	_, err := db.sql.ExecContext(ctx,
@@ -169,8 +200,14 @@ func (db *DB) ListSources(ctx context.Context, userID int64) ([]Source, error) {
 		        s.state, s.trial_until, s.per_session_cap, s.added_at, s.last_fetch_at, s.fetch_error,
 		        (SELECT COUNT(*) FROM items i WHERE i.source_id = s.id) AS item_count,
 		        (SELECT COUNT(*) FROM items i WHERE i.source_id = s.id
-		           AND NOT EXISTS (SELECT 1 FROM item_state st WHERE st.item_id = i.id AND st.user_id = ?)) AS unseen_count
-		 FROM sources s WHERE s.user_id = ? ORDER BY s.title`, userID, userID)
+		           AND NOT EXISTS (SELECT 1 FROM item_state st WHERE st.item_id = i.id AND st.user_id = ?)) AS unseen_count,
+		        (SELECT COALESCE(CAST(SUM(CASE WHEN st.state='skipped' THEN 1 ELSE 0 END) AS REAL)
+		           / NULLIF(COUNT(*), 0), 0)
+		         FROM item_state st JOIN items i2 ON i2.id = st.item_id
+		         WHERE i2.source_id = s.id AND st.user_id = ?) AS skip_pct,
+		        (SELECT COUNT(*) / 30.0 FROM items i3
+		         WHERE i3.source_id = s.id AND i3.published_at >= datetime('now', '-30 days')) AS posts_per_day
+		 FROM sources s WHERE s.user_id = ? ORDER BY s.title`, userID, userID, userID)
 	if err != nil {
 		return nil, err
 	}
@@ -221,7 +258,7 @@ func scanSource(r rowScanner) (*Source, error) {
 	var trialUntil, lastFetch sql.NullString
 	if err := r.Scan(&s.ID, &s.Kind, &s.Title, &s.FeedURL, &s.HomepageURL, &s.IconURL, &s.Weight,
 		&s.State, &trialUntil, &s.PerSessionCap, &added, &lastFetch, &s.FetchError,
-		&s.ItemCount, &s.UnseenCount); err != nil {
+		&s.ItemCount, &s.UnseenCount, &s.SkipPct, &s.PostsPerDay); err != nil {
 		return nil, err
 	}
 	s.AddedAt = parseTime(added)

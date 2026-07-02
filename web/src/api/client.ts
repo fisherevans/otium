@@ -34,6 +34,8 @@ export interface Source {
   feed_slugs?: string[];
   item_count?: number;
   unseen_count?: number;
+  skip_pct?: number;
+  posts_per_day?: number;
 }
 
 export interface Item {
@@ -148,6 +150,8 @@ export const api = {
     patch: { weight_bucket?: string; state?: string; per_session_cap?: number; title?: string },
   ) => req<{ ok: boolean }>("PATCH", `/sources/${id}`, patch),
   deleteSource: (id: number) => req<{ ok: boolean }>("DELETE", `/sources/${id}`),
+  setSourceFeeds: (id: number, feedSlugs: string[]) =>
+    req<{ ok: boolean }>("PUT", `/sources/${id}/feeds`, { feed_slugs: feedSlugs }),
   sourceItems: (id: number) => req<Item[]>("GET", `/sources/${id}/items`),
 
   buildSession: (minLow: number, minHigh: number, themes: string[]) =>

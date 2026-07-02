@@ -33,6 +33,8 @@ type Source struct {
 	FeedSlugs   []string `json:"feed_slugs,omitempty"`
 	ItemCount   int      `json:"item_count,omitempty"`
 	UnseenCount int      `json:"unseen_count,omitempty"`
+	SkipPct     float64  `json:"skip_pct"`      // fraction of shown items skipped (0..1)
+	PostsPerDay float64  `json:"posts_per_day"` // avg items/day over the last 30 days
 }
 
 // Feed is a theme/collection ("Comedy", "Local News") - a saved grouping of

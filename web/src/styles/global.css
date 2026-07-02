@@ -652,6 +652,234 @@ h1.display {
   color: var(--paper);
 }
 
+/* ============================================================
+   Library management - List + Expandable Rows
+   ============================================================ */
+.lib-filter {
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  padding: 14px 0 10px;
+  -webkit-overflow-scrolling: touch;
+}
+.lib-fchip {
+  flex: 0 0 auto;
+  padding: 7px 13px;
+  border: 1.5px solid var(--rule-hard);
+  background: var(--paper);
+  font-family: var(--grot);
+  font-size: 12px;
+  white-space: nowrap;
+}
+.lib-fchip.on {
+  background: var(--ink);
+  color: var(--paper);
+}
+.lib-sub {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 4px 0 6px;
+  border-bottom: 1.5px solid var(--rule-hard);
+  padding-bottom: 8px;
+}
+.lib-seg {
+  padding: 5px 11px;
+  border: 1px solid var(--rule);
+  background: var(--paper);
+  font-family: var(--grot);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--ink-soft);
+}
+.lib-seg.on {
+  background: var(--ink);
+  color: var(--paper);
+  border-color: var(--ink);
+}
+.lib-count {
+  margin-left: auto;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--ink-mute);
+}
+.lib-row {
+  border-bottom: 1px solid var(--hair);
+}
+.lib-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 13px 2px;
+}
+.wtag {
+  flex: 0 0 auto;
+  min-width: 48px;
+  text-align: center;
+  font-family: var(--mono);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  padding: 4px 6px;
+  border: 1.5px solid var(--rule-hard);
+  background: var(--paper);
+}
+.lib-head .nm {
+  flex: 1;
+  min-width: 0;
+}
+.lib-head .nm b {
+  font-weight: 600;
+  display: block;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.lib-head .nm span {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--ink-mute);
+}
+.lib-head .chev {
+  color: var(--ink-mute);
+  font-size: 14px;
+}
+.lib-expand {
+  padding: 4px 2px 18px;
+}
+.ctl-label {
+  font-family: var(--grot);
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ink-mute);
+  margin: 16px 0 6px;
+}
+.wbuckets {
+  display: flex;
+  border: 1.5px solid var(--rule-hard);
+}
+.wbucket {
+  flex: 1;
+  padding: 10px 2px;
+  font-family: var(--grot);
+  font-size: 11px;
+  text-align: center;
+  background: var(--paper);
+  border-left: 1px solid var(--hair);
+}
+.wbucket:first-child {
+  border-left: none;
+}
+.wbucket.on {
+  background: var(--ink);
+  color: var(--paper);
+}
+.capstep {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+.capstep button {
+  width: 36px;
+  height: 36px;
+  border: 1.5px solid var(--rule-hard);
+  background: var(--paper);
+  font-size: 20px;
+  line-height: 1;
+}
+.capstep .val {
+  font-family: var(--didot);
+  font-size: 22px;
+  min-width: 22px;
+  text-align: center;
+}
+.caphint {
+  font-family: var(--serif);
+  font-style: italic;
+  font-size: 12px;
+  color: var(--ink-mute);
+  margin: 5px 0 0;
+}
+.feed-assign {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.fa-chip {
+  padding: 6px 11px;
+  border: 1.5px solid var(--rule-hard);
+  background: var(--paper);
+  font-family: var(--grot);
+  font-size: 12px;
+}
+.fa-chip.on {
+  background: var(--ink);
+  color: var(--paper);
+}
+.insight {
+  border-left: 2px solid var(--ink);
+  background: var(--paper-3);
+  padding: 10px 12px;
+  margin: 12px 0 4px;
+  font-size: 13px;
+  color: var(--ink-soft);
+}
+.insight b {
+  color: var(--ink);
+  font-weight: 700;
+}
+.lib-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 14px;
+}
+.lib-actions button {
+  flex: 1;
+  padding: 11px;
+  border: 1.5px solid var(--rule-hard);
+  background: var(--paper);
+  font-family: var(--grot);
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+.lib-actions button:active {
+  background: var(--paper-3);
+}
+.confirm {
+  background: var(--paper-3);
+  border: 1.5px solid var(--rule-hard);
+  padding: 12px;
+  margin-top: 12px;
+  font-size: 14px;
+}
+.toast {
+  position: fixed;
+  left: 50%;
+  bottom: 74px;
+  transform: translateX(-50%);
+  background: var(--ink);
+  color: var(--paper);
+  font-family: var(--grot);
+  font-size: 13px;
+  padding: 11px 16px;
+  display: flex;
+  gap: 16px;
+  align-items: center;
+  z-index: 40;
+  max-width: 90%;
+}
+.toast button {
+  color: var(--paper);
+  background: none;
+  border: none;
+  text-decoration: underline;
+  font-family: var(--grot);
+  font-size: 13px;
+}
+
 /* e-ink refresh flash on advance */
 @keyframes einkflash {
   0% { opacity: 0; }

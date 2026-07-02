@@ -193,6 +193,27 @@ func (h *Handler) DeleteSource(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
 }
 
+// SetSourceFeeds replaces the set of feeds (themes) a source belongs to.
+func (h *Handler) SetSourceFeeds(w http.ResponseWriter, r *http.Request) {
+	uid := userID(r)
+	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	if err != nil {
+		badRequest(w, "bad source id")
+		return
+	}
+	var body struct {
+		FeedSlugs []string `json:"feed_slugs"`
+	}
+	if !decode(w, r, &body) {
+		return
+	}
+	if err := h.db.SetSourceFeeds(r.Context(), uid, id, body.FeedSlugs); err != nil {
+		serverError(w, h.log, "set source feeds", err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
+}
+
 func (h *Handler) SourceItems(w http.ResponseWriter, r *http.Request) {
 	uid := userID(r)
 	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
