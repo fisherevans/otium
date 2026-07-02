@@ -57,6 +57,9 @@ func NewRouter(h *handler.Handler, authMiddleware func(http.Handler) http.Handle
 			r.Post("/session", h.BuildSession)
 			r.Post("/items/{id}/event", h.ItemEvent)
 			r.Post("/fetch", h.FetchNow)
+
+			r.Post("/import/parse", h.ParseImport)
+			r.Post("/import/commit", h.CommitImport)
 		})
 	})
 

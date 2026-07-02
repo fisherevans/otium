@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { api, type Source } from "@/api/client";
 
 const BUCKETS = ["very_low", "low", "normal", "high", "favorite"] as const;
@@ -18,6 +19,7 @@ function bucketOf(weight: number): string {
 }
 
 export default function SourcesPage() {
+  const nav = useNavigate();
   const [sources, setSources] = useState<Source[]>([]);
   const [adding, setAdding] = useState(false);
   const [title, setTitle] = useState("");
@@ -69,9 +71,12 @@ export default function SourcesPage() {
       <h1 className="display">Your library</h1>
       <p className="sub">The creators and feeds you've chosen. Weight controls how often they surface.</p>
 
-      <div style={{ display: "flex", gap: 8 }}>
+      <button className="btn" style={{ marginTop: 0 }} onClick={() => nav("/import")}>
+        Import your follows (YouTube, Feedly, OPML…)
+      </button>
+      <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
         <button className="btn ghost" style={{ marginTop: 0 }} onClick={() => setAdding((a) => !a)}>
-          {adding ? "Cancel" : "+ Add source"}
+          {adding ? "Cancel" : "+ Add one"}
         </button>
         <button className="btn ghost" style={{ marginTop: 0 }} onClick={fetchNow} disabled={fetching}>
           {fetching ? "Refreshing…" : "Refresh feeds"}

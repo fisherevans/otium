@@ -97,6 +97,51 @@ func (db *DB) CreateFeed(ctx context.Context, userID int64, name, slug, color st
 	return &Feed{ID: id, UserID: userID, Name: name, Slug: slug, Color: color}, nil
 }
 
+// GetOrCreateFeed returns the feed with this slug, creating it if absent. Used
+// by import to turn OPML folders into feeds without duplicating.
+func (db *DB) GetOrCreateFeed(ctx context.Context, userID int64, name, slug, color string) (*Feed, error) {
+	var f Feed
+	err := db.sql.QueryRowContext(ctx,
+		`SELECT id, name, slug, color FROM feeds WHERE user_id = ? AND slug = ?`, userID, slug).
+		Scan(&f.ID, &f.Name, &f.Slug, &f.Color)
+	if err == nil {
+		return &f, nil
+	}
+	if err != sql.ErrNoRows {
+		return nil, err
+	}
+	return db.CreateFeed(ctx, userID, name, slug, color)
+}
+
+// AddFeedSource adds a source to a feed without disturbing existing members.
+func (db *DB) AddFeedSource(ctx context.Context, feedID, sourceID int64) error {
+	_, err := db.sql.ExecContext(ctx,
+		`INSERT OR IGNORE INTO feed_sources (feed_id, source_id) VALUES (?, ?)`, feedID, sourceID)
+	return err
+}
+
+// CreateSourceImport inserts a source, or returns the existing one's id if the
+// (user, feed_url) already exists. created reports whether a new row was made,
+// so import can report "N added, M already followed".
+func (db *DB) CreateSourceImport(ctx context.Context, s *Source) (id int64, created bool, err error) {
+	res, err := db.sql.ExecContext(ctx,
+		`INSERT INTO sources (user_id, kind, title, feed_url, homepage_url, weight, state)
+		 VALUES (?, ?, ?, ?, ?, ?, 'followed')
+		 ON CONFLICT(user_id, feed_url) DO NOTHING`,
+		s.UserID, def(s.Kind, "rss"), s.Title, s.FeedURL, s.HomepageURL, defF(s.Weight, 1.0))
+	if err != nil {
+		return 0, false, err
+	}
+	if n, _ := res.RowsAffected(); n > 0 {
+		id, _ = res.LastInsertId()
+		return id, true, nil
+	}
+	// Already existed - fetch its id so it can still be added to a feed.
+	err = db.sql.QueryRowContext(ctx,
+		`SELECT id FROM sources WHERE user_id = ? AND feed_url = ?`, s.UserID, s.FeedURL).Scan(&id)
+	return id, false, err
+}
+
 // SetFeedSources replaces the source membership of a feed.
 func (db *DB) SetFeedSources(ctx context.Context, userID, feedID int64, sourceIDs []int64) error {
 	tx, err := db.sql.BeginTx(ctx, nil)

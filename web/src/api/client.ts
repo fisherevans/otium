@@ -71,7 +71,38 @@ export interface BuildResponse {
   result: SessionResult;
 }
 
+export interface ImportCandidate {
+  title: string;
+  feed_url: string;
+  homepage_url: string;
+  kind: string;
+  category: string;
+}
+
+export interface ParseResult {
+  format: string;
+  count: number;
+  candidates: ImportCandidate[];
+}
+
+export interface CommitResult {
+  created: number;
+  already_had: number;
+  feeds_created: number;
+  refreshing: boolean;
+}
+
 export class Unauthorized extends Error {}
+
+function handleAuth(status: number) {
+  if (status === 401 || status === 403) {
+    if (!location.pathname.startsWith("/auth/")) {
+      const rd = encodeURIComponent(location.pathname + location.search);
+      location.assign(`/auth/login?rd=${rd}`);
+    }
+    throw new Unauthorized("unauthenticated");
+  }
+}
 
 async function req<T>(method: string, path: string, body?: unknown): Promise<T> {
   const res = await fetch(`/api/v1${path}`, {
@@ -124,4 +155,22 @@ export const api = {
   itemEvent: (id: number, type: string, sessionId?: string) =>
     req<{ ok: boolean }>("POST", `/items/${id}/event`, { type, session_id: sessionId ?? "" }),
   fetchNow: () => req<{ new_items: number }>("POST", "/fetch"),
+
+  // Import: parse sends the raw file text (not JSON-wrapped) so the server sees
+  // the OPML/CSV bytes directly.
+  parseImport: async (text: string): Promise<ParseResult> => {
+    const res = await fetch("/api/v1/import/parse", {
+      method: "POST",
+      headers: { "Content-Type": "text/plain" },
+      body: text,
+    });
+    handleAuth(res.status);
+    if (!res.ok) throw new Error((await res.json().catch(() => ({}))).message || `${res.status}`);
+    return res.json();
+  },
+  commitImport: (sources: ImportCandidate[], createFeedsFromFolders: boolean) =>
+    req<CommitResult>("POST", "/import/commit", {
+      sources,
+      create_feeds_from_folders: createFeedsFromFolders,
+    }),
 };
