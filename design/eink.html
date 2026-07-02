@@ -1,0 +1,159 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>otium · e-ink interaction studies</title>
+<style>
+  :root{
+    --bg:#13120e; --panel:#1c1a14; --ink:#ece4d3; --soft:#b7ad97; --faint:#847a66;
+    --line:#302c22; --rule:#413b2e; --gold:#c9a227;
+    --serif:"Iowan Old Style",Palatino,Georgia,serif;
+    --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+    --mono:"SF Mono",Menlo,ui-monospace,monospace;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--sans);line-height:1.6;-webkit-font-smoothing:antialiased;}
+  .wrap{max-width:1080px;margin:0 auto;padding:0 20px;}
+  a{color:var(--gold);text-decoration:none;}
+  .hero{padding:50px 0 22px;border-bottom:1px solid var(--line);max-width:720px;}
+  .kicker{font-family:var(--mono);font-size:12px;letter-spacing:.18em;text-transform:uppercase;color:var(--faint);margin:0 0 14px;}
+  h1{font-family:var(--serif);font-weight:400;font-size:36px;line-height:1.12;margin:0 0 14px;}
+  h1 .g{color:var(--gold);font-style:italic;}
+  .dek{font-size:18px;color:var(--soft);margin:0 0 16px;}
+  .toplinks{display:flex;gap:12px;flex-wrap:wrap;margin-top:14px;font-family:var(--mono);font-size:13px;}
+  .toplinks a{border:1px solid var(--rule);border-radius:9px;padding:8px 13px;}
+  .prose{max-width:720px;font-size:16.5px;color:#ded6c4;}
+  .prose p{margin:16px 0;}
+  .callout{border-left:2px solid var(--gold);background:#c9a2270f;padding:12px 16px;margin:22px 0;border-radius:0 8px 8px 0;font-size:15.5px;color:var(--soft);}
+  .callout b{color:var(--ink);}
+  section.axis{border-top:1px solid var(--line);margin-top:36px;padding-top:4px;}
+  section.axis h2{font-family:var(--serif);font-weight:400;font-size:24px;margin:22px 0 4px;}
+  section.axis .adek{max-width:720px;color:var(--soft);font-size:16px;margin:0 0 12px;}
+  .dir{margin:28px 0 8px;}
+  .dir .pv{position:relative;width:100%;aspect-ratio:390/580;overflow:hidden;border:1px solid var(--rule);border-radius:14px;background:#2c2b28;box-shadow:0 10px 34px #0008;}
+  .dir .pv iframe{position:absolute;top:0;left:0;width:390px;height:580px;border:0;transform-origin:top left;}
+  .dir .pv a.hit{position:absolute;inset:0;z-index:3;}
+  .dir .pv .badge{position:absolute;z-index:4;right:10px;bottom:10px;background:#000000cc;color:#fff;font-family:var(--mono);font-size:11px;letter-spacing:.04em;padding:7px 11px;border-radius:999px;pointer-events:none;}
+  .dir h3{font-family:var(--serif);font-weight:400;font-size:22px;margin:0 0 2px;}
+  .dir .num{color:var(--faint);font-family:var(--mono);font-size:14px;margin-right:8px;}
+  .meta-line{font-size:14.5px;color:var(--soft);margin:9px 0;}
+  .meta-line b{color:var(--ink);font-weight:600;}
+  .chips{display:flex;flex-wrap:wrap;gap:5px;margin:10px 0;}
+  .chips i{font-style:normal;font-family:var(--mono);font-size:10.5px;letter-spacing:.02em;color:var(--faint);border:1px solid var(--rule);border-radius:5px;padding:3px 7px;}
+  .openbtn{display:inline-block;margin-top:8px;font-family:var(--mono);font-size:13px;border:1px solid var(--rule);border-radius:9px;padding:9px 14px;color:var(--gold);}
+  .openbtn:active{background:#c9a2271f;}
+  @media(min-width:860px){
+    .dir{display:grid;grid-template-columns:300px 1fr;gap:30px;align-items:start;}
+    .dir .pv{position:sticky;top:20px;}
+  }
+  footer{border-top:1px solid var(--line);margin-top:48px;padding:32px 0 80px;color:var(--faint);font-size:14px;max-width:720px;}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="hero">
+    <p class="kicker">otium · chosen direction: e-ink</p>
+    <h1>E-Ink, in motion</h1>
+    <p class="dek">You picked the e-ink language. Now the question is how it <em>moves</em>. Nine variations, same look, exploring three things: how you travel through content, how you like / open / preview, and how each kind of media renders in grayscale.</p>
+    <div class="toplinks">
+      <a href="index.html">← all 18 directions</a>
+      <a href="prototypes/e-ink-paper.html">the base e-ink app</a>
+      <a href="EXPERIENCE.md">experience guidelines</a>
+    </div>
+  </div>
+
+  <div class="prose">
+    <p>All nine share the exact same skin - paper, Charter serif, hard hairlines, dithered media, and a deliberately slow e-ink "refresh" flash on every move. Only the <em>interaction</em> and <em>media treatment</em> differ, so you're judging how it feels in the hand, not how it looks. Every preview is live; tap it to open full-screen and actually swipe, hold, and stamp.</p>
+    <div class="callout"><b>How to read this.</b> These are interaction sketches - some gestures are more finished than others. Feel for the one-at-a-time rhythm (no blur-past), and whether like/open/preview feel natural under your thumb. You can mix: "the Swipe Deck's gestures with the Media Reel's previews." The media treatments in #9 are the reference set regardless of which navigation wins.</p>
+  </div>
+
+  <div id="app"></div>
+
+  <footer>
+    Static, interactive mockups on the shared mixed-media fixture (article · image · horizontal video · vertical video · audio · quote). Committed under <span style="font-family:var(--mono)">design/prototypes/eink/</span>. Pick a navigation model + an action vocabulary + the media treatments, and I'll wire it into the live app as the real e-ink theme.
+  </footer>
+</div>
+
+<script>
+const AXES = [
+  { title:"How you move through content", dek:"One item at a time is the rule - you can never blur past a dozen. These differ in the gesture that advances you and how finite it feels.", items:["eink-pager","eink-swipe-deck","eink-tap-zones","eink-scroll-snap","eink-stack"] },
+  { title:"Liking, opening, previewing", dek:"The action vocabulary. How you say yes/no, how you jump to the source, and how you glance deeper without leaving.", items:["eink-gestures","eink-rail","eink-peek"] },
+  { title:"Media previews in e-ink", dek:"How each content type renders in grayscale - the reference treatments for article, image, horizontal + vertical video, and audio.", items:["eink-media-gallery"] },
+];
+
+const D = {
+  "eink-pager": { name:"Vertical Pager",
+    nav:"One item per full screen; swipe up to advance, down to go back — each turn gated by an e-ink invert flash, ending on a finite done-card.",
+    act:"Like slams an ink LIKED stamp; Open fires a full-frame invert flash (hand-off to source); tapping play inverts the hero as an inline preview; Skip advances via the page-turn.",
+    media:["vertical video","horizontal video","article","photo gallery","audio","quote"] },
+  "eink-swipe-deck": { name:"Swipe Deck",
+    nav:"A physical card stack — current on top, next two peeking beneath; swipe the top card through the finite session.",
+    act:"Swipe right / Like saves, left / Skip discards, up / Open launches a reader; ink stamps fade in during the drag and commit on fly-off; play toggles a scrub preview.",
+    media:["vertical video","horizontal video","article","image + gallery dots","audio","quote"] },
+  "eink-tap-zones": { name:"Tap Zones (Kindle)",
+    nav:"Full-bleed pages, near-zero chrome: tap the left third = back, right third = next, center (media/title) = open.",
+    act:"Tap opens a slide-up reader sheet; long-press the bottom handle reveals a Like / Open / Skip dock; Like ink-stamps a heart, Skip fades and auto-advances.",
+    media:["vertical video","horizontal video","article hero","photo gallery","audio","quote"] },
+  "eink-scroll-snap": { name:"Scroll-Snap Column",
+    nav:"Vertical scroll, but scroll-snap locks exactly one item per viewport (snap-stop always) — you physically cannot blur past.",
+    act:"Actions under each snapped item: Like stamps + advances, Skip drops a diagonal SKIPPED stamp, Open flashes then slides up a reader sheet.",
+    media:["vertical video","horizontal video","article hero","photo gallery","audio","quote"] },
+  "eink-stack": { name:"The Reading Stack",
+    nav:"A physical pile of paper: the top card full-height, the next few peeking; toss the top card up to advance and watch a pile gauge shrink to empty.",
+    act:"Per-card dock: Like ink-stamps, Open triggers a heavy refresh, Toss discards; tapping media toggles a play/scrubber preview.",
+    media:["vertical video","horizontal video","article","image + gallery dots","audio","quote"] },
+  "eink-gestures": { name:"Gesture Actions",
+    nav:"One card in a finite deck; swipe or Skip to advance, refresh flash on each turn, progress ticks up top.",
+    act:"Double-tap or swipe-right = like (ink heart + corner flag); tap media/title = open; long-press = expand an inline preview; swipe-left = skip. A mirrored button bar backs every gesture.",
+    media:["vertical video","horizontal video","article","image gallery","audio","quote"] },
+  "eink-rail": { name:"Action Rail",
+    nav:"Vertical scroll-snap stream, one item per screen; an observer marks the active item and drives a segmented top progress strip.",
+    act:"A fixed right-edge rail — Open / Like / Save / Skip — ink-fills on press; Like/Save toggle + stamp, Skip dims + advances, Open (or a media play tap) raises a flash-in reader overlay.",
+    media:["vertical video","horizontal video","article hero","image gallery","audio","quote"] },
+  "eink-peek": { name:"Press-and-Peek Preview",
+    nav:"One item at a time; a top tick strip advances via Next/Skip with a refresh flash, ending on a completion screen.",
+    act:"Press-and-hold any media to raise a large peek overlay, then drag up to OPEN or down to LIKE (release-in-place dismisses). Discrete buttons mirror it; Like drops a rotated ink stamp. The richest preview across media types.",
+    media:["vertical video","horizontal video","article + excerpt","image gallery","audio","quote"] },
+  "eink-media-gallery": { name:"Media Treatments Reel",
+    nav:"One media item per full screen; advance by tapping edge zones, swiping, or arrows, with a segmented tick strip.",
+    act:"Every slide has Open (invert flash), Like (inked + rotated stamp), and Preview/Play toggling the media's own control and animating its scrubber.",
+    media:["vertical 9:16 + play + duration","horizontal 16:9 + scrubber","article + drop-cap","photo + 1/3 dots","podcast waveform + timeline","pull-quote"] },
+};
+
+const app = document.getElementById("app");
+let n = 0;
+AXES.forEach((ax) => {
+  const sec = document.createElement("section");
+  sec.className = "axis";
+  sec.innerHTML = `<h2>${ax.title}</h2><p class="adek">${ax.dek}</p>`;
+  ax.items.forEach((slug) => {
+    n++;
+    const d = D[slug];
+    const href = `prototypes/eink/${slug}.html`;
+    const chips = d.media.map((m) => `<i>${m}</i>`).join("");
+    const fig = document.createElement("div");
+    fig.className = "dir";
+    fig.innerHTML = `
+      <div class="pv">
+        <iframe src="${href}" scrolling="no" loading="lazy" tabindex="-1"></iframe>
+        <a class="hit" href="${href}" aria-label="Open ${d.name}"></a>
+        <span class="badge">tap to try ↗</span>
+      </div>
+      <div class="body">
+        <h3><span class="num">${String(n).padStart(2,"0")}</span>${d.name}</h3>
+        <p class="meta-line"><b>Move:</b> ${d.nav}</p>
+        <p class="meta-line"><b>Like / open / preview:</b> ${d.act}</p>
+        <div class="chips">${chips}</div>
+        <a class="openbtn" href="${href}">Open full-screen ↗</a>
+      </div>`;
+    sec.appendChild(fig);
+  });
+  app.appendChild(sec);
+});
+
+function fit(){ document.querySelectorAll(".dir .pv").forEach((p)=>{ p.querySelector("iframe").style.transform=`scale(${p.clientWidth/390})`; }); }
+window.addEventListener("resize",fit); window.addEventListener("load",fit); fit();
+</script>
+</body>
+</html>

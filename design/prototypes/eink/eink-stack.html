@@ -1,0 +1,740 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>otium — e-ink · the reading stack</title>
+<style>
+  :root{
+    --paper:#f4f2ec;
+    --paper-2:#efece3;
+    --ink:#1a1815;
+    --ink-soft:#4b4740;
+    --ink-mute:#8b857a;
+    --rule:#c9c3b5;
+    --rule-hard:#1a1815;
+    --hair:#d9d4c8;
+    --serif:"Charter","Iowan Old Style","Georgia",serif;
+    --grot:"Helvetica Neue","Arial",sans-serif;
+    --mono:"SF Mono","Menlo",ui-monospace,monospace;
+    --didot:"Didot","Hoefler Text","Baskerville",serif;
+  }
+
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+  html,body{height:100%;margin:0;}
+  body{
+    background:#3b3a36;
+    background-image:radial-gradient(circle at 30% 20%, #4a4844 0%, #2c2b28 70%);
+    display:flex;align-items:center;justify-content:center;
+    min-height:100vh;
+    font-family:var(--serif);
+    -webkit-font-smoothing:antialiased;
+    padding:18px;
+  }
+
+  /* ---------- phone frame ---------- */
+  .phone{
+    position:relative;
+    width:390px;height:844px;max-height:calc(100vh - 24px);
+    background:var(--paper);
+    border-radius:44px;
+    box-shadow:0 0 0 2px #111, 0 0 0 12px #16150f, 0 30px 70px rgba(0,0,0,.55);
+    overflow:hidden;
+    display:flex;flex-direction:column;
+  }
+  .phone::before{
+    content:"";position:absolute;inset:0;pointer-events:none;z-index:30;
+    background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='140' height='140'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/><feColorMatrix type='saturate' values='0'/></filter><rect width='140' height='140' filter='url(%23n)' opacity='0.05'/></svg>");
+    mix-blend-mode:multiply;opacity:.6;
+  }
+
+  /* status bar */
+  .status{
+    position:relative;z-index:4;
+    display:flex;justify-content:space-between;align-items:center;
+    padding:14px 26px 6px;
+    font-family:var(--mono);font-size:12px;letter-spacing:.03em;color:var(--ink);
+    flex:0 0 auto;
+  }
+  .status .dots{display:flex;gap:3px;align-items:center;}
+  .status .bar{width:2px;background:var(--ink);}
+  .status .bar:nth-child(1){height:5px}
+  .status .bar:nth-child(2){height:7px}
+  .status .bar:nth-child(3){height:9px}
+  .status .bar:nth-child(4){height:11px}
+
+  /* ---------- app header ---------- */
+  header.app{
+    position:relative;z-index:4;flex:0 0 auto;
+    padding:6px 26px 10px;
+    border-bottom:1.5px solid var(--rule-hard);
+    display:flex;align-items:flex-end;justify-content:space-between;
+  }
+  .wordmark{
+    font-family:var(--didot);
+    font-size:34px;line-height:.9;letter-spacing:.01em;color:var(--ink);font-weight:400;
+  }
+  .tagline{
+    font-family:var(--grot);
+    font-size:9.5px;letter-spacing:.34em;text-transform:uppercase;
+    color:var(--ink-soft);padding-bottom:5px;
+  }
+
+  /* ---------- progress strip: the pile gauge ---------- */
+  .gauge{
+    position:relative;z-index:4;flex:0 0 auto;
+    padding:11px 26px 12px;
+    border-bottom:1.5px solid var(--rule-hard);
+    display:flex;align-items:center;gap:12px;
+  }
+  .gauge .label{
+    font-family:var(--grot);font-size:9.5px;letter-spacing:.2em;text-transform:uppercase;
+    color:var(--ink-mute);white-space:nowrap;
+  }
+  .gauge .label b{color:var(--ink);font-weight:700;}
+  .gauge .segs{display:flex;gap:4px;flex:1;}
+  .gauge .seg{
+    flex:1;height:9px;border:1.2px solid var(--rule-hard);background:var(--paper);
+    position:relative;overflow:hidden;
+  }
+  .gauge .seg.done{
+    background-image:repeating-linear-gradient(45deg,var(--ink) 0 1.4px,transparent 1.4px 3.2px);
+    background-color:var(--ink);
+  }
+  .gauge .seg.done::after{content:"";position:absolute;inset:0;background:var(--ink);opacity:.86;}
+  .gauge .seg.now{
+    background-image:radial-gradient(var(--ink) .8px, transparent 1px);
+    background-size:5px 5px;background-color:var(--paper-2);
+  }
+
+  /* ---------- stack stage ---------- */
+  .stage{position:relative;flex:1 1 auto;overflow:hidden;z-index:3;}
+
+  /* e-ink refresh flash */
+  .flash{
+    position:absolute;inset:0;z-index:25;pointer-events:none;background:var(--ink);opacity:0;
+  }
+  .flash.go{animation:refresh .28s steps(2,end) forwards;}
+  @keyframes refresh{
+    0%{opacity:0}40%{opacity:.9}41%{opacity:.05}70%{opacity:.5}100%{opacity:0}
+  }
+
+  .stack{position:absolute;inset:0;}
+
+  .card{
+    position:absolute;left:16px;right:16px;top:16px;bottom:16px;
+    background:var(--paper);
+    border:1.5px solid var(--rule-hard);
+    box-shadow:2px 3px 0 rgba(26,24,21,.16);
+    display:flex;flex-direction:column;
+    transform-origin:50% 100%;
+    will-change:transform;
+    /* slow, stepped e-ink settle */
+    transition:transform .42s steps(5,end), opacity .42s steps(4,end);
+    touch-action:none;
+    overflow:hidden;
+  }
+  .card.dragging{transition:none;}
+  .card .grain{
+    position:absolute;inset:0;pointer-events:none;z-index:1;
+    background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='120' height='120'><filter id='g'><feTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/><feColorMatrix type='saturate' values='0'/></filter><rect width='120' height='120' filter='url(%23g)' opacity='0.04'/></svg>");
+    mix-blend-mode:multiply;opacity:.7;
+  }
+
+  /* toss-off animation */
+  .card.toss{
+    transition:transform .5s cubic-bezier(.3,.7,.3,1), opacity .5s steps(4,end);
+    opacity:0;pointer-events:none;
+  }
+
+  .card .inner{
+    position:relative;z-index:2;flex:1;overflow-y:auto;overflow-x:hidden;
+    -webkit-overflow-scrolling:touch;padding:18px 18px 16px;
+  }
+  .card .inner::-webkit-scrollbar{width:0;}
+
+  /* --- top strip of card: index + grab handle --- */
+  .cardtop{
+    display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;
+  }
+  .idx{
+    font-family:var(--mono);font-size:11px;letter-spacing:.06em;color:var(--ink-mute);
+  }
+  .idx b{color:var(--ink);}
+  .handle{
+    display:flex;flex-direction:column;gap:3px;align-items:center;opacity:.55;
+  }
+  .handle i{display:block;width:26px;height:2px;background:var(--ink);}
+
+  .reason{
+    display:inline-flex;align-items:center;gap:7px;
+    font-family:var(--grot);font-size:9.5px;letter-spacing:.2em;text-transform:uppercase;
+    color:var(--ink);border:1px solid var(--rule-hard);
+    padding:4px 9px;margin-bottom:14px;background:var(--paper-2);
+  }
+  .reason .glyph{width:9px;height:9px;flex:0 0 auto;}
+
+  /* ---------- media blocks ---------- */
+  .media{
+    position:relative;border:1.5px solid var(--rule-hard);background:var(--paper-2);
+    overflow:hidden;margin-bottom:15px;
+  }
+  .media .fill{display:block;width:100%;height:100%;}
+  .media.h16{aspect-ratio:16/9;}
+  .media.v16{aspect-ratio:9/16;max-width:196px;margin-left:auto;margin-right:auto;}
+  .media.img{aspect-ratio:4/3;}
+  .media.hero{aspect-ratio:16/7;}
+
+  .play{
+    position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);
+    width:54px;height:54px;border-radius:50%;
+    background:var(--paper);border:2px solid var(--rule-hard);
+    display:flex;align-items:center;justify-content:center;
+    box-shadow:0 2px 0 rgba(26,24,21,.28);z-index:3;
+    transition:transform .12s steps(2,end);
+  }
+  .media:active .play{transform:translate(-50%,-50%) translateY(1px);}
+  .play::after{
+    content:"";margin-left:4px;
+    border-style:solid;border-width:10px 0 10px 16px;
+    border-color:transparent transparent transparent var(--ink);
+  }
+  .media.playing .play::after{
+    margin-left:0;width:14px;height:16px;border:none;
+    background:linear-gradient(var(--ink),var(--ink)) left/5px 100% no-repeat,
+               linear-gradient(var(--ink),var(--ink)) right/5px 100% no-repeat;
+  }
+
+  .chip-dur{
+    position:absolute;right:8px;bottom:8px;z-index:3;
+    font-family:var(--mono);font-size:11px;letter-spacing:.03em;
+    color:var(--paper);background:var(--ink);
+    padding:2px 7px;border:1px solid var(--ink);
+  }
+  .tallbadge{
+    position:absolute;left:8px;top:8px;z-index:3;
+    font-family:var(--grot);font-size:8.5px;letter-spacing:.18em;text-transform:uppercase;
+    color:var(--paper);background:var(--ink);padding:3px 6px;
+  }
+  .galdots{
+    position:absolute;left:50%;bottom:9px;transform:translateX(-50%);z-index:3;
+    display:flex;gap:6px;
+  }
+  .galdots i{width:6px;height:6px;border:1.2px solid var(--paper);background:transparent;border-radius:50%;
+    box-shadow:0 0 0 1px var(--ink);}
+  .galdots i.on{background:var(--paper);}
+
+  /* scrubber revealed on preview */
+  .scrub{
+    display:none;align-items:center;gap:9px;margin:-6px 0 15px;
+    font-family:var(--mono);font-size:10.5px;color:var(--ink-soft);letter-spacing:.02em;
+  }
+  .media.playing ~ .scrub, .scrub.show{display:flex;}
+  .scrub .track{flex:1;height:3px;background:var(--hair);position:relative;}
+  .scrub .track b{position:absolute;left:0;top:0;bottom:0;width:34%;background:var(--ink);}
+  .scrub .track b::after{content:"";position:absolute;right:-4px;top:-3px;width:9px;height:9px;
+    background:var(--paper);border:1.5px solid var(--ink);border-radius:50%;}
+
+  /* audio waveform */
+  .wave{
+    display:flex;align-items:center;gap:2.4px;height:64px;padding:10px 12px;
+    border:1.5px solid var(--rule-hard);background:var(--paper-2);margin-bottom:15px;
+    position:relative;overflow:hidden;
+  }
+  .wave span{flex:1;background:var(--ink);opacity:.72;min-width:2px;}
+  .wave .pip{
+    position:absolute;right:10px;top:8px;
+    font-family:var(--mono);font-size:10.5px;color:var(--ink-soft);letter-spacing:.03em;
+  }
+  .audio-row{display:flex;align-items:center;gap:13px;margin-bottom:15px;}
+  .audio-row .pbtn{
+    flex:0 0 auto;width:46px;height:46px;border-radius:50%;
+    border:2px solid var(--rule-hard);background:var(--paper);
+    display:flex;align-items:center;justify-content:center;box-shadow:0 2px 0 rgba(26,24,21,.28);
+  }
+  .audio-row .pbtn::after{content:"";margin-left:3px;
+    border-style:solid;border-width:8px 0 8px 13px;border-color:transparent transparent transparent var(--ink);}
+  .audio-row.playing .pbtn::after{margin-left:0;width:11px;height:13px;border:none;
+    background:linear-gradient(var(--ink),var(--ink)) left/4px 100% no-repeat,
+              linear-gradient(var(--ink),var(--ink)) right/4px 100% no-repeat;}
+  .audio-row .wave{flex:1;margin-bottom:0;height:52px;}
+
+  /* pull quote */
+  .pullquote{
+    border-top:2px solid var(--rule-hard);border-bottom:2px solid var(--rule-hard);
+    padding:26px 6px 24px;margin:6px 0 16px;text-align:center;position:relative;
+  }
+  .pullquote::before{
+    content:"\201C";font-family:var(--didot);font-size:78px;line-height:0;
+    color:var(--ink);position:absolute;left:50%;top:24px;transform:translateX(-50%);opacity:.16;
+  }
+  .pullquote q{
+    font-family:var(--serif);font-style:italic;font-size:25px;line-height:1.32;
+    color:var(--ink);quotes:none;display:block;position:relative;z-index:1;
+  }
+
+  /* article excerpt */
+  .excerpt{
+    font-family:var(--serif);font-size:14.5px;line-height:1.5;color:var(--ink-soft);
+    border-left:2px solid var(--rule-hard);padding-left:12px;margin:0 0 15px;
+  }
+
+  h2.ctitle{
+    font-family:var(--serif);font-weight:400;font-size:25px;line-height:1.16;
+    letter-spacing:-.008em;color:var(--ink);margin:0 0 10px;
+  }
+  h2.ctitle em{font-style:italic;}
+
+  .meta{
+    display:flex;align-items:center;gap:9px;flex-wrap:wrap;
+    font-family:var(--mono);font-size:11px;letter-spacing:.02em;color:var(--ink-soft);
+    margin-bottom:18px;
+  }
+  .meta .src{font-family:var(--grot);font-size:12px;letter-spacing:.03em;color:var(--ink);}
+  .meta .dot{width:3px;height:3px;background:var(--ink-mute);border-radius:50%;}
+  .meta .mtype{display:inline-flex;align-items:center;gap:5px;text-transform:uppercase;
+    letter-spacing:.1em;font-size:9.5px;font-family:var(--grot);color:var(--ink);}
+
+  /* actions dock, pinned bottom of card */
+  .dock{
+    position:relative;z-index:2;flex:0 0 auto;
+    border-top:1.5px solid var(--rule-hard);
+    display:flex;background:var(--paper);
+  }
+  .dock .act{
+    flex:1;min-height:56px;background:var(--paper);border:none;
+    font-family:var(--grot);font-size:11px;letter-spacing:.1em;text-transform:uppercase;
+    color:var(--ink);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:5px;
+    cursor:pointer;transition:background .14s steps(2,end);
+  }
+  .dock .act + .act{border-left:1.5px solid var(--rule-hard);}
+  .dock .act:active{background:var(--paper-2);}
+  .dock .act svg{display:block;}
+  .dock .act.open{flex:1.4;background:var(--ink);color:var(--paper);}
+  .dock .act.open svg *{stroke:var(--paper);}
+  .dock .act.like.on{background:var(--ink);color:var(--paper);}
+  .dock .act.like.on svg path{fill:var(--paper);stroke:var(--paper);}
+
+  /* like stamp burst */
+  .stamp{
+    position:absolute;left:50%;top:44%;z-index:24;pointer-events:none;
+    transform:translate(-50%,-50%) rotate(-11deg) scale(.6);opacity:0;
+    font-family:var(--grot);font-size:15px;letter-spacing:.24em;text-transform:uppercase;font-weight:700;
+    color:var(--ink);border:3px solid var(--ink);padding:8px 16px;
+  }
+  .stamp.go{animation:stampin .6s steps(4,end) forwards;}
+  @keyframes stampin{
+    0%{opacity:0;transform:translate(-50%,-50%) rotate(-11deg) scale(.55);}
+    30%{opacity:1;transform:translate(-50%,-50%) rotate(-11deg) scale(1.08);}
+    60%{opacity:1;transform:translate(-50%,-50%) rotate(-11deg) scale(1);}
+    100%{opacity:0;transform:translate(-50%,-56%) rotate(-11deg) scale(1);}
+  }
+
+  /* toss hint that floats above stack */
+  .tosshint{
+    position:absolute;left:0;right:0;top:24px;z-index:20;text-align:center;pointer-events:none;
+    font-family:var(--grot);font-size:10px;letter-spacing:.24em;text-transform:uppercase;
+    color:var(--ink);opacity:0;transition:opacity .12s;
+  }
+  .tosshint.show{opacity:.9;}
+  .tosshint .arw{display:block;font-size:16px;margin-bottom:3px;}
+
+  /* ---------- done / empty state ---------- */
+  .done{
+    position:absolute;inset:16px;z-index:1;
+    border:1.5px solid var(--rule-hard);background:var(--paper);
+    display:flex;flex-direction:column;align-items:center;justify-content:center;
+    padding:40px 30px;text-align:center;opacity:0;visibility:hidden;
+    transition:opacity .4s steps(3,end);
+  }
+  .done.show{opacity:1;visibility:visible;}
+  .done .mark{font-family:var(--didot);font-size:52px;color:var(--ink);line-height:1;}
+  .done .line{font-family:var(--serif);font-style:italic;font-size:22px;color:var(--ink);margin:18px 0 6px;}
+  .done .count{font-family:var(--mono);font-size:12px;color:var(--ink-soft);letter-spacing:.03em;margin-bottom:28px;}
+  .done .stats{display:flex;gap:0;border:1.5px solid var(--rule-hard);margin-bottom:28px;width:100%;}
+  .done .stats .st{flex:1;padding:14px 8px;}
+  .done .stats .st + .st{border-left:1.5px solid var(--rule-hard);}
+  .done .stats .st .n{font-family:var(--serif);font-size:26px;color:var(--ink);}
+  .done .stats .st .k{font-family:var(--grot);font-size:8.5px;letter-spacing:.18em;text-transform:uppercase;color:var(--ink-mute);margin-top:3px;}
+  .done .restart{
+    min-height:54px;width:100%;border:2px solid var(--rule-hard);background:var(--ink);color:var(--paper);
+    font-family:var(--serif);font-size:18px;display:flex;align-items:center;justify-content:center;gap:10px;cursor:pointer;
+  }
+  .done .restart:active{transform:translateY(1px);}
+  .done .restart::after{content:"";position:absolute;}
+</style>
+</head>
+<body>
+<div class="phone" id="phone">
+
+  <!-- shared dither filter defs -->
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true">
+    <defs>
+      <filter id="dither" x="0" y="0" width="100%" height="100%">
+        <feTurbulence type="fractalNoise" baseFrequency="0.7 0.7" numOctaves="2" seed="7" stitchTiles="stitch" result="n"/>
+        <feColorMatrix in="n" type="saturate" values="0" result="g"/>
+        <feComponentTransfer in="g" result="hi">
+          <feFuncR type="discrete" tableValues="0 0.25 0.55 0.82 1"/>
+          <feFuncG type="discrete" tableValues="0 0.25 0.55 0.82 1"/>
+          <feFuncB type="discrete" tableValues="0 0.25 0.55 0.82 1"/>
+        </feComponentTransfer>
+        <feColorMatrix in="hi" type="matrix" values="0 0 0 0 0.10  0 0 0 0 0.09  0 0 0 0 0.08  0 0 0 1 0"/>
+      </filter>
+      <pattern id="halftone" width="6" height="6" patternUnits="userSpaceOnUse">
+        <rect width="6" height="6" fill="#efece3"/>
+        <circle cx="3" cy="3" r="1.5" fill="#1a1815"/>
+      </pattern>
+    </defs>
+  </svg>
+
+  <div class="status">
+    <span>9:41</span>
+    <span class="dots" aria-hidden="true">
+      <span class="bar"></span><span class="bar"></span><span class="bar"></span><span class="bar"></span>
+      &nbsp;<svg width="22" height="11" viewBox="0 0 22 11"><rect x="0.5" y="0.5" width="18" height="10" rx="2" fill="none" stroke="#1a1815"/><rect x="19" y="3.5" width="2" height="4" fill="#1a1815"/><rect x="2" y="2" width="13" height="7" fill="#1a1815"/></svg>
+    </span>
+  </div>
+
+  <header class="app">
+    <div class="wordmark">otium</div>
+    <div class="tagline">one at a time</div>
+  </header>
+
+  <div class="gauge">
+    <span class="label"><b id="gnum">6</b> in the stack</span>
+    <div class="segs" id="segs"></div>
+  </div>
+
+  <div class="stage">
+    <div class="flash" id="flash"></div>
+    <div class="tosshint" id="tosshint"><span class="arw">&uarr;</span>toss to finish</div>
+
+    <div class="done" id="done">
+      <div class="mark">&#10086;</div>
+      <div class="line">The stack is empty.</div>
+      <div class="count">You&rsquo;re done. Go do something.</div>
+      <div class="stats">
+        <div class="st"><div class="n" id="st-read">0</div><div class="k">read</div></div>
+        <div class="st"><div class="n" id="st-liked">0</div><div class="k">liked</div></div>
+        <div class="st"><div class="n" id="st-opened">0</div><div class="k">opened</div></div>
+      </div>
+      <button class="restart" id="restart">Build a new stack &rarr;</button>
+    </div>
+
+    <div class="stack" id="stack"></div>
+  </div>
+</div>
+
+<script>
+(function(){
+  "use strict";
+
+  var flash   = document.getElementById('flash');
+  var stackEl = document.getElementById('stack');
+  var doneEl  = document.getElementById('done');
+  var segsEl  = document.getElementById('segs');
+  var gnum    = document.getElementById('gnum');
+  var hint    = document.getElementById('tosshint');
+
+  function eink(){ flash.classList.remove('go'); void flash.offsetWidth; flash.classList.add('go'); }
+
+  var reasonGlyph = '<svg class="glyph" viewBox="0 0 9 9" width="9" height="9"><rect x="1.2" y="1.2" width="6.6" height="6.6" fill="#1a1815"/></svg>';
+
+  var ic = {
+    like:'<svg width="18" height="18" viewBox="0 0 14 14"><path d="M7 12S1.5 8.6 1.5 4.9C1.5 3.3 2.7 2 4.3 2 5.4 2 6.4 2.7 7 3.7 7.6 2.7 8.6 2 9.7 2 11.3 2 12.5 3.3 12.5 4.9 12.5 8.6 7 12 7 12z" fill="none" stroke="#1a1815" stroke-width="1.2"/></svg>',
+    open:'<svg width="18" height="18" viewBox="0 0 14 14"><path d="M4 2.5h7.5V10M11.5 2.5L4.5 9.5M2.5 5v6.5H9" fill="none" stroke="#1a1815" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+    toss:'<svg width="18" height="18" viewBox="0 0 14 14"><path d="M7 11.5V3M3.5 6L7 2.5 10.5 6" fill="none" stroke="#1a1815" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+    mvid:'<svg width="12" height="12" viewBox="0 0 14 14"><rect x="1" y="2.5" width="12" height="9" fill="none" stroke="#1a1815" stroke-width="1.2"/><path d="M6 5.2l3 1.8-3 1.8z" fill="#1a1815"/></svg>',
+    mart:'<svg width="12" height="12" viewBox="0 0 14 14"><path d="M2 3h10M2 6h10M2 9h7" stroke="#1a1815" stroke-width="1.2" stroke-linecap="round"/></svg>',
+    maud:'<svg width="12" height="12" viewBox="0 0 14 14"><path d="M1.5 7h1.5M4 4.5v5M6.5 2.5v9M9 5v4M11.5 3.5v7" stroke="#1a1815" stroke-width="1.3" stroke-linecap="round"/></svg>',
+    mimg:'<svg width="12" height="12" viewBox="0 0 14 14"><rect x="1.5" y="2.5" width="11" height="9" fill="none" stroke="#1a1815" stroke-width="1.2"/><circle cx="4.5" cy="5.5" r="1" fill="#1a1815"/><path d="M2 10l3-3 2.2 2.2L9.5 6.5 12.5 10" fill="none" stroke="#1a1815" stroke-width="1.2" stroke-linejoin="round"/></svg>',
+    mquo:'<svg width="12" height="12" viewBox="0 0 14 14"><path d="M2 8c0-2 1-3.5 3-4l.4 1c-1.2.4-1.8 1.2-1.8 2H5v2.6H2V8zM8 8c0-2 1-3.5 3-4l.4 1c-1.2.4-1.8 1.2-1.8 2H11v2.6H8V8z" fill="#1a1815"/></svg>'
+  };
+
+  function ditherFill(w,h,seed){
+    // an SVG that fills its box with a dithered grayscale field + faint frame
+    return '<svg class="fill" viewBox="0 0 '+w+' '+h+'" preserveAspectRatio="xMidYMid slice">'+
+      '<rect width="'+w+'" height="'+h+'" fill="#efece3"/>'+
+      '<rect width="'+w+'" height="'+h+'" filter="url(#dither)" opacity="0.9"/>'+
+      '<rect width="'+w+'" height="'+h+'" fill="url(#halftone)" opacity="0.10"/>'+
+    '</svg>';
+  }
+
+  function waveBars(n,seedShift){
+    var s='';
+    for(var i=0;i<n;i++){
+      // deterministic pseudo-height
+      var v = Math.abs(Math.sin((i+1)*(1.3+seedShift)) * Math.cos((i+2)*0.7));
+      var h = 14 + Math.round(v*80); // percent
+      s += '<span style="height:'+h+'%"></span>';
+    }
+    return s;
+  }
+
+  /* ---------- fixture ---------- */
+  var DATA = [
+    {
+      type:'vertvid', reason:'Rare · posts weekly',
+      title:'Scumbag Dad &mdash; the school pickup bit', src:'Scumbag Dad', dur:'0:48',
+      mtype:'Short', micon:ic.mvid,
+      media:'<div class="media v16" data-preview="1">'+ditherFill(90,160)+
+              '<span class="tallbadge">Short</span>'+
+              '<span class="play"></span><span class="chip-dur">0:48</span></div>'+
+            '<div class="scrub"><span>0:12</span><div class="track"><b></b></div><span>0:48</span></div>'
+    },
+    {
+      type:'horzvid', reason:'Favorite source',
+      title:'I got hit in the teeth at England&rsquo;s oldest ritual', src:'Tom Scott', dur:'10:24',
+      mtype:'Video', micon:ic.mvid,
+      media:'<div class="media h16" data-preview="1">'+ditherFill(160,90)+
+              '<span class="play"></span><span class="chip-dur">10:24</span></div>'+
+            '<div class="scrub"><span>3:31</span><div class="track"><b></b></div><span>10:24</span></div>'
+    },
+    {
+      type:'article', reason:'Fresh · today',
+      title:'Apple&rsquo;s entry-level MacBook Pro could get a redesign', src:'The Verge', dur:'4 min read',
+      mtype:'Article', micon:ic.mart,
+      media:'<div class="media hero">'+ditherFill(160,70)+'</div>'+
+            '<p class="excerpt">A revamped entry model could arrive as soon as this year, per supply-chain reports.</p>'
+    },
+    {
+      type:'image', reason:'High-weight source',
+      title:'Aurora over the Faroe Islands', src:'Astronomy Picture of the Day', dur:'Photo',
+      mtype:'Image', micon:ic.mimg,
+      media:'<div class="media img" data-preview="1">'+ditherFill(120,90)+
+              '<span class="galdots"><i class="on"></i><i></i><i></i></span></div>'
+    },
+    {
+      type:'audio', reason:'Rare · posts seldom',
+      title:'The Real Book', src:'99% Invisible', dur:'32 min',
+      mtype:'Audio', micon:ic.maud,
+      media:'<div class="audio-row" data-preview="1"><span class="pbtn"></span>'+
+              '<div class="wave">'+waveBars(38,0.2)+'<span class="pip">32:00</span></div></div>'+
+            '<div class="scrub show"><span>08:14</span><div class="track"><b></b></div><span>32:00</span></div>'
+    },
+    {
+      type:'quote', reason:'Recent',
+      title:'', src:'Kottke', dur:'Text',
+      mtype:'Quote', micon:ic.mquo,
+      media:'<div class="pullquote"><q>The best way to predict the future is to invent it.</q></div>'
+    }
+  ];
+
+  var TOTAL = DATA.length;
+  var state = DATA.map(function(){ return { liked:false, opened:false, read:false }; });
+  var cursor = 0;           // index of current top card in DATA
+  var consumed = 0;         // count tossed
+
+  /* ---------- gauge ---------- */
+  var segEls = [];
+  for(var i=0;i<TOTAL;i++){
+    var s=document.createElement('div'); s.className='seg'; segsEl.appendChild(s); segEls.push(s);
+  }
+  function paintGauge(){
+    for(var i=0;i<TOTAL;i++){
+      segEls[i].className = 'seg' + (i<consumed?' done': (i===consumed?' now':''));
+    }
+    gnum.textContent = String(TOTAL - consumed);
+  }
+
+  /* ---------- build a card element ---------- */
+  function buildCard(dataIndex){
+    var d = DATA[dataIndex];
+    var st = state[dataIndex];
+    var el = document.createElement('div');
+    el.className='card';
+    el.dataset.i = dataIndex;
+    var titleHtml = d.title ? '<h2 class="ctitle">'+d.title+'</h2>' : '';
+    el.innerHTML =
+      '<div class="grain"></div>'+
+      '<div class="stamp">Liked</div>'+
+      '<div class="inner">'+
+        '<div class="cardtop">'+
+          '<span class="idx">No.&nbsp;<b>'+(dataIndex+1)+'</b> / '+TOTAL+'</span>'+
+          '<span class="handle"><i></i><i></i></span>'+
+        '</div>'+
+        '<span class="reason">'+reasonGlyph+d.reason+'</span>'+
+        d.media+
+        titleHtml+
+        '<div class="meta"><span class="src">'+d.src+'</span><span class="dot"></span>'+
+          '<span>'+d.dur+'</span><span class="dot"></span>'+
+          '<span class="mtype">'+d.micon+d.mtype+'</span></div>'+
+      '</div>'+
+      '<div class="dock">'+
+        '<button class="act like'+(st.liked?' on':'')+'" data-a="like">'+ic.like+'Like</button>'+
+        '<button class="act open" data-a="open">'+ic.open+'Open</button>'+
+        '<button class="act toss" data-a="toss">'+ic.toss+'Toss</button>'+
+      '</div>';
+    return el;
+  }
+
+  /* ---------- (re)render the visible stack ---------- */
+  var MAX_DEPTH = 3; // top + 2 peeking behind
+  function layout(){
+    // remaining data indices from cursor..end
+    var remaining = TOTAL - cursor;
+    // ensure DOM has the right cards (top-most first). We render lazily:
+    // clear and rebuild is simplest and cheap at this scale, but preserve top card if mid-drag.
+    stackEl.innerHTML = '';
+    var shown = Math.min(MAX_DEPTH, remaining);
+    // build from back to front so DOM order = paint order; front card last (highest z via style)
+    for(var depth = shown-1; depth>=0; depth--){
+      var di = cursor + depth;
+      var card = buildCard(di);
+      var scale = 1 - depth*0.035;
+      var ty = depth*15;          // peek downward -> bottom edges stack like paper
+      card.style.transform = 'translateY('+ty+'px) scale('+scale+')';
+      card.style.zIndex = String(10 - depth);
+      if(depth===0){
+        card.classList.add('is-top');
+        wireTop(card, di);
+      }else{
+        card.style.filter = 'brightness('+(1 - depth*0.03)+')';
+        // non-top cards are inert
+        card.style.pointerEvents = 'none';
+        card.querySelector('.inner').style.overflow='hidden';
+      }
+      stackEl.appendChild(card);
+    }
+    paintGauge();
+    if(remaining===0) showDone();
+  }
+
+  /* ---------- interactions on the top card ---------- */
+  function wireTop(card, di){
+    // dock buttons
+    card.querySelector('.dock').addEventListener('click', function(e){
+      var b = e.target.closest('.act'); if(!b) return;
+      var a = b.dataset.a;
+      if(a==='like'){
+        state[di].liked = !state[di].liked;
+        b.classList.toggle('on', state[di].liked);
+        if(state[di].liked){
+          var stamp = card.querySelector('.stamp');
+          stamp.classList.remove('go'); void stamp.offsetWidth; stamp.classList.add('go');
+        }
+      } else if(a==='open'){
+        state[di].opened = true;
+        // open = a heavier e-ink refresh, mark opened
+        eink();
+        b.classList.add('on');
+      } else if(a==='toss'){
+        tossTop(card, di, -1);
+      }
+    });
+
+    // media preview toggle (tap, not drag)
+    var previews = card.querySelectorAll('[data-preview]');
+    Array.prototype.forEach.call(previews, function(p){
+      p.addEventListener('click', function(){
+        p.classList.toggle('playing');
+        // audio-row uses its own playing class visual
+        eink();
+      });
+    });
+
+    // drag-to-toss (vertical)
+    var startY=0, startX=0, curDX=0, curDY=0, dragging=false, moved=false, fromScroll=false;
+    var inner = card.querySelector('.inner');
+
+    function onDown(e){
+      // ignore drags starting on buttons or interactive media (let their taps work)
+      if(e.target.closest('.dock')) return;
+      var pt = point(e);
+      startY = pt.y; startX = pt.x; curDX=0; curDY=0; moved=false;
+      // if the inner is scrolled and user starts a downward pull, let it scroll instead
+      fromScroll = inner.scrollTop > 2;
+      dragging = true;
+      card.classList.add('dragging');
+      if(card.setPointerCapture && e.pointerId!=null){ try{card.setPointerCapture(e.pointerId);}catch(_){}}
+    }
+    function onMove(e){
+      if(!dragging) return;
+      var pt = point(e);
+      curDX = pt.x - startX; curDY = pt.y - startY;
+      if(Math.abs(curDY)>6 || Math.abs(curDX)>6) moved=true;
+      // Only hijack as a toss gesture when pulling UP and not scrolling content up.
+      var pullingUp = curDY < 0;
+      if(pullingUp && inner.scrollTop<=0){
+        e.preventDefault();
+        var dy = curDY;                 // negative
+        var dx = curDX*0.35;
+        card.style.transform = 'translate('+dx+'px,'+dy+'px) rotate('+(dx*0.02)+'deg)';
+        card.style.opacity = String(Math.max(0.25, 1 - (-dy)/380));
+        hint.classList.toggle('show', -dy>40);
+      }
+    }
+    function onUp(e){
+      if(!dragging) return;
+      dragging=false; card.classList.remove('dragging');
+      hint.classList.remove('show');
+      if(curDY < -110){          // threshold met -> toss
+        tossTop(card, di, curDX>0?1:-1);
+      } else {
+        // spring back (stepped e-ink settle)
+        card.style.transform = 'translateY(0px) scale(1)';
+        card.style.opacity = '1';
+      }
+    }
+    card.addEventListener('pointerdown', onDown);
+    card.addEventListener('pointermove', onMove);
+    card.addEventListener('pointerup', onUp);
+    card.addEventListener('pointercancel', onUp);
+    // touch fallback
+    card.addEventListener('touchstart', onDown, {passive:false});
+    card.addEventListener('touchmove', onMove, {passive:false});
+    card.addEventListener('touchend', onUp);
+  }
+
+  function point(e){
+    if(e.touches && e.touches[0]) return {x:e.touches[0].clientX, y:e.touches[0].clientY};
+    if(e.changedTouches && e.changedTouches[0]) return {x:e.changedTouches[0].clientX, y:e.changedTouches[0].clientY};
+    return {x:e.clientX, y:e.clientY};
+  }
+
+  var busy=false;
+  function tossTop(card, di, dir){
+    if(busy) return; busy=true;
+    state[di].read = true;
+    hint.classList.remove('show');
+    card.classList.add('toss');
+    var flyX = (dir||-1)*90;
+    card.style.transform = 'translate('+flyX+'px,-120%) rotate('+(dir*8)+'deg)';
+    card.style.opacity = '0';
+    eink();
+    setTimeout(function(){
+      cursor++; consumed++;
+      layout();
+      busy=false;
+    }, 300);
+  }
+
+  /* ---------- done state ---------- */
+  function showDone(){
+    var read = state.filter(function(s){return s.read;}).length;
+    var liked = state.filter(function(s){return s.liked;}).length;
+    var opened = state.filter(function(s){return s.opened;}).length;
+    document.getElementById('st-read').textContent = read;
+    document.getElementById('st-liked').textContent = liked;
+    document.getElementById('st-opened').textContent = opened;
+    doneEl.classList.add('show');
+  }
+  document.getElementById('restart').addEventListener('click', function(){
+    eink();
+    setTimeout(function(){
+      cursor=0; consumed=0;
+      state = DATA.map(function(){ return { liked:false, opened:false, read:false }; });
+      doneEl.classList.remove('show');
+      layout();
+    }, 140);
+  });
+
+  /* ---------- boot ---------- */
+  layout();
+  // one-time hint pulse
+  setTimeout(function(){ hint.classList.add('show'); setTimeout(function(){hint.classList.remove('show');},1400); }, 700);
+
+})();
+</script>
+</body>
+</html>
