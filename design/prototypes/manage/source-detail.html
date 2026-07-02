@@ -1,0 +1,847 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>otium — e-ink · source detail</title>
+<style>
+  :root{
+    --paper:#f4f2ec;
+    --paper-2:#efece3;
+    --ink:#1a1815;
+    --ink-soft:#4b4740;
+    --ink-mute:#8b857a;
+    --rule:#c9c3b5;
+    --rule-hard:#1a1815;
+    --hair:#d9d4c8;
+    --serif:"Charter","Iowan Old Style","Georgia",serif;
+    --grot:"Helvetica Neue","Arial",sans-serif;
+    --mono:"SF Mono","Menlo",ui-monospace,monospace;
+    --didot:"Didot","Hoefler Text","Baskerville",serif;
+    --bar-h:60px;
+  }
+
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+  html,body{height:100%;margin:0;}
+  body{
+    background:#3b3a36;
+    background-image:radial-gradient(circle at 30% 20%, #4a4844 0%, #2c2b28 70%);
+    display:flex;align-items:center;justify-content:center;
+    min-height:100vh;
+    font-family:var(--serif);
+    -webkit-font-smoothing:antialiased;
+    padding:18px;
+  }
+
+  /* ---------- phone frame ---------- */
+  .phone{
+    position:relative;
+    width:390px;height:844px;max-height:calc(100vh - 24px);
+    background:var(--paper);
+    border-radius:44px;
+    box-shadow:0 0 0 2px #111, 0 0 0 12px #16150f, 0 30px 70px rgba(0,0,0,.55);
+    overflow:hidden;
+    display:flex;flex-direction:column;
+  }
+  .phone::before{
+    content:"";position:absolute;inset:0;pointer-events:none;z-index:6;
+    background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='140' height='140'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/><feColorMatrix type='saturate' values='0'/></filter><rect width='140' height='140' filter='url(%23n)' opacity='0.05'/></svg>");
+    mix-blend-mode:multiply;opacity:.6;
+  }
+
+  /* status bar */
+  .status{
+    position:relative;z-index:4;
+    display:flex;justify-content:space-between;align-items:center;
+    padding:14px 26px 6px;
+    font-family:var(--mono);font-size:12px;letter-spacing:.03em;color:var(--ink);
+    flex:0 0 auto;
+  }
+  .status .dots{display:flex;gap:3px;align-items:center;}
+  .status .bar{width:2px;background:var(--ink);}
+  .status .bar:nth-child(1){height:5px}
+  .status .bar:nth-child(2){height:7px}
+  .status .bar:nth-child(3){height:9px}
+  .status .bar:nth-child(4){height:11px}
+
+  /* ---------- app header ---------- */
+  header.app{
+    position:relative;z-index:4;flex:0 0 auto;
+    padding:2px 18px 10px;
+    border-bottom:1.5px solid var(--rule-hard);
+    display:flex;align-items:center;gap:12px;
+  }
+  .backbtn{
+    width:34px;height:34px;flex:0 0 auto;border:1.5px solid var(--rule-hard);background:var(--paper);cursor:pointer;
+    display:flex;align-items:center;justify-content:center;
+  }
+  .backbtn:active{background:var(--paper-2);}
+  .backbtn svg{width:14px;height:14px;}
+  .hwrap{display:flex;flex-direction:column;gap:2px;min-width:0;flex:1 1 auto;}
+  .hwrap .k{font-family:var(--grot);font-size:8.5px;letter-spacing:.24em;text-transform:uppercase;color:var(--ink-mute);}
+  .hwrap .n{font-family:var(--didot);font-size:22px;line-height:1;color:var(--ink);}
+  .wordmark{
+    font-family:var(--didot);font-size:22px;line-height:.9;color:var(--ink);font-weight:400;
+    flex:0 0 auto;padding-bottom:1px;
+  }
+
+  /* ---------- stage / scroll ---------- */
+  .stage{position:relative;flex:1 1 auto;overflow:hidden;z-index:3;min-height:0;}
+  .flash{position:absolute;inset:0;z-index:16;pointer-events:none;background:var(--ink);opacity:0;}
+  .flash.go{animation:refresh .3s steps(2,end) forwards;}
+  @keyframes refresh{0%{opacity:0}40%{opacity:.92}41%{opacity:.05}72%{opacity:.45}100%{opacity:0}}
+
+  .detail{
+    position:absolute;inset:0;overflow-y:auto;overflow-x:hidden;
+    -webkit-overflow-scrolling:touch;scrollbar-width:none;
+  }
+  .detail::-webkit-scrollbar{width:0;}
+
+  /* section scaffolding */
+  .sec{padding:18px 18px;border-bottom:1.5px solid var(--rule-hard);}
+  .sec:last-child{border-bottom:0;}
+  .seclabel{
+    font-family:var(--grot);font-size:8.5px;letter-spacing:.2em;text-transform:uppercase;
+    color:var(--ink-mute);margin:0 0 12px;display:flex;justify-content:space-between;align-items:baseline;gap:8px;
+  }
+  .seclabel .sv{font-family:var(--mono);font-size:10px;letter-spacing:.02em;text-transform:none;color:var(--ink-soft);}
+
+  /* ---------- source header card ---------- */
+  .srchead{display:flex;gap:13px;align-items:flex-start;}
+  /* vertical weight meter */
+  .wmeter{flex:0 0 auto;width:15px;display:flex;flex-direction:column-reverse;gap:2px;margin-top:4px;}
+  .wmeter i{width:15px;height:6px;border:1px solid var(--rule-hard);background:var(--paper);}
+  .wmeter i.f{background:var(--ink);}
+  .shmain{flex:1 1 auto;min-width:0;}
+  .shtitle{
+    font-family:var(--didot);font-size:27px;line-height:1.02;color:var(--ink);
+    display:flex;align-items:baseline;gap:8px;
+  }
+  .shtitle .fav{font-family:var(--didot);font-size:18px;line-height:1;color:var(--ink);}
+  .shkind{
+    display:flex;align-items:center;gap:7px;margin-top:8px;flex-wrap:wrap;
+    font-family:var(--mono);font-size:11px;color:var(--ink-soft);letter-spacing:.01em;
+  }
+  .shkind .tb{
+    font-family:var(--grot);font-size:8px;letter-spacing:.14em;text-transform:uppercase;
+    border:1px solid var(--rule-hard);padding:2px 5px;color:var(--ink);
+  }
+  .shkind .url{font-family:var(--mono);font-size:10.5px;color:var(--ink-mute);word-break:break-all;}
+  /* stat trio */
+  .stats{display:flex;margin-top:15px;border:1.5px solid var(--rule-hard);}
+  .stat{
+    flex:1;padding:9px 6px 8px;border-left:1px solid var(--rule);
+    display:flex;flex-direction:column;align-items:center;gap:3px;text-align:center;
+  }
+  .stat:first-child{border-left:0;}
+  .stat .sl{font-family:var(--grot);font-size:7.5px;letter-spacing:.16em;text-transform:uppercase;color:var(--ink-mute);}
+  .stat .sd{font-family:var(--mono);font-size:14px;color:var(--ink);line-height:1;}
+  .stat .sd.big{font-family:var(--didot);font-size:17px;}
+
+  /* ---------- filter row ---------- */
+  .filterline{display:flex;align-items:center;gap:9px;flex-wrap:wrap;}
+  .fcur{
+    font-family:var(--grot);font-size:10px;letter-spacing:.06em;text-transform:uppercase;
+    padding:8px 12px;border:1.5px solid var(--rule-hard);background:var(--ink);color:var(--paper);line-height:1;
+  }
+  .fnote{
+    font-family:var(--serif);font-size:12.5px;font-style:italic;line-height:1.4;color:var(--ink-soft);margin-top:11px;
+  }
+
+  /* ---------- split callout + cards ---------- */
+  .callout{border:1.5px solid var(--rule-hard);background:var(--paper);padding:13px 13px 14px;}
+  .callout .ctop{display:flex;align-items:center;gap:9px;margin-bottom:8px;}
+  .callout .cmark{
+    width:26px;height:26px;flex:0 0 auto;border:1.5px solid var(--rule-hard);background:var(--paper-2);
+    display:flex;align-items:center;justify-content:center;font-family:var(--didot);font-size:16px;color:var(--ink);
+  }
+  .callout .chdr{font-family:var(--grot);font-size:8.5px;letter-spacing:.18em;text-transform:uppercase;color:var(--ink);}
+  .callout .ctext{font-family:var(--serif);font-size:13.5px;line-height:1.42;color:var(--ink);}
+  .callout .ctext b{font-weight:700;}
+  .typemix{display:flex;gap:7px;margin:11px 0 2px;}
+  .typemix .tm{
+    font-family:var(--grot);font-size:9px;letter-spacing:.1em;text-transform:uppercase;
+    border:1.5px solid var(--rule-hard);background:var(--paper-2);padding:6px 9px;color:var(--ink);
+    display:inline-flex;align-items:center;gap:6px;line-height:1;
+  }
+  .typemix .tm .dot{width:8px;height:8px;background:var(--ink);}
+  .typemix .tm .dot.h{background:var(--paper);border:1.5px solid var(--ink);}
+
+  .splitbtn{
+    width:100%;margin-top:13px;border:1.5px solid var(--rule-hard);background:var(--ink);color:var(--paper);cursor:pointer;
+    padding:14px 4px;display:flex;align-items:center;justify-content:center;gap:9px;
+    font-family:var(--grot);font-size:11px;letter-spacing:.14em;text-transform:uppercase;font-weight:700;
+  }
+  .splitbtn:active{transform:translateY(1px);}
+  .splitbtn svg{width:15px;height:15px;}
+  .splithint{
+    font-family:var(--serif);font-size:11.5px;font-style:italic;line-height:1.4;color:var(--ink-soft);margin-top:10px;
+  }
+
+  /* split result cards */
+  .splitcards{display:flex;flex-direction:column;gap:13px;}
+  .scard{border:1.5px solid var(--rule-hard);background:var(--paper);}
+  .scard .schd{
+    display:flex;align-items:center;gap:10px;padding:12px 13px;border-bottom:1.5px solid var(--rule-hard);background:var(--paper-2);
+  }
+  .scard .sctype{
+    font-family:var(--grot);font-size:8px;letter-spacing:.14em;text-transform:uppercase;
+    border:1px solid var(--rule-hard);background:var(--paper);padding:3px 6px;color:var(--ink);flex:0 0 auto;
+  }
+  .scard .scname{font-family:var(--didot);font-size:17px;line-height:1;color:var(--ink);flex:1 1 auto;min-width:0;}
+  .scard .scbody{padding:13px;}
+  .splitactions{display:flex;gap:8px;margin-top:3px;}
+  .mergebtn{
+    flex:1;border:1.5px solid var(--rule-hard);background:var(--paper);cursor:pointer;
+    padding:11px 4px;display:flex;align-items:center;justify-content:center;gap:7px;
+    font-family:var(--grot);font-size:9.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--ink);
+  }
+  .mergebtn:active{background:var(--paper-2);}
+  .mergebtn svg{width:13px;height:13px;}
+
+  /* ---------- shared control blocks ---------- */
+  .pblock{margin-bottom:18px;}
+  .pblock:last-child{margin-bottom:0;}
+  .plabel{
+    display:flex;justify-content:space-between;align-items:baseline;
+    font-family:var(--grot);font-size:8.5px;letter-spacing:.2em;text-transform:uppercase;
+    color:var(--ink-mute);margin:0 0 9px;
+  }
+  .plabel .val{font-family:var(--mono);font-size:10.5px;letter-spacing:.02em;color:var(--ink);text-transform:none;}
+
+  /* weight selector */
+  .wsel{display:flex;border:1.5px solid var(--rule-hard);}
+  .wsel button{
+    flex:1;padding:11px 2px 10px;font-family:var(--grot);font-size:8.5px;letter-spacing:.04em;
+    text-transform:uppercase;color:var(--ink-soft);background:var(--paper);border:0;
+    border-left:1px solid var(--rule);cursor:pointer;position:relative;line-height:1.1;
+  }
+  .wsel button:first-child{border-left:0;}
+  .wsel button .wtick{display:block;height:4px;margin:0 auto 6px;width:60%;background:var(--rule);}
+  .wsel button.on{background:var(--ink);color:var(--paper);font-weight:700;}
+  .wsel button.on .wtick{background:var(--paper);}
+  .wsel button:active{background:var(--paper-2);}
+  .wsel button.on:active{background:var(--ink);}
+
+  /* cap stepper */
+  .cap{display:flex;align-items:stretch;border:1.5px solid var(--rule-hard);width:fit-content;}
+  .stepbtn{
+    width:44px;height:42px;border:0;border-right:1.5px solid var(--rule-hard);background:var(--paper);
+    font-family:var(--serif);font-size:22px;line-height:1;color:var(--ink);cursor:pointer;
+    display:flex;align-items:center;justify-content:center;
+  }
+  .stepbtn:last-child{border-right:0;border-left:1.5px solid var(--rule-hard);}
+  .stepbtn:active{background:var(--paper-2);}
+  .capval{
+    min-width:118px;display:flex;flex-direction:column;align-items:center;justify-content:center;background:var(--paper);
+  }
+  .capval .cv{font-family:var(--mono);font-size:16px;color:var(--ink);line-height:1;}
+  .capval .cl{font-family:var(--grot);font-size:7.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-mute);margin-top:3px;}
+  .caphint{font-family:var(--serif);font-size:12px;font-style:italic;line-height:1.35;color:var(--ink-soft);margin-top:9px;}
+
+  /* feed chips */
+  .chips{display:flex;flex-wrap:wrap;gap:7px;}
+  .chip{
+    font-family:var(--grot);font-size:9.5px;letter-spacing:.08em;text-transform:uppercase;
+    padding:8px 12px;border:1.5px solid var(--rule-hard);color:var(--ink-soft);background:var(--paper);cursor:pointer;
+  }
+  .chip.on{background:var(--ink);color:var(--paper);border-color:var(--ink);}
+  .chip:active{transform:translateY(1px);}
+
+  /* danger actions + confirm */
+  .acts{display:flex;gap:8px;}
+  .act{
+    flex:1;border:1.5px solid var(--rule-hard);background:var(--paper);cursor:pointer;
+    padding:12px 4px;display:flex;align-items:center;justify-content:center;gap:7px;
+    font-family:var(--grot);font-size:9.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--ink);
+  }
+  .act:active{background:var(--paper-2);}
+  .act svg{width:13px;height:13px;flex:0 0 auto;}
+  .act.danger{color:var(--ink-mute);}
+  .confirm{border:1.5px solid var(--rule-hard);background:var(--ink);padding:14px 13px;}
+  .confirm .cmsg{font-family:var(--serif);font-size:14px;line-height:1.42;color:var(--paper);margin:0 0 12px;}
+  .confirm .cmsg b{font-weight:700;}
+  .confirm .crow{display:flex;gap:8px;}
+  .confirm .cbtn{
+    flex:1;padding:12px 4px;border:1.5px solid var(--paper);cursor:pointer;
+    font-family:var(--grot);font-size:9.5px;letter-spacing:.12em;text-transform:uppercase;
+  }
+  .confirm .cbtn.go{background:var(--paper);color:var(--ink);font-weight:700;}
+  .confirm .cbtn.cancel{background:transparent;color:var(--paper);}
+
+  /* ---------- raw feed ---------- */
+  .rawtypes{display:flex;gap:7px;margin:-2px 0 13px;}
+  .tchip{
+    font-family:var(--grot);font-size:9.5px;letter-spacing:.06em;text-transform:uppercase;
+    padding:7px 11px;border:1.5px solid var(--rule-hard);background:var(--ink);color:var(--paper);cursor:pointer;
+    display:inline-flex;align-items:center;gap:6px;line-height:1;
+  }
+  .tchip .mk{font-family:var(--mono);font-size:11px;line-height:1;}
+  .tchip.off{background:var(--paper);color:var(--ink-mute);text-decoration:line-through;}
+
+  .rawitem{border-top:1px solid var(--hair);}
+  .rawitem:first-of-type{border-top:0;}
+  .rawitem.dim{opacity:.34;}
+  .rawitem.dim .rt{text-decoration:line-through;text-decoration-thickness:1px;}
+  .rawhead{display:flex;align-items:stretch;gap:12px;padding:13px 0;cursor:pointer;position:relative;}
+  .rawhead:active{background:var(--paper-2);}
+
+  /* score cue */
+  .scorebox{flex:0 0 auto;width:40px;display:flex;flex-direction:column;align-items:center;gap:5px;align-self:center;}
+  .snum{font-family:var(--didot);font-size:23px;line-height:.9;color:var(--ink);}
+  .rawitem.dim .snum{color:var(--ink-soft);}
+  .sscale{font-family:var(--grot);font-size:7px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-mute);margin-top:-3px;}
+  .dens{display:flex;flex-direction:column-reverse;gap:1.5px;}
+  .dens i{width:22px;height:3px;border:1px solid var(--rule-hard);background:var(--paper);}
+  .dens i.f{background:var(--ink);}
+
+  .rawmain{flex:1 1 auto;min-width:0;align-self:center;}
+  .rt{font-family:var(--serif);font-size:15px;line-height:1.2;color:var(--ink);}
+  .rm{
+    display:flex;align-items:center;gap:7px;margin-top:6px;flex-wrap:wrap;
+    font-family:var(--mono);font-size:10px;color:var(--ink-soft);letter-spacing:.01em;
+  }
+  .rm .cat{font-family:var(--grot);font-size:8px;letter-spacing:.12em;text-transform:uppercase;color:var(--ink);border:1px solid var(--rule-hard);padding:1px 4px;}
+  .rm .sep{color:var(--rule);}
+
+  .rawside{flex:0 0 auto;display:flex;flex-direction:column;align-items:flex-end;justify-content:center;gap:6px;}
+  .picktag{
+    font-family:var(--grot);font-size:7.5px;letter-spacing:.16em;text-transform:uppercase;
+    background:var(--ink);color:var(--paper);padding:3px 6px;white-space:nowrap;
+  }
+  .picktag.no{background:var(--paper);color:var(--ink-mute);border:1px solid var(--rule);}
+  .chev{width:12px;height:12px;transition:transform .3s steps(3,end);}
+  .chev path{stroke:var(--ink-mute);}
+  .rawitem.open .chev{transform:rotate(180deg);}
+
+  /* breakdown panel */
+  .bd{overflow:hidden;max-height:0;transition:max-height .34s steps(6,end);}
+  .rawitem.open .bd{max-height:800px;}
+  .bd-in{padding:2px 0 15px 52px;}
+  .bdlabel{font-family:var(--grot);font-size:8px;letter-spacing:.2em;text-transform:uppercase;color:var(--ink-mute);margin:0 0 10px;}
+  .factor{display:flex;align-items:center;gap:11px;margin-bottom:11px;}
+  .fseg{flex:0 0 auto;display:flex;gap:2px;}
+  .fseg i{width:9px;height:9px;border:1px solid var(--rule-hard);background:var(--paper);}
+  .fseg i.f{background:var(--ink);}
+  .fbody{flex:1 1 auto;min-width:0;}
+  .fname{font-family:var(--grot);font-size:9px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink);}
+  .fdesc{font-family:var(--serif);font-size:12px;line-height:1.3;color:var(--ink-soft);margin-top:2px;}
+  .fdesc b{color:var(--ink);font-weight:700;}
+  .bdscore{
+    display:flex;align-items:center;gap:12px;margin-top:14px;padding-top:13px;border-top:1.5px solid var(--rule-hard);
+  }
+  .bdscore .bn{font-family:var(--didot);font-size:34px;line-height:.8;color:var(--ink);flex:0 0 auto;}
+  .bdscore .bmeta{flex:1 1 auto;min-width:0;}
+  .bdscore .bmeta .bl{font-family:var(--grot);font-size:8px;letter-spacing:.2em;text-transform:uppercase;color:var(--ink-mute);}
+  .bdscore .bmeta .bv{font-family:var(--serif);font-size:13px;line-height:1.35;color:var(--ink);margin-top:3px;}
+  .bdscore .bmeta .bv b{font-weight:700;}
+  .bdverdict{
+    flex:0 0 auto;font-family:var(--grot);font-size:8.5px;letter-spacing:.14em;text-transform:uppercase;
+    padding:6px 8px;align-self:center;
+  }
+  .bdverdict.yes{background:var(--ink);color:var(--paper);}
+  .bdverdict.no{border:1.5px solid var(--rule);color:var(--ink-mute);}
+
+  .rawsummary{
+    font-family:var(--serif);font-size:12px;font-style:italic;color:var(--ink-soft);
+    margin-top:6px;padding-top:12px;border-top:1px solid var(--hair);
+  }
+  .rawsummary b{font-style:normal;font-weight:700;color:var(--ink);}
+
+  /* ---------- undo toast ---------- */
+  .toast{
+    position:absolute;left:14px;right:14px;bottom:14px;z-index:15;
+    background:var(--ink);border:1.5px solid var(--ink);
+    padding:12px 8px 12px 15px;display:flex;align-items:center;justify-content:space-between;gap:10px;
+    box-shadow:4px 4px 0 rgba(26,24,21,.25);
+    transform:translateY(200%);transition:transform .3s steps(4,end);
+  }
+  .toast.up{transform:translateY(0);}
+  .toast .tmsg{font-family:var(--serif);font-size:14px;color:var(--paper);line-height:1.25;}
+  .toast .tmsg b{font-weight:700;}
+  .toast .tundo{
+    flex:0 0 auto;font-family:var(--grot);font-size:10px;letter-spacing:.16em;text-transform:uppercase;
+    border:1.5px solid var(--paper);background:transparent;color:var(--paper);padding:8px 13px;cursor:pointer;
+  }
+  .toast .tundo:active{background:var(--paper);color:var(--ink);}
+
+  /* ---------- bottom section-jump bar ---------- */
+  nav.actionbar{
+    position:relative;z-index:8;flex:0 0 auto;height:var(--bar-h);
+    background:var(--paper);border-top:1.5px solid var(--rule-hard);display:flex;
+  }
+  .abtn{
+    flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;
+    font-family:var(--grot);font-size:8.5px;letter-spacing:.14em;text-transform:uppercase;
+    color:var(--ink-soft);cursor:pointer;position:relative;background:transparent;border:0;padding:0;overflow:hidden;
+  }
+  .abtn + .abtn{border-left:1px solid var(--hair);}
+  .abtn:active{background:var(--paper-2);}
+  .abtn .ic{width:19px;height:19px;display:block;}
+  .abtn .ic *{stroke:var(--ink);fill:none;}
+</style>
+</head>
+<body>
+<div class="phone" id="phone">
+
+  <div class="status">
+    <span>9:41</span>
+    <span class="dots" aria-hidden="true">
+      <span class="bar"></span><span class="bar"></span><span class="bar"></span><span class="bar"></span>
+      &nbsp;<svg width="22" height="11" viewBox="0 0 22 11"><rect x="0.5" y="0.5" width="18" height="10" rx="2" fill="none" stroke="#1a1815"/><rect x="19" y="3.5" width="2" height="4" fill="#1a1815"/><rect x="2" y="2" width="13" height="7" fill="#1a1815"/></svg>
+    </span>
+  </div>
+
+  <header class="app">
+    <button class="backbtn" aria-label="Back to library">
+      <svg viewBox="0 0 15 15"><path d="M9.5 2.5L4.5 7.5l5 5" fill="none" stroke="#1a1815" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    </button>
+    <div class="hwrap">
+      <span class="k">Library / Source</span>
+      <span class="n">Manage source</span>
+    </div>
+    <div class="wordmark">otium</div>
+  </header>
+
+  <div class="stage">
+    <div class="flash" id="flash"></div>
+
+    <div class="detail" id="detail">
+
+      <!-- 1. SOURCE HEADER -->
+      <section class="sec" id="secHeader">
+        <div class="srchead">
+          <div class="wmeter" id="hdrMeter"></div>
+          <div class="shmain">
+            <div class="shtitle"><span class="fav" id="hdrFav">&#10022;</span><span id="hdrTitle">99% Invisible</span></div>
+            <div class="shkind">
+              <span class="tb">Podcast + Blog</span><span class="tb">RSS</span>
+              <span class="url">feeds.99percentinvisible.org</span>
+            </div>
+          </div>
+        </div>
+        <div class="stats" id="hdrStats"></div>
+      </section>
+
+      <!-- 2. FILTER -->
+      <section class="sec" id="secFilter">
+        <div class="seclabel">This source pulls</div>
+        <div class="filterline">
+          <span class="fcur" id="filterCur">All content</span>
+        </div>
+        <div class="fnote">A source is a feed URL plus an optional filter. Right now this one takes <b>everything</b> the feed publishes &mdash; podcast episodes and blog posts &mdash; into a single weighted stream.</div>
+      </section>
+
+      <!-- 3. SPLIT -->
+      <section class="sec" id="secSplit">
+        <div class="seclabel">Split this feed</div>
+        <div id="splitZone"></div>
+      </section>
+
+      <!-- 4. CONTROLS -->
+      <section class="sec" id="secControls">
+        <div class="seclabel">Controls <span class="sv" id="controlsScope">whole source</span></div>
+        <div id="controls"></div>
+      </section>
+
+      <!-- 5. DANGER -->
+      <section class="sec" id="secDanger">
+        <div class="seclabel">Source</div>
+        <div id="dangerZone"></div>
+      </section>
+
+      <!-- 6. RAW FEED -->
+      <section class="sec" id="secRaw">
+        <div class="seclabel">Raw feed &mdash; recent items <span class="sv" id="rawScope"></span></div>
+        <div class="rawtypes" id="rawTypes"></div>
+        <div id="rawList"></div>
+        <div class="rawsummary" id="rawSummary"></div>
+      </section>
+
+    </div>
+
+    <!-- undo toast -->
+    <div class="toast" id="toast">
+      <span class="tmsg" id="toastMsg"></span>
+      <button class="tundo" id="toastUndo">Undo</button>
+    </div>
+  </div>
+
+  <nav class="actionbar" id="actionbar">
+    <button class="abtn" data-jump="secHeader">
+      <span class="ic"><svg width="19" height="19" viewBox="0 0 15 15"><path d="M2.5 6L7.5 2l5 4v6.5h-10z" stroke-width="1.3" stroke-linejoin="round"/></svg></span>
+      Overview
+    </button>
+    <button class="abtn" data-jump="secSplit">
+      <span class="ic"><svg width="19" height="19" viewBox="0 0 15 15"><path d="M7.5 2.5v3M7.5 5.5L4 9v3.5M7.5 5.5L11 9v3.5" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+      Split
+    </button>
+    <button class="abtn" data-jump="secRaw">
+      <span class="ic"><svg width="19" height="19" viewBox="0 0 15 15"><path d="M2.5 3.5h10M2.5 7.5h10M2.5 11.5h6" stroke-width="1.4" stroke-linecap="round"/></svg></span>
+      Raw feed
+    </button>
+  </nav>
+</div>
+
+<script>
+(function(){
+  "use strict";
+
+  var WORDS  = ['very low','low','normal','high','favorite'];
+  var WSHORT = ['v.low','low','normal','high','fav'];
+  var CAP = function(w){ return w.charAt(0).toUpperCase()+w.slice(1); };
+  var FEEDS = ['News','Comedy','Science','Tech','Music','Curiosity'];
+  var TYPELABEL = {podcast:'Podcast', blog:'Blog'};
+
+  function esc(t){ return String(t).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+  /* ---------- the source being managed ---------- */
+  var src = {
+    title:'99% Invisible',
+    w:4, cap:2, feeds:['Curiosity']
+  };
+
+  /* raw recent items (the actual feed). rarity is per-item (blog posts more often -> less rare). */
+  var items = [
+    {id:1, t:'podcast', title:'The Real Book',                len:'34 min',     age:'2d ago',  ageDays:2,  rarity:3, score:8.6},
+    {id:2, t:'blog',    title:'Notes on making Season 12',    len:'4 min read', age:'3d ago',  ageDays:3,  rarity:2, score:5.1},
+    {id:3, t:'podcast', title:'Weeding is Fundamental',       len:'41 min',     age:'6d ago',  ageDays:6,  rarity:3, score:7.2},
+    {id:4, t:'blog',    title:'Behind the mic: a photo essay',len:'2 min',      age:'8d ago',  ageDays:8,  rarity:1, score:3.9},
+    {id:5, t:'podcast', title:'The Age of the Algorithm',     len:'28 min',     age:'12d ago', ageDays:12, rarity:3, score:6.0},
+    {id:6, t:'blog',    title:'Errata & corrections',         len:'1 min',      age:'15d ago', ageDays:15, rarity:1, score:2.4}
+  ];
+
+  /* view state */
+  var st = {
+    split:false,
+    filterOff:{},        // {podcast:1} when a type is excluded from the raw view
+    open:{},             // expanded breakdowns by item id
+    confirm:null,        // 'archive' | 'delete'
+    splitCards:[
+      {type:'podcast', name:'99% Invisible · Podcast', w:4, cap:2},
+      {type:'blog',    name:'99% Invisible · Blog',    w:1, cap:2}
+    ]
+  };
+
+  var flash = document.getElementById('flash');
+  function doFlash(){ flash.classList.remove('go'); void flash.offsetWidth; flash.classList.add('go'); }
+
+  /* ---------- undo toast ---------- */
+  var toast=document.getElementById('toast');
+  var toastMsg=document.getElementById('toastMsg');
+  var toastUndo=document.getElementById('toastUndo');
+  var toastTimer=null, undoFn=null;
+  function showToast(msgHTML, onUndo){
+    toastMsg.innerHTML=msgHTML; undoFn=onUndo;
+    toast.classList.add('up');
+    if(toastTimer) clearTimeout(toastTimer);
+    toastTimer=setTimeout(hideToast, 4200);
+  }
+  function hideToast(){ toast.classList.remove('up'); undoFn=null; if(toastTimer){ clearTimeout(toastTimer); toastTimer=null; } }
+  toastUndo.addEventListener('click', function(){ if(undoFn){ var f=undoFn; hideToast(); f(); } });
+
+  /* ---------- small builders ---------- */
+  function meterHTML(w){
+    var c=''; for(var i=0;i<5;i++){ c+='<i class="'+(i<=w?'f':'')+'"></i>'; } return c;
+  }
+  function wselHTML(w, attr){
+    var h=''; for(var i=0;i<5;i++){ h+='<button '+attr+'="'+i+'" class="'+(w===i?'on':'')+'"><span class="wtick"></span>'+WSHORT[i]+'</button>'; } return h;
+  }
+  function capValHTML(cap){
+    return cap==null
+      ? '<span class="cv">Off</span><span class="cl">no limit</span>'
+      : '<span class="cv">'+cap+'</span><span class="cl">max / session</span>';
+  }
+
+  /* ---------- 1. header ---------- */
+  function renderHeader(){
+    document.getElementById('hdrMeter').innerHTML = meterHTML(src.w);
+    document.getElementById('hdrFav').style.display = src.w===4 ? '' : 'none';
+    document.getElementById('hdrTitle').textContent = src.title;
+    var stats = document.getElementById('hdrStats');
+    stats.innerHTML =
+      '<div class="stat"><span class="sl">Weight</span><span class="sd big">'+CAP(WORDS[src.w])+'</span></div>'+
+      '<div class="stat"><span class="sl">Session cap</span><span class="sd">'+(src.cap==null?'Off':'≤ '+src.cap)+'</span></div>'+
+      '<div class="stat"><span class="sl">In feed</span><span class="sd">'+(src.feeds.length?esc(src.feeds.join(', ')):'None')+'</span></div>';
+  }
+
+  /* ---------- 3. split ---------- */
+  var splitZone = document.getElementById('splitZone');
+  function renderSplit(){
+    if(!st.split){
+      splitZone.innerHTML =
+        '<div class="callout">'+
+          '<div class="ctop"><span class="cmark">2</span><span class="chdr">This feed has 2 content types</span></div>'+
+          '<div class="ctext">The feed at <b>feeds.99percentinvisible.org</b> mixes <b>podcast episodes</b> and <b>blog posts</b> in one stream. Split it into two sources you can weight and cap independently &mdash; so the podcast can stay a favorite while the blog rides lower.</div>'+
+          '<div class="typemix"><span class="tm"><span class="dot"></span>Podcast</span><span class="tm"><span class="dot h"></span>Blog</span></div>'+
+          '<button class="splitbtn" data-act="dosplit"><svg viewBox="0 0 15 15"><path d="M7.5 2v3.5M7.5 5.5L3.5 9.5v3M7.5 5.5L11.5 9.5v3" fill="none" stroke="#f4f2ec" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>Split this feed</button>'+
+          '<div class="splithint">Cloning current settings as a starting point. Splitting <b>replaces</b> the default source, so the same episode never shows up twice.</div>'+
+        '</div>';
+      return;
+    }
+    // split cards
+    var cards='';
+    st.splitCards.forEach(function(c,i){
+      cards +=
+        '<div class="scard">'+
+          '<div class="schd"><span class="sctype">'+TYPELABEL[c.type]+'</span><span class="scname">'+esc(c.name)+'</span></div>'+
+          '<div class="scbody">'+
+            '<div class="pblock"><div class="plabel"><span>Weight</span><span class="val">'+WORDS[c.w]+'</span></div>'+
+              '<div class="wsel">'+wselHTML(c.w,'data-sw="'+i+'" data-swv')+'</div></div>'+
+            '<div class="pblock" style="margin-bottom:0"><div class="plabel"><span>Per-session cap</span><span class="val">'+(c.cap==null?'off':'≤ '+c.cap)+'</span></div>'+
+              '<div class="cap"><button class="stepbtn" data-scap="'+i+'" data-d="-1">&minus;</button>'+
+              '<div class="capval">'+capValHTML(c.cap)+'</div>'+
+              '<button class="stepbtn" data-scap="'+i+'" data-d="1">+</button></div></div>'+
+          '</div>'+
+        '</div>';
+    });
+    splitZone.innerHTML =
+      '<div class="splithint" style="margin:0 0 13px">Now two independent sources back the same feed. Each is weighted and capped on its own; the old combined source is retired so items never duplicate.</div>'+
+      '<div class="splitcards">'+cards+'</div>'+
+      '<div class="splitactions"><button class="mergebtn" data-act="merge"><svg viewBox="0 0 15 15"><path d="M3.5 2.5v3M11.5 2.5v3M3.5 5.5L7.5 9.5M11.5 5.5L7.5 9.5M7.5 9.5v3" fill="none" stroke="#1a1815" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>Merge back to one source</button></div>';
+  }
+
+  /* ---------- 4. controls (whole source) ---------- */
+  var controls = document.getElementById('controls');
+  function renderControls(){
+    document.getElementById('controlsScope').textContent = st.split ? 'moved into split sources' : 'whole source';
+    if(st.split){
+      controls.innerHTML = '<div class="caphint" style="margin:0">Weight and cap now live on each split source above. Merge back to manage them as one.</div>';
+      return;
+    }
+    var capHint = src.cap==null
+      ? 'No per-session limit &mdash; every fresh item from this source can appear.'
+      : 'Keeps the freshest '+src.cap+' per session; older overflow waits for the next one.';
+    var chips='';
+    FEEDS.forEach(function(f){ chips += '<span class="chip '+(src.feeds.indexOf(f)>=0?'on':'')+'" data-feed="'+esc(f)+'">'+esc(f)+'</span>'; });
+
+    controls.innerHTML =
+      '<div class="pblock"><div class="plabel"><span>Weight</span><span class="val">'+WORDS[src.w]+'</span></div>'+
+        '<div class="wsel">'+wselHTML(src.w,'data-w')+'</div></div>'+
+      '<div class="pblock"><div class="plabel"><span>Per-session cap</span><span class="val">'+(src.cap==null?'flood control off':'≤ '+src.cap+' items')+'</span></div>'+
+        '<div class="cap"><button class="stepbtn" data-cap="-1">&minus;</button>'+
+        '<div class="capval">'+capValHTML(src.cap)+'</div>'+
+        '<button class="stepbtn" data-cap="1">+</button></div>'+
+        '<div class="caphint">'+capHint+'</div></div>'+
+      '<div class="pblock" style="margin-bottom:0"><div class="plabel"><span>Feeds / themes</span><span class="val">'+src.feeds.length+' assigned</span></div>'+
+        '<div class="chips">'+chips+'</div></div>';
+  }
+
+  /* ---------- 5. danger ---------- */
+  var dangerZone = document.getElementById('dangerZone');
+  function renderDanger(){
+    if(st.confirm){
+      var del = st.confirm==='delete';
+      dangerZone.innerHTML =
+        '<div class="confirm">'+
+          '<p class="cmsg">'+(del
+            ? 'Delete <b>'+esc(src.title)+'</b>? This removes the source and its history for good.'
+            : 'Archive <b>'+esc(src.title)+'</b>? It stops surfacing but keeps its history and weight.')+'</p>'+
+          '<div class="crow"><button class="cbtn go" data-act="confirmyes">'+(del?'Delete':'Archive')+'</button>'+
+          '<button class="cbtn cancel" data-act="confirmno">Cancel</button></div>'+
+        '</div>';
+      return;
+    }
+    dangerZone.innerHTML =
+      '<div class="acts">'+
+        '<button class="act" data-act="archive"><svg viewBox="0 0 15 15"><rect x="2" y="3" width="11" height="3" fill="none" stroke="#1a1815" stroke-width="1.3"/><path d="M3 6.5v6h9v-6M6 9h3" fill="none" stroke="#1a1815" stroke-width="1.3" stroke-linecap="round"/></svg>Archive</button>'+
+        '<button class="act danger" data-act="delete"><svg viewBox="0 0 15 15"><path d="M3 4h9M6 4V2.5h3V4M4 4l.6 8.5h5.8L11 4" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/></svg>Delete</button>'+
+      '</div>';
+  }
+
+  /* ---------- 6. raw feed + per-item scores ---------- */
+  function includedItems(){
+    return items.filter(function(it){ return !st.filterOff[it.t]; });
+  }
+  function pickedSet(){
+    // rank included items by score desc, top `cap` are picked
+    var inc = includedItems().slice().sort(function(a,b){ return b.score-a.score; });
+    var picks = {};
+    var cap = src.cap==null ? inc.length : src.cap;
+    inc.forEach(function(it,i){ if(i<cap) picks[it.id]=i+1; }); // value = pick rank
+    return {picks:picks, order:inc};
+  }
+  function segHTML(level){ // level 1..3
+    var h=''; for(var i=1;i<=3;i++){ h+='<i class="'+(i<=level?'f':'')+'"></i>'; } return h;
+  }
+  function densHTML(score){
+    var n=Math.round(score), h='';
+    for(var i=1;i<=10;i++){ h+='<i class="'+(i<=n?'f':'')+'"></i>'; } return h;
+  }
+  function freshLevel(d){ return d<=3 ? 3 : d<=7 ? 2 : 1; }
+  function freshWord(l){ return ['','low','moderate','high'][l]; }
+
+  var chev = '<svg class="chev" viewBox="0 0 12 12"><path d="M2.5 4l3.5 3.5L9.5 4" fill="none" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+
+  function breakdownHTML(it, ctx){
+    var rank = ctx.order.map(function(x){return x.id;}).indexOf(it.id)+1;
+    var picked = !!ctx.picks[it.id];
+    var incCount = ctx.order.length;
+    var capTxt = src.cap==null ? 'no cap' : 'cap '+src.cap;
+    var fl = freshLevel(it.ageDays);
+    var posDesc = picked
+      ? '<b>'+ordinal(rank)+'</b> of this source by score — within '+capTxt+', so it makes the session'
+      : '<b>'+ordinal(rank)+'</b> of '+incCount+' by score — past '+capTxt+', so it waits for a lighter session';
+    return '<div class="bd"><div class="bd-in">'+
+      '<div class="bdlabel">Why this score</div>'+
+      factor('Freshness', fl, '<b>'+freshWord(fl)+'</b> — '+it.age.replace(' ago','')+' old') +
+      factor('Weight', src.w>=4?3:src.w>=2?2:1, '<b>'+CAP(WORDS[src.w])+'</b> source — lifts everything it sends') +
+      factor('Rarity', it.rarity, '<b>'+['','common','occasional','seldom'][it.rarity]+'</b> — '+(it.t==='podcast'?'podcast episodes are infrequent':'blog posts land often')) +
+      factor('Position vs cap', picked?3:1, posDesc) +
+      '<div class="bdscore">'+
+        '<span class="bn">'+it.score.toFixed(1)+'</span>'+
+        '<div class="bmeta"><div class="bl">Rank score / 10</div><div class="bv">'+(picked
+          ? 'Beats the blog posts on freshness &amp; rarity — <b>picked</b>.'
+          : 'A strong item, but two others scored higher this session.')+'</div></div>'+
+        '<span class="bdverdict '+(picked?'yes':'no')+'">'+(picked?'Picked':'Held')+'</span>'+
+      '</div>'+
+    '</div></div>';
+  }
+  function factor(name, level, desc){
+    return '<div class="factor"><span class="fseg">'+segHTML(level)+'</span>'+
+      '<div class="fbody"><div class="fname">'+name+'</div><div class="fdesc">'+desc+'</div></div></div>';
+  }
+  function ordinal(n){ return n+({1:'st',2:'nd',3:'rd'}[n]||'th'); }
+
+  var rawList = document.getElementById('rawList');
+  var rawSummary = document.getElementById('rawSummary');
+  var rawTypes = document.getElementById('rawTypes');
+  var rawScope = document.getElementById('rawScope');
+
+  function renderRawTypes(){
+    var types=['podcast','blog'], h='';
+    types.forEach(function(t){
+      var off=!!st.filterOff[t];
+      h += '<span class="tchip'+(off?' off':'')+'" data-rtype="'+t+'"><span class="mk">'+(off?'✕':'✓')+'</span>'+TYPELABEL[t]+'</span>';
+    });
+    rawTypes.innerHTML=h;
+  }
+  function renderRaw(){
+    renderRawTypes();
+    var ctx = pickedSet();
+    var pickCount = Object.keys(ctx.picks).length;
+    rawScope.textContent = pickCount+' picked · '+(src.cap==null?'no cap':'cap '+src.cap);
+    var h='';
+    items.forEach(function(it){
+      var off = !!st.filterOff[it.t];
+      var picked = !off && !!ctx.picks[it.id];
+      var open = !!st.open[it.id];
+      var tagHTML = off
+        ? '<span class="picktag no">Filtered</span>'
+        : (picked ? '<span class="picktag">Picked</span>' : '<span class="picktag no">Held</span>');
+      h +=
+        '<div class="rawitem'+(off?' dim':'')+(open?' open':'')+'" data-id="'+it.id+'">'+
+          '<div class="rawhead">'+
+            '<div class="scorebox">'+
+              '<span class="snum">'+it.score.toFixed(1)+'</span>'+
+              '<span class="dens">'+densHTML(it.score)+'</span>'+
+              '<span class="sscale">/10</span>'+
+            '</div>'+
+            '<div class="rawmain">'+
+              '<div class="rt">'+esc(it.title)+'</div>'+
+              '<div class="rm"><span class="cat">'+TYPELABEL[it.t]+'</span><span>'+esc(it.len)+'</span><span class="sep">·</span><span>'+esc(it.age)+'</span></div>'+
+            '</div>'+
+            '<div class="rawside">'+tagHTML+chev+'</div>'+
+          '</div>'+
+          breakdownHTML(it, ctx)+
+        '</div>';
+    });
+    rawList.innerHTML=h;
+
+    var incCount = includedItems().length;
+    if(incCount===items.length){
+      rawSummary.innerHTML = 'All <b>'+items.length+'</b> recent items considered — the top <b>'+pickCount+'</b> by score make this session'+(src.cap==null?'':' (cap '+src.cap+')')+'.';
+    } else {
+      rawSummary.innerHTML = 'Filtered to <b>'+incCount+'</b> of <b>'+items.length+'</b> items — <b>'+pickCount+'</b> picked from what remains'+(src.cap==null?'':' (cap '+src.cap+')')+'.';
+    }
+  }
+
+  /* ---------- render all ---------- */
+  function renderAll(){ renderHeader(); renderSplit(); renderControls(); renderDanger(); renderRaw(); }
+
+  /* ---------- interactions ---------- */
+  function setWeight(w){
+    if(src.w===w) return;
+    var prev=src.w; src.w=w;
+    renderHeader(); renderControls(); renderRaw();
+    showToast(esc(src.title)+' &rarr; <b>'+CAP(WORDS[w])+'</b>', function(){ src.w=prev; renderHeader(); renderControls(); renderRaw(); });
+  }
+  function stepCap(d){
+    var v = src.cap==null ? 0 : src.cap;
+    v += d;
+    if(v<=0) src.cap=null; else if(v>20) src.cap=20; else src.cap=v;
+    renderHeader(); renderControls(); renderRaw();
+  }
+  function toggleFeed(f){
+    var i=src.feeds.indexOf(f);
+    if(i>=0) src.feeds.splice(i,1); else src.feeds.push(f);
+    renderHeader(); renderControls();
+  }
+  function setSplitWeight(idx, w){
+    var c=st.splitCards[idx]; if(c.w===w) return;
+    var prev=c.w; c.w=w; renderSplit();
+    showToast(esc(c.name)+' &rarr; <b>'+CAP(WORDS[w])+'</b>', function(){ c.w=prev; renderSplit(); });
+  }
+  function stepSplitCap(idx, d){
+    var c=st.splitCards[idx];
+    var v = c.cap==null ? 0 : c.cap;
+    v += d;
+    if(v<=0) c.cap=null; else if(v>20) c.cap=20; else c.cap=v;
+    renderSplit();
+  }
+
+  var detail = document.getElementById('detail');
+  detail.addEventListener('click', function(e){
+    // whole-source weight
+    var wb=e.target.closest('[data-w]'); if(wb){ setWeight(parseInt(wb.getAttribute('data-w'),10)); return; }
+    var cb=e.target.closest('[data-cap]'); if(cb){ stepCap(parseInt(cb.getAttribute('data-cap'),10)); return; }
+    var fc=e.target.closest('[data-feed]'); if(fc){ toggleFeed(fc.getAttribute('data-feed')); return; }
+
+    // split card controls
+    var sw=e.target.closest('[data-swv]'); if(sw){ setSplitWeight(parseInt(sw.closest('[data-sw]').getAttribute('data-sw'),10), parseInt(sw.getAttribute('data-swv'),10)); return; }
+    var sc=e.target.closest('[data-scap]'); if(sc){ stepSplitCap(parseInt(sc.getAttribute('data-scap'),10), parseInt(sc.getAttribute('data-d'),10)); return; }
+
+    // raw type filter
+    var rt=e.target.closest('[data-rtype]');
+    if(rt){ var t=rt.getAttribute('data-rtype'); if(st.filterOff[t]) delete st.filterOff[t]; else st.filterOff[t]=1; renderRaw(); return; }
+
+    // actions
+    var ac=e.target.closest('[data-act]');
+    if(ac){ doAct(ac.getAttribute('data-act')); return; }
+
+    // expand a raw item's breakdown
+    var rh=e.target.closest('.rawhead');
+    if(rh){
+      var row=rh.closest('.rawitem'); var id=parseInt(row.getAttribute('data-id'),10);
+      st.open[id]=!st.open[id];
+      row.classList.toggle('open', st.open[id]);
+      return;
+    }
+  });
+
+  function doAct(act){
+    if(act==='dosplit'){ st.split=true; doFlash(); renderSplit(); renderControls(); renderHeader(); return; }
+    if(act==='merge'){ st.split=false; doFlash(); renderSplit(); renderControls(); renderHeader(); return; }
+    if(act==='archive'){ st.confirm='archive'; renderDanger(); return; }
+    if(act==='delete'){ st.confirm='delete'; renderDanger(); return; }
+    if(act==='confirmno'){ st.confirm=null; renderDanger(); return; }
+    if(act==='confirmyes'){
+      var kind=st.confirm; st.confirm=null; doFlash();
+      renderDanger();
+      showToast('<b>'+esc(src.title)+'</b> '+(kind==='delete'?'deleted':'archived')+' (demo)', null);
+      return;
+    }
+  }
+
+  /* ---------- bottom section-jump bar ---------- */
+  document.getElementById('actionbar').addEventListener('click', function(e){
+    var b=e.target.closest('[data-jump]'); if(!b) return;
+    var el=document.getElementById(b.getAttribute('data-jump'));
+    if(el) el.scrollIntoView({behavior:'smooth',block:'start'});
+  });
+
+  renderAll();
+})();
+</script>
+</body>
+</html>
