@@ -111,9 +111,36 @@ budget is *your* wall-clock, and the server just supplies a good ranked queue.
 - **Done** is always reachable, no guilt. When the well is dry: "That's
   everything new" - a *good* outcome, being caught up.
 
-Presentation note: today this is a paced vertical card list. A more focused
-single-card-at-a-time mode (swipe to advance) is a live option and fits the
-"one at a time" intent even more literally - a future toggle, not a rebuild.
+**Presentation: one item at a time.** The session shows a *single* focused card,
+not a scrollable list - you can't blur past a dozen items. You Open it, or Skip
+(a real negative signal, because you actually looked at this one thing), or
+advance to Next. This is what makes the behavioral signal trustworthy: in a
+scroll list a "skip" is ambiguous; one-at-a-time, it means you rejected *that*
+item.
+
+### Prediction & behavioral signals
+
+The time budget and the user's behavior feed back into ranking - transparently,
+never as engagement optimization.
+
+- **Predicted items seen.** From the budget and the mix's empirical *time per
+  item*, otium estimates how many items the user will actually get through, and
+  **sharpens selectivity when that number is small** (a short session's few
+  slots go to the best items; a long session flattens to admit more variety).
+  `score = (weight·rarity)^selectivity · freshness · skipPenalty`.
+- **Time per item** starts from content duration over a feed's recent ~100 items
+  (`SourceAvgDuration`), blended with a skim factor (content length overstates
+  time - you skim). Caveat: RSS gives duration for podcasts, rarely for YouTube,
+  never for articles. The **truer** source is behavioral - now that we show one
+  item at a time we can measure real per-feed dwell (item shown → advanced).
+  That measured pace should supersede content duration; it's the next step the
+  single-item view unlocks.
+- **Skip rate.** A source the user consistently skips is downweighted
+  (`skipPenalty`, once there's a real sample). Explicit skips only, and only
+  because single-item presentation makes each skip meaningful.
+
+These are deliberate, legible adjustments to a transparent formula - not a black
+box. The user can always be told why an item ranked where it did.
 
 ### Library
 

@@ -390,6 +390,29 @@ h1.display {
   flex: 1;
 }
 
+/* single-item focus card: one piece of content dominates the screen */
+.card.focus {
+  display: flex;
+  flex-direction: column;
+  min-height: 60vh;
+  padding: 20px;
+}
+.card.focus h3 {
+  font-size: 22px;
+  line-height: 1.28;
+}
+.card.focus .summary {
+  flex: 1;
+  font-size: 15px;
+}
+.focus-open {
+  margin-top: 8px;
+  margin-bottom: 10px;
+}
+.focus-open .btn {
+  margin-top: 0;
+}
+
 /* --- source library rows --- */
 .row {
   display: flex;

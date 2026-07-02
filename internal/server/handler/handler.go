@@ -251,7 +251,33 @@ func (h *Handler) BuildSession(w http.ResponseWriter, r *http.Request) {
 		serverError(w, h.log, "candidates", err)
 		return
 	}
-	result := session.Build(session.Request{MinLow: body.MinLow, MinHigh: body.MinHigh}, pool, time.Now().UTC())
+
+	// Behavioral + content signals: empirical time-per-item (predicts how many
+	// items fit the budget -> selectivity) and skip history (downweights sources
+	// the user keeps passing on).
+	avgDur, err := h.db.SourceAvgDuration(r.Context(), uid, 100)
+	if err != nil {
+		serverError(w, h.log, "avg duration", err)
+		return
+	}
+	skips, err := h.db.SourceSkipStats(r.Context(), uid)
+	if err != nil {
+		serverError(w, h.log, "skip stats", err)
+		return
+	}
+	stats := map[int64]session.SourceStat{}
+	for sid, avg := range avgDur {
+		s := stats[sid]
+		s.AvgContentSec = avg
+		stats[sid] = s
+	}
+	for sid, sk := range skips {
+		s := stats[sid]
+		s.Shown, s.Skipped = sk.Shown, sk.Skipped
+		stats[sid] = s
+	}
+
+	result := session.Build(session.Request{MinLow: body.MinLow, MinHigh: body.MinHigh}, pool, time.Now().UTC(), stats)
 
 	// Persist the session and mark its items surfaced so the next build doesn't
 	// repeat them.

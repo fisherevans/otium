@@ -22,7 +22,26 @@ const (
 	freshnessHalfLifeDays = 21.0 // an item's freshness score halves every 3 weeks
 	rareThresholdPerDay   = 1.0  // sources below this cadence are "rare" and get boosted
 	rareBoostMax          = 1.0  // a ~never-posting source gets up to +100% score
+
+	// Prediction: how many items the user will actually get through. Content
+	// duration is only half of it - the user skims/skips, so effective time per
+	// item is a fraction of the content length.
+	skimFactor       = 0.4   // user typically spends ~40% of an item's length
+	articleEffSec    = 40.0  // effective time for a duration-less item (an article)
+	defaultAvgEffSec = 120.0 // fallback when we know nothing about the mix
+
+	skipPenaltyMax = 0.5 // a source skipped 100% of the time loses up to 50% score
+	skipMinSample  = 5   // don't act on skip rate below this many shows
 )
+
+// SourceStat is the per-source behavioral + content signal the ranker folds in:
+// the empirical time-per-item (for prediction) and the shown/skipped history
+// (for downweighting sources the user keeps passing on).
+type SourceStat struct {
+	AvgContentSec float64 // avg known content duration over recent items (0 = none/article)
+	Shown         int
+	Skipped       int
+}
 
 // defaultDurationSec estimates how long an item takes to consume when the feed
 // didn't tell us (RSS rarely carries duration). Rough, tunable.
@@ -58,11 +77,12 @@ type Selected struct {
 
 // Result is a built session.
 type Result struct {
-	Items        []Selected `json:"items"`
-	TotalSeconds int        `json:"total_seconds"`
-	TargetLow    int        `json:"target_low_min"`
-	TargetHigh   int        `json:"target_high_min"`
-	PoolSize     int        `json:"pool_size"`
+	Items          []Selected `json:"items"`
+	TotalSeconds   int        `json:"total_seconds"`
+	TargetLow      int        `json:"target_low_min"`
+	TargetHigh     int        `json:"target_high_min"`
+	PoolSize       int        `json:"pool_size"`
+	PredictedItems int        `json:"predicted_items"` // how many we expect the user to get through
 }
 
 type scored struct {
@@ -79,17 +99,23 @@ type scored struct {
 // count-bounded, NOT duration-bounded: the client consumes this queue paced by
 // the user's elapsed wall-clock time (a skimmed article costs seconds, a watched
 // video costs minutes - only the user's clock knows), refilling as it goes.
-func Build(req Request, pool []store.Candidate, now time.Time) Result {
+func Build(req Request, pool []store.Candidate, now time.Time, stats map[int64]SourceStat) Result {
+	// Predict how many items the user will actually get through this session, from
+	// their time budget and the mix's empirical time-per-item. Scarcer sessions
+	// sharpen selectivity so the few slots they'll see go to the best items.
+	predicted := predictItems(req, pool, stats)
+	sel := selectivity(predicted)
+
 	k := req.QueueSize
 	if k <= 0 {
-		k = defaultQueueSize
+		k = clampInt(predicted*3, 20, defaultQueueSize*2)
 	}
 
 	ranked := make([]scored, 0, len(pool))
 	for _, c := range pool {
 		ranked = append(ranked, scored{
 			c:        c,
-			score:    scoreOf(c, now),
+			score:    scoreOf(c, now, stats[c.SourceID], sel),
 			dur:      estDuration(c),
 			reason:   reasonOf(c, now),
 			sourceID: c.SourceID,
@@ -98,7 +124,7 @@ func Build(req Request, pool []store.Candidate, now time.Time) Result {
 	sort.SliceStable(ranked, func(i, j int) bool { return ranked[i].score > ranked[j].score })
 
 	perSourceUsed := map[int64]int{}
-	var out []Selected
+	out := make([]Selected, 0, k) // never nil: an empty session must serialize as [] not null
 	total := 0
 	lastSource := int64(-1)
 
@@ -143,23 +169,97 @@ func Build(req Request, pool []store.Candidate, now time.Time) Result {
 	}
 
 	return Result{
-		Items:        out,
-		TotalSeconds: total, // informational only; not a budget
-		TargetLow:    req.MinLow,
-		TargetHigh:   req.MinHigh,
-		PoolSize:     len(pool),
+		Items:          out,
+		TotalSeconds:   total, // informational only; not a budget
+		TargetLow:      req.MinLow,
+		TargetHigh:     req.MinHigh,
+		PoolSize:       len(pool),
+		PredictedItems: predicted,
 	}
 }
 
-// scoreOf = weight * freshness * rarityBoost. All three are the knobs the user
-// controls (weight directly; rarity/freshness indirectly via which sources they
-// follow), which is what keeps the feed explainable.
-func scoreOf(c store.Candidate, now time.Time) float64 {
+// predictItems estimates how many items fit the time budget: budget divided by
+// the mix's effective time-per-item. Effective time blends the feed's empirical
+// content length (SourceStat.AvgContentSec) with the skim factor - because a
+// 20-minute video the user skims in two minutes costs two minutes, not twenty.
+func predictItems(req Request, pool []store.Candidate, stats map[int64]SourceStat) int {
+	seen := map[int64]bool{}
+	var sum float64
+	var n int
+	for _, c := range pool {
+		if seen[c.SourceID] {
+			continue
+		}
+		seen[c.SourceID] = true
+		avg := stats[c.SourceID].AvgContentSec
+		if avg > 0 {
+			sum += avg * skimFactor
+		} else {
+			sum += articleEffSec
+		}
+		n++
+	}
+	avgEff := defaultAvgEffSec
+	if n > 0 {
+		avgEff = sum / float64(n)
+	}
+	budgetSec := float64((req.MinLow+req.MinHigh)/2) * 60
+	if budgetSec <= 0 {
+		budgetSec = 600
+	}
+	p := int(math.Round(budgetSec / avgEff))
+	if p < 1 {
+		p = 1
+	}
+	return p
+}
+
+// selectivity sharpens (>1) or flattens (<1) the weight/rarity term. When only a
+// few items will be seen, sharpen so the scarce slots favor top sources; when
+// many will be seen, flatten to admit more variety.
+func selectivity(predicted int) float64 {
+	switch {
+	case predicted < 8:
+		return 1.2
+	case predicted > 25:
+		return 0.9
+	default:
+		return 1.0
+	}
+}
+
+// skipPenalty downweights a source the more consistently the user skips it, once
+// there's enough of a sample to trust the rate.
+func skipPenalty(s SourceStat) float64 {
+	if s.Shown < skipMinSample {
+		return 1
+	}
+	rate := float64(s.Skipped) / float64(s.Shown)
+	return 1 - skipPenaltyMax*rate
+}
+
+func clampInt(v, lo, hi int) int {
+	if v < lo {
+		return lo
+	}
+	if v > hi {
+		return hi
+	}
+	return v
+}
+
+// scoreOf = (weight * rarityBoost)^selectivity * freshness * skipPenalty. The
+// user-controlled knobs (weight directly; rarity/freshness via which sources
+// they follow) stay legible; selectivity and skipPenalty are the behavior- and
+// budget-driven adjustments. sel > 1 sharpens the favor toward high-weight
+// sources when few items will be seen.
+func scoreOf(c store.Candidate, now time.Time, stat SourceStat, sel float64) float64 {
 	weight := c.SourceWeight
 	if weight <= 0 {
 		weight = 1
 	}
-	return weight * freshness(c.PublishedAt, now) * rarityBoost(c.SourceCadence)
+	base := weight * rarityBoost(c.SourceCadence)
+	return math.Pow(base, sel) * freshness(c.PublishedAt, now) * skipPenalty(stat)
 }
 
 func freshness(published, now time.Time) float64 {

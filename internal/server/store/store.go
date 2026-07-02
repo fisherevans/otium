@@ -451,6 +451,74 @@ func scanItems(rows *sql.Rows) ([]Item, error) {
 	return out, rows.Err()
 }
 
+// SkipStat is a source's recent engagement: how many of its items the user has
+// been shown vs. how many they skipped. Feeds skip-rate downweighting.
+type SkipStat struct {
+	Shown   int
+	Skipped int
+}
+
+// SourceAvgDuration returns each source's average *content* duration (seconds)
+// over its most recent `window` items that carry a known duration. This is the
+// empirical "time per item" for a feed - a comedy-shorts channel averages ~90s,
+// a longform channel ~20 min - used to predict how many items a time budget can
+// hold. Sources whose items carry no duration (articles) are absent from the
+// map; the caller supplies a read/skim default for those.
+func (db *DB) SourceAvgDuration(ctx context.Context, userID int64, window int) (map[int64]float64, error) {
+	rows, err := db.sql.QueryContext(ctx,
+		`WITH ranked AS (
+		   SELECT i.source_id, i.duration_sec,
+		          ROW_NUMBER() OVER (PARTITION BY i.source_id ORDER BY i.published_at DESC) AS rn
+		   FROM items i JOIN sources s ON s.id = i.source_id
+		   WHERE s.user_id = ?
+		 )
+		 SELECT source_id, AVG(duration_sec)
+		 FROM ranked
+		 WHERE rn <= ? AND duration_sec > 0
+		 GROUP BY source_id`, userID, window)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := map[int64]float64{}
+	for rows.Next() {
+		var sid int64
+		var avg float64
+		if err := rows.Scan(&sid, &avg); err != nil {
+			return nil, err
+		}
+		out[sid] = avg
+	}
+	return out, rows.Err()
+}
+
+// SourceSkipStats returns per-source shown/skipped counts from item_state. A
+// row in item_state means the item reached the user (surfaced/acted); state
+// 'skipped' means they rejected it. This is the behavioral signal the ranker
+// uses to bubble down sources the user keeps passing on.
+func (db *DB) SourceSkipStats(ctx context.Context, userID int64) (map[int64]SkipStat, error) {
+	rows, err := db.sql.QueryContext(ctx,
+		`SELECT i.source_id,
+		        COUNT(*) AS shown,
+		        SUM(CASE WHEN st.state = 'skipped' THEN 1 ELSE 0 END) AS skipped
+		 FROM item_state st JOIN items i ON i.id = st.item_id
+		 WHERE st.user_id = ? GROUP BY i.source_id`, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := map[int64]SkipStat{}
+	for rows.Next() {
+		var sid int64
+		var s SkipStat
+		if err := rows.Scan(&sid, &s.Shown, &s.Skipped); err != nil {
+			return nil, err
+		}
+		out[sid] = s
+	}
+	return out, rows.Err()
+}
+
 // --- item state + events ---
 
 func (db *DB) SetItemState(ctx context.Context, userID, itemID int64, state string) error {
