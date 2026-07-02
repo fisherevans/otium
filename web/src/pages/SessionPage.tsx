@@ -75,6 +75,8 @@ export default function SessionPage() {
   const ackHigh = useRef(false);
   const advances = useRef<number[]>([]);
   const shownIds = useRef<Set<number>>(new Set());
+  const engaged = useRef<Set<number>>(new Set()); // ids that got open/like/save
+  const prevIdx = useRef(0);
   const stageRef = useRef<HTMLDivElement>(null);
   const itemEls = useRef<(HTMLDivElement | null)[]>([]);
 
@@ -112,6 +114,8 @@ export default function SessionPage() {
     ackHigh.current = false;
     advances.current = [];
     shownIds.current = new Set();
+    engaged.current = new Set();
+    prevIdx.current = 0;
     build(false).finally(() => setLoading(false));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [params.toString()]);
@@ -148,13 +152,22 @@ export default function SessionPage() {
           const idx = Number((en.target as HTMLElement).dataset.idx);
           if (Number.isNaN(idx)) continue;
           setCurrent(idx);
+          // Finalize the item we just moved past: advancing forward without
+          // having opened/liked/saved it is a skip (next == skip).
+          if (idx > prevIdx.current) {
+            const left = items[prevIdx.current];
+            if (left && !engaged.current.has(left.item.id)) {
+              api.itemEvent(left.item.id, "skip", sessionId).catch(() => {});
+              const now = Date.now();
+              advances.current = [...advances.current, now].slice(-4);
+              if (advances.current.filter((t) => now - t < 8000).length >= 3 && !checkin) setCheckin("fast");
+            }
+          }
+          prevIdx.current = idx;
           const it = items[idx];
           if (it && !shownIds.current.has(it.item.id)) {
             shownIds.current.add(it.item.id);
             api.itemEvent(it.item.id, "seen", sessionId).catch(() => {});
-            const now = Date.now();
-            advances.current = [...advances.current, now].slice(-4);
-            if (advances.current.filter((t) => now - t < 8000).length >= 3 && !checkin) setCheckin("fast");
           }
           if (idx >= items.length - 1 && elapsed < highSec && !exhausted && !loadingMore) void loadMore();
         }
@@ -187,11 +200,13 @@ export default function SessionPage() {
 
   function open() {
     if (!cur) return;
+    engaged.current.add(cur.item.id);
     api.itemEvent(cur.item.id, "open", sessionId).catch(() => {});
     window.open(cur.item.url, "_blank", "noopener");
   }
   function like() {
     if (!cur) return;
+    engaged.current.add(cur.item.id);
     setLiked((s) => {
       const n = new Set(s);
       n.has(cur.item.id) ? n.delete(cur.item.id) : n.add(cur.item.id);
@@ -201,6 +216,7 @@ export default function SessionPage() {
   }
   function save() {
     if (!cur) return;
+    engaged.current.add(cur.item.id);
     setSaved((s) => {
       const n = new Set(s);
       n.has(cur.item.id) ? n.delete(cur.item.id) : n.add(cur.item.id);

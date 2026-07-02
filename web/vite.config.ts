@@ -14,6 +14,8 @@ export default defineConfig({
   server: {
     port: webPort,
     strictPort: true,
+    host: true, // bind 0.0.0.0 so the phone can reach it over Tailscale
+    allowedHosts: true, // Vite 6 blocks non-localhost Host headers otherwise
     proxy: {
       "/api": { target: `http://localhost:${apiPort}`, changeOrigin: true },
       "/auth": { target: `http://localhost:${apiPort}`, changeOrigin: true },

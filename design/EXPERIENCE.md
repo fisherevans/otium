@@ -111,12 +111,13 @@ budget is *your* wall-clock, and the server just supplies a good ranked queue.
 - **Done** is always reachable, no guilt. When the well is dry: "That's
   everything new" - a *good* outcome, being caught up.
 
-**Presentation: one item at a time.** The session shows a *single* focused card,
-not a scrollable list - you can't blur past a dozen items. You Open it, or Skip
-(a real negative signal, because you actually looked at this one thing), or
-advance to Next. This is what makes the behavioral signal trustworthy: in a
-scroll list a "skip" is ambiguous; one-at-a-time, it means you rejected *that*
-item.
+**Presentation: one item at a time (scroll-snap).** The session is a scroll-snap
+column - exactly one item locked per screen, so you can't blur past a dozen. A
+compact bottom bar carries four actions: **Open · Like · Save · Next**. There is
+no separate "Skip": **advancing past an item you didn't open/like/save *is* the
+skip** (next == skip). Because it's one-at-a-time, that pass is a trustworthy
+rejection of *that* item, which is exactly what makes the skip-rate signal
+meaningful. Engaging (open/like/save) exempts an item from being counted a skip.
 
 ### Prediction & behavioral signals
 
@@ -135,9 +136,10 @@ never as engagement optimization.
   item at a time we can measure real per-feed dwell (item shown → advanced).
   That measured pace should supersede content duration; it's the next step the
   single-item view unlocks.
-- **Skip rate.** A source the user consistently skips is downweighted
-  (`skipPenalty`, once there's a real sample). Explicit skips only, and only
-  because single-item presentation makes each skip meaningful.
+- **Skip rate.** A source the user consistently passes on is downweighted
+  (`skipPenalty`, once there's a real sample). A "pass" = advancing past an item
+  without engaging (next == skip); single-item presentation makes each pass a
+  meaningful rejection rather than scroll-blur.
 
 These are deliberate, legible adjustments to a transparent formula - not a black
 box. The user can always be told why an item ranked where it did.
