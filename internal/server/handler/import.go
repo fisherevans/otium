@@ -9,7 +9,7 @@ import (
 	"github.com/fisherevans/otium/internal/server/store"
 )
 
-const maxImportBytes = 8 << 20 // 8 MiB - a Takeout CSV / OPML is tiny; cap to be safe
+const maxImportBytes = 48 << 20 // generous: a raw Takeout/export zip, not just the CSV
 
 // ParseImport accepts a raw OPML / Takeout-CSV / URL-list body and returns the
 // parsed candidates for review. It does not persist anything.
@@ -17,6 +17,12 @@ func (h *Handler) ParseImport(w http.ResponseWriter, r *http.Request) {
 	data, err := io.ReadAll(io.LimitReader(r.Body, maxImportBytes))
 	if err != nil {
 		badRequest(w, "could not read upload")
+		return
+	}
+	// Unpack a zip (raw Takeout / export download) to its importable file first.
+	data, err = importer.ExtractImportable(data)
+	if err != nil {
+		badRequest(w, err.Error())
 		return
 	}
 	cands, format, err := importer.Parse(data)

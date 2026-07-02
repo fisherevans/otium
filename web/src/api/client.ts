@@ -156,13 +156,13 @@ export const api = {
     req<{ ok: boolean }>("POST", `/items/${id}/event`, { type, session_id: sessionId ?? "" }),
   fetchNow: () => req<{ new_items: number }>("POST", "/fetch"),
 
-  // Import: parse sends the raw file text (not JSON-wrapped) so the server sees
-  // the OPML/CSV bytes directly.
-  parseImport: async (text: string): Promise<ParseResult> => {
+  // Import: parse sends the raw upload (text OR a file Blob - a zip must go as
+  // bytes, not text) so the server can unzip / parse it directly.
+  parseImport: async (body: string | Blob): Promise<ParseResult> => {
     const res = await fetch("/api/v1/import/parse", {
       method: "POST",
-      headers: { "Content-Type": "text/plain" },
-      body: text,
+      headers: { "Content-Type": typeof body === "string" ? "text/plain" : "application/octet-stream" },
+      body,
     });
     handleAuth(res.status);
     if (!res.ok) throw new Error((await res.json().catch(() => ({}))).message || `${res.status}`);

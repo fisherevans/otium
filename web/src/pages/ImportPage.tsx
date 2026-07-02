@@ -22,12 +22,12 @@ export default function ImportPage() {
   const hasCategories = useMemo(() => cands.some((c) => c.category), [cands]);
   const keptCount = keep.filter(Boolean).length;
 
-  async function parse(text: string) {
+  async function parse(body: string | Blob) {
     setErr("");
     setResult(null);
-    if (!text.trim()) return;
+    if (typeof body === "string" && !body.trim()) return;
     try {
-      const r = await api.parseImport(text);
+      const r = await api.parseImport(body);
       if (r.count === 0) {
         setErr("Nothing recognized in that file. Expected OPML, a YouTube Takeout CSV, or a list of feed URLs.");
         return;
@@ -43,7 +43,8 @@ export default function ImportPage() {
   async function onFile(e: React.ChangeEvent<HTMLInputElement>) {
     const f = e.target.files?.[0];
     if (!f) return;
-    parse(await f.text());
+    // Send the file as-is (a .zip must go as bytes, not text).
+    parse(f);
   }
 
   async function commit() {
@@ -85,8 +86,8 @@ export default function ImportPage() {
     <div>
       <h1 className="display">Import your follows</h1>
       <p className="sub">
-        Drop a <b>YouTube Takeout</b> CSV, an <b>OPML</b> file (Feedly, podcast apps, any RSS reader),
-        or paste a list of feed URLs.
+        Drop a <b>YouTube Takeout</b> (the raw <b>.zip</b> is fine — it's unpacked for you), an{" "}
+        <b>OPML</b> file (Feedly, podcast apps, any RSS reader), or paste a list of feed URLs.
       </p>
 
       {cands.length === 0 ? (
@@ -95,7 +96,7 @@ export default function ImportPage() {
             Choose a file
             <input
               type="file"
-              accept=".opml,.xml,.csv,.txt"
+              accept=".opml,.xml,.csv,.txt,.zip"
               onChange={onFile}
               style={{ display: "none" }}
             />

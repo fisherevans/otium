@@ -15,13 +15,59 @@
 package importer
 
 import (
+	"archive/zip"
 	"bytes"
 	"encoding/csv"
 	"encoding/xml"
 	"fmt"
+	"io"
 	"net/url"
 	"strings"
 )
+
+const maxUnzipBytes = 16 << 20 // per-entry cap, guards against zip bombs
+
+// ExtractImportable accepts a raw upload and, if it's a zip (a Google Takeout or
+// a Feedly/podcast export downloads as one), pulls out the importable file:
+// subscriptions.csv (YouTube) or the first .opml/.xml. Non-zip input is returned
+// as-is. This is what lets someone upload the raw download from their phone
+// without unpacking it first.
+func ExtractImportable(data []byte) ([]byte, error) {
+	if !isZip(data) {
+		return data, nil
+	}
+	zr, err := zip.NewReader(bytes.NewReader(data), int64(len(data)))
+	if err != nil {
+		return nil, fmt.Errorf("read zip: %w", err)
+	}
+	// Prefer a YouTube subscriptions.csv anywhere in the tree.
+	for _, f := range zr.File {
+		if strings.HasSuffix(strings.ToLower(f.Name), "subscriptions.csv") {
+			return readZipEntry(f)
+		}
+	}
+	// Otherwise the first OPML/XML feed list.
+	for _, f := range zr.File {
+		n := strings.ToLower(f.Name)
+		if strings.HasSuffix(n, ".opml") || strings.HasSuffix(n, ".xml") {
+			return readZipEntry(f)
+		}
+	}
+	return nil, fmt.Errorf("zip has no subscriptions.csv or .opml (a TikTok/Instagram follow list isn't a feed list - send it for handle mapping instead)")
+}
+
+func isZip(b []byte) bool {
+	return len(b) >= 4 && b[0] == 'P' && b[1] == 'K' && b[2] == 0x03 && b[3] == 0x04
+}
+
+func readZipEntry(f *zip.File) ([]byte, error) {
+	rc, err := f.Open()
+	if err != nil {
+		return nil, err
+	}
+	defer rc.Close()
+	return io.ReadAll(io.LimitReader(rc, maxUnzipBytes))
+}
 
 // Candidate is a proposed source, pre-persistence.
 type Candidate struct {
