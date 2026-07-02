@@ -3,117 +3,180 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-<title>otium · design directions</title>
+<title>otium · choosing a design language</title>
 <style>
-  :root { --bg:#14130f; --panel:#1d1b15; --ink:#ece4d3; --soft:#b6ac96; --faint:#7d7460; --line:#332f24; --gold:#c9a227; }
-  * { box-sizing:border-box; }
-  body { margin:0; background:var(--bg); color:var(--ink); font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif; line-height:1.5; }
-  header { padding:28px 20px 12px; max-width:1100px; margin:0 auto; }
-  h1 { font-family:"Iowan Old Style",Palatino,Georgia,serif; font-style:italic; font-weight:400; font-size:30px; margin:0 0 6px; }
-  h1 .g { color:var(--gold); }
-  .lede { color:var(--soft); font-size:15px; max-width:60ch; margin:0 0 4px; }
-  .lede a { color:var(--gold); }
-  .count { color:var(--faint); font-size:13px; letter-spacing:.04em; }
-  .group { max-width:1100px; margin:0 auto; padding:8px 14px 10px; }
-  .group h2 { font-family:"Iowan Old Style",Palatino,Georgia,serif; font-weight:400; font-size:19px; color:var(--soft); border-bottom:1px solid var(--line); padding:22px 6px 8px; margin:0 0 14px; }
-  .grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(230px,1fr)); gap:18px; }
-  .tile { background:var(--panel); border:1px solid var(--line); border-radius:14px; overflow:hidden; display:flex; flex-direction:column; }
-  .preview { position:relative; width:100%; aspect-ratio:390/560; overflow:hidden; background:#000; border-bottom:1px solid var(--line); }
-  .preview iframe { position:absolute; top:0; left:0; width:390px; height:560px; border:0; transform-origin:top left; }
-  .preview a.hit { position:absolute; inset:0; z-index:2; }
-  .cap { padding:12px 14px 14px; }
-  .cap b { font-size:15px; display:block; }
-  .cap .desc { color:var(--soft); font-size:13px; margin:3px 0 10px; min-height:34px; }
-  .cap .open { display:inline-block; color:var(--gold); font-size:13px; letter-spacing:.03em; border:1px solid var(--line); border-radius:8px; padding:7px 12px; }
-  .cap .open:active { background:#c9a2271f; }
-  footer { max-width:1100px; margin:0 auto; padding:30px 20px 60px; color:var(--faint); font-size:13px; }
-  a { text-decoration:none; }
+  :root{
+    --bg:#13120e; --panel:#1c1a14; --panel2:#221f18; --ink:#ece4d3; --soft:#b7ad97;
+    --faint:#847a66; --line:#302c22; --gold:#c9a227; --rule:#413b2e;
+    --serif:"Iowan Old Style",Palatino,Georgia,serif;
+    --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+    --mono:"SF Mono",Menlo,ui-monospace,monospace;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--sans);line-height:1.62;
+    -webkit-font-smoothing:antialiased;}
+  .wrap{max-width:760px;margin:0 auto;padding:0 20px;}
+  a{color:var(--gold);text-decoration:none;}
+  /* hero */
+  .hero{padding:54px 0 24px;border-bottom:1px solid var(--line);}
+  .kicker{font-family:var(--mono);font-size:12px;letter-spacing:.18em;text-transform:uppercase;color:var(--faint);margin:0 0 16px;}
+  h1{font-family:var(--serif);font-weight:400;font-size:38px;line-height:1.12;margin:0 0 14px;}
+  h1 .g{color:var(--gold);font-style:italic;}
+  .dek{font-size:18px;color:var(--soft);margin:0 0 18px;}
+  .herometa{font-family:var(--mono);font-size:12.5px;color:var(--faint);display:flex;gap:16px;flex-wrap:wrap;}
+  /* prose */
+  .prose{font-size:17px;color:#ded6c4;}
+  .prose p{margin:16px 0;}
+  .prose h2{font-family:var(--serif);font-weight:400;font-size:26px;color:var(--ink);margin:44px 0 6px;}
+  .prose h2 .num{color:var(--faint);font-family:var(--mono);font-size:15px;margin-right:10px;}
+  .prose .fam-dek{color:var(--soft);font-size:16px;margin:0 0 8px;}
+  .prose em{color:var(--ink);font-style:italic;}
+  .callout{border-left:2px solid var(--gold);background:#c9a2270f;padding:12px 16px;margin:22px 0;border-radius:0 8px 8px 0;font-size:15.5px;color:var(--soft);}
+  .callout b{color:var(--ink);}
+  section.fam{border-top:1px solid var(--line);margin-top:34px;padding-top:6px;}
+  /* direction cards */
+  .dir{margin:30px 0 8px;padding:0;}
+  .dir .pv{position:relative;width:100%;aspect-ratio:390/580;overflow:hidden;border:1px solid var(--rule);
+    border-radius:14px;background:#000;box-shadow:0 10px 34px #0008;}
+  .dir .pv iframe{position:absolute;top:0;left:0;width:390px;height:580px;border:0;transform-origin:top left;}
+  .dir .pv a.hit{position:absolute;inset:0;z-index:3;}
+  .dir .pv .badge{position:absolute;z-index:4;right:10px;bottom:10px;background:#000000cc;color:#fff;
+    font-family:var(--mono);font-size:11px;letter-spacing:.04em;padding:7px 11px;border-radius:999px;
+    border:1px solid #ffffff33;pointer-events:none;}
+  .dir .body{padding:14px 2px 0;}
+  .dir h3{font-family:var(--serif);font-weight:400;font-size:23px;margin:0 0 2px;}
+  .dir .origin{font-family:var(--mono);font-size:11.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--faint);margin:0 0 12px;}
+  .dir .pitch{font-size:16.5px;color:#ded6c4;margin:0 0 14px;}
+  .swatches{display:flex;gap:6px;margin:0 0 14px;}
+  .swatches i{width:26px;height:26px;border-radius:6px;border:1px solid #ffffff1a;display:block;}
+  .meta-line{font-size:14.5px;color:var(--soft);margin:9px 0;}
+  .meta-line b{color:var(--ink);font-weight:600;}
+  .openbtn{display:inline-block;margin-top:8px;font-family:var(--mono);font-size:13px;letter-spacing:.03em;
+    border:1px solid var(--rule);border-radius:9px;padding:9px 14px;color:var(--gold);}
+  .openbtn:active{background:#c9a2271f;}
+  /* wide screens: side-by-side */
+  @media(min-width:860px){
+    .wrap{max-width:1080px;}
+    .prose,.hero .dek,.hero{max-width:720px;}
+    .dir{display:grid;grid-template-columns:300px 1fr;gap:30px;align-items:start;}
+    .dir .pv{position:sticky;top:20px;}
+  }
+  footer{border-top:1px solid var(--line);margin-top:50px;padding:34px 0 80px;color:var(--faint);font-size:14px;}
+  footer a{color:var(--gold);}
+  .toplinks{display:flex;gap:14px;flex-wrap:wrap;margin:20px 0 0;font-family:var(--mono);font-size:13px;}
+  .toplinks a{border:1px solid var(--rule);border-radius:9px;padding:8px 13px;}
 </style>
 </head>
 <body>
-<header>
-  <h1><span class="g">o</span>tium · design directions</h1>
-  <p class="lede">18 committed visual languages for the same app. Every prototype uses the identical content and the real interactions - the analog-stick intent pad, explainable session cards, the library - so you're comparing <em>design</em>, not features. Tap any tile to open it full-screen and actually drag the pad on your phone.</p>
-  <p class="lede">The skeleton beneath all of them (IA, flows, touch rules, the pad spec) is written up in <a href="EXPERIENCE.md">EXPERIENCE.md</a>.</p>
-  <p class="count" id="count"></p>
-</header>
-<div id="app"></div>
-<footer>
-  Static mockups, shared fixture. Pick a direction (or a few elements from several) and I'll make it the real theme. Some may want palette/contrast tuning - note anything that catches your eye.
-</footer>
+<div class="wrap">
+
+  <div class="hero">
+    <p class="kicker">otium · design review</p>
+    <h1>Finding <span class="g">otium</span>'s face</h1>
+    <p class="dek">Eighteen ways the same app could look and feel. Same content, same interactions - only the design language changes. Read top to bottom, drag the pads, and pick the one (or the mix) that feels like ours.</p>
+    <div class="herometa">
+      <span>18 directions</span><span>·</span><span>4 families</span><span>·</span><span>live &amp; touchable</span>
+    </div>
+    <div class="toplinks">
+      <a href="gallery.html">▦ Grid view</a>
+      <a href="EXPERIENCE.md">▤ Experience guidelines</a>
+    </div>
+  </div>
+
+  <div class="prose">
+    <p>Right now the app works but looks like <em>every</em> app - a bland default that could be anyone's. The point of this pass is to find a face that's unmistakably otium: calm, deliberate, a little classical, built for a thumb on a phone. Not "a feed with nicer colors," a genuinely distinct experience.</p>
+    <p>So I had a fleet of agents each build a <em>complete</em> mobile prototype in one committed design language - no half-measures, no hedging toward the middle. Every prototype shows the same three screens (the intent pad, a session, the library) with the same content, so you're comparing <em>design</em>, not features. Each preview below is the real thing, running; tap it to open full-screen and actually drag the analog stick.</p>
+    <div class="callout"><b>How to read this.</b> Don't look for "the finished app" - these are committed sketches, some need contrast or polish. Judge the <em>language</em>: does this feel like a considered, unhurried reading ritual, or like another content firehose? You can also mix - "that palette, this typography, that pad." Just tell me where you land.</div>
+    <p>One thing they all share on purpose: the bones. The information architecture, the session-not-feed model, the analog-stick intent pad, the touch rules, and the anti-patterns (no infinite scroll, no unread badges, no streaks) are written up in the <a href="EXPERIENCE.md">experience guidelines</a> and hold no matter which skin wins. What follows is only the <em>look and feel</em>, grouped into four families.</p>
+  </div>
+
+  <div id="app" class="prose"></div>
+
+  <div class="prose">
+    <h2>So - how to decide</h2>
+    <p>A few ways to cut it. If you want otium to feel <em>timeless and trustworthy</em>, the light-and-literary family (Reading Room, E-Ink) is the safe, durable bet. If you want it to feel <em>special and yours</em> the moment you open it, the crafted and luminous families (Analog Desk, Nocturne, Deco, Observatory) have the most personality without going loud. If "not another bland app" is the whole point and you want <em>edge</em>, the graphic family (Riso, Bauhaus, Swiss) is the antidote. And two of them - Blueprint and the Analog Desk - make the two-axis pad feel <em>inevitable</em>, which is worth weighting since the pad is our signature.</p>
+    <p>Tell me a single direction to make real, or a Frankenstein - "Nocturne's black-and-ember palette, Reading Room's typography, the Analog Desk pad." I'll wire the winning tokens into the live app so the instance on your phone <em>becomes</em> that design, then we iterate on the real thing.</p>
+  </div>
+
+  <footer>
+    Static mockups, shared fixture, generated by a parallel agent fleet. Everything's committed under <span style="font-family:var(--mono)">design/</span> on main.
+    <br />Prefer a plain grid? <a href="gallery.html">Grid view →</a> · The bones: <a href="EXPERIENCE.md">experience guidelines →</a>
+  </footer>
+
+</div>
 
 <script>
-const GROUPS = [
-  { title: "Light & literary", items: [
-    ["reading-room","Editorial Reading Room","A fine printed magazine — serif, ivory, one oxblood accent. Quiet and timeless."],
-    ["newsprint-broadsheet","Broadsheet Newspaper","Masthead, column rules, ink on newsprint. Dense and authoritative."],
-    ["e-ink-paper","E-Ink Paper","Pure grayscale, crisp serif, glare-free. The literal anti-screen."],
-    ["ma-inkwash","Ma — Ink & Space","Vast calm, one vermilion seal, an ensō dial. Emptiness as a feature."],
+const PAL = {"amber-crt":["#f4b860","#7c5a2e","#c98a3c","#6e4c22","#2a2011","#221a0e"],"analog-desk":["#5a3d15","#c86b4a","#2a2012","#c8b489","#1a2b21","#122019"],"bauhaus-primary":["#171310","#f4eddf","#f2c230","#d4361f","#1b3a8c","#0c0a08"],"blueprint-drafting":["#0a2540","#071b30","#12395c","#5fd3ff","#3a9dc4","#e8f4fb"],"deco-club":["#c9a24b","#e6c877","#8a6d2c","#0c0c0c","#0a1512","#0f1e19"],"e-ink-paper":["#1a1815","#4b4740","#f4f2ec","#efece3","#8b857a","#c9c3b5"],"field-almanac":["#9a8b6d","#a9782f","#b6a67f","#8a4b32","#6f7a5a","#f4ecd8"],"ma-inkwash":["#201e1a","#4a463e","#c9c2b0","#8c877a","#c1332b","#14120e"],"moleskine-notebook":["#a6402f","#8a7c66","#f4ead6","#2c2620","#c9a86f","#b08e57"],"newsprint-broadsheet":["#141109","#f0ebdd","#e7e1cf","#3a352a","#6d6552","#1a160d"],"nocturne":["#160f04","#f7c65d","#f9cf6a","#000000","#0a0a0b","#121214"],"observatory-starchart":["#d8b661","#f0cf83","#f3ecd0","#b9c2e0","#8a6f34","#070a18"],"reading-room":["#7a2222","#0d0b09","#f4ede0","#efe6d6","#211b16","#4a4038"],"riso-zine":["#f2e9d0","#0b0b0e","#eaddb8","#1f2fe0","#141fb0","#f0402a"],"ritual-tarot":["#c9a24b","#e9cd82","#8f7231","#ece0c6","#0b0813","#241a3c"],"stained-glass":["#05040a","#e7c66b","#9c1732","#0f6b46","#c98a10","#f2b62e"],"swiss-brut":["#111110","#e8340c","#f2f1ec","#d7d5cd","#9c9a92","#6b6a64"],"wabi-ceramic":["#9a7622","#e4c76b","#0b0908","#fbf3e5","#b39d78","#bda986"]};
+
+const FAMILIES = [
+  { title:"Light &amp; literary", dek:"Ink on paper. Type and whitespace carry it; color is a whisper. The most timeless, trustworthy end of the spectrum - otium as something you subscribe to and keep.", dirs:[
+    { slug:"reading-room", name:"Editorial Reading Room", origin:"a fine printed magazine", pitch:"The session as a magazine's table of contents. Serif display, ivory paper, one oxblood accent, real typographic hierarchy - it feels edited, not generated.", notice:"The reason labels set as small-caps standfirsts, the drop-cap, the hairline rules. Nothing shouts; the type does the work.", fit:"The safest durable pick and the most literate. Risk: play it too quiet and it drifts toward tasteful-but-forgettable - it needs to commit to the editorial detail (and it does here)." },
+    { slug:"newsprint-broadsheet", name:"Broadsheet Newspaper", origin:"a front page", pitch:"A masthead, a dateline, column rules, dense serif headlines. Your session is today's edition; cards stack like stories under the fold.", notice:"The nameplate and section flag, the tight decks, the one thread of red. It reads as authoritative and current.", fit:"Denser and more journalistic than the magazine. Excellent if your feeds skew news; can feel busy for a leisure product that's supposed to slow you down." },
+    { slug:"e-ink-paper", name:"E-Ink Paper", origin:"a dedicated e-reader", pitch:"Pure grayscale, crisp serif, zero color, glare-free. Transitions fade like an e-ink refresh - deliberately slow, deliberately calm.", notice:"How much calm comes from removing color entirely, and the hard 1px rules. It's the most literally anti-screen option here.", fit:"The purest expression of 'calm, not a slot machine.' Trade-off: with no color, the reason-pills and weights lean entirely on shape and type to differentiate." },
+    { slug:"ma-inkwash", name:"Ma - Ink &amp; Space", origin:"Japanese negative space", pitch:"Emptiness as the feature. Vast washi space, one vermilion seal as the only color, an ensō circle for the intent pad. One gesture per screen.", notice:"What it leaves out. The pad is a single brushed ink ring; the restraint is the design.", fit:"The most serene and the most opinionated about restraint. Risk: if you like density and information-at-a-glance, this may feel too sparse." },
   ]},
-  { title: "Warm & crafted", items: [
-    ["analog-desk","Tactile Analog Desk","Brass, walnut & felt — the pad is a real machined joystick with depth."],
-    ["field-almanac","Naturalist Field Almanac","Aged paper, botanical engraving, sepia & sage. Scholarly, warm."],
-    ["wabi-ceramic","Wabi-Sabi Ceramic","Clay & stone with kintsugi-gold seams. Material, grounded, serene."],
-    ["moleskine-notebook","Personal Notebook","Kraft & dot-grid, hand-drawn ink. Your private reading journal."],
+  { title:"Warm &amp; crafted", dek:"Made by hand, made of stuff. Wood, clay, paper, ink. These lean into physical materials and the analog-stick metaphor - the coziest, most tactile end.", dirs:[
+    { slug:"analog-desk", name:"Tactile Analog Desk", origin:"brass-and-walnut studio gear", pitch:"Skeuomorphic in the best way. Brass, walnut, felt-green, embossed surfaces - and the intent pad is a real machined joystick with depth and a knob that casts a moving shadow.", notice:"Press a button and it insets; drag the knob and the shadow travels. It's the most physically 'touchable' of all eighteen.", fit:"Leans hardest into the analog-stick idea you liked - the metaphor becomes literal. Skeuomorphism is a strong, love-it-or-not flavor; here it's warm rather than dated." },
+    { slug:"field-almanac", name:"Naturalist Field Almanac", origin:"a vintage field guide", pitch:"Aged cream paper, engraved botanical hairlines, sepia and sage and ochre, numbered entries. Cards catalogued like specimens.", notice:"The almanac numbering and the fine engraved ornament - scholarly and warm without being fussy.", fit:"Ties straight to otium's classical-leisure roots (the word practically asks for it). Watch that the ornament stays a hairline and never clutters." },
+    { slug:"wabi-ceramic", name:"Wabi-Sabi Ceramic", origin:"hand-thrown pottery", pitch:"Clay, stone and oatmeal matte tones, irregular thrown forms, and kintsugi - gold-repaired cracks - as the only accent. Imperfection as beauty.", notice:"The gold seams tracing the tether and the card edges. Surfaces feel glazed, material, real.", fit:"Material and grounded, clearly distinct from flat minimalism. The strongest 'this is a crafted object' feeling in the set." },
+    { slug:"moleskine-notebook", name:"Personal Notebook", origin:"a bullet journal", pitch:"Kraft and cream, a faint dot-grid, hand-drawn ink checkboxes and underlines, washi-tape and index-tab details. Your private reading journal.", notice:"The hand-made annotations and tabs - it feels like yours, not a product's.", fit:"The most intimate option. Risk: handwriting accents can tip twee if overdone; kept to small touches here, with real type for everything you read." },
   ]},
-  { title: "Dark & luminous", items: [
-    ["nocturne","Nocturne OLED","True-black with one warm ember of light. Late-night, expensive-feeling."],
-    ["amber-crt","Amber Terminal","Warm phosphor, mono + serif. A scholar's terminal, not a hacker movie."],
-    ["ritual-tarot","Ritual Reading","Midnight indigo & gold foil — a session drawn like a reading. Ceremonial."],
-    ["stained-glass","Stained Glass","Jewel tones in dark leading, backlit cathedral glow. Reverent."],
-    ["observatory-starchart","Observatory Star Chart","Astrolabe dial, constellation lines. Scientific, exact, wondrous."],
-    ["deco-club","Art Deco Club","Gold linework on onyx-emerald, ceremonial symmetry. Gatsby luxe."],
-    ["blueprint-drafting","Architect Blueprint","Cyan linework on navy — the pad is a plotted coordinate graph. Precise."],
+  { title:"Dark &amp; luminous", dek:"Light in the dark. Deep grounds with a single source of glow or gold. The most premium and phone-native family, and where the most ceremony lives.", dirs:[
+    { slug:"nocturne", name:"Nocturne OLED", origin:"a late-night reading room", pitch:"True black for OLED, one warm ember of light you move on purpose. Layered glass, filmic depth, glow used sparingly.", notice:"The knob is a luminous orb with a faint trail; the ember is the only bright thing on pure black. Feels expensive.", fit:"The most modern-premium and the most phone-native (great on AMOLED, easy at night). Broadly safe - the job is making sure it reads as otium and not generic-dark." },
+    { slug:"amber-crt", name:"Amber Terminal", origin:"a scholar's terminal", pitch:"Warm amber phosphor on near-black, mono paired with one classic serif, hairline ASCII rules, a blinking cursor. Elegant, not a hacker movie.", notice:"Every item is a typed line with a stated reason. The subtle scanline and the restraint that keep it refined.", fit:"Nerdy-classy and very 'you.' Trade-off: monospace density is an acquired taste for long-form reading; the serif headings soften that here." },
+    { slug:"ritual-tarot", name:"Ritual Reading", origin:"a tarot reading", pitch:"Midnight indigo and aubergine, antique gold foil, celestial lines. Building a session is 'drawing' your reading; the pad is a mystical dial.", notice:"The ceremony of it - ornate card borders, the astral linework. It makes a session feel like an event.", fit:"Leans hardest into 'intentional ritual.' Risk: mysticism can undercut the tool-like trust otium needs; kept tasteful and premium here rather than spooky." },
+    { slug:"stained-glass", name:"Stained Glass", origin:"leaded cathedral glass", pitch:"Deep jewel tones - cobalt, ruby, emerald, amber - bounded by dark leading lines, backlit with a soft glow. Cards as glass panels.", notice:"The leading strokes and the rose-window pad; the saturated, reverent color.", fit:"The richest, most saturated option. Bold and beautiful; legibility and contrast on a phone in daylight are the things to check." },
+    { slug:"observatory-starchart", name:"Observatory Star Chart", origin:"celestial navigation", pitch:"Deep space navy, fine constellation lines, engraved astrolabe rings, coordinate readouts. The pad is an astrolabe you rotate; sessions get charted.", notice:"Scientific instrumentation, not divination - the precision and the wonder together. The x/y of the pad becomes literal star coordinates.", fit:"Wonder plus rigor, and distinct from the tarot take by being exact rather than mystical. Watch that the fine star-lines stay legible small." },
+    { slug:"deco-club", name:"Art Deco Club", origin:"a 1920s members' club", pitch:"Gold geometric linework on onyx and emerald, ceremonial symmetry, stepped Deco motifs, Copperplate caps. Luxe and exclusive.", notice:"The pad framed as an ornate gauge; thin gold rules edging the cards. It feels earned, invitation-only.", fit:"Elegant and ceremonial - 'attention as something you spend on purpose' made visual. Gold-on-dark is striking; the line to walk is elegant, not gaudy." },
+    { slug:"blueprint-drafting", name:"Architect Blueprint", origin:"a drafting table", pitch:"Fine cyan technical linework on blueprint navy, dimension lines, tick marks, a title-block in the corner. Everything measured and annotated.", notice:"The intent pad is a plotted coordinate graph with a crosshair and live x/y readouts - the two axes become literal engineering.", fit:"Makes the two-axis pad feel inevitable, which matters since the pad is our signature. Cool and precise; the risk is feeling clinical for a leisure app." },
   ]},
-  { title: "Bold & graphic", items: [
-    ["riso-zine","Risograph Zine","Two overprinted inks, huge condensed type, grain. The hardest anti-bland."],
-    ["bauhaus-primary","Bauhaus","Primary red/blue/yellow, pure geometry. Playful-rational modernism."],
-    ["swiss-brut","Swiss / Brutalist","Stark grid, signal red, huge grotesk, exposed structure. Tool-like."],
+  { title:"Bold &amp; graphic", dek:"Loud on purpose. Big type, flat color, exposed structure. If 'not another bland app' is the whole brief, this is the strongest answer - the question is how much edge you want.", dirs:[
+    { slug:"riso-zine", name:"Risograph Zine", origin:"an indie zine", pitch:"Two overprinted spot inks on cream, huge condensed type, grain and deliberate misregister, hand-cut shapes. Expressive but art-directed, not chaotic.", notice:"The print-block shadows that collapse when you press; the tactile, stamped-ink energy. Maximum personality.", fit:"The hardest antidote to 'bland' in the whole set. Risk: it's loud for a product built to slow you down - the call is how much edge otium should carry." },
+    { slug:"bauhaus-primary", name:"Bauhaus", origin:"foundational modernism", pitch:"Primary red, blue and yellow on warm white, pure circle-square-triangle geometry, bold geometric sans, asymmetric balance.", notice:"The pad as a literal circle-in-square; chips as colored geometric tiles. Joyful and rational at once.", fit:"Confident and playful, more color-forward than Swiss. Primaries are a real commitment - it's cheerful where most of otium is contemplative." },
+    { slug:"swiss-brut", name:"Swiss / Brutalist", origin:"international typographic style", pitch:"Stark near-white and near-black, one signal red, a rigorous visible grid, huge grotesk type, index numbers, exposed structure, zero ornament.", notice:"Cards as ruled records; the pad as a precise plotted graph with crosshair. Every element sits on the grid.", fit:"The most rational and tool-like - 'a tool, not a toy.' Risk: it can read cold; that single red and the generous whitespace are what keep it human." },
   ]},
 ];
 
 const app = document.getElementById("app");
-let total = 0;
-for (const g of GROUPS) {
+let n = 0;
+FAMILIES.forEach((fam) => {
   const sec = document.createElement("section");
-  sec.className = "group";
-  const grid = document.createElement("div");
-  grid.className = "grid";
-  sec.innerHTML = `<h2>${g.title}</h2>`;
-  for (const [slug, name, desc] of g.items) {
-    total++;
-    const href = `prototypes/${slug}.html`;
-    const tile = document.createElement("figure");
-    tile.className = "tile";
-    tile.style.margin = "0";
-    tile.innerHTML = `
-      <div class="preview">
+  sec.className = "fam";
+  sec.innerHTML = `<h2>${fam.title}</h2><p class="fam-dek">${fam.dek}</p>`;
+  fam.dirs.forEach((d) => {
+    n++;
+    const href = `prototypes/${d.slug}.html`;
+    const sw = (PAL[d.slug] || []).map((c) => `<i style="background:${c}"></i>`).join("");
+    const fig = document.createElement("div");
+    fig.className = "dir";
+    fig.innerHTML = `
+      <div class="pv">
         <iframe src="${href}" scrolling="no" loading="lazy" tabindex="-1"></iframe>
-        <a class="hit" href="${href}" aria-label="${name}"></a>
+        <a class="hit" href="${href}" aria-label="Open ${d.name}"></a>
+        <span class="badge">tap to open ↗</span>
       </div>
-      <figcaption class="cap">
-        <b>${name}</b>
-        <div class="desc">${desc}</div>
-        <a class="open" href="${href}">Open full →</a>
-      </figcaption>`;
-    grid.appendChild(tile);
-  }
-  sec.appendChild(grid);
+      <div class="body">
+        <h3><span style="color:var(--faint);font-family:var(--mono);font-size:15px">${String(n).padStart(2,"0")}</span> ${d.name}</h3>
+        <div class="origin">${d.origin}</div>
+        <div class="swatches">${sw}</div>
+        <p class="pitch">${d.pitch}</p>
+        <p class="meta-line"><b>Notice:</b> ${d.notice}</p>
+        <p class="meta-line"><b>Fit &amp; trade-off:</b> ${d.fit}</p>
+        <a class="openbtn" href="${href}">Open full-screen ↗</a>
+      </div>`;
+    sec.appendChild(fig);
+  });
   app.appendChild(sec);
-}
-document.getElementById("count").textContent = total + " directions · tap to open";
+});
 
-// Scale each live preview to fit its tile width (previews are non-interactive;
-// the overlay link opens the full prototype).
-function fit() {
-  document.querySelectorAll(".preview").forEach((p) => {
-    const f = p.querySelector("iframe");
-    const s = p.clientWidth / 390;
-    f.style.transform = `scale(${s})`;
+function fit(){
+  document.querySelectorAll(".dir .pv").forEach((p)=>{
+    const f=p.querySelector("iframe");
+    f.style.transform=`scale(${p.clientWidth/390})`;
   });
 }
-window.addEventListener("resize", fit);
-window.addEventListener("load", fit);
+window.addEventListener("resize",fit);
+window.addEventListener("load",fit);
 fit();
 </script>
 </body>
