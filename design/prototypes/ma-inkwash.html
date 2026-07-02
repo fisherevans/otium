@@ -1,0 +1,791 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<title>otium — 間</title>
+<style>
+  /* ─────────────────────────────────────────────────────────
+     otium · "Ma — Ink & Negative Space"
+     Washi paper · sumi ink · one vermilion seal · silence
+     ───────────────────────────────────────────────────────── */
+
+  :root{
+    --paper:      #F2EEE3;   /* washi off-white, warm */
+    --paper-deep: #EAE4D5;   /* faint fold / recess   */
+    --sumi:       #201E1A;   /* warm near-black ink   */
+    --sumi-soft:  #4A463E;   /* diluted ink           */
+    --sumi-faint: #8C877A;   /* far-diluted ink       */
+    --hair:       #C9C2B0;   /* hairline              */
+    --vermilion:  #C1332B;   /* the only color: seal  */
+    --vermilion-d:#9E241E;
+  }
+
+  *{ margin:0; padding:0; box-sizing:border-box;
+     -webkit-tap-highlight-color:transparent; }
+
+  html,body{ height:100%; }
+
+  body{
+    font-family:"Optima","Futura","Avenir Next",sans-serif;
+    background:
+      radial-gradient(120% 90% at 50% 0%, #2b2822 0%, #201d18 55%, #14120e 100%);
+    color:var(--sumi);
+    display:flex; align-items:center; justify-content:center;
+    min-height:100vh;
+    padding:22px 0;
+    -webkit-font-smoothing:antialiased;
+    text-rendering:optimizeLegibility;
+  }
+
+  /* ── phone frame ─────────────────────────────────────────── */
+  .device{
+    position:relative;
+    width:390px; height:844px;
+    border-radius:52px;
+    background:#000;
+    padding:11px;
+    box-shadow:
+      0 1px 0 rgba(255,255,255,.08) inset,
+      0 40px 90px -20px rgba(0,0,0,.75),
+      0 12px 30px -10px rgba(0,0,0,.6);
+    flex:0 0 auto;
+  }
+  .screen{
+    position:relative;
+    width:100%; height:100%;
+    border-radius:42px;
+    overflow:hidden;
+    background:var(--paper);
+    background-image:
+      radial-gradient(140% 120% at 50% -10%, #F7F3EA 0%, var(--paper) 46%, var(--paper-deep) 100%);
+  }
+  /* washi grain */
+  .screen::before{
+    content:""; position:absolute; inset:0; z-index:0; pointer-events:none;
+    opacity:.5; mix-blend-mode:multiply;
+    background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='140' height='140'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/><feColorMatrix type='matrix' values='0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 0.045 0'/></filter><rect width='140' height='140' filter='url(%23n)'/></svg>");
+  }
+  /* long soft fibers */
+  .screen::after{
+    content:""; position:absolute; inset:0; z-index:0; pointer-events:none;
+    opacity:.35; mix-blend-mode:multiply;
+    background-image:
+      repeating-linear-gradient(94deg, transparent 0 26px, rgba(150,140,120,.05) 26px 27px),
+      repeating-linear-gradient(3deg, transparent 0 40px, rgba(150,140,120,.04) 40px 41px);
+  }
+
+  .notch{
+    position:absolute; top:0; left:50%; transform:translateX(-50%);
+    width:124px; height:30px; background:#000;
+    border-bottom-left-radius:16px; border-bottom-right-radius:16px;
+    z-index:60;
+  }
+
+  /* ── app scaffold ────────────────────────────────────────── */
+  .app{ position:absolute; inset:0; display:flex; flex-direction:column; z-index:2; }
+
+  .statusbar{
+    height:46px; flex:0 0 auto;
+    display:flex; align-items:flex-end; justify-content:space-between;
+    padding:0 30px 5px; font-size:13px; letter-spacing:.02em;
+    color:var(--sumi-soft);
+    font-family:"Futura","Avenir Next",sans-serif;
+    z-index:3;
+  }
+  .statusbar .dots{ display:flex; gap:5px; align-items:center; }
+  .statusbar .dots svg{ display:block; }
+
+  header.brand{
+    flex:0 0 auto;
+    padding:6px 34px 10px;
+    display:flex; align-items:baseline; justify-content:space-between;
+    z-index:3;
+  }
+  .wordmark{
+    font-family:"Optima","Palatino",serif;
+    font-size:23px; font-weight:400; letter-spacing:.14em;
+    color:var(--sumi);
+  }
+  .wordmark .seal{
+    display:inline-block; width:7px; height:7px; border-radius:50%;
+    background:var(--vermilion); margin-left:2px; vertical-align:middle;
+    transform:translateY(-1px);
+  }
+  .tagline{
+    font-family:"Futura","Avenir Next",sans-serif;
+    font-size:9.5px; letter-spacing:.34em; text-transform:uppercase;
+    color:var(--sumi-faint);
+  }
+
+  .scroll{
+    flex:1 1 auto; overflow-y:auto; overflow-x:hidden;
+    -webkit-overflow-scrolling:touch;
+    position:relative; z-index:2;
+  }
+  .scroll::-webkit-scrollbar{ display:none; }
+
+  /* views */
+  .view{ display:none; padding:0 34px 40px; animation:fade .7s ease both; }
+  .view.active{ display:block; }
+  @keyframes fade{ from{opacity:0; transform:translateY(6px);} to{opacity:1; transform:none;} }
+
+  /* section kanji-mark + label */
+  .mark{
+    display:flex; align-items:center; gap:12px; margin:20px 0 4px;
+  }
+  .mark .kanji{
+    font-family:"Hiragino Mincho ProN","Yu Mincho",serif;
+    font-size:19px; color:var(--sumi-faint); font-weight:400;
+    line-height:1;
+  }
+  .mark .lbl{
+    font-family:"Futura","Avenir Next",sans-serif;
+    font-size:9.5px; letter-spacing:.36em; text-transform:uppercase;
+    color:var(--sumi-faint);
+  }
+  .prompt{
+    font-family:"Optima","Palatino",serif;
+    font-weight:400; font-size:30px; line-height:1.18; letter-spacing:.005em;
+    color:var(--sumi); margin:4px 0 0;
+  }
+  .prompt .thin{ color:var(--sumi-faint); }
+
+  /* ── INTENT ─────────────────────────────────────────────── */
+  .padwrap{
+    position:relative; margin:24px auto 8px;
+    width:296px; height:296px;
+    touch-action:none;
+  }
+  /* corner mood labels */
+  .corner{
+    position:absolute; font-family:"Futura","Avenir Next",sans-serif;
+    font-size:8.5px; letter-spacing:.24em; text-transform:uppercase;
+    color:var(--sumi-faint); opacity:.5; transition:opacity .5s, color .5s;
+    line-height:1.5; pointer-events:none; z-index:4;
+  }
+  .corner b{ font-weight:400; display:block; }
+  .corner.tl{ top:0; left:0; text-align:left; }
+  .corner.tr{ top:0; right:0; text-align:right; }
+  .corner.bl{ bottom:0; left:0; text-align:left; }
+  .corner.br{ bottom:0; right:0; text-align:right; }
+  .corner.near{ opacity:1; color:var(--sumi); }
+
+  .enso{ position:absolute; inset:0; z-index:2; pointer-events:none; }
+  #tether{ transition:opacity .4s; }
+  .knob{
+    position:absolute; z-index:5;
+    width:54px; height:54px; margin:-27px 0 0 -27px;
+    left:50%; top:50%;
+    pointer-events:none;
+    transition:transform .55s cubic-bezier(.2,.9,.2,1);
+    will-change:transform;
+  }
+  .knob.dragging{ transition:none; }
+  .knob svg{ display:block; filter:drop-shadow(0 4px 7px rgba(30,25,18,.28)); }
+
+  .readout{
+    text-align:center; margin:14px 0 2px;
+  }
+  .readout .big{
+    font-family:"Optima","Palatino",serif; font-size:26px; letter-spacing:.02em;
+    color:var(--sumi);
+  }
+  .readout .big .div{ color:var(--hair); margin:0 8px; font-weight:300; }
+  .readout .sub{
+    font-family:"Futura","Avenir Next",sans-serif;
+    font-size:10px; letter-spacing:.28em; text-transform:uppercase;
+    color:var(--sumi-faint); margin-top:7px;
+  }
+
+  /* theme chips */
+  .chips{
+    display:flex; flex-wrap:wrap; gap:9px; justify-content:center;
+    margin:26px 2px 6px;
+  }
+  .chip{
+    font-family:"Futura","Avenir Next",sans-serif;
+    font-size:11px; letter-spacing:.14em;
+    padding:9px 15px; min-height:38px;
+    display:inline-flex; align-items:center; gap:7px;
+    border:1px solid var(--hair); border-radius:2px;
+    color:var(--sumi-soft); background:transparent;
+    transition:.35s ease; cursor:pointer;
+    position:relative;
+  }
+  .chip .dot{
+    width:5px; height:5px; border-radius:50%; background:transparent;
+    border:1px solid var(--hair); transition:.35s;
+  }
+  .chip:active{ transform:scale(.96); }
+  .chip.on{
+    color:var(--sumi); border-color:var(--sumi);
+    background:rgba(32,30,26,.04);
+  }
+  .chip.on .dot{ background:var(--vermilion); border-color:var(--vermilion); }
+
+  /* build button */
+  .build{
+    margin:30px auto 8px; display:block; width:100%;
+    font-family:"Optima","Palatino",serif; font-size:17px; letter-spacing:.16em;
+    padding:19px 0; min-height:60px;
+    background:var(--sumi); color:var(--paper);
+    border:none; border-radius:3px; cursor:pointer;
+    transition:.3s ease; position:relative; overflow:hidden;
+  }
+  .build .seal{
+    display:inline-block; width:6px; height:6px; border-radius:50%;
+    background:var(--vermilion); margin-left:10px; vertical-align:middle;
+    transform:translateY(-2px);
+  }
+  .build:active{ transform:scale(.985); background:#100f0c; }
+
+  .silence{
+    text-align:center; margin:20px 0 4px;
+    font-family:"Hiragino Mincho ProN","Yu Mincho","Hoefler Text",serif;
+    font-size:11px; letter-spacing:.3em; color:var(--sumi-faint); font-style:italic;
+  }
+
+  /* ── SESSION ────────────────────────────────────────────── */
+  .card{
+    position:relative; padding:22px 4px 22px;
+    border-bottom:1px solid var(--hair);
+    animation:cardin .8s ease both;
+  }
+  @keyframes cardin{ from{opacity:0; transform:translateY(10px);} to{opacity:1; transform:none;} }
+  .card:first-of-type{ padding-top:14px; }
+
+  .reason{
+    display:inline-flex; align-items:center; gap:7px;
+    font-family:"Futura","Avenir Next",sans-serif;
+    font-size:9px; letter-spacing:.24em; text-transform:uppercase;
+    color:var(--sumi-faint); margin-bottom:12px;
+  }
+  .reason .seal{
+    width:5px; height:5px; border-radius:50%; background:var(--vermilion);
+    flex:0 0 auto;
+  }
+  .card h3{
+    font-family:"Iowan Old Style","Palatino","Optima",serif;
+    font-weight:400; font-size:21px; line-height:1.28; letter-spacing:.005em;
+    color:var(--sumi); margin-bottom:9px;
+  }
+  .card .summary{
+    font-family:"Optima","Avenir Next",sans-serif;
+    font-size:13px; line-height:1.55; color:var(--sumi-soft);
+    margin-bottom:11px; max-width:30ch;
+  }
+  .meta{
+    display:flex; align-items:center; gap:9px; margin-bottom:16px;
+    font-family:"Futura","Avenir Next",sans-serif;
+    font-size:10.5px; letter-spacing:.1em; color:var(--sumi-faint);
+  }
+  .meta .sep{ width:14px; height:1px; background:var(--hair); }
+  .meta .type{ text-transform:uppercase; letter-spacing:.2em; font-size:9px; }
+
+  .actions{ display:flex; align-items:center; gap:10px; }
+  .act{
+    flex:0 0 auto;
+    font-family:"Futura","Avenir Next",sans-serif;
+    font-size:11px; letter-spacing:.14em;
+    min-height:44px; padding:0 16px;
+    display:inline-flex; align-items:center; gap:8px;
+    background:transparent; border:1px solid var(--hair); border-radius:2px;
+    color:var(--sumi-soft); cursor:pointer; transition:.28s ease;
+  }
+  .act:active{ transform:scale(.95); }
+  .act.open{ border-color:var(--sumi); color:var(--sumi); }
+  .act.open:active{ background:var(--sumi); color:var(--paper); }
+  .act.like{ margin-left:auto; padding:0 14px; }
+  .act.like svg{ display:block; transition:.3s; }
+  .act.like .fill{ opacity:0; transition:.35s; }
+  .act.like.on{ border-color:var(--vermilion); color:var(--vermilion); }
+  .act.like.on .fill{ opacity:1; }
+  .act.skip{ padding:0 14px; color:var(--sumi-faint); }
+
+  .session-foot{
+    text-align:center; padding:34px 0 4px;
+  }
+  .session-foot .brush{ margin:0 auto 18px; display:block; }
+  .session-foot .done-line{
+    font-family:"Iowan Old Style","Palatino",serif; font-style:italic;
+    font-size:19px; letter-spacing:.02em; color:var(--sumi); margin-bottom:6px;
+  }
+  .session-foot .count{
+    font-family:"Futura","Avenir Next",sans-serif;
+    font-size:9.5px; letter-spacing:.3em; text-transform:uppercase;
+    color:var(--sumi-faint); margin-bottom:26px;
+  }
+  .foot-btns{ display:flex; gap:12px; }
+  .foot-btns button{
+    flex:1; min-height:52px;
+    font-family:"Optima","Palatino",serif; font-size:14px; letter-spacing:.1em;
+    border-radius:3px; cursor:pointer; transition:.28s ease;
+  }
+  .foot-btns .more{
+    background:transparent; border:1px solid var(--sumi); color:var(--sumi);
+  }
+  .foot-btns .more:active{ background:rgba(32,30,26,.05); transform:scale(.98); }
+  .foot-btns .done{
+    background:var(--sumi); border:1px solid var(--sumi); color:var(--paper);
+  }
+  .foot-btns .done:active{ transform:scale(.98); background:#100f0c; }
+
+  /* ── LIBRARY ────────────────────────────────────────────── */
+  .row{
+    display:flex; align-items:center; gap:14px;
+    padding:22px 2px; border-bottom:1px solid var(--hair);
+  }
+  .row .body{ flex:1 1 auto; min-width:0; }
+  .row .name{
+    font-family:"Iowan Old Style","Palatino",serif;
+    font-weight:400; font-size:18px; letter-spacing:.01em; color:var(--sumi);
+    margin-bottom:5px;
+  }
+  .row .sub{
+    font-family:"Futura","Avenir Next",sans-serif;
+    font-size:9.5px; letter-spacing:.16em; text-transform:uppercase;
+    color:var(--sumi-faint);
+  }
+  .row .sub .u{ color:var(--sumi-soft); }
+  .weight{
+    flex:0 0 auto;
+    font-family:"Futura","Avenir Next",sans-serif;
+    font-size:9.5px; letter-spacing:.14em;
+    min-height:44px; padding:0 14px;
+    display:inline-flex; align-items:center; gap:8px;
+    border:1px solid var(--hair); border-radius:2px;
+    color:var(--sumi-soft); background:transparent; cursor:pointer;
+    transition:.3s ease;
+  }
+  .weight:active{ transform:scale(.95); }
+  .weight .bars{ display:flex; align-items:flex-end; gap:2px; height:12px; }
+  .weight .bars i{
+    width:2.5px; background:var(--hair); display:block; transition:.3s;
+  }
+  .weight .bars i:nth-child(1){ height:4px; }
+  .weight .bars i:nth-child(2){ height:7px; }
+  .weight .bars i:nth-child(3){ height:10px; }
+  .weight .bars i:nth-child(4){ height:12px; }
+  .weight[data-level="favorite"]{ color:var(--vermilion); border-color:var(--vermilion); }
+  .weight[data-level="favorite"] .bars i{ background:var(--vermilion); }
+  .weight[data-level="high"]{ color:var(--sumi); border-color:var(--sumi); }
+  .weight[data-level="high"] .bars i:nth-child(-n+3){ background:var(--sumi); }
+  .weight[data-level="normal"] .bars i:nth-child(-n+2){ background:var(--sumi-soft); }
+  .weight[data-level="low"] .bars i:nth-child(-n+1){ background:var(--sumi-soft); }
+  .weight[data-level="very-low"] .bars i{ background:var(--hair); }
+
+  .lib-note{
+    font-family:"Iowan Old Style","Palatino",serif; font-style:italic;
+    font-size:12.5px; line-height:1.6; color:var(--sumi-faint);
+    text-align:center; padding:30px 20px 4px; max-width:30ch; margin:0 auto;
+  }
+
+  /* ── bottom nav ─────────────────────────────────────────── */
+  nav{
+    flex:0 0 auto; height:86px;
+    display:flex; align-items:flex-start; justify-content:space-around;
+    padding:14px 26px 0;
+    background:linear-gradient(0deg, var(--paper) 62%, rgba(242,238,227,0));
+    border-top:1px solid var(--hair);
+    position:relative; z-index:5;
+  }
+  .navbtn{
+    background:none; border:none; cursor:pointer;
+    display:flex; flex-direction:column; align-items:center; gap:7px;
+    padding:6px 14px; min-width:56px; min-height:56px;
+    color:var(--sumi-faint); transition:.3s ease;
+  }
+  .navbtn .ico{ width:22px; height:22px; display:block; transition:.3s; }
+  .navbtn .ico svg{ width:100%; height:100%; display:block; }
+  .navbtn .t{
+    font-family:"Futura","Avenir Next",sans-serif;
+    font-size:8.5px; letter-spacing:.22em; text-transform:uppercase;
+  }
+  .navbtn .under{
+    width:4px; height:4px; border-radius:50%; background:transparent;
+    margin-top:-2px; transition:.3s;
+  }
+  .navbtn:active{ transform:translateY(1px); }
+  .navbtn.active{ color:var(--sumi); }
+  .navbtn.active .under{ background:var(--vermilion); }
+
+  .home-ind{
+    position:absolute; bottom:8px; left:50%; transform:translateX(-50%);
+    width:128px; height:5px; border-radius:3px; background:var(--sumi);
+    opacity:.28; z-index:60;
+  }
+</style>
+</head>
+<body>
+<div class="device">
+  <div class="notch"></div>
+  <div class="screen">
+    <div class="app">
+
+      <!-- status bar -->
+      <div class="statusbar">
+        <span>9:41</span>
+        <span class="dots">
+          <svg width="17" height="11" viewBox="0 0 17 11"><g fill="#4A463E"><rect x="0" y="7" width="3" height="4" rx="1"/><rect x="4.5" y="4.5" width="3" height="6.5" rx="1"/><rect x="9" y="2" width="3" height="9" rx="1"/><rect x="13.5" y="0" width="3" height="11" rx="1" opacity=".35"/></g></svg>
+          <svg width="24" height="11" viewBox="0 0 24 11"><rect x="0.5" y="0.5" width="20" height="10" rx="2.5" fill="none" stroke="#4A463E" opacity=".55"/><rect x="2.2" y="2.2" width="14" height="6.6" rx="1" fill="#4A463E"/><rect x="21.5" y="3.5" width="1.5" height="4" rx="1" fill="#4A463E" opacity=".55"/></svg>
+        </span>
+      </div>
+
+      <!-- brand -->
+      <header class="brand">
+        <span class="wordmark">otium<span class="seal"></span></span>
+        <span class="tagline">attention, on&nbsp;purpose</span>
+      </header>
+
+      <div class="scroll" id="scroll">
+
+        <!-- ══════════════ INTENT ══════════════ -->
+        <section class="view active" id="view-intent">
+          <div class="mark"><span class="kanji">間</span><span class="lbl">Intent</span></div>
+          <h1 class="prompt">How much<br><span class="thin">time?</span></h1>
+
+          <!-- enso analog pad -->
+          <div class="padwrap" id="pad">
+            <div class="corner tl"><b>long</b>focused</div>
+            <div class="corner tr"><b>long</b>varied</div>
+            <div class="corner bl"><b>quick</b>focused</div>
+            <div class="corner br"><b>quick</b>varied</div>
+
+            <svg class="enso" viewBox="0 0 296 296" preserveAspectRatio="xMidYMid meet">
+              <!-- faint guide axes -->
+              <line x1="148" y1="58" x2="148" y2="238" stroke="#C9C2B0" stroke-width="1" opacity=".5"/>
+              <line x1="58" y1="148" x2="238" y2="148" stroke="#C9C2B0" stroke-width="1" opacity=".5"/>
+              <!-- enso brush circle (open, tapered, hand-drawn) -->
+              <path d="M 173 66
+                       C 118 52, 66 84, 60 143
+                       C 55 200, 100 240, 156 238
+                       C 210 236, 244 196, 240 145
+                       C 237 104, 210 78, 176 70"
+                    fill="none" stroke="#201E1A"
+                    stroke-width="7.5" stroke-linecap="round"
+                    opacity=".9"
+                    style="stroke-dasharray:0;"/>
+              <!-- dry-brush inner texture strokes -->
+              <path d="M 168 72 C 120 60, 74 90, 69 143"
+                    fill="none" stroke="#201E1A" stroke-width="2" stroke-linecap="round" opacity=".22"/>
+              <path d="M 232 150 C 234 195, 202 230, 155 231"
+                    fill="none" stroke="#201E1A" stroke-width="2" stroke-linecap="round" opacity=".2"/>
+              <!-- tether from center to knob -->
+              <line id="tether" x1="148" y1="148" x2="148" y2="148"
+                    stroke="#201E1A" stroke-width="2" stroke-linecap="round" opacity="0"/>
+              <!-- center rest mark -->
+              <circle cx="148" cy="148" r="2.4" fill="#8C877A"/>
+            </svg>
+
+            <!-- brush-dot knob -->
+            <div class="knob" id="knob">
+              <svg width="54" height="54" viewBox="0 0 54 54">
+                <defs>
+                  <radialGradient id="ink" cx="42%" cy="38%" r="70%">
+                    <stop offset="0%" stop-color="#3a352c"/>
+                    <stop offset="60%" stop-color="#201E1A"/>
+                    <stop offset="100%" stop-color="#14120e"/>
+                  </radialGradient>
+                </defs>
+                <!-- irregular sumi dot -->
+                <path d="M 27 5
+                         C 39 4, 50 13, 49 27
+                         C 48 41, 40 50, 26 49
+                         C 13 48, 4 39, 5 26
+                         C 6 14, 15 6, 27 5 Z"
+                      fill="url(#ink)"/>
+                <path d="M 22 9 C 12 12, 7 21, 9 30" fill="none" stroke="#000" stroke-width="1" opacity=".25" stroke-linecap="round"/>
+                <circle cx="20" cy="18" r="4" fill="#fff" opacity=".12"/>
+              </svg>
+            </div>
+          </div>
+
+          <!-- readout -->
+          <div class="readout">
+            <div class="big"><span id="ro-min">18</span><span class="div">–</span><span id="ro-max">26</span> <span style="font-size:15px;letter-spacing:.18em;color:var(--sumi-soft)">min</span></div>
+            <div class="sub">about <span id="ro-items">5</span> items</div>
+          </div>
+
+          <!-- theme chips -->
+          <div class="mark" style="justify-content:center;margin-top:26px"><span class="lbl">In the mood for</span></div>
+          <div class="chips" id="chips">
+            <button class="chip on" data-t="News"><span class="dot"></span>News</button>
+            <button class="chip on" data-t="Tech"><span class="dot"></span>Tech</button>
+            <button class="chip" data-t="Science"><span class="dot"></span>Science</button>
+            <button class="chip" data-t="Curiosity"><span class="dot"></span>Curiosity</button>
+            <button class="chip" data-t="Gaming"><span class="dot"></span>Gaming</button>
+            <button class="chip on" data-t="Music"><span class="dot"></span>Music</button>
+          </div>
+
+          <button class="build" id="build">Build my session<span class="seal"></span></button>
+          <div class="silence">— then, silence until you begin —</div>
+        </section>
+
+        <!-- ══════════════ SESSION ══════════════ -->
+        <section class="view" id="view-session">
+          <div class="mark"><span class="kanji">席</span><span class="lbl">Your session</span></div>
+          <h1 class="prompt" style="font-size:25px">Four things,<br><span class="thin">chosen with reason.</span></h1>
+
+          <div id="cards"></div>
+
+          <div class="session-foot">
+            <svg class="brush" width="120" height="26" viewBox="0 0 120 26">
+              <path d="M 4 15 C 30 6, 58 20, 84 11 C 98 6, 110 12, 116 13"
+                    fill="none" stroke="#201E1A" stroke-width="4" stroke-linecap="round" opacity=".85"/>
+              <circle cx="116" cy="13" r="3.4" fill="#C1332B"/>
+            </svg>
+            <div class="done-line">That's your session.</div>
+            <div class="count">4 items · ~58 min</div>
+            <div class="foot-btns">
+              <button class="more" id="more">More like this</button>
+              <button class="done" id="done">Done</button>
+            </div>
+          </div>
+        </section>
+
+        <!-- ══════════════ LIBRARY ══════════════ -->
+        <section class="view" id="view-library">
+          <div class="mark"><span class="kanji">蔵</span><span class="lbl">Library</span></div>
+          <h1 class="prompt" style="font-size:25px">What you follow,<br><span class="thin">weighted by hand.</span></h1>
+
+          <div id="rows" style="margin-top:18px"></div>
+
+          <div class="lib-note">A feed you weight is a feed that can't run away with you.</div>
+        </section>
+
+      </div><!-- /scroll -->
+
+      <!-- bottom nav -->
+      <nav id="nav">
+        <button class="navbtn active" data-v="intent">
+          <span class="ico"><svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="8.5" stroke="currentColor" stroke-width="1.4"/><circle cx="12" cy="12" r="2.2" fill="currentColor"/></svg></span>
+          <span class="t">Intent</span>
+          <span class="under"></span>
+        </button>
+        <button class="navbtn" data-v="session">
+          <span class="ico"><svg viewBox="0 0 24 24" fill="none"><path d="M4 7h16M4 12h16M4 17h10" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg></span>
+          <span class="t">Session</span>
+          <span class="under"></span>
+        </button>
+        <button class="navbtn" data-v="library">
+          <span class="ico"><svg viewBox="0 0 24 24" fill="none"><path d="M5 4h5v16H5zM14 4h5v16h-5z" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/></svg></span>
+          <span class="t">Library</span>
+          <span class="under"></span>
+        </button>
+      </nav>
+
+      <div class="home-ind"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+(function(){
+  "use strict";
+
+  /* ── navigation ─────────────────────────────────────────── */
+  const views = {
+    intent:  document.getElementById('view-intent'),
+    session: document.getElementById('view-session'),
+    library: document.getElementById('view-library'),
+  };
+  const navBtns = [...document.querySelectorAll('.navbtn')];
+  const scroll = document.getElementById('scroll');
+  function show(v){
+    Object.keys(views).forEach(k=>views[k].classList.toggle('active', k===v));
+    navBtns.forEach(b=>b.classList.toggle('active', b.dataset.v===v));
+    scroll.scrollTop = 0;
+  }
+  navBtns.forEach(b=>b.addEventListener('click',()=>show(b.dataset.v)));
+
+  /* ── enso analog pad ────────────────────────────────────── */
+  const pad    = document.getElementById('pad');
+  const knob   = document.getElementById('knob');
+  const tether = document.getElementById('tether');
+  const corners= { tl:document.querySelector('.corner.tl'), tr:document.querySelector('.corner.tr'),
+                   bl:document.querySelector('.corner.bl'), br:document.querySelector('.corner.br') };
+  const roMin  = document.getElementById('ro-min');
+  const roMax  = document.getElementById('ro-max');
+  const roItems= document.getElementById('ro-items');
+
+  const R = 96;              // clamp radius in px from center
+  let cx=0, cy=0;            // pad center (page coords), set on down
+  let dragging=false;
+
+  function setKnob(dx, dy){
+    // clamp to circle
+    const d = Math.hypot(dx,dy);
+    if(d>R){ dx=dx/d*R; dy=dy/d*R; }
+    knob.style.transform = `translate(${dx}px, ${dy}px)`;
+    // tether in svg coords (viewBox 296, pad 296 -> 1:1)
+    tether.setAttribute('x2', 148+dx);
+    tether.setAttribute('y2', 148+dy);
+    tether.style.opacity = d>4 ? '0.6' : '0';
+    updateReadout(dx, dy);
+  }
+
+  function updateReadout(dx, dy){
+    // vertical: up = long (dy negative), down = quick (dy positive)
+    // horizontal: left = focused, right = varied
+    const ny = Math.max(-1, Math.min(1, -dy/R));  // +1 long, -1 quick
+    const nx = Math.max(-1, Math.min(1,  dx/R));  // +1 varied, -1 focused
+
+    // length: quick ~6min .. long ~55min center window
+    const center = 30 + ny*24;         // 6 .. 54
+    const span   = 5 + (nx+1)*3.2;     // wider when varied
+    let lo = Math.round(center - span);
+    let hi = Math.round(center + span);
+    lo = Math.max(4, lo); hi = Math.max(lo+3, hi);
+    roMin.textContent = lo;
+    roMax.textContent = hi;
+
+    // items: more when varied + longer
+    const items = Math.max(2, Math.round( (center/9) + (nx+1)*1.1 ));
+    roItems.textContent = items;
+
+    // brighten nearest corner
+    const near =
+      (ny>=0 && nx<0) ? 'tl' :
+      (ny>=0 && nx>=0)? 'tr' :
+      (ny<0  && nx<0) ? 'bl' : 'br';
+    Object.keys(corners).forEach(k=>corners[k].classList.toggle('near', k===near && Math.hypot(dx,dy)>10));
+  }
+
+  function pointFromEvent(e){
+    const r = pad.getBoundingClientRect();
+    cx = r.left + r.width/2;
+    cy = r.top  + r.height/2;
+    return { dx: e.clientX - cx, dy: e.clientY - cy };
+  }
+
+  pad.addEventListener('pointerdown', e=>{
+    dragging = true;
+    knob.classList.add('dragging');
+    pad.setPointerCapture(e.pointerId);
+    const p = pointFromEvent(e);
+    setKnob(p.dx, p.dy);
+  });
+  pad.addEventListener('pointermove', e=>{
+    if(!dragging) return;
+    const p = { dx: e.clientX - cx, dy: e.clientY - cy };
+    setKnob(p.dx, p.dy);
+  });
+  function release(){
+    if(!dragging) return;
+    dragging=false;
+    knob.classList.remove('dragging');
+    // tap-to-recenter: knob springs home
+    knob.style.transform = 'translate(0px,0px)';
+    tether.setAttribute('x2',148); tether.setAttribute('y2',148);
+    tether.style.opacity='0';
+    updateReadout(0,0);
+  }
+  pad.addEventListener('pointerup', release);
+  pad.addEventListener('pointercancel', release);
+
+  // seed readout at center
+  updateReadout(0,0);
+
+  /* ── theme chips ────────────────────────────────────────── */
+  document.getElementById('chips').addEventListener('click', e=>{
+    const c = e.target.closest('.chip'); if(!c) return;
+    c.classList.toggle('on');
+  });
+
+  /* build -> go to session */
+  document.getElementById('build').addEventListener('click', ()=>show('session'));
+
+  /* ── session cards fixture ──────────────────────────────── */
+  const CARDS = [
+    { reason:'Favorite source', title:"I got hit in the teeth at England's oldest ritual",
+      source:'Tom Scott', dur:'10 min', type:'video', summary:'' },
+    { reason:'Fresh — posted today', title:"Apple's entry-level MacBook Pro could get a redesign",
+      source:'The Verge', dur:'4 min', type:'article',
+      summary:'A revamped entry model could arrive as soon as this year, per supply-chain reports.' },
+    { reason:'Rare — posts seldom', title:'The Real Book',
+      source:'99% Invisible', dur:'32 min', type:'audio', summary:'' },
+    { reason:'High-weight source', title:"The universe's biggest unsolved problem",
+      source:'Veritasium', dur:'12 min', type:'video', summary:'' },
+  ];
+  const heartSVG =
+    '<svg width="14" height="14" viewBox="0 0 24 24">'+
+      '<path class="stroke" d="M12 20s-7-4.5-9.2-9C1.4 8 2.6 4.5 6 4.5c2 0 3.2 1.3 4 2.6.8-1.3 2-2.6 4-2.6 3.4 0 4.6 3.5 3.2 6.5C19 15.5 12 20 12 20Z" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/>'+
+      '<path class="fill" d="M12 20s-7-4.5-9.2-9C1.4 8 2.6 4.5 6 4.5c2 0 3.2 1.3 4 2.6.8-1.3 2-2.6 4-2.6 3.4 0 4.6 3.5 3.2 6.5C19 15.5 12 20 12 20Z" fill="currentColor"/>'+
+    '</svg>';
+
+  const cardsEl = document.getElementById('cards');
+  CARDS.forEach((c,i)=>{
+    const el = document.createElement('div');
+    el.className='card';
+    el.style.animationDelay = (i*0.09)+'s';
+    el.innerHTML =
+      '<span class="reason"><span class="seal"></span>'+c.reason+'</span>'+
+      '<h3>'+c.title+'</h3>'+
+      (c.summary ? '<p class="summary">'+c.summary+'</p>' : '')+
+      '<div class="meta"><span>'+c.source+'</span><span class="sep"></span>'+
+        '<span>'+c.dur+'</span><span class="sep"></span>'+
+        '<span class="type">'+c.type+'</span></div>'+
+      '<div class="actions">'+
+        '<button class="act open">Open</button>'+
+        '<button class="act like">'+heartSVG+'<span>Like</span></button>'+
+        '<button class="act skip">Skip</button>'+
+      '</div>';
+    cardsEl.appendChild(el);
+  });
+
+  cardsEl.addEventListener('click', e=>{
+    const like = e.target.closest('.act.like');
+    if(like){ like.classList.toggle('on');
+      like.querySelector('span').textContent = like.classList.contains('on') ? 'Liked' : 'Like'; return; }
+    const skip = e.target.closest('.act.skip');
+    if(skip){ const card = skip.closest('.card');
+      card.style.transition='opacity .5s, transform .5s, max-height .5s';
+      card.style.overflow='hidden'; card.style.maxHeight=card.offsetHeight+'px';
+      requestAnimationFrame(()=>{ card.style.opacity='.28'; card.style.transform='translateX(-14px)'; });
+      return; }
+  });
+
+  document.getElementById('more').addEventListener('click', ()=>show('intent'));
+  document.getElementById('done').addEventListener('click', ()=>show('intent'));
+
+  /* ── library rows fixture ───────────────────────────────── */
+  const ROWS = [
+    { name:'Tom Scott',  kind:'youtube', unseen:15, level:'favorite', label:'Favorite' },
+    { name:'NPR News',   kind:'rss',     unseen:10, level:'normal',   label:'Normal' },
+    { name:'Kurzgesagt', kind:'youtube', unseen:15, level:'favorite', label:'Favorite' },
+    { name:'Hacker News',kind:'rss',     unseen:20, level:'low',      label:'Low' },
+  ];
+  const LEVELS = [
+    {k:'very-low', l:'Very low'},{k:'low',l:'Low'},{k:'normal',l:'Normal'},
+    {k:'high',l:'High'},{k:'favorite',l:'Favorite'}
+  ];
+  const rowsEl = document.getElementById('rows');
+  ROWS.forEach(r=>{
+    const el=document.createElement('div');
+    el.className='row';
+    el.innerHTML =
+      '<div class="body"><div class="name">'+r.name+'</div>'+
+      '<div class="sub">'+r.kind+' · <span class="u">'+r.unseen+' unseen</span></div></div>'+
+      '<button class="weight" data-level="'+r.level+'">'+
+        '<span class="lbltxt">'+r.label+'</span>'+
+        '<span class="bars"><i></i><i></i><i></i><i></i></span>'+
+      '</button>';
+    rowsEl.appendChild(el);
+  });
+  // tap weight -> cycle through levels
+  rowsEl.addEventListener('click', e=>{
+    const w = e.target.closest('.weight'); if(!w) return;
+    const cur = w.dataset.level;
+    let idx = LEVELS.findIndex(x=>x.k===cur);
+    idx = (idx+1) % LEVELS.length;
+    w.dataset.level = LEVELS[idx].k;
+    w.querySelector('.lbltxt').textContent = LEVELS[idx].l;
+    w.style.transform='scale(1.05)';
+    setTimeout(()=>w.style.transform='',180);
+  });
+
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,991 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+<title>otium — attention, on purpose</title>
+<style>
+  /* ============================================================
+     otium — "Naturalist Field Almanac"
+     Aged cream paper, sepia + sage + ochre, letterpress, engraved
+     hairline ornament, numbered entries, small-caps, old-style figs.
+     ============================================================ */
+
+  :root {
+    --paper:      #ece3cf;   /* aged cream */
+    --paper-lit:  #f4ecd8;   /* highlit page */
+    --paper-deep: #e2d6ba;   /* shadowed leaf */
+    --ink:        #3a3226;   /* sepia ink */
+    --ink-soft:   #6b5f49;   /* faded ink */
+    --ink-faint:  #9a8b6d;   /* pencil */
+    --sage:       #6f7a5a;   /* muted sage */
+    --sage-deep:  #545c40;
+    --ochre:      #a9782f;   /* ochre */
+    --ochre-lit:  #c0913f;
+    --rust:       #8a4b32;   /* specimen red */
+    --rule:       #b6a67f;   /* hairline */
+    --rule-soft:  #cabf9f;
+    --gilt:       #9c7b3a;
+  }
+
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+
+  html, body {
+    margin: 0; padding: 0;
+    height: 100%;
+    background:
+      radial-gradient(circle at 30% 20%, #4a4436 0%, #322d22 60%, #241f18 100%);
+    font-family: "Iowan Old Style", "Palatino", "Baskerville", Georgia, serif;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  body {
+    display: flex; align-items: center; justify-content: center;
+    min-height: 100vh;
+    padding: 18px 0;
+  }
+
+  /* ---- phone frame ---- */
+  .device {
+    position: relative;
+    width: 390px; height: 844px;
+    max-height: calc(100vh - 24px);
+    border-radius: 52px;
+    background: #191510;
+    padding: 11px;
+    box-shadow:
+      0 40px 80px -20px rgba(0,0,0,.7),
+      0 0 0 2px #0d0b08,
+      inset 0 0 3px 1px rgba(255,255,255,.06);
+  }
+  .screen {
+    position: relative;
+    width: 100%; height: 100%;
+    border-radius: 42px;
+    overflow: hidden;
+    background: var(--paper);
+    display: flex; flex-direction: column;
+  }
+
+  /* aged-paper texture: mottling + fibre grain via layered gradients + SVG noise */
+  .screen::before {
+    content: "";
+    position: absolute; inset: 0;
+    pointer-events: none;
+    z-index: 6;
+    background-image:
+      radial-gradient(circle at 12% 8%,  rgba(120,95,50,.10) 0 2px, transparent 3px),
+      radial-gradient(circle at 82% 22%, rgba(120,95,50,.08) 0 2px, transparent 3px),
+      radial-gradient(circle at 68% 78%, rgba(90,70,35,.10)  0 3px, transparent 4px),
+      radial-gradient(circle at 24% 64%, rgba(140,110,60,.07) 0 2px, transparent 3px);
+    opacity: .8;
+  }
+  /* vignette + foxing at edges */
+  .screen::after {
+    content: "";
+    position: absolute; inset: 0;
+    pointer-events: none;
+    z-index: 7;
+    border-radius: 42px;
+    box-shadow:
+      inset 0 0 60px 6px rgba(90,68,34,.20),
+      inset 0 0 8px 1px rgba(58,50,38,.18);
+    background:
+      linear-gradient(180deg, rgba(120,95,55,.05), transparent 12%, transparent 88%, rgba(90,68,40,.08));
+  }
+  .grain {
+    position: absolute; inset: 0;
+    z-index: 5;
+    pointer-events: none;
+    opacity: .35;
+    mix-blend-mode: multiply;
+  }
+
+  /* ---- notch / status glyph ---- */
+  .statusbar {
+    position: relative; z-index: 8;
+    height: 44px; flex: 0 0 44px;
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 0 26px;
+    font: 600 14px/1 "Avenir Next", "Optima", sans-serif;
+    color: var(--ink-soft);
+    letter-spacing: .3px;
+  }
+  .statusbar .dots { display: flex; gap: 4px; align-items: center; }
+  .statusbar .dots i {
+    width: 5px; height: 5px; border-radius: 50%;
+    background: var(--ink-soft); display: block;
+  }
+
+  /* ---- scrolling content ---- */
+  .content {
+    position: relative; z-index: 4;
+    flex: 1 1 auto;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    padding: 4px 26px 118px;
+  }
+  .content::-webkit-scrollbar { width: 0; }
+
+  .page { display: none; animation: leaf .5s ease both; }
+  .page.active { display: block; }
+  @keyframes leaf {
+    from { opacity: 0; transform: translateY(6px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  /* ---- masthead ---- */
+  .masthead { text-align: center; padding-top: 6px; }
+  .wordmark {
+    font-family: "Didot", "Bodoni 72", "Hoefler Text", Georgia, serif;
+    font-size: 46px; font-weight: 400;
+    letter-spacing: 1px;
+    color: var(--ink);
+    line-height: .9;
+    position: relative; display: inline-block;
+    text-shadow: 0 1px 0 rgba(255,255,255,.25);
+  }
+  .wordmark::first-letter { color: var(--rust); }
+  .tagline {
+    font-family: "Copperplate", "Optima", sans-serif;
+    font-size: 10.5px; letter-spacing: 3.5px;
+    text-transform: uppercase;
+    color: var(--ink-faint);
+    margin-top: 8px;
+  }
+  .rule-orn { margin: 12px auto 4px; display: block; }
+
+  /* section eyebrows / small caps headings */
+  .eyebrow {
+    font-family: "Copperplate", "Optima", sans-serif;
+    font-size: 10px; letter-spacing: 2.6px; text-transform: uppercase;
+    color: var(--ochre);
+    text-align: center;
+  }
+  .folio-h {
+    font-family: "Didot", "Hoefler Text", Georgia, serif;
+    font-size: 27px; font-weight: 400;
+    color: var(--ink);
+    text-align: center;
+    margin: 3px 0 2px;
+    font-variant-numeric: oldstyle-nums;
+  }
+  .sub-latin {
+    text-align: center;
+    font-style: italic;
+    font-size: 13px;
+    color: var(--ink-faint);
+    margin-bottom: 14px;
+  }
+
+  /* ============================================================
+     INTENT — the analog plotting pad
+     ============================================================ */
+  .plat {
+    position: relative;
+    margin: 4px auto 2px;
+    width: 300px; height: 300px;
+    touch-action: none;
+    user-select: none; -webkit-user-select: none;
+  }
+  .plat-frame {
+    position: absolute; inset: 0;
+    border-radius: 6px;
+    background:
+      linear-gradient(180deg, var(--paper-lit), var(--paper-deep));
+    box-shadow:
+      inset 0 0 0 1px var(--rule),
+      inset 0 0 0 5px var(--paper),
+      inset 0 0 0 6px var(--rule-soft),
+      0 2px 0 rgba(255,255,255,.2);
+  }
+  .plat svg.engrave { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+
+  .corner {
+    position: absolute;
+    font-family: "Copperplate", "Optima", sans-serif;
+    font-size: 8.5px; letter-spacing: 1.4px; text-transform: uppercase;
+    color: var(--ink-faint);
+    line-height: 1.35;
+    transition: color .25s, opacity .25s;
+    pointer-events: none;
+    max-width: 78px;
+  }
+  .corner b { display:block; color: var(--ink-soft); font-weight:600; }
+  .corner.tl { top: 14px; left: 14px; text-align: left; }
+  .corner.tr { top: 14px; right: 14px; text-align: right; }
+  .corner.bl { bottom: 14px; left: 14px; text-align: left; }
+  .corner.br { bottom: 14px; right: 14px; text-align: right; }
+  .corner.near { color: var(--rust); }
+  .corner.near b { color: var(--rust); }
+
+  .axis-label {
+    position: absolute;
+    font-family: "Copperplate", "Optima", sans-serif;
+    font-size: 8px; letter-spacing: 1.6px; text-transform: uppercase;
+    color: var(--ochre);
+    pointer-events: none;
+  }
+  .axis-label.top { top: 3px; left: 50%; transform: translateX(-50%); }
+  .axis-label.bot { bottom: 3px; left: 50%; transform: translateX(-50%); }
+  .axis-label.lft { left: 5px; top: 50%; transform: translateY(-50%) rotate(-90deg); transform-origin: left center; }
+  .axis-label.rgt { right: 5px; top: 50%; transform: translateY(-50%) rotate(90deg); transform-origin: right center; }
+
+  .knob {
+    position: absolute;
+    width: 54px; height: 54px;
+    left: 50%; top: 50%;
+    transform: translate(-50%, -50%);
+    border-radius: 50%;
+    background:
+      radial-gradient(circle at 38% 32%, #c8a24f 0%, #a9782f 42%, #7c5620 100%);
+    box-shadow:
+      0 3px 6px rgba(50,35,15,.45),
+      inset 0 1px 1px rgba(255,240,200,.5),
+      inset 0 -2px 4px rgba(60,40,15,.55),
+      0 0 0 1px rgba(60,40,15,.4);
+    z-index: 3;
+    cursor: grab;
+    transition: box-shadow .2s, width .12s, height .12s;
+  }
+  .knob::after {
+    content: "";
+    position: absolute; inset: 0;
+    margin: auto; width: 12px; height: 12px;
+    border-radius: 50%;
+    background: radial-gradient(circle at 40% 35%, #f0dca0, #8a641f);
+    box-shadow: inset 0 0 2px rgba(50,30,10,.6);
+  }
+  .plat.dragging .knob { cursor: grabbing; box-shadow: 0 5px 12px rgba(50,35,15,.5), inset 0 1px 1px rgba(255,240,200,.5), inset 0 -2px 4px rgba(60,40,15,.55), 0 0 0 2px rgba(169,120,47,.35); }
+
+  .center-mark {
+    position: absolute; left: 50%; top: 50%;
+    width: 7px; height: 7px; margin: -3.5px 0 0 -3.5px;
+    border-radius: 50%; background: var(--ink-faint);
+    z-index: 1;
+  }
+
+  /* readout ledger */
+  .readout {
+    margin: 16px auto 4px;
+    text-align: center;
+  }
+  .readout .big {
+    font-family: "Iowan Old Style", Palatino, serif;
+    font-size: 30px; color: var(--ink);
+    font-variant-numeric: oldstyle-nums;
+    letter-spacing: .5px;
+  }
+  .readout .big .amp { color: var(--ochre); font-style: italic; padding: 0 2px; }
+  .readout .items {
+    font-family: "Copperplate", "Optima", sans-serif;
+    font-size: 10px; letter-spacing: 2px; text-transform: uppercase;
+    color: var(--ink-faint); margin-top: 5px;
+  }
+
+  /* theme chips */
+  .field-label {
+    font-family: "Copperplate", "Optima", sans-serif;
+    font-size: 9.5px; letter-spacing: 2.4px; text-transform: uppercase;
+    color: var(--ochre);
+    margin: 22px 0 12px;
+    display: flex; align-items: center; gap: 10px;
+  }
+  .field-label::before, .field-label::after {
+    content: ""; flex: 1; height: 1px;
+    background: repeating-linear-gradient(90deg, var(--rule) 0 4px, transparent 4px 7px);
+  }
+  .chips { display: flex; flex-wrap: wrap; gap: 9px; justify-content: center; }
+  .chip {
+    font-family: "Iowan Old Style", Palatino, serif;
+    font-size: 14.5px;
+    color: var(--ink-soft);
+    padding: 9px 15px 8px;
+    border: 1px solid var(--rule);
+    border-radius: 2px;
+    background: linear-gradient(180deg, var(--paper-lit), var(--paper));
+    display: inline-flex; align-items: center; gap: 8px;
+    min-height: 44px;
+    cursor: pointer;
+    transition: transform .12s, background .2s, color .2s, box-shadow .2s;
+    position: relative;
+  }
+  .chip .tick {
+    width: 13px; height: 13px; opacity: 0; transition: opacity .18s;
+    flex: 0 0 13px;
+  }
+  .chip:active { transform: scale(.96); }
+  .chip.on {
+    color: var(--paper-lit);
+    background: linear-gradient(180deg, var(--sage), var(--sage-deep));
+    border-color: var(--sage-deep);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,.2), 0 1px 2px rgba(50,40,20,.3);
+  }
+  .chip.on .tick { opacity: 1; }
+
+  .build {
+    margin: 26px auto 10px;
+    width: 100%;
+    min-height: 58px;
+    border: none;
+    border-radius: 3px;
+    background:
+      linear-gradient(180deg, #45402f, #2f2b20);
+    color: var(--paper-lit);
+    font-family: "Copperplate", "Optima", sans-serif;
+    font-size: 13px; letter-spacing: 3px; text-transform: uppercase;
+    display: flex; align-items: center; justify-content: center; gap: 12px;
+    cursor: pointer;
+    box-shadow:
+      inset 0 1px 0 rgba(255,240,200,.14),
+      inset 0 0 0 1px rgba(0,0,0,.3),
+      0 3px 0 rgba(40,32,18,.5),
+      0 6px 12px rgba(30,24,12,.35);
+    transition: transform .12s, box-shadow .12s;
+  }
+  .build:active { transform: translateY(2px); box-shadow: inset 0 1px 0 rgba(255,240,200,.14), inset 0 0 0 1px rgba(0,0,0,.3), 0 1px 0 rgba(40,32,18,.5); }
+  .build svg { flex: 0 0 auto; }
+
+  /* ============================================================
+     SESSION — catalogued specimen cards
+     ============================================================ */
+  .specimen {
+    position: relative;
+    margin-bottom: 22px;
+    padding: 18px 18px 16px 48px;
+    background:
+      linear-gradient(180deg, var(--paper-lit), var(--paper));
+    border: 1px solid var(--rule);
+    border-radius: 3px;
+    box-shadow: 0 1px 0 rgba(255,255,255,.3), 0 2px 5px rgba(60,45,20,.12);
+    transition: transform .35s cubic-bezier(.2,.7,.3,1), opacity .35s;
+  }
+  /* entry number in the margin, engraved circle */
+  .specimen .no {
+    position: absolute; left: 12px; top: 16px;
+    width: 26px; height: 26px;
+    display: flex; align-items: center; justify-content: center;
+    font-family: "Didot", "Hoefler Text", serif;
+    font-size: 15px; color: var(--rust);
+    font-variant-numeric: oldstyle-nums;
+  }
+  .specimen .no svg { position: absolute; inset: 0; }
+  /* left binding rule */
+  .specimen::before {
+    content: ""; position: absolute; left: 40px; top: 14px; bottom: 14px;
+    width: 1px;
+    background: repeating-linear-gradient(180deg, var(--rule) 0 3px, transparent 3px 6px);
+  }
+  .reason {
+    display: inline-flex; align-items: center; gap: 6px;
+    font-family: "Copperplate", "Optima", sans-serif;
+    font-size: 8.5px; letter-spacing: 1.6px; text-transform: uppercase;
+    color: var(--sage-deep);
+    border: 1px solid var(--sage);
+    border-radius: 2px;
+    padding: 4px 8px 3px;
+    background: rgba(111,122,90,.10);
+    margin-bottom: 11px;
+  }
+  .reason svg { flex: 0 0 auto; }
+  .specimen h3 {
+    margin: 0 0 6px;
+    font-family: "Iowan Old Style", Palatino, Baskerville, serif;
+    font-size: 20px; font-weight: 500; line-height: 1.22;
+    color: var(--ink);
+    letter-spacing: .1px;
+  }
+  .meta {
+    font-family: "Copperplate", "Optima", sans-serif;
+    font-size: 9.5px; letter-spacing: 1.3px; text-transform: uppercase;
+    color: var(--ink-faint);
+    display: flex; align-items: center; flex-wrap: wrap; gap: 7px;
+    margin-bottom: 4px;
+  }
+  .meta .src { color: var(--ink-soft); }
+  .meta .sep { width: 3px; height: 3px; border-radius: 50%; background: var(--ink-faint); display: inline-block; }
+  .summary {
+    font-family: "Iowan Old Style", Palatino, serif;
+    font-style: italic; font-size: 13.5px; line-height: 1.45;
+    color: var(--ink-soft);
+    margin: 9px 0 2px;
+    padding-left: 10px;
+    border-left: 2px solid var(--rule-soft);
+  }
+  .actions {
+    display: flex; gap: 9px; margin-top: 15px;
+    padding-top: 13px;
+    border-top: 1px solid var(--rule-soft);
+  }
+  .act {
+    flex: 1; min-height: 44px;
+    border: 1px solid var(--rule);
+    border-radius: 2px;
+    background: linear-gradient(180deg, var(--paper-lit), var(--paper));
+    color: var(--ink-soft);
+    font-family: "Copperplate", "Optima", sans-serif;
+    font-size: 10px; letter-spacing: 1.6px; text-transform: uppercase;
+    display: flex; align-items: center; justify-content: center; gap: 6px;
+    cursor: pointer;
+    transition: transform .12s, background .2s, color .2s;
+  }
+  .act svg { flex: 0 0 auto; }
+  .act:active { transform: scale(.95); }
+  .act.open {
+    background: linear-gradient(180deg, #45402f, #2f2b20);
+    color: var(--paper-lit); border-color: #2f2b20;
+    flex: 1.3;
+  }
+  .act.like.on {
+    background: linear-gradient(180deg, var(--rust), #6d3a26);
+    color: var(--paper-lit); border-color: #6d3a26;
+  }
+  .act.like.on svg path { fill: var(--paper-lit); }
+  .specimen.skipped {
+    opacity: .38;
+    transform: translateX(8px);
+  }
+  .specimen.skipped h3 { text-decoration: line-through; text-decoration-color: var(--ink-faint); }
+
+  .session-foot {
+    text-align: center;
+    margin: 8px 0 4px;
+    padding: 22px 0 4px;
+  }
+  .colophon-orn { display: block; margin: 0 auto 14px; }
+  .session-foot .decl {
+    font-family: "Didot", "Hoefler Text", Georgia, serif;
+    font-size: 22px; font-style: italic; color: var(--ink);
+  }
+  .session-foot .tally {
+    font-family: "Copperplate", "Optima", sans-serif;
+    font-size: 10px; letter-spacing: 2px; text-transform: uppercase;
+    color: var(--ochre); margin-top: 8px;
+  }
+  .foot-btns { display: flex; gap: 11px; margin-top: 20px; }
+  .foot-btns button {
+    flex: 1; min-height: 50px;
+    font-family: "Copperplate", "Optima", sans-serif;
+    font-size: 10.5px; letter-spacing: 2px; text-transform: uppercase;
+    border-radius: 3px; cursor: pointer;
+    transition: transform .12s;
+  }
+  .foot-btns button:active { transform: scale(.96); }
+  .foot-btns .more {
+    background: linear-gradient(180deg, var(--paper-lit), var(--paper));
+    border: 1px solid var(--rule); color: var(--ink-soft);
+  }
+  .foot-btns .done {
+    background: linear-gradient(180deg, var(--sage), var(--sage-deep));
+    border: 1px solid var(--sage-deep); color: var(--paper-lit);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,.18);
+  }
+
+  /* ============================================================
+     LIBRARY — source register
+     ============================================================ */
+  .register { margin-top: 4px; }
+  .src-row {
+    position: relative;
+    display: flex; align-items: center; gap: 14px;
+    padding: 16px 4px 16px 8px;
+    border-bottom: 1px solid var(--rule-soft);
+  }
+  .src-row:first-child { border-top: 1px solid var(--rule-soft); }
+  .src-glyph {
+    flex: 0 0 42px; width: 42px; height: 42px;
+    display: flex; align-items: center; justify-content: center;
+    border: 1px solid var(--rule);
+    border-radius: 50%;
+    background: var(--paper-lit);
+    box-shadow: inset 0 0 0 3px var(--paper);
+  }
+  .src-body { flex: 1 1 auto; min-width: 0; }
+  .src-body h4 {
+    margin: 0 0 3px;
+    font-family: "Iowan Old Style", Palatino, serif;
+    font-size: 17.5px; font-weight: 500; color: var(--ink);
+  }
+  .src-body .kind {
+    font-family: "Copperplate", "Optima", sans-serif;
+    font-size: 9px; letter-spacing: 1.4px; text-transform: uppercase;
+    color: var(--ink-faint);
+    display: flex; align-items: center; gap: 6px;
+  }
+  .src-body .kind .sep { width: 3px; height: 3px; border-radius: 50%; background: var(--ink-faint); }
+  .weight-pill {
+    flex: 0 0 auto;
+    font-family: "Copperplate", "Optima", sans-serif;
+    font-size: 9px; letter-spacing: 1.2px; text-transform: uppercase;
+    padding: 8px 11px; min-height: 44px;
+    display: flex; align-items: center; gap: 6px;
+    border-radius: 2px; cursor: pointer;
+    border: 1px solid var(--rule);
+    background: linear-gradient(180deg, var(--paper-lit), var(--paper));
+    color: var(--ink-soft);
+    transition: transform .12s, background .25s, color .25s, border-color .25s;
+    white-space: nowrap;
+  }
+  .weight-pill:active { transform: scale(.94); }
+  /* weight scale ticks */
+  .wgt-ticks { display: inline-flex; gap: 2px; align-items: flex-end; height: 12px; }
+  .wgt-ticks i { width: 2px; background: currentColor; opacity: .35; display: block; border-radius: 1px; }
+  .wgt-ticks i.f { opacity: 1; }
+  .wgt-ticks i:nth-child(1){height:4px} .wgt-ticks i:nth-child(2){height:6px}
+  .wgt-ticks i:nth-child(3){height:8px} .wgt-ticks i:nth-child(4){height:10px}
+  .wgt-ticks i:nth-child(5){height:12px}
+  .weight-pill[data-w="favorite"] { color: var(--rust); border-color: var(--rust); background: rgba(138,75,50,.08); }
+  .weight-pill[data-w="high"]     { color: var(--ochre); border-color: var(--ochre); }
+  .weight-pill[data-w="normal"]   { color: var(--ink-soft); }
+  .weight-pill[data-w="low"]      { color: var(--ink-faint); }
+  .weight-pill[data-w="very low"] { color: var(--ink-faint); opacity: .85; }
+
+  .register-note {
+    margin: 22px 4px 4px;
+    font-family: "Iowan Old Style", Palatino, serif;
+    font-style: italic; font-size: 12.5px; text-align: center;
+    color: var(--ink-faint);
+  }
+
+  /* ============================================================
+     bottom nav — engraved plate
+     ============================================================ */
+  .nav {
+    position: absolute; z-index: 9;
+    left: 0; right: 0; bottom: 0;
+    height: 96px;
+    padding-bottom: 22px;
+    display: flex;
+    background:
+      linear-gradient(180deg, rgba(226,214,186,.0), var(--paper-deep) 40%);
+    border-top: 1px solid var(--rule);
+    box-shadow: 0 -4px 14px rgba(80,60,30,.14);
+  }
+  .nav::before {
+    content: ""; position: absolute; top: 3px; left: 22px; right: 22px; height: 1px;
+    background: repeating-linear-gradient(90deg, var(--rule-soft) 0 5px, transparent 5px 9px);
+  }
+  .nav button {
+    flex: 1; background: none; border: none; cursor: pointer;
+    display: flex; flex-direction: column; align-items: center; gap: 5px;
+    color: var(--ink-faint);
+    font-family: "Copperplate", "Optima", sans-serif;
+    font-size: 8.5px; letter-spacing: 1.8px; text-transform: uppercase;
+    padding-top: 14px;
+    transition: color .2s;
+    position: relative;
+  }
+  .nav button svg { transition: transform .2s; }
+  .nav button .np {
+    font-variant-numeric: oldstyle-nums;
+    font-family: "Didot","Hoefler Text",serif;
+    font-size: 10px; letter-spacing: 0;
+  }
+  .nav button.on { color: var(--rust); }
+  .nav button.on svg path,
+  .nav button.on svg circle,
+  .nav button.on svg line { stroke: var(--rust); }
+  .nav button.on::after {
+    content: ""; position: absolute; top: 6px;
+    width: 4px; height: 4px; border-radius: 50%;
+    background: var(--rust);
+  }
+  .nav button:active svg { transform: translateY(1px) scale(.94); }
+</style>
+</head>
+<body>
+  <div class="device">
+    <div class="screen">
+      <!-- SVG paper grain -->
+      <svg class="grain" xmlns="http://www.w3.org/2000/svg">
+        <filter id="fnoise"><feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="2" stitchTiles="stitch"/>
+          <feColorMatrix type="matrix" values="0 0 0 0 0.35  0 0 0 0 0.28  0 0 0 0 0.16  0 0 0 0.5 0"/></filter>
+        <rect width="100%" height="100%" filter="url(#fnoise)"/>
+      </svg>
+
+      <div class="statusbar">
+        <span>9:41</span>
+        <span class="dots"><i></i><i></i><i></i></span>
+      </div>
+
+      <div class="content" id="content">
+
+        <!-- ===================== INTENT ===================== -->
+        <section class="page active" id="page-intent">
+          <div class="masthead">
+            <div class="wordmark">otium</div>
+            <div class="tagline">attention, on purpose</div>
+            <svg class="rule-orn" width="150" height="14" viewBox="0 0 150 14" fill="none">
+              <path d="M2 7 H60" stroke="#b6a67f" stroke-width="1"/>
+              <path d="M148 7 H90" stroke="#b6a67f" stroke-width="1"/>
+              <path d="M75 2 C70 7 70 7 75 12 C80 7 80 7 75 2 Z" fill="#8a4b32"/>
+              <circle cx="63" cy="7" r="1.4" fill="#a9782f"/>
+              <circle cx="87" cy="7" r="1.4" fill="#a9782f"/>
+            </svg>
+          </div>
+
+          <div class="eyebrow">Plate I &middot; The Reckoning</div>
+          <h2 class="folio-h">How much time?</h2>
+          <p class="sub-latin">otium bene collocatum &mdash; leisure, well spent</p>
+
+          <!-- the analog plotting pad -->
+          <div class="plat" id="plat">
+            <div class="plat-frame"></div>
+            <svg class="engrave" viewBox="0 0 300 300" preserveAspectRatio="none">
+              <!-- graticule -->
+              <g stroke="#c3b48c" stroke-width="0.75">
+                <line x1="60" y1="18" x2="60" y2="282"/>
+                <line x1="120" y1="18" x2="120" y2="282"/>
+                <line x1="180" y1="18" x2="180" y2="282"/>
+                <line x1="240" y1="18" x2="240" y2="282"/>
+                <line x1="18" y1="60" x2="282" y2="60"/>
+                <line x1="18" y1="120" x2="282" y2="120"/>
+                <line x1="18" y1="180" x2="282" y2="180"/>
+                <line x1="18" y1="240" x2="282" y2="240"/>
+              </g>
+              <!-- centre cross, heavier -->
+              <g stroke="#a9782f" stroke-width="1">
+                <line x1="150" y1="26" x2="150" y2="274" stroke-dasharray="2 4"/>
+                <line x1="26" y1="150" x2="274" y2="150" stroke-dasharray="2 4"/>
+              </g>
+              <circle cx="150" cy="150" r="70" fill="none" stroke="#c3b48c" stroke-width="0.75" stroke-dasharray="1 5"/>
+              <!-- tether line, updated by JS -->
+              <line id="tether" x1="150" y1="150" x2="150" y2="150" stroke="#8a4b32" stroke-width="1.4"/>
+              <!-- little compass rose engraving, upper-right vacant quadrant -->
+              <g transform="translate(150,150)" opacity="0.5">
+                <path d="M0 -6 L2 0 L0 6 L-2 0 Z" fill="#8a4b32"/>
+              </g>
+            </svg>
+
+            <div class="axis-label top">longer</div>
+            <div class="axis-label bot">quicker</div>
+            <div class="axis-label lft">focused</div>
+            <div class="axis-label rgt">varied</div>
+
+            <div class="corner tl" data-corner="lf"><b>Long</b>&amp; focused</div>
+            <div class="corner tr" data-corner="lv"><b>Long</b>&amp; varied</div>
+            <div class="corner bl" data-corner="qf"><b>Quick</b>&amp; focused</div>
+            <div class="corner br" data-corner="qv"><b>Quick</b>&amp; varied</div>
+
+            <div class="center-mark"></div>
+            <div class="knob" id="knob"></div>
+          </div>
+
+          <div class="readout">
+            <div class="big"><span id="ro-time">18&ndash;26</span> <span class="amp">min</span></div>
+            <div class="items">approximately <span id="ro-items">5</span> entries</div>
+          </div>
+
+          <div class="field-label">Subjects of Interest</div>
+          <div class="chips" id="chips">
+            <!-- filled by JS so tick svg stays clean -->
+          </div>
+
+          <button class="build" id="buildBtn">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="none"><path d="M8 1 L10 6 L15 6.5 L11 10 L12.5 15 L8 12 L3.5 15 L5 10 L1 6.5 L6 6 Z" stroke="#e9dcbb" stroke-width="1" fill="none"/></svg>
+            Build my session
+          </button>
+        </section>
+
+        <!-- ===================== SESSION ===================== -->
+        <section class="page" id="page-session">
+          <div class="masthead" style="padding-top:2px">
+            <div class="eyebrow" style="margin-top:8px">Plate II &middot; The Field Session</div>
+            <h2 class="folio-h">Today's specimens</h2>
+            <p class="sub-latin">four collected &middot; gathered with intent</p>
+            <svg class="rule-orn" width="130" height="12" viewBox="0 0 130 12" fill="none">
+              <path d="M2 6 H50" stroke="#b6a67f"/><path d="M128 6 H80" stroke="#b6a67f"/>
+              <path d="M65 1 L68 6 L65 11 L62 6 Z" fill="#6f7a5a"/>
+            </svg>
+          </div>
+
+          <div id="cards"></div>
+
+          <div class="session-foot">
+            <svg class="colophon-orn" width="60" height="24" viewBox="0 0 60 24" fill="none">
+              <path d="M30 3 C24 9 18 8 12 12 C18 12 24 13 30 20 C36 13 42 12 48 12 C42 8 36 9 30 3 Z" stroke="#8a4b32" stroke-width="1" fill="none"/>
+              <circle cx="30" cy="12" r="1.6" fill="#a9782f"/>
+            </svg>
+            <div class="decl">That's your session.</div>
+            <div class="tally">4 items &middot; ~58 min</div>
+            <div class="foot-btns">
+              <button class="more" id="moreBtn">More like this</button>
+              <button class="done" id="doneBtn">Done</button>
+            </div>
+          </div>
+        </section>
+
+        <!-- ===================== LIBRARY ===================== -->
+        <section class="page" id="page-library">
+          <div class="masthead" style="padding-top:2px">
+            <div class="eyebrow" style="margin-top:8px">Plate III &middot; The Register</div>
+            <h2 class="folio-h">Your sources</h2>
+            <p class="sub-latin">catalogued feeds &middot; weighted by hand</p>
+            <svg class="rule-orn" width="130" height="12" viewBox="0 0 130 12" fill="none">
+              <path d="M2 6 H50" stroke="#b6a67f"/><path d="M128 6 H80" stroke="#b6a67f"/>
+              <path d="M65 1 L68 6 L65 11 L62 6 Z" fill="#a9782f"/>
+            </svg>
+          </div>
+          <div class="register" id="register"></div>
+          <p class="register-note">Tap a weight to re-tune how often a source is drawn into a session.</p>
+        </section>
+
+      </div><!-- /content -->
+
+      <!-- bottom nav -->
+      <nav class="nav" id="nav">
+        <button data-tab="intent" class="on">
+          <svg width="22" height="22" viewBox="0 0 22 22" fill="none">
+            <circle cx="11" cy="11" r="8.5" stroke="#9a8b6d" stroke-width="1.2"/>
+            <line x1="11" y1="11" x2="11" y2="5" stroke="#9a8b6d" stroke-width="1.2"/>
+            <line x1="11" y1="11" x2="15" y2="13" stroke="#9a8b6d" stroke-width="1.2"/>
+            <circle cx="11" cy="11" r="1.3" fill="#9a8b6d" stroke="none"/>
+          </svg>
+          <span class="np">Intent</span>
+        </button>
+        <button data-tab="session">
+          <svg width="22" height="22" viewBox="0 0 22 22" fill="none">
+            <path d="M4 4 H18 V18 H4 Z" stroke="#9a8b6d" stroke-width="1.2"/>
+            <line x1="7" y1="8" x2="15" y2="8" stroke="#9a8b6d" stroke-width="1.2"/>
+            <line x1="7" y1="11" x2="15" y2="11" stroke="#9a8b6d" stroke-width="1.2"/>
+            <line x1="7" y1="14" x2="12" y2="14" stroke="#9a8b6d" stroke-width="1.2"/>
+          </svg>
+          <span class="np">Session</span>
+        </button>
+        <button data-tab="library">
+          <svg width="22" height="22" viewBox="0 0 22 22" fill="none">
+            <path d="M4 3 H10 V19 H4 Z" stroke="#9a8b6d" stroke-width="1.2"/>
+            <path d="M10 3 H16 V19 H10 Z" stroke="#9a8b6d" stroke-width="1.2"/>
+            <line x1="13" y1="6" x2="13" y2="16" stroke="#9a8b6d" stroke-width="1.2"/>
+          </svg>
+          <span class="np">Library</span>
+        </button>
+      </nav>
+
+    </div><!-- /screen -->
+  </div><!-- /device -->
+
+<script>
+(function(){
+  "use strict";
+
+  /* ---------------- nav ---------------- */
+  var nav = document.getElementById('nav');
+  var pages = {
+    intent:  document.getElementById('page-intent'),
+    session: document.getElementById('page-session'),
+    library: document.getElementById('page-library')
+  };
+  var content = document.getElementById('content');
+  function go(tab){
+    Object.keys(pages).forEach(function(k){ pages[k].classList.toggle('active', k===tab); });
+    Array.prototype.forEach.call(nav.children, function(b){ b.classList.toggle('on', b.dataset.tab===tab); });
+    content.scrollTop = 0;
+  }
+  Array.prototype.forEach.call(nav.children, function(b){
+    b.addEventListener('click', function(){ go(b.dataset.tab); });
+  });
+
+  /* ---------------- theme chips ---------------- */
+  var themes = ["News","Tech","Science","Curiosity","Gaming","Music"];
+  var chipsEl = document.getElementById('chips');
+  var tick = '<svg class="tick" viewBox="0 0 13 13" fill="none"><path d="M2 7 L5 10 L11 3" stroke="#f4ecd8" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+  themes.forEach(function(t, i){
+    var c = document.createElement('div');
+    c.className = 'chip' + (i===1||i===3 ? ' on' : '');
+    c.innerHTML = tick + '<span>' + t + '</span>';
+    c.addEventListener('click', function(){ c.classList.toggle('on'); });
+    chipsEl.appendChild(c);
+  });
+
+  /* ---------------- analog plotting pad ---------------- */
+  var plat  = document.getElementById('plat');
+  var knob  = document.getElementById('knob');
+  var tether= document.getElementById('tether');
+  var roTime= document.getElementById('ro-time');
+  var roItems=document.getElementById('ro-items');
+  var corners = {};
+  Array.prototype.forEach.call(document.querySelectorAll('.corner'), function(el){
+    corners[el.dataset.corner] = el;
+  });
+
+  var SIZE = 300, C = SIZE/2, R = 120; // clamp radius within frame padding
+  // value model: y up = longer, x right = varied
+  function update(dx, dy){
+    // clamp to circle of radius R
+    var d = Math.hypot(dx, dy);
+    if (d > R){ dx = dx/d*R; dy = dy/d*R; }
+    // move knob (px relative to center)
+    knob.style.transform = 'translate(-50%,-50%) translate(' + dx + 'px,' + dy + 'px)';
+    // tether in svg coords
+    tether.setAttribute('x2', (C + dx).toFixed(1));
+    tether.setAttribute('y2', (C + dy).toFixed(1));
+
+    // normalized -1..1 : nx variety (right+), ny length (up+ => -dy)
+    var nx = Math.max(-1, Math.min(1, dx / R));
+    var ny = Math.max(-1, Math.min(1, -dy / R));
+
+    // session length: center ~22 min, up to ~75, down to ~6
+    var mid = 22 + ny * 26;               // 6 .. 48 nominal
+    if (ny > 0) mid = 22 + ny * 40;       // stretch the "long" end
+    mid = Math.max(6, mid);
+    var lo = Math.round(mid * 0.8);
+    var hi = Math.round(mid * 1.15);
+    roTime.textContent = lo + '–' + hi;
+
+    // items: longer session + more variety => more entries
+    var items = Math.round(2 + (mid/12) + (nx+1) * 1.1);
+    items = Math.max(2, Math.min(9, items));
+    roItems.textContent = items;
+
+    // nearest corner
+    var key = (ny >= 0 ? 'l' : 'q') + (nx >= 0 ? 'v' : 'f');
+    Object.keys(corners).forEach(function(k){
+      corners[k].classList.toggle('near', k === key && d > 12);
+    });
+  }
+
+  function recenter(){
+    knob.style.transition = 'transform .32s cubic-bezier(.3,1.4,.5,1)';
+    knob.style.transform = 'translate(-50%,-50%)';
+    tether.setAttribute('x2', C); tether.setAttribute('y2', C);
+    update(0,0);
+    setTimeout(function(){ knob.style.transition = ''; }, 340);
+  }
+
+  var dragging = false;
+  function rel(e){
+    var r = plat.getBoundingClientRect();
+    var sx = r.width / SIZE; // in case of scaling
+    var px = (e.clientX - r.left) / sx;
+    var py = (e.clientY - r.top)  / sx;
+    return { dx: px - C, dy: py - C };
+  }
+  function down(e){
+    dragging = true; plat.classList.add('dragging');
+    knob.style.transition = '';
+    var p = rel(e); update(p.dx, p.dy);
+    if (plat.setPointerCapture && e.pointerId!=null){ try{ plat.setPointerCapture(e.pointerId);}catch(_){} }
+    e.preventDefault();
+  }
+  function move(e){
+    if(!dragging) return;
+    var p = rel(e); update(p.dx, p.dy);
+    e.preventDefault();
+  }
+  function up(){
+    if(!dragging) return;
+    dragging = false; plat.classList.remove('dragging');
+  }
+  plat.addEventListener('pointerdown', down);
+  plat.addEventListener('pointermove', move);
+  plat.addEventListener('pointerup', up);
+  plat.addEventListener('pointercancel', up);
+  // double-tap knob recenters
+  knob.addEventListener('dblclick', function(e){ e.stopPropagation(); recenter(); });
+  // single tap on empty pad also recenters (tap-to-recenter), but only if it was a tap not a drag
+  var tapStart = 0, moved = false;
+  plat.addEventListener('pointerdown', function(){ tapStart = Date.now(); moved = false; });
+  plat.addEventListener('pointermove', function(){ moved = true; });
+  plat.addEventListener('pointerup', function(e){
+    if (!moved && (Date.now() - tapStart) < 220){
+      var p = rel(e);
+      if (Math.hypot(p.dx, p.dy) < 34) recenter();
+    }
+  });
+
+  // seed default: gently up-right (long-ish, some variety) so readout matches "18-26 / ~5"
+  update(28, -34);
+
+  document.getElementById('buildBtn').addEventListener('click', function(){ go('session'); });
+
+  /* ---------------- session cards ---------------- */
+  var leaf = '<svg width="9" height="9" viewBox="0 0 9 9" fill="none"><path d="M4.5 1 C2 3 2 6 4.5 8 C7 6 7 3 4.5 1 Z" stroke="#545c40" stroke-width=".8" fill="none"/></svg>';
+  var cards = [
+    { reason:"Favorite source", title:"I got hit in the teeth at England's oldest ritual", src:"Tom Scott", dur:"10 min", type:"video" },
+    { reason:"Fresh — posted today", title:"Apple's entry-level MacBook Pro could get a redesign", src:"The Verge", dur:"4 min", type:"article", summary:"A revamped entry model could arrive as soon as this year, per supply-chain reports." },
+    { reason:"Rare — posts seldom", title:"The Real Book", src:"99% Invisible", dur:"32 min", type:"audio" },
+    { reason:"High-weight source", title:"The universe's biggest unsolved problem", src:"Veritasium", dur:"12 min", type:"video" }
+  ];
+  var roman = ["","i","ii","iii","iv","v","vi"];
+  var cardsEl = document.getElementById('cards');
+  var typeGlyph = {
+    video:  '<svg width="9" height="9" viewBox="0 0 9 9"><path d="M2 1.5 L7.5 4.5 L2 7.5 Z" fill="#9a8b6d"/></svg>',
+    article:'<svg width="9" height="9" viewBox="0 0 9 9" fill="none"><rect x="1.5" y="1" width="6" height="7" stroke="#9a8b6d" stroke-width=".8"/><line x1="3" y1="3" x2="6" y2="3" stroke="#9a8b6d" stroke-width=".8"/><line x1="3" y1="5" x2="6" y2="5" stroke="#9a8b6d" stroke-width=".8"/></svg>',
+    audio:  '<svg width="9" height="9" viewBox="0 0 9 9" fill="none"><path d="M1.5 5.5 V3.5 H3 L5 1.5 V7.5 L3 5.5 Z" fill="#9a8b6d"/><path d="M6 3 Q7.2 4.5 6 6" stroke="#9a8b6d" stroke-width=".7" fill="none"/></svg>'
+  };
+
+  cards.forEach(function(c, i){
+    var el = document.createElement('article');
+    el.className = 'specimen';
+    var summary = c.summary ? '<p class="summary">' + c.summary + '</p>' : '';
+    el.innerHTML =
+      '<div class="no">' +
+        '<svg width="26" height="26" viewBox="0 0 26 26" fill="none"><circle cx="13" cy="13" r="11.5" stroke="#c3b48c" stroke-width="1" stroke-dasharray="1.5 2.5"/></svg>' +
+        '<span>' + roman[i+1] + '</span>' +
+      '</div>' +
+      '<span class="reason">' + leaf + c.reason + '</span>' +
+      '<h3>' + c.title + '</h3>' +
+      '<div class="meta"><span class="src">' + c.src + '</span><span class="sep"></span>' +
+        '<span>' + c.dur + '</span><span class="sep"></span>' +
+        '<span>' + (typeGlyph[c.type]||'') + ' ' + c.type + '</span></div>' +
+      summary +
+      '<div class="actions">' +
+        '<button class="act open"><svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M2 6 H10 M6 2 L10 6 L6 10" stroke="#f4ecd8" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/></svg>Open</button>' +
+        '<button class="act like"><svg width="13" height="13" viewBox="0 0 13 13" fill="none"><path d="M6.5 11 C3 8.5 1 6.7 1 4.4 C1 2.9 2.1 1.8 3.5 1.8 C4.5 1.8 5.4 2.4 6.5 3.7 C7.6 2.4 8.5 1.8 9.5 1.8 C10.9 1.8 12 2.9 12 4.4 C12 6.7 10 8.5 6.5 11 Z" stroke="#8a4b32" stroke-width="1" fill="none"/></svg>Like</button>' +
+        '<button class="act skip"><svg width="12" height="12" viewBox="0 0 12 12" fill="none"><path d="M3 3 L9 9 M9 3 L3 9" stroke="#6b5f49" stroke-width="1.2" stroke-linecap="round"/></svg>Skip</button>' +
+      '</div>';
+    // wire actions
+    var likeBtn = el.querySelector('.like');
+    likeBtn.addEventListener('click', function(){ likeBtn.classList.toggle('on'); });
+    var skipBtn = el.querySelector('.skip');
+    skipBtn.addEventListener('click', function(){ el.classList.toggle('skipped'); });
+    cardsEl.appendChild(el);
+  });
+
+  document.getElementById('moreBtn').addEventListener('click', function(){ content.scrollTop = 0; });
+  document.getElementById('doneBtn').addEventListener('click', function(){ go('intent'); recenter(); });
+
+  /* ---------------- library register ---------------- */
+  var sources = [
+    { name:"Tom Scott", kind:"youtube", unseen:15, weight:"favorite" },
+    { name:"NPR News",  kind:"rss",     unseen:10, weight:"normal" },
+    { name:"Kurzgesagt",kind:"youtube", unseen:15, weight:"favorite" },
+    { name:"Hacker News",kind:"rss",    unseen:20, weight:"low" }
+  ];
+  var scale = ["very low","low","normal","high","favorite"];
+  var filled = { "very low":1, "low":2, "normal":3, "high":4, "favorite":5 };
+  var srcGlyphs = {
+    youtube:'<svg width="18" height="18" viewBox="0 0 18 18" fill="none"><rect x="1.5" y="4" width="15" height="10" rx="2.5" stroke="#6f7a5a" stroke-width="1.1"/><path d="M7.5 6.8 L11.5 9 L7.5 11.2 Z" fill="#6f7a5a"/></svg>',
+    rss:'<svg width="18" height="18" viewBox="0 0 18 18" fill="none"><circle cx="4.5" cy="13.5" r="1.5" fill="#a9782f"/><path d="M3 8 A7 7 0 0 1 10 15" stroke="#a9782f" stroke-width="1.3" fill="none"/><path d="M3 4 A11 11 0 0 1 14 15" stroke="#a9782f" stroke-width="1.3" fill="none"/></svg>'
+  };
+  var reg = document.getElementById('register');
+  function ticksFor(w){
+    var n = filled[w];
+    var s = '<span class="wgt-ticks">';
+    for (var k=1;k<=5;k++){ s += '<i class="' + (k<=n?'f':'') + '"></i>'; }
+    return s + '</span>';
+  }
+  sources.forEach(function(s){
+    var row = document.createElement('div');
+    row.className = 'src-row';
+    row.innerHTML =
+      '<div class="src-glyph">' + (srcGlyphs[s.kind]||'') + '</div>' +
+      '<div class="src-body"><h4>' + s.name + '</h4>' +
+        '<div class="kind">' + s.kind + '<span class="sep"></span>' + s.unseen + ' unseen</div></div>' +
+      '<button class="weight-pill" data-w="' + s.weight + '">' + ticksFor(s.weight) + '<span class="wlabel">' + s.weight + '</span></button>';
+    var pill = row.querySelector('.weight-pill');
+    pill.addEventListener('click', function(){
+      var cur = scale.indexOf(pill.dataset.w);
+      var next = scale[(cur+1) % scale.length];
+      pill.dataset.w = next;
+      pill.querySelector('.wlabel').textContent = next;
+      pill.querySelector('.wgt-ticks').outerHTML = ticksFor(next);
+    });
+    reg.appendChild(row);
+  });
+
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,953 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover"/>
+<title>otium — attention, on purpose</title>
+<style>
+/* ============================================================
+   otium · "Observatory Star Chart"
+   A celestial-navigation instrument. Deep-space navy, pale gold
+   star points, engraved astrolabe rings, refined serif + mono.
+   Scientific and precise — not mystical.
+   ============================================================ */
+
+:root{
+  --void:        #060812;   /* deep space */
+  --void-2:      #0a0e1e;   /* panel space */
+  --navy:        #0f1630;   /* engraved plate */
+  --navy-line:   #1c2952;   /* grid hairline */
+  --ink:         #050710;
+  --star:        #f3ecd0;   /* pale star white-gold */
+  --star-dim:    #b9c2e0;   /* cool pale */
+  --gold:        #d8b661;   /* engraved brass */
+  --gold-bright: #f0cf83;
+  --gold-deep:   #8a6f34;
+  --cyan:        #8fd0d8;   /* cold star / accent */
+  --line:        rgba(216,182,97,0.22);
+  --line-soft:   rgba(185,194,224,0.14);
+  --serif: "Hoefler Text","Iowan Old Style","Baskerville",Georgia,serif;
+  --serif-disp: "Didot","Bodoni 72","Hoefler Text",Georgia,serif;
+  --mono: "SF Mono","Menlo",ui-monospace,monospace;
+  --deco: "Copperplate","Copperplate Gothic Light",var(--serif-disp);
+}
+
+*{ box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+html,body{ margin:0; padding:0; height:100%; }
+body{
+  background:
+    radial-gradient(1200px 900px at 30% -10%, #12183a 0%, #070a18 45%, #04050c 100%);
+  min-height:100%;
+  display:flex; align-items:center; justify-content:center;
+  font-family:var(--serif);
+  color:var(--star-dim);
+  padding:22px 0;
+  -webkit-font-smoothing:antialiased;
+  overflow-x:hidden;
+}
+
+/* ---------- Phone frame ---------- */
+.frame{
+  position:relative;
+  width:390px; height:844px;
+  border-radius:52px;
+  background:var(--void);
+  box-shadow:
+    0 0 0 2px #14183010,
+    0 0 0 11px #0b0d1a,
+    0 0 0 12px #23283f,
+    0 40px 120px rgba(0,0,0,.7),
+    0 0 90px rgba(50,70,150,.10);
+  overflow:hidden;
+  isolation:isolate;
+}
+/* notch */
+.frame::after{
+  content:""; position:absolute; top:0; left:50%; transform:translateX(-50%);
+  width:150px; height:30px; background:#000; border-radius:0 0 20px 20px; z-index:60;
+}
+
+/* deep star field + grain baked into frame background */
+.starfield{ position:absolute; inset:0; z-index:0; pointer-events:none; }
+.grain{ position:absolute; inset:0; z-index:1; opacity:.05; pointer-events:none; mix-blend-mode:screen; }
+
+/* ---------- App shell ---------- */
+.app{
+  position:absolute; inset:0; z-index:5;
+  display:flex; flex-direction:column;
+}
+.scroll{
+  flex:1; overflow-y:auto; overflow-x:hidden;
+  padding:64px 22px 108px;
+  -webkit-overflow-scrolling:touch;
+  scroll-behavior:smooth;
+}
+.scroll::-webkit-scrollbar{ width:0; }
+
+.screen{ display:none; animation:rise .5s cubic-bezier(.2,.7,.2,1); }
+.screen.active{ display:block; }
+@keyframes rise{ from{opacity:0; transform:translateY(10px);} to{opacity:1; transform:translateY(0);} }
+
+/* ---------- Masthead ---------- */
+.mast{ text-align:center; margin-bottom:18px; position:relative; }
+.wordmark{
+  font-family:var(--serif-disp);
+  font-size:34px; letter-spacing:.02em; color:var(--star);
+  font-weight:400; line-height:1;
+  text-shadow:0 0 26px rgba(240,207,131,.20);
+}
+.wordmark .dot{ color:var(--gold); }
+.tagline{
+  font-family:var(--mono);
+  font-size:9.5px; letter-spacing:.42em; text-transform:uppercase;
+  color:var(--gold); opacity:.72; margin-top:9px;
+}
+.mast-rule{
+  margin:16px auto 0; width:190px; height:14px;
+  display:block; opacity:.8;
+}
+
+/* ---------- Section eyebrow ---------- */
+.eyebrow{
+  font-family:var(--mono); font-size:9px; letter-spacing:.34em;
+  text-transform:uppercase; color:var(--gold); opacity:.8;
+  display:flex; align-items:center; gap:9px; margin:0 2px 6px;
+}
+.eyebrow::after{ content:""; flex:1; height:1px;
+  background:linear-gradient(90deg,var(--line),transparent); }
+.screen-title{
+  font-family:var(--serif-disp); font-weight:400;
+  font-size:27px; color:var(--star); line-height:1.05; margin:0 0 3px;
+  letter-spacing:.005em;
+}
+.screen-sub{
+  font-family:var(--serif); font-style:italic; font-size:13.5px;
+  color:var(--star-dim); opacity:.75; margin:0 0 20px;
+}
+
+/* ============================================================
+   INTENT — the astrolabe star-dial
+   ============================================================ */
+.dial-wrap{ position:relative; margin:6px auto 0; width:326px; }
+.dial{
+  position:relative; width:326px; height:326px; margin:0 auto;
+  touch-action:none; cursor:grab; user-select:none;
+}
+.dial.dragging{ cursor:grabbing; }
+.dial svg{ position:absolute; inset:0; width:100%; height:100%; display:block; overflow:visible; }
+
+/* corner mood labels */
+.corner{
+  position:absolute; font-family:var(--mono); font-size:8.5px;
+  letter-spacing:.16em; text-transform:uppercase; color:var(--star-dim);
+  opacity:.4; transition:opacity .35s, color .35s, text-shadow .35s;
+  line-height:1.5; pointer-events:none; width:96px;
+}
+.corner b{ display:block; font-size:8.5px; color:var(--gold); opacity:.85; }
+.corner.tl{ top:-6px; left:-8px; text-align:left; }
+.corner.tr{ top:-6px; right:-8px; text-align:right; }
+.corner.bl{ bottom:-6px; left:-8px; text-align:left; }
+.corner.br{ bottom:-6px; right:-8px; text-align:right; }
+.corner.near{ opacity:1; color:var(--star);
+  text-shadow:0 0 14px rgba(243,236,208,.5); }
+.corner.near b{ opacity:1; color:var(--gold-bright);
+  text-shadow:0 0 12px rgba(240,207,131,.6); }
+
+/* axis micro-labels */
+.axis-tag{
+  position:absolute; font-family:var(--mono); font-size:8px;
+  letter-spacing:.2em; text-transform:uppercase; color:var(--gold);
+  opacity:.55; pointer-events:none;
+}
+.axis-tag.top{ top:44px; left:50%; transform:translateX(-50%); }
+.axis-tag.bot{ bottom:44px; left:50%; transform:translateX(-50%); }
+.axis-tag.lft{ left:20px; top:50%; transform:translateY(-50%) rotate(-90deg); transform-origin:left center; }
+.axis-tag.rgt{ right:20px; top:50%; transform:translateY(-50%) rotate(90deg); transform-origin:right center; }
+
+/* the knob (a charted star) */
+.knob{
+  position:absolute; top:50%; left:50%;
+  width:46px; height:46px; margin:-23px 0 0 -23px;
+  transition:transform .42s cubic-bezier(.2,.9,.2,1);
+  will-change:transform; z-index:8; pointer-events:none;
+}
+.dial.dragging .knob{ transition:none; }
+
+/* readout */
+.readout{
+  margin:22px auto 0; text-align:center;
+}
+.readout .r-time{
+  font-family:var(--serif-disp); font-size:31px; color:var(--star);
+  letter-spacing:.01em; line-height:1;
+  text-shadow:0 0 22px rgba(240,207,131,.18);
+}
+.readout .r-items{
+  font-family:var(--mono); font-size:11px; letter-spacing:.22em;
+  text-transform:uppercase; color:var(--gold); opacity:.85; margin-top:9px;
+}
+.readout .r-coord{
+  font-family:var(--mono); font-size:9px; letter-spacing:.14em;
+  color:var(--star-dim); opacity:.45; margin-top:7px;
+}
+.recenter{
+  display:block; margin:12px auto 0; background:none; border:none;
+  font-family:var(--mono); font-size:9px; letter-spacing:.22em;
+  text-transform:uppercase; color:var(--star-dim); opacity:.5;
+  padding:6px 10px; cursor:pointer;
+}
+.recenter:active{ opacity:.9; color:var(--gold); }
+
+/* ---------- theme chips ---------- */
+.chip-row{
+  display:flex; flex-wrap:wrap; gap:9px; margin-top:6px;
+}
+.chip{
+  flex:0 0 auto; min-height:44px;
+  display:inline-flex; align-items:center; gap:7px;
+  padding:9px 15px; border-radius:2px;
+  background:linear-gradient(180deg, rgba(20,28,58,.55), rgba(10,14,30,.55));
+  border:1px solid var(--line-soft);
+  font-family:var(--serif); font-size:14px; color:var(--star-dim);
+  letter-spacing:.01em; cursor:pointer;
+  transition:.28s cubic-bezier(.2,.7,.2,1);
+  position:relative;
+}
+.chip .glyph{ width:9px; height:9px; opacity:.5; transition:.28s; }
+.chip:active{ transform:scale(.96); }
+.chip.on{
+  border-color:var(--gold);
+  background:linear-gradient(180deg, rgba(52,42,18,.6), rgba(28,22,10,.55));
+  color:var(--star);
+  box-shadow:0 0 18px rgba(216,182,97,.14), inset 0 0 12px rgba(216,182,97,.06);
+}
+.chip.on .glyph{ opacity:1; }
+
+/* ---------- primary button ---------- */
+.build-btn{
+  width:100%; min-height:56px; margin-top:26px;
+  border:1px solid var(--gold); border-radius:3px;
+  background:
+    linear-gradient(180deg, rgba(58,46,20,.55), rgba(20,16,8,.6));
+  color:var(--gold-bright);
+  font-family:var(--deco); font-size:15px; letter-spacing:.24em;
+  text-transform:uppercase; cursor:pointer;
+  display:flex; align-items:center; justify-content:center; gap:12px;
+  transition:.3s; position:relative; overflow:hidden;
+  box-shadow:0 0 26px rgba(216,182,97,.12), inset 0 0 20px rgba(216,182,97,.05);
+}
+.build-btn:active{ transform:scale(.985); box-shadow:0 0 40px rgba(240,207,131,.28), inset 0 0 22px rgba(216,182,97,.12); }
+.build-btn svg{ width:17px; height:17px; }
+
+/* ============================================================
+   SESSION — charted cards
+   ============================================================ */
+.chart-meta{
+  display:flex; justify-content:space-between; align-items:flex-end;
+  margin-bottom:18px; padding-bottom:12px;
+  border-bottom:1px solid var(--line);
+}
+.chart-meta .cm-label{
+  font-family:var(--mono); font-size:9px; letter-spacing:.28em;
+  text-transform:uppercase; color:var(--gold); opacity:.8;
+}
+.chart-meta .cm-val{
+  font-family:var(--serif-disp); font-size:19px; color:var(--star); margin-top:4px;
+}
+.chart-meta .cm-coord{
+  font-family:var(--mono); font-size:9px; letter-spacing:.12em;
+  color:var(--star-dim); opacity:.5; text-align:right;
+}
+
+.card{
+  position:relative; margin-bottom:16px; padding:18px 18px 14px;
+  background:
+    linear-gradient(180deg, rgba(15,22,48,.62), rgba(8,11,26,.72));
+  border:1px solid var(--line-soft);
+  border-radius:4px;
+  overflow:hidden;
+  animation:cardIn .55s cubic-bezier(.2,.7,.2,1) both;
+}
+@keyframes cardIn{ from{opacity:0; transform:translateY(14px);} to{opacity:1; transform:translateY(0);} }
+/* engraved corner ticks */
+.card .tick{ position:absolute; width:11px; height:11px; opacity:.4; }
+.card .tick.tl{ top:6px; left:6px; border-top:1px solid var(--gold); border-left:1px solid var(--gold); }
+.card .tick.tr{ top:6px; right:6px; border-top:1px solid var(--gold); border-right:1px solid var(--gold); }
+.card .tick.bl{ bottom:6px; left:6px; border-bottom:1px solid var(--gold); border-left:1px solid var(--gold); }
+.card .tick.br{ bottom:6px; right:6px; border-bottom:1px solid var(--gold); border-right:1px solid var(--gold); }
+
+.card-head{ display:flex; align-items:center; gap:9px; margin-bottom:11px; }
+.reason{
+  display:inline-flex; align-items:center; gap:6px;
+  font-family:var(--mono); font-size:8.5px; letter-spacing:.16em;
+  text-transform:uppercase; color:var(--gold);
+  padding:4px 9px; border:1px solid var(--line);
+  border-radius:2px; background:rgba(216,182,97,.05);
+}
+.reason .star6{ width:8px; height:8px; }
+.card .idx{
+  margin-left:auto; font-family:var(--mono); font-size:9px;
+  letter-spacing:.1em; color:var(--star-dim); opacity:.4;
+}
+.card-title{
+  font-family:var(--serif-disp); font-weight:400; font-size:20px;
+  line-height:1.22; color:var(--star); margin:0 0 8px; letter-spacing:.005em;
+}
+.card-summary{
+  font-family:var(--serif); font-style:italic; font-size:13px;
+  line-height:1.5; color:var(--star-dim); opacity:.72; margin:0 0 12px;
+}
+.card-src{
+  display:flex; align-items:center; gap:8px; margin-bottom:14px;
+  font-family:var(--mono); font-size:10px; letter-spacing:.08em;
+  color:var(--star-dim); opacity:.72;
+}
+.card-src .src-name{ color:var(--star-dim); opacity:1; }
+.card-src .sep{ opacity:.4; }
+.card-src .type{ color:var(--cyan); opacity:.9; }
+
+.card-actions{ display:flex; gap:9px; }
+.act{
+  flex:1; min-height:44px; display:flex; align-items:center; justify-content:center; gap:7px;
+  border:1px solid var(--line-soft); border-radius:3px;
+  background:rgba(255,255,255,.012);
+  font-family:var(--mono); font-size:10px; letter-spacing:.14em; text-transform:uppercase;
+  color:var(--star-dim); cursor:pointer; transition:.24s;
+}
+.act svg{ width:14px; height:14px; }
+.act:active{ transform:scale(.95); }
+.act.open{ border-color:var(--line); color:var(--gold-bright); }
+.act.open:active{ background:rgba(216,182,97,.1); }
+.act.like.on{
+  border-color:var(--gold); color:var(--gold-bright);
+  background:rgba(216,182,97,.09);
+  box-shadow:inset 0 0 12px rgba(216,182,97,.12);
+}
+.act.like.on svg{ fill:var(--gold-bright); }
+.act.skip:active{ color:#c98d8d; border-color:rgba(201,141,141,.4); }
+
+/* session footer */
+.session-footer{
+  text-align:center; margin:26px 0 8px; padding:22px 0 4px;
+  border-top:1px solid var(--line);
+}
+.session-footer .sf-mark{ width:26px; height:26px; margin-bottom:10px; opacity:.85; }
+.session-footer .sf-line{
+  font-family:var(--serif-disp); font-size:22px; color:var(--star); letter-spacing:.01em;
+}
+.session-footer .sf-sub{
+  font-family:var(--mono); font-size:9px; letter-spacing:.26em; text-transform:uppercase;
+  color:var(--gold); opacity:.75; margin-top:9px;
+}
+.footer-btns{ display:flex; gap:10px; margin-top:20px; }
+.footer-btns button{
+  flex:1; min-height:50px; border-radius:3px; cursor:pointer;
+  font-family:var(--deco); font-size:12px; letter-spacing:.2em; text-transform:uppercase;
+  transition:.26s;
+}
+.btn-more{
+  border:1px solid var(--line); background:rgba(216,182,97,.05); color:var(--gold-bright);
+}
+.btn-more:active{ transform:scale(.97); background:rgba(216,182,97,.12); }
+.btn-done{
+  border:1px solid var(--line-soft); background:rgba(143,208,216,.05); color:var(--cyan);
+}
+.btn-done:active{ transform:scale(.97); background:rgba(143,208,216,.12); }
+
+/* ============================================================
+   LIBRARY — source catalogue
+   ============================================================ */
+.lib-row{
+  display:flex; align-items:center; gap:14px;
+  padding:16px 14px; margin-bottom:11px;
+  background:linear-gradient(180deg, rgba(15,22,48,.5), rgba(8,11,26,.6));
+  border:1px solid var(--line-soft); border-radius:4px;
+  transition:.24s;
+}
+.lib-row:active{ border-color:var(--line); }
+.lib-star{ width:30px; height:30px; flex:0 0 auto; opacity:.9; }
+.lib-body{ flex:1; min-width:0; }
+.lib-name{
+  font-family:var(--serif-disp); font-size:18px; color:var(--star); letter-spacing:.005em;
+}
+.lib-sub{
+  font-family:var(--mono); font-size:9.5px; letter-spacing:.1em; text-transform:uppercase;
+  color:var(--star-dim); opacity:.6; margin-top:4px;
+}
+.lib-sub .unseen{ color:var(--gold); opacity:.85; }
+.weight{
+  flex:0 0 auto; min-height:44px; min-width:44px;
+  display:flex; flex-direction:column; align-items:center; justify-content:center; gap:5px;
+  padding:6px 11px; border-radius:3px; cursor:pointer;
+  border:1px solid var(--line-soft); background:rgba(255,255,255,.012);
+  transition:.24s;
+}
+.weight:active{ transform:scale(.95); }
+.weight .w-label{
+  font-family:var(--mono); font-size:7.5px; letter-spacing:.14em; text-transform:uppercase;
+  color:var(--star-dim); opacity:.75; white-space:nowrap;
+}
+.weight .w-bars{ display:flex; gap:2px; align-items:flex-end; height:12px; }
+.weight .w-bars i{ width:3px; background:var(--star-dim); opacity:.28; border-radius:1px; }
+.weight .w-bars i:nth-child(1){ height:4px; }
+.weight .w-bars i:nth-child(2){ height:7px; }
+.weight .w-bars i:nth-child(3){ height:10px; }
+.weight .w-bars i:nth-child(4){ height:12px; }
+.weight.lit-1 .w-bars i:nth-child(-n+1),
+.weight.lit-2 .w-bars i:nth-child(-n+2),
+.weight.lit-3 .w-bars i:nth-child(-n+3),
+.weight.lit-4 .w-bars i:nth-child(-n+4){ background:var(--gold); opacity:1; }
+.weight.fav{ border-color:var(--gold); box-shadow:inset 0 0 12px rgba(216,182,97,.12); }
+.weight.fav .w-label{ color:var(--gold-bright); opacity:1; }
+.weight.fav .w-star{ width:13px; height:13px; }
+.lib-note{
+  font-family:var(--serif); font-style:italic; font-size:12px;
+  color:var(--star-dim); opacity:.5; text-align:center; margin-top:16px; line-height:1.5;
+}
+
+/* ============================================================
+   Bottom nav — engraved instrument bar
+   ============================================================ */
+.nav{
+  position:absolute; left:0; right:0; bottom:0; z-index:40; height:88px;
+  display:flex; align-items:stretch;
+  background:linear-gradient(180deg, rgba(6,8,18,.4), rgba(4,5,12,.95) 40%);
+  backdrop-filter:blur(14px); -webkit-backdrop-filter:blur(14px);
+  border-top:1px solid var(--line);
+  padding-bottom:20px;
+}
+.nav::before{
+  content:""; position:absolute; top:-1px; left:50%; transform:translateX(-50%);
+  width:60%; height:1px;
+  background:linear-gradient(90deg,transparent,var(--gold),transparent); opacity:.55;
+}
+.nav-btn{
+  flex:1; background:none; border:none; cursor:pointer;
+  display:flex; flex-direction:column; align-items:center; justify-content:center; gap:6px;
+  color:var(--star-dim); opacity:.5; transition:.3s; padding-top:8px;
+}
+.nav-btn svg{ width:23px; height:23px; }
+.nav-btn .nav-lbl{
+  font-family:var(--mono); font-size:8px; letter-spacing:.2em; text-transform:uppercase;
+}
+.nav-btn.active{ opacity:1; color:var(--gold-bright); }
+.nav-btn.active svg{ filter:drop-shadow(0 0 8px rgba(240,207,131,.5)); }
+.nav-btn:active{ transform:scale(.92); }
+.nav-btn.active .nav-dot{ opacity:1; }
+.nav-dot{
+  width:3px; height:3px; border-radius:50%; background:var(--gold);
+  opacity:0; transition:.3s; margin-top:1px;
+}
+</style>
+</head>
+<body>
+<div class="frame">
+
+  <!-- deep star field -->
+  <svg class="starfield" viewBox="0 0 390 844" preserveAspectRatio="xMidYMid slice" aria-hidden="true">
+    <defs>
+      <radialGradient id="glowStar" cx="50%" cy="50%" r="50%">
+        <stop offset="0%" stop-color="#f3ecd0" stop-opacity="1"/>
+        <stop offset="100%" stop-color="#f3ecd0" stop-opacity="0"/>
+      </radialGradient>
+    </defs>
+    <g id="stars"></g>
+    <!-- faint constellation lines -->
+    <g stroke="rgba(185,194,224,0.13)" stroke-width="0.6" fill="none">
+      <path d="M40,120 L92,168 L150,150 L138,214 L210,240"/>
+      <path d="M300,90 L330,150 L288,190 L340,230"/>
+      <path d="M60,640 L120,690 L96,760 L170,740 L210,800"/>
+      <path d="M250,600 L320,650 L300,720"/>
+    </g>
+  </svg>
+
+  <!-- grain -->
+  <svg class="grain" aria-hidden="true"><filter id="gr"><feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="2" stitchTiles="stitch"/></filter><rect width="100%" height="100%" filter="url(#gr)"/></svg>
+
+  <div class="app">
+    <div class="scroll" id="scroll">
+
+      <!-- masthead -->
+      <div class="mast">
+        <div class="wordmark">otium<span class="dot">.</span></div>
+        <div class="tagline">attention, on purpose</div>
+        <svg class="mast-rule" viewBox="0 0 190 14" fill="none">
+          <line x1="0" y1="7" x2="72" y2="7" stroke="rgba(216,182,97,0.4)"/>
+          <line x1="118" y1="7" x2="190" y2="7" stroke="rgba(216,182,97,0.4)"/>
+          <path d="M95 1 L97.5 6.5 L103 7 L97.5 7.5 L95 13 L92.5 7.5 L87 7 L92.5 6.5 Z" fill="#d8b661"/>
+        </svg>
+      </div>
+
+      <!-- ============ INTENT ============ -->
+      <section class="screen active" id="s-intent">
+        <div class="eyebrow">Set the instrument</div>
+        <h1 class="screen-title">How much time?</h1>
+        <p class="screen-sub">Draw the pointer to chart your session.</p>
+
+        <div class="dial-wrap">
+          <div class="dial" id="dial">
+            <svg viewBox="0 0 326 326" aria-hidden="true">
+              <defs>
+                <radialGradient id="plate" cx="50%" cy="42%" r="62%">
+                  <stop offset="0%" stop-color="#141d3d"/>
+                  <stop offset="60%" stop-color="#0c1226"/>
+                  <stop offset="100%" stop-color="#070a18"/>
+                </radialGradient>
+                <radialGradient id="core" cx="50%" cy="50%" r="50%">
+                  <stop offset="0%" stop-color="#f0cf83" stop-opacity="0.9"/>
+                  <stop offset="55%" stop-color="#d8b661" stop-opacity="0.25"/>
+                  <stop offset="100%" stop-color="#d8b661" stop-opacity="0"/>
+                </radialGradient>
+              </defs>
+
+              <!-- engraved plate -->
+              <rect x="4" y="4" width="318" height="318" rx="8" fill="url(#plate)" stroke="rgba(216,182,97,0.28)" stroke-width="1"/>
+              <rect x="12" y="12" width="302" height="302" rx="5" fill="none" stroke="rgba(185,194,224,0.1)" stroke-width="0.6"/>
+
+              <!-- fine ecliptic grid -->
+              <g stroke="rgba(185,194,224,0.09)" stroke-width="0.5">
+                <line x1="12" y1="93.5" x2="314" y2="93.5"/>
+                <line x1="12" y1="163" x2="314" y2="163"/>
+                <line x1="12" y1="232.5" x2="314" y2="232.5"/>
+                <line x1="93.5" y1="12" x2="93.5" y2="314"/>
+                <line x1="163" y1="12" x2="163" y2="314"/>
+                <line x1="232.5" y1="12" x2="232.5" y2="314"/>
+              </g>
+
+              <!-- astrolabe rings -->
+              <g fill="none" stroke="rgba(216,182,97,0.34)">
+                <circle cx="163" cy="163" r="138" stroke-width="0.8"/>
+                <circle cx="163" cy="163" r="112" stroke-width="0.6" stroke-dasharray="1 5"/>
+                <circle cx="163" cy="163" r="82" stroke-width="0.7"/>
+                <circle cx="163" cy="163" r="48" stroke-width="0.6" stroke-dasharray="1 4"/>
+              </g>
+              <!-- degree tick ring -->
+              <g id="ticks" stroke="rgba(216,182,97,0.5)" stroke-width="0.8"></g>
+
+              <!-- cardinal axes -->
+              <g stroke="rgba(216,182,97,0.2)" stroke-width="0.7">
+                <line x1="163" y1="25" x2="163" y2="301"/>
+                <line x1="25" y1="163" x2="301" y2="163"/>
+              </g>
+
+              <!-- core glow -->
+              <circle cx="163" cy="163" r="34" fill="url(#core)"/>
+              <!-- center pivot -->
+              <circle cx="163" cy="163" r="3.4" fill="#f3ecd0"/>
+              <circle cx="163" cy="163" r="7" fill="none" stroke="rgba(243,236,208,0.5)" stroke-width="0.7"/>
+
+              <!-- tether line: center -> knob -->
+              <line id="tether" x1="163" y1="163" x2="163" y2="163"
+                    stroke="#f0cf83" stroke-width="1.1" stroke-opacity="0.85"
+                    stroke-dasharray="3 3"/>
+              <!-- reach circle marker at knob position (small) -->
+              <circle id="reach" cx="163" cy="163" r="0" fill="none" stroke="rgba(240,207,131,0.25)" stroke-width="0.6"/>
+            </svg>
+
+            <!-- corner mood labels -->
+            <div class="corner tl" data-c="tl"><b>Long · Focused</b>a deep sitting</div>
+            <div class="corner tr near" data-c="tr"><b>Long · Varied</b>a wide evening</div>
+            <div class="corner bl" data-c="bl"><b>Quick · Focused</b>one clean bite</div>
+            <div class="corner br" data-c="br"><b>Quick · Varied</b>a fast sampler</div>
+
+            <div class="axis-tag top">longer ↑</div>
+            <div class="axis-tag bot">↓ quicker</div>
+            <div class="axis-tag lft">focused</div>
+            <div class="axis-tag rgt">varied</div>
+
+            <!-- the charted-star knob -->
+            <div class="knob" id="knob">
+              <svg viewBox="0 0 46 46">
+                <circle cx="23" cy="23" r="21" fill="rgba(240,207,131,0.14)" stroke="#f0cf83" stroke-width="1"/>
+                <circle cx="23" cy="23" r="21" fill="none" stroke="rgba(240,207,131,0.4)" stroke-width="0.5" stroke-dasharray="1 3"/>
+                <path d="M23 7 L25.6 20.4 L39 23 L25.6 25.6 L23 39 L20.4 25.6 L7 23 L20.4 20.4 Z" fill="#f3ecd0"/>
+                <circle cx="23" cy="23" r="2.4" fill="#8a6f34"/>
+              </svg>
+            </div>
+          </div>
+
+          <div class="readout">
+            <div class="r-time" id="rTime">18–26 min</div>
+            <div class="r-items" id="rItems">~5 items charted</div>
+            <div class="r-coord" id="rCoord">bearing 000° · elev +00°</div>
+            <button class="recenter" id="recenter">◇ tap dial to re-center</button>
+          </div>
+        </div>
+
+        <div style="margin-top:30px">
+          <div class="eyebrow">Fields of interest</div>
+          <div class="chip-row" id="chips">
+            <button class="chip" data-t="News"><svg class="glyph" viewBox="0 0 10 10"><circle cx="5" cy="5" r="4" fill="none" stroke="currentColor"/></svg>News</button>
+            <button class="chip on" data-t="Tech"><svg class="glyph" viewBox="0 0 10 10"><path d="M5 0 L6.2 3.8 L10 5 L6.2 6.2 L5 10 L3.8 6.2 L0 5 L3.8 3.8 Z" fill="currentColor"/></svg>Tech</button>
+            <button class="chip" data-t="Science"><svg class="glyph" viewBox="0 0 10 10"><path d="M5 0 L6.2 3.8 L10 5 L6.2 6.2 L5 10 L3.8 6.2 L0 5 L3.8 3.8 Z" fill="currentColor"/></svg>Science</button>
+            <button class="chip on" data-t="Curiosity"><svg class="glyph" viewBox="0 0 10 10"><path d="M5 0 L6.2 3.8 L10 5 L6.2 6.2 L5 10 L3.8 6.2 L0 5 L3.8 3.8 Z" fill="currentColor"/></svg>Curiosity</button>
+            <button class="chip" data-t="Gaming"><svg class="glyph" viewBox="0 0 10 10"><circle cx="5" cy="5" r="4" fill="none" stroke="currentColor"/></svg>Gaming</button>
+            <button class="chip" data-t="Music"><svg class="glyph" viewBox="0 0 10 10"><circle cx="5" cy="5" r="4" fill="none" stroke="currentColor"/></svg>Music</button>
+          </div>
+        </div>
+
+        <button class="build-btn" id="buildBtn">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.3"><circle cx="12" cy="12" r="9"/><path d="M12 3 L12 21 M3 12 L21 12" stroke-width="0.8"/><path d="M12 6 L13.6 10.4 L18 12 L13.6 13.6 L12 18 L10.4 13.6 L6 12 L10.4 10.4 Z" fill="currentColor" stroke="none"/></svg>
+          Chart my session
+        </button>
+      </section>
+
+      <!-- ============ SESSION ============ -->
+      <section class="screen" id="s-session">
+        <div class="eyebrow">Charted for you</div>
+        <h1 class="screen-title">Tonight's session</h1>
+        <p class="screen-sub">Four points, plotted from the feeds you follow.</p>
+
+        <div class="chart-meta">
+          <div>
+            <div class="cm-label">Session length</div>
+            <div class="cm-val">4 items · ~58 min</div>
+          </div>
+          <div class="cm-coord">chart no. 0731<br/>plotted 21:14</div>
+        </div>
+
+        <div id="cards"></div>
+
+        <div class="session-footer">
+          <svg class="sf-mark" viewBox="0 0 26 26" fill="none">
+            <circle cx="13" cy="13" r="12" stroke="rgba(216,182,97,0.5)"/>
+            <path d="M13 4 L14.6 10.4 L21 12 L14.6 13.6 L13 22 L11.4 13.6 L5 12 L11.4 10.4 Z" fill="#d8b661"/>
+          </svg>
+          <div class="sf-line">That's your session.</div>
+          <div class="sf-sub">the chart is complete</div>
+          <div class="footer-btns">
+            <button class="btn-more" id="moreBtn">More like this</button>
+            <button class="btn-done" id="doneBtn">Done</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- ============ LIBRARY ============ -->
+      <section class="screen" id="s-library">
+        <div class="eyebrow">Your catalogue</div>
+        <h1 class="screen-title">Sources</h1>
+        <p class="screen-sub">The bodies you keep in your sky, and how brightly each shines.</p>
+        <div id="lib"></div>
+        <div class="lib-note">Weight sets how often a source is drawn into a chart.<br/>Tap a pill to shift it.</div>
+      </section>
+
+    </div>
+
+    <!-- bottom nav -->
+    <nav class="nav">
+      <button class="nav-btn active" data-s="s-intent">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.3"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="2" fill="currentColor" stroke="none"/><path d="M12 12 L17 8" stroke-width="1.4"/><path d="M12 3 L12 5 M12 19 L12 21 M3 12 L5 12 M19 12 L21 12"/></svg>
+        <span class="nav-lbl">Intent</span>
+        <span class="nav-dot"></span>
+      </button>
+      <button class="nav-btn" data-s="s-session">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.3"><path d="M4 20 L4 4 M4 20 L20 20"/><path d="M6 15 L10 11 L13 13 L18 7" stroke-width="1.4"/><circle cx="6" cy="15" r="1" fill="currentColor" stroke="none"/><circle cx="10" cy="11" r="1" fill="currentColor" stroke="none"/><circle cx="13" cy="13" r="1" fill="currentColor" stroke="none"/><circle cx="18" cy="7" r="1.3" fill="currentColor" stroke="none"/></svg>
+        <span class="nav-lbl">Session</span>
+        <span class="nav-dot"></span>
+      </button>
+      <button class="nav-btn" data-s="s-library">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.3"><rect x="4" y="4" width="16" height="16" rx="1"/><path d="M12 4 L12 20"/><path d="M8 9 L8.6 10.6 L10 11 L8.6 11.4 L8 13 L7.4 11.4 L6 11 L7.4 10.6 Z" fill="currentColor" stroke="none"/><path d="M16 14 L16 17 M15 15.5 L17 15.5"/></svg>
+        <span class="nav-lbl">Library</span>
+        <span class="nav-dot"></span>
+      </button>
+    </nav>
+  </div>
+</div>
+
+<script>
+(function(){
+  "use strict";
+
+  /* ---------- star field generation ---------- */
+  (function stars(){
+    var g = document.getElementById('stars');
+    var W=390,H=844,n=150,html='';
+    for(var i=0;i<n;i++){
+      var x=(Math.random()*W).toFixed(1), y=(Math.random()*H).toFixed(1);
+      var r=(Math.random()*Math.random()*1.3+0.2).toFixed(2);
+      var o=(0.25+Math.random()*0.7).toFixed(2);
+      var gold = Math.random()>0.82;
+      var col = gold ? '#f0cf83' : '#e8ecff';
+      html += '<circle cx="'+x+'" cy="'+y+'" r="'+r+'" fill="'+col+'" opacity="'+o+'"/>';
+    }
+    // a few glowing beacon stars
+    var beacons=[[58,150],[300,110],[120,700],[320,660],[200,410]];
+    beacons.forEach(function(b){
+      html += '<circle cx="'+b[0]+'" cy="'+b[1]+'" r="6" fill="url(#glowStar)" opacity="0.5"/>';
+      html += '<circle cx="'+b[0]+'" cy="'+b[1]+'" r="1.1" fill="#f3ecd0"/>';
+    });
+    g.innerHTML = html;
+  })();
+
+  /* ---------- degree ticks on the dial ---------- */
+  (function ticks(){
+    var g=document.getElementById('ticks');
+    if(!g) return;
+    var cx=163,cy=163,R=138,html='';
+    for(var d=0; d<360; d+=6){
+      var a=(d-90)*Math.PI/180;
+      var major = (d%30===0);
+      var len = major?7:3.5;
+      var x1=cx+Math.cos(a)*R, y1=cy+Math.sin(a)*R;
+      var x2=cx+Math.cos(a)*(R-len), y2=cy+Math.sin(a)*(R-len);
+      html+='<line x1="'+x1.toFixed(1)+'" y1="'+y1.toFixed(1)+'" x2="'+x2.toFixed(1)+'" y2="'+y2.toFixed(1)+'" stroke-opacity="'+(major?0.6:0.3)+'"/>';
+    }
+    g.innerHTML=html;
+  })();
+
+  /* ============================================================
+     THE ASTROLABE STAR-DIAL  (analog-stick mechanics)
+     vertical = session length (up=long / down=quick)
+     horizontal = variety (left=focused / right=varied)
+     ============================================================ */
+  var dial   = document.getElementById('dial');
+  var knob   = document.getElementById('knob');
+  var tether = document.getElementById('tether');
+  var reach  = document.getElementById('reach');
+  var rTime  = document.getElementById('rTime');
+  var rItems = document.getElementById('rItems');
+  var rCoord = document.getElementById('rCoord');
+  var corners= { tl:document.querySelector('.corner.tl'),
+                 tr:document.querySelector('.corner.tr'),
+                 bl:document.querySelector('.corner.bl'),
+                 br:document.querySelector('.corner.br') };
+
+  var VB = 326;                 // svg viewbox size
+  var CX = 163, CY = 163;       // center in viewbox units
+  var MAXR = 128;               // clamp radius in viewbox units
+  // start position: up-right (long/varied), matches default readout
+  var pos = { x: 66, y: -66 };  // in viewbox units relative to center
+  var dragging = false;
+
+  function vbToPx(){ return dial.clientWidth / VB; } // scale svg->css px
+
+  function render(){
+    var scale = vbToPx();
+    // knob in css px relative to center of dial
+    knob.style.transform = 'translate('+(pos.x*scale)+'px,'+(pos.y*scale)+'px)';
+    // tether + reach in viewbox units
+    var kx = CX+pos.x, ky = CY+pos.y;
+    tether.setAttribute('x2', kx);
+    tether.setAttribute('y2', ky);
+    var rr = Math.hypot(pos.x,pos.y);
+    reach.setAttribute('r', rr>6 ? rr : 0);
+
+    // normalized: nx right positive, ny UP positive
+    var nx = pos.x/MAXR;            // -1 .. 1
+    var ny = -pos.y/MAXR;           // -1 .. 1 (up = +)
+    nx=Math.max(-1,Math.min(1,nx)); ny=Math.max(-1,Math.min(1,ny));
+
+    // ---- length from vertical ----
+    // center ~22 min ; up -> longer, down -> shorter
+    var mid = 22 + ny*20;          // 2 .. 42
+    if(mid<4) mid=4;
+    var span = 5 + Math.abs(nx)*6; // varied widens the window
+    var lo = Math.max(2, Math.round(mid - span/2));
+    var hi = Math.round(mid + span/2);
+    rTime.textContent = lo+'–'+hi+' min';
+
+    // ---- item count from length + variety ----
+    // longer sessions & more variety -> more items
+    var base = 2 + (ny+1)*1.8 + (nx+1)*1.1; // ~2 .. ~7.8
+    var items = Math.max(1, Math.round(base));
+    rItems.textContent = '~'+items+' item'+(items===1?'':'s')+' charted';
+
+    // ---- coordinate readout (instrument flavor) ----
+    var bearing = Math.round(((Math.atan2(pos.x,-pos.y)*180/Math.PI)+360)%360);
+    var elev = Math.round(ny*90);
+    rCoord.textContent = 'bearing '+String(bearing).padStart(3,'0')+'° · elev '+(elev>=0?'+':'−')+String(Math.abs(elev)).padStart(2,'0')+'°';
+
+    // ---- brighten nearest corner ----
+    var near = (ny>=0 ? 't':'b') + (nx>=0 ? 'r':'l');
+    for(var k in corners){ corners[k].classList.toggle('near', k===near); }
+  }
+
+  function setFromClient(clientX, clientY){
+    var rect = dial.getBoundingClientRect();
+    var scale = vbToPx();
+    // css px relative to center
+    var dx = (clientX - rect.left - rect.width/2)/scale;
+    var dy = (clientY - rect.top  - rect.height/2)/scale;
+    var r = Math.hypot(dx,dy);
+    if(r>MAXR){ dx=dx/r*MAXR; dy=dy/r*MAXR; }
+    pos.x=dx; pos.y=dy;
+    render();
+  }
+
+  var moved=false, downX=0, downY=0;
+  dial.addEventListener('pointerdown', function(e){
+    dragging=true; moved=false; downX=e.clientX; downY=e.clientY;
+    dial.classList.add('dragging');
+    dial.setPointerCapture(e.pointerId);
+    setFromClient(e.clientX,e.clientY);
+  });
+  dial.addEventListener('pointermove', function(e){
+    if(!dragging) return;
+    if(Math.hypot(e.clientX-downX,e.clientY-downY)>3) moved=true;
+    setFromClient(e.clientX,e.clientY);
+  });
+  function endDrag(e){
+    if(!dragging) return;
+    dragging=false; dial.classList.remove('dragging');
+    // tap (no drag) => recenter
+    if(!moved){ recenter(); }
+  }
+  dial.addEventListener('pointerup', endDrag);
+  dial.addEventListener('pointercancel', endDrag);
+
+  function recenter(){ pos.x=0; pos.y=0; render(); }
+  document.getElementById('recenter').addEventListener('click', function(e){
+    e.stopPropagation(); recenter();
+  });
+
+  window.addEventListener('resize', render);
+  // initial paint (after layout)
+  requestAnimationFrame(render);
+  setTimeout(render, 60);
+
+  /* ---------- theme chips ---------- */
+  document.getElementById('chips').addEventListener('click', function(e){
+    var c = e.target.closest('.chip'); if(!c) return;
+    c.classList.toggle('on');
+  });
+
+  /* ============================================================
+     SESSION cards (fixture)
+     ============================================================ */
+  var CARDS = [
+    { reason:"Favorite source", title:"I got hit in the teeth at England's oldest ritual",
+      src:"Tom Scott", dur:"10 min", type:"video", summary:null },
+    { reason:"Fresh · posted today", title:"Apple's entry-level MacBook Pro could get a redesign",
+      src:"The Verge", dur:"4 min", type:"article",
+      summary:"A revamped entry model could arrive as soon as this year, per supply-chain reports." },
+    { reason:"Rare · posts seldom", title:"The Real Book",
+      src:"99% Invisible", dur:"32 min", type:"audio", summary:null },
+    { reason:"High-weight source", title:"The universe's biggest unsolved problem",
+      src:"Veritasium", dur:"12 min", type:"video", summary:null }
+  ];
+
+  var STAR6 = '<svg class="star6" viewBox="0 0 8 8"><path d="M4 0 L4.9 3.1 L8 4 L4.9 4.9 L4 8 L3.1 4.9 L0 4 L3.1 3.1 Z" fill="#d8b661"/></svg>';
+
+  function iconOpen(){ return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M6 4 L18 12 L6 20 Z"/></svg>'; }
+  function iconLike(){ return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M12 3 L14.6 9.4 L21 12 L14.6 14.6 L12 21 L9.4 14.6 L3 12 L9.4 9.4 Z"/></svg>'; }
+  function iconSkip(){ return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M7 5 L15 12 L7 19 M17 5 L17 19"/></svg>'; }
+
+  (function renderCards(){
+    var box=document.getElementById('cards'), html='';
+    CARDS.forEach(function(c,i){
+      html += '<article class="card" style="animation-delay:'+(i*0.09)+'s">'
+        + '<span class="tick tl"></span><span class="tick tr"></span><span class="tick bl"></span><span class="tick br"></span>'
+        + '<div class="card-head">'
+        +   '<span class="reason">'+STAR6+c.reason+'</span>'
+        +   '<span class="idx">'+String(i+1).padStart(2,'0')+' / 04</span>'
+        + '</div>'
+        + '<h3 class="card-title">'+c.title+'</h3>'
+        + (c.summary?'<p class="card-summary">'+c.summary+'</p>':'')
+        + '<div class="card-src"><span class="src-name">'+c.src+'</span><span class="sep">·</span>'
+        +   '<span>'+c.dur+'</span><span class="sep">·</span><span class="type">'+c.type+'</span></div>'
+        + '<div class="card-actions">'
+        +   '<button class="act open">'+iconOpen()+'Open</button>'
+        +   '<button class="act like">'+iconLike()+'Like</button>'
+        +   '<button class="act skip">'+iconSkip()+'Skip</button>'
+        + '</div>'
+        + '</article>';
+    });
+    box.innerHTML=html;
+    box.addEventListener('click', function(e){
+      var like=e.target.closest('.act.like');
+      if(like){ like.classList.toggle('on'); return; }
+      var skip=e.target.closest('.act.skip');
+      if(skip){ var card=skip.closest('.card'); card.style.transition='opacity .4s, transform .4s';
+        card.style.opacity='.35'; card.style.transform='translateX(-8px) scale(.98)'; return; }
+    });
+  })();
+
+  document.getElementById('moreBtn').addEventListener('click', function(){
+    document.getElementById('scroll').scrollTo({top:0,behavior:'smooth'});
+  });
+  document.getElementById('doneBtn').addEventListener('click', function(){
+    go('s-intent');
+    setNav('s-intent');
+  });
+
+  /* ============================================================
+     LIBRARY (fixture)
+     ============================================================ */
+  var WEIGHTS = ["very low","low","normal","high","favorite"];
+  var LIB = [
+    { name:"Tom Scott", kind:"youtube", unseen:15, w:4 },
+    { name:"NPR News",  kind:"rss",     unseen:10, w:2 },
+    { name:"Kurzgesagt",kind:"youtube", unseen:15, w:4 },
+    { name:"Hacker News",kind:"rss",    unseen:20, w:1 }
+  ];
+  function libStar(fav){
+    return fav
+      ? '<svg class="lib-star" viewBox="0 0 30 30"><circle cx="15" cy="15" r="13" fill="none" stroke="rgba(216,182,97,0.5)"/><path d="M15 5 L16.9 12.2 L24 15 L16.9 17.8 L15 25 L13.1 17.8 L6 15 L13.1 12.2 Z" fill="#d8b661"/></svg>'
+      : '<svg class="lib-star" viewBox="0 0 30 30"><circle cx="15" cy="15" r="13" fill="none" stroke="rgba(185,194,224,0.25)"/><circle cx="15" cy="15" r="2.4" fill="#b9c2e0"/><circle cx="15" cy="15" r="6" fill="none" stroke="rgba(185,194,224,0.3)" stroke-width="0.6"/></svg>';
+  }
+  function weightPill(w){
+    var fav = w===4;
+    var label = WEIGHTS[w];
+    var cls = 'weight lit-'+w + (fav?' fav':'');
+    var inner = fav
+      ? '<svg class="w-star" viewBox="0 0 13 13"><path d="M6.5 0 L7.9 4.6 L13 6.5 L7.9 8.4 L6.5 13 L5.1 8.4 L0 6.5 L5.1 4.6 Z" fill="#f0cf83"/></svg>'
+      : '<div class="w-bars"><i></i><i></i><i></i><i></i></div>';
+    return '<button class="'+cls+'">'+inner+'<span class="w-label">'+label+'</span></button>';
+  }
+  (function renderLib(){
+    var box=document.getElementById('lib'), html='';
+    LIB.forEach(function(s){
+      html += '<div class="lib-row">'
+        + libStar(s.w===4)
+        + '<div class="lib-body"><div class="lib-name">'+s.name+'</div>'
+        +   '<div class="lib-sub">'+s.kind+' · <span class="unseen">'+s.unseen+' unseen</span></div></div>'
+        + weightPill(s.w)
+        + '</div>';
+    });
+    box.innerHTML=html;
+    // tap weight pill -> cycle
+    box.addEventListener('click', function(e){
+      var p=e.target.closest('.weight'); if(!p) return;
+      var m=p.className.match(/lit-(\d)/); var cur=m?+m[1]:2;
+      var next=(cur+1)%5;
+      p.className='weight lit-'+next+(next===4?' fav':'');
+      var lbl=p.querySelector('.w-label'); if(lbl) lbl.textContent=WEIGHTS[next];
+      p.innerHTML = (next===4
+        ? '<svg class="w-star" viewBox="0 0 13 13"><path d="M6.5 0 L7.9 4.6 L13 6.5 L7.9 8.4 L6.5 13 L5.1 8.4 L0 6.5 L5.1 4.6 Z" fill="#f0cf83"/></svg>'
+        : '<div class="w-bars"><i></i><i></i><i></i><i></i></div>')
+        + '<span class="w-label">'+WEIGHTS[next]+'</span>';
+      // sync the source star
+      var row=p.closest('.lib-row'); var starEl=row.querySelector('.lib-star');
+      var tmp=document.createElement('div'); tmp.innerHTML=libStar(next===4);
+      row.replaceChild(tmp.firstChild, starEl);
+    });
+  })();
+
+  /* ============================================================
+     NAV / screen switching
+     ============================================================ */
+  var scroll=document.getElementById('scroll');
+  function go(id){
+    document.querySelectorAll('.screen').forEach(function(s){
+      s.classList.toggle('active', s.id===id);
+    });
+    scroll.scrollTo({top:0});
+    if(id==='s-intent'){ requestAnimationFrame(render); }
+  }
+  function setNav(id){
+    document.querySelectorAll('.nav-btn').forEach(function(b){
+      b.classList.toggle('active', b.getAttribute('data-s')===id);
+    });
+  }
+  document.querySelector('.nav').addEventListener('click', function(e){
+    var b=e.target.closest('.nav-btn'); if(!b) return;
+    var id=b.getAttribute('data-s'); go(id); setNav(id);
+  });
+  document.getElementById('buildBtn').addEventListener('click', function(){
+    go('s-session'); setNav('s-session');
+  });
+
+})();
+</script>
+</body>
+</html>

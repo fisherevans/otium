@@ -1,0 +1,736 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>otium — attention, on purpose</title>
+<style>
+  :root{
+    --ivory:#f4ede0;         /* warm paper */
+    --ivory-2:#efe6d6;       /* deeper paper for wells */
+    --ink:#211b16;           /* deep brown-black ink */
+    --ink-soft:#4a4038;      /* secondary ink */
+    --ink-faint:#8a7d6c;     /* tertiary / captions */
+    --oxblood:#7a2222;       /* the single accent */
+    --oxblood-deep:#5e1919;
+    --rule:#c9bca6;          /* hairline */
+    --rule-soft:#d8cdb9;
+    --stage:#2a2622;         /* backdrop behind the phone */
+  }
+
+  *{ box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  html,body{ margin:0; padding:0; height:100%; }
+  body{
+    background:
+      radial-gradient(120% 90% at 50% 0%, #35302a 0%, var(--stage) 60%, #201d19 100%);
+    font-family:"Iowan Old Style","Palatino Linotype",Palatino,"Hoefler Text",Georgia,serif;
+    color:var(--ink);
+    display:flex; align-items:center; justify-content:center;
+    min-height:100vh;
+    padding:22px 0;
+    -webkit-font-smoothing:antialiased;
+  }
+
+  /* ---------- phone frame ---------- */
+  .phone{
+    position:relative;
+    width:390px; height:844px;
+    max-width:100vw;
+    background:var(--ivory);
+    border-radius:46px;
+    box-shadow:
+      0 0 0 2px #0d0b09,
+      0 0 0 11px #17130f,
+      0 0 0 12px #322b22,
+      0 40px 90px -20px rgba(0,0,0,.75);
+    overflow:hidden;
+    display:flex; flex-direction:column;
+  }
+  /* paper grain */
+  .phone::before{
+    content:""; position:absolute; inset:0; z-index:0; pointer-events:none;
+    opacity:.5; mix-blend-mode:multiply;
+    background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='140' height='140'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/><feColorMatrix type='saturate' values='0'/></filter><rect width='100%25' height='100%25' filter='url(%23n)' opacity='0.35'/></svg>");
+  }
+  /* notch */
+  .notch{
+    position:absolute; top:0; left:50%; transform:translateX(-50%);
+    width:150px; height:26px; background:#0d0b09;
+    border-bottom-left-radius:16px; border-bottom-right-radius:16px;
+    z-index:40;
+  }
+
+  /* ---------- masthead ---------- */
+  .masthead{
+    position:relative; z-index:10;
+    padding:40px 26px 12px;
+    text-align:center;
+    flex:0 0 auto;
+    border-bottom:1px solid var(--rule);
+    background:linear-gradient(180deg, var(--ivory) 0%, var(--ivory) 70%, rgba(244,237,224,0) 100%);
+  }
+  .wordmark{
+    font-family:"Didot","Hoefler Text","Iowan Old Style",Georgia,serif;
+    font-size:38px; font-weight:400; letter-spacing:.02em;
+    color:var(--ink); line-height:1; margin:0;
+    font-feature-settings:"onum" 1;
+  }
+  .wordmark .dot{ color:var(--oxblood); }
+  .tagline{
+    font-family:"Optima","Gill Sans","Avenir Next",sans-serif;
+    text-transform:uppercase; letter-spacing:.34em;
+    font-size:9.5px; color:var(--ink-faint);
+    margin:8px 0 0; padding-left:.34em;
+  }
+  .mast-rules{ margin-top:12px; }
+  .mast-rules .r1{ height:2px; background:var(--ink); }
+  .mast-rules .r2{ height:1px; background:var(--ink); margin-top:2px; }
+
+  /* ---------- scroll stage ---------- */
+  .stage{
+    position:relative; z-index:5;
+    flex:1 1 auto; overflow-y:auto; overflow-x:hidden;
+    -webkit-overflow-scrolling:touch;
+    scrollbar-width:none;
+  }
+  .stage::-webkit-scrollbar{ display:none; }
+  .screen{ display:none; padding:22px 26px 120px; animation:fade .5s ease both; }
+  .screen.active{ display:block; }
+  @keyframes fade{ from{opacity:0; transform:translateY(6px);} to{opacity:1; transform:none;} }
+
+  /* small-caps section label */
+  .kicker{
+    font-family:"Optima","Gill Sans","Avenir Next",sans-serif;
+    text-transform:uppercase; letter-spacing:.28em;
+    font-size:10px; color:var(--oxblood);
+    display:flex; align-items:center; gap:10px;
+    margin:2px 0 14px;
+  }
+  .kicker::after{ content:""; flex:1 1 auto; height:1px; background:var(--rule); }
+
+  /* ---------- INTENT ---------- */
+  .intent-head{
+    font-family:"Didot","Hoefler Text",Georgia,serif;
+    font-size:34px; line-height:1.05; font-weight:400;
+    margin:2px 0 4px; letter-spacing:.01em;
+  }
+  .intent-sub{
+    font-size:15px; line-height:1.5; color:var(--ink-soft);
+    margin:0 0 20px; font-style:italic; max-width:30ch;
+  }
+
+  /* analog pad */
+  .pad-wrap{ display:flex; flex-direction:column; align-items:center; }
+  .pad{
+    position:relative;
+    width:300px; height:240px;
+    background:
+      linear-gradient(180deg, var(--ivory-2), #e7dcc8);
+    border:1px solid var(--ink);
+    box-shadow:inset 0 0 0 3px var(--ivory), inset 0 0 22px rgba(90,25,25,.06);
+    border-radius:3px;
+    touch-action:none; cursor:grab;
+    overflow:hidden;
+  }
+  .pad:active{ cursor:grabbing; }
+  .pad .axis{ position:absolute; background:var(--rule-soft); pointer-events:none; }
+  .pad .axis.v{ left:50%; top:8px; bottom:8px; width:1px; transform:translateX(-.5px); }
+  .pad .axis.h{ top:50%; left:8px; right:8px; height:1px; transform:translateY(-.5px); }
+  /* tick marks */
+  .pad .tick{ position:absolute; background:var(--rule); pointer-events:none; }
+
+  .corner{
+    position:absolute; width:88px; pointer-events:none;
+    font-family:"Optima","Gill Sans","Avenir Next",sans-serif;
+    text-transform:uppercase; letter-spacing:.14em;
+    font-size:8.5px; line-height:1.35; color:var(--ink-faint);
+    transition:color .25s ease, opacity .25s ease;
+  }
+  .corner b{ display:block; font-size:9.5px; letter-spacing:.16em; color:var(--ink-soft); font-weight:600; }
+  .corner.tl{ top:12px; left:12px; text-align:left; }
+  .corner.tr{ top:12px; right:12px; text-align:right; }
+  .corner.bl{ bottom:12px; left:12px; text-align:left; }
+  .corner.br{ bottom:12px; right:12px; text-align:right; }
+  .corner.near{ color:var(--oxblood); }
+  .corner.near b{ color:var(--oxblood); }
+
+  .tether{ position:absolute; left:0; top:0; width:100%; height:100%; pointer-events:none; }
+  .knob{
+    position:absolute; width:54px; height:54px; left:50%; top:50%;
+    margin:-27px 0 0 -27px;
+    border-radius:50%;
+    background:radial-gradient(circle at 38% 34%, #8a2a2a, var(--oxblood) 45%, var(--oxblood-deep) 100%);
+    box-shadow:0 5px 14px rgba(70,15,15,.5), inset 0 1px 2px rgba(255,255,255,.35), inset 0 -3px 6px rgba(0,0,0,.35);
+    border:1px solid var(--oxblood-deep);
+    pointer-events:none;
+    display:flex; align-items:center; justify-content:center;
+    transition:transform .06s linear;
+  }
+  .knob::after{
+    content:""; width:8px; height:8px; border-radius:50%;
+    background:var(--ivory); opacity:.85;
+    box-shadow:0 0 0 4px rgba(244,237,224,.18);
+  }
+  .knob.snap{ transition:left .35s cubic-bezier(.2,1.4,.4,1), top .35s cubic-bezier(.2,1.4,.4,1); }
+
+  .recenter{
+    margin-top:12px; font-family:"Optima","Gill Sans",sans-serif;
+    font-size:10px; letter-spacing:.18em; text-transform:uppercase;
+    color:var(--ink-faint); background:none; border:none;
+    padding:6px 10px; cursor:pointer;
+  }
+
+  /* readout */
+  .readout{
+    text-align:center; margin:16px 0 6px;
+    padding:16px 0; border-top:1px solid var(--ink); border-bottom:1px solid var(--ink);
+    position:relative;
+  }
+  .readout .num{
+    font-family:"Didot","Hoefler Text",Georgia,serif;
+    font-size:30px; line-height:1; letter-spacing:.01em;
+  }
+  .readout .num .amp{ color:var(--oxblood); font-style:italic; padding:0 .12em; }
+  .readout .lbl{
+    font-family:"Optima","Gill Sans",sans-serif; text-transform:uppercase;
+    letter-spacing:.24em; font-size:9px; color:var(--ink-faint); margin-top:9px;
+  }
+  .readout .mood{
+    font-style:italic; font-size:13px; color:var(--ink-soft); margin-top:8px;
+  }
+
+  /* theme chips */
+  .chips{ display:flex; flex-wrap:wrap; gap:9px; margin:20px 0 6px; }
+  .chip{
+    font-family:"Optima","Gill Sans","Avenir Next",sans-serif;
+    font-size:12px; letter-spacing:.08em;
+    padding:9px 15px; min-height:40px; display:inline-flex; align-items:center;
+    background:transparent; color:var(--ink-soft);
+    border:1px solid var(--rule); border-radius:2px;
+    cursor:pointer; transition:all .18s ease;
+    position:relative;
+  }
+  .chip:active{ transform:translateY(1px); }
+  .chip.on{
+    background:var(--oxblood); color:var(--ivory);
+    border-color:var(--oxblood-deep);
+    box-shadow:0 2px 6px rgba(90,25,25,.28);
+  }
+
+  .build{
+    width:100%; margin-top:22px;
+    font-family:"Iowan Old Style","Palatino",Georgia,serif;
+    font-size:17px; letter-spacing:.04em;
+    padding:17px; min-height:56px;
+    background:var(--ink); color:var(--ivory);
+    border:none; border-radius:3px; cursor:pointer;
+    box-shadow:0 6px 18px -6px rgba(0,0,0,.55);
+    transition:transform .12s ease, background .2s ease;
+    display:flex; align-items:center; justify-content:center; gap:12px;
+  }
+  .build .flr{ color:var(--oxblood); }
+  .build:active{ transform:translateY(2px); background:#100d0a; }
+
+  /* ---------- SESSION ---------- */
+  .toc-head{
+    font-family:"Didot","Hoefler Text",Georgia,serif;
+    font-size:30px; line-height:1.06; margin:2px 0 4px; font-weight:400;
+  }
+  .toc-meta{
+    font-family:"Optima","Gill Sans",sans-serif; text-transform:uppercase;
+    letter-spacing:.2em; font-size:10px; color:var(--ink-faint); margin:0 0 20px;
+  }
+  .toc-meta .sep{ color:var(--oxblood); padding:0 6px; }
+
+  .card{
+    position:relative; padding:20px 0 22px;
+    border-top:1px solid var(--rule);
+  }
+  .card:first-of-type{ border-top:2px solid var(--ink); }
+  .card .no{
+    position:absolute; right:0; top:20px;
+    font-family:"Didot","Hoefler Text",Georgia,serif; font-style:italic;
+    font-size:34px; color:var(--rule); line-height:1;
+  }
+  .reason{
+    display:inline-flex; align-items:center; gap:7px;
+    font-family:"Optima","Gill Sans",sans-serif; text-transform:uppercase;
+    letter-spacing:.16em; font-size:9px; color:var(--oxblood);
+    margin-bottom:9px;
+  }
+  .reason .glyph{ width:9px; height:9px; }
+  .card h3{
+    font-family:"Iowan Old Style","Palatino","Hoefler Text",Georgia,serif;
+    font-weight:400; font-size:21px; line-height:1.24; margin:0 44px 8px 0;
+    letter-spacing:.005em;
+  }
+  .card .summary{
+    font-size:14px; line-height:1.55; color:var(--ink-soft);
+    font-style:italic; margin:0 20px 12px 0;
+  }
+  /* drop cap on the first card's title area via summary of card 2? use on card 1 title */
+  .card .credit{
+    font-family:"Optima","Gill Sans",sans-serif; font-size:10.5px;
+    letter-spacing:.1em; text-transform:uppercase; color:var(--ink-faint);
+    margin-bottom:14px; display:flex; align-items:center; gap:9px; flex-wrap:wrap;
+  }
+  .card .credit .src{ color:var(--ink); }
+  .card .credit .dot{ width:3px; height:3px; border-radius:50%; background:var(--rule); }
+  .card .credit .kind{ font-style:normal; }
+
+  .actions{ display:flex; gap:10px; }
+  .act{
+    flex:1 1 auto; min-height:44px;
+    font-family:"Optima","Gill Sans",sans-serif; font-size:11px;
+    letter-spacing:.14em; text-transform:uppercase;
+    display:inline-flex; align-items:center; justify-content:center; gap:7px;
+    background:transparent; border:1px solid var(--rule); border-radius:2px;
+    color:var(--ink-soft); cursor:pointer; transition:all .15s ease;
+  }
+  .act:active{ transform:translateY(1px); }
+  .act.open{ border-color:var(--ink); color:var(--ink); }
+  .act.open:active{ background:var(--ink); color:var(--ivory); }
+  .act svg{ width:13px; height:13px; }
+  .act.like.on{ border-color:var(--oxblood); color:var(--oxblood); background:rgba(122,34,34,.06); }
+  .act.like.on svg .fillheart{ fill:var(--oxblood); }
+  .act.skip:active{ color:var(--ink); border-color:var(--ink-faint); }
+
+  .end{
+    text-align:center; padding:34px 0 8px; margin-top:8px;
+    border-top:2px solid var(--ink);
+  }
+  .end .orn{ font-size:18px; color:var(--oxblood); letter-spacing:.4em; margin-bottom:12px; }
+  .end .colophon{
+    font-family:"Didot","Hoefler Text",Georgia,serif; font-style:italic;
+    font-size:20px; margin-bottom:20px; color:var(--ink);
+  }
+  .end-actions{ display:flex; gap:12px; }
+  .end-actions button{
+    flex:1 1 auto; min-height:50px;
+    font-family:"Optima","Gill Sans",sans-serif; font-size:11px;
+    letter-spacing:.14em; text-transform:uppercase; cursor:pointer;
+    border-radius:3px; transition:transform .12s ease;
+  }
+  .end-actions button:active{ transform:translateY(2px); }
+  .more{ background:transparent; border:1px solid var(--ink); color:var(--ink); }
+  .done{ background:var(--ink); border:1px solid var(--ink); color:var(--ivory); }
+
+  /* ---------- LIBRARY ---------- */
+  .lib-head{
+    font-family:"Didot","Hoefler Text",Georgia,serif;
+    font-size:30px; line-height:1.06; margin:2px 0 4px; font-weight:400;
+  }
+  .lib-sub{ font-style:italic; font-size:14px; color:var(--ink-soft); margin:0 0 20px; }
+  .row{
+    display:flex; align-items:center; gap:14px;
+    padding:18px 0; border-top:1px solid var(--rule);
+  }
+  .row:first-of-type{ border-top:2px solid var(--ink); }
+  .row .mono{
+    font-family:"Optima","Gill Sans",sans-serif; font-size:10px;
+    color:var(--rule); width:20px; text-align:right;
+    font-variant-numeric:tabular-nums;
+  }
+  .row .body{ flex:1 1 auto; min-width:0; }
+  .row .name{
+    font-family:"Iowan Old Style","Palatino",Georgia,serif; font-size:18px;
+    margin:0 0 3px;
+  }
+  .row .sub{
+    font-family:"Optima","Gill Sans",sans-serif; font-size:10px;
+    letter-spacing:.1em; text-transform:uppercase; color:var(--ink-faint);
+  }
+  .row .sub .unseen{ color:var(--oxblood); }
+  .weight{
+    flex:0 0 auto;
+    font-family:"Optima","Gill Sans",sans-serif; font-size:9.5px;
+    letter-spacing:.12em; text-transform:uppercase;
+    padding:8px 12px; min-height:38px; display:inline-flex; align-items:center;
+    border:1px solid var(--rule); border-radius:2px;
+    background:var(--ivory-2); color:var(--ink-soft);
+    cursor:pointer; transition:all .18s ease; white-space:nowrap;
+    gap:6px;
+  }
+  .weight:active{ transform:translateY(1px); }
+  .weight .pips{ display:inline-flex; gap:2px; align-items:center; }
+  .weight .pip{ width:4px; height:4px; border-radius:50%; background:var(--rule); }
+  .weight .pip.on{ background:var(--ink-soft); }
+  .weight[data-level="favorite"]{ border-color:var(--oxblood); color:var(--oxblood); background:rgba(122,34,34,.05); }
+  .weight[data-level="favorite"] .pip.on{ background:var(--oxblood); }
+  .weight[data-level="high"]{ border-color:var(--ink); color:var(--ink); }
+  .weight[data-level="high"] .pip.on{ background:var(--ink); }
+
+  .lib-foot{
+    margin-top:26px; padding-top:16px; border-top:2px solid var(--ink);
+    font-style:italic; font-size:13px; color:var(--ink-faint); text-align:center;
+  }
+
+  /* ---------- bottom nav ---------- */
+  .nav{
+    position:relative; z-index:20; flex:0 0 auto;
+    display:flex; background:var(--ivory);
+    border-top:2px solid var(--ink);
+    padding-bottom:14px;
+  }
+  .nav button{
+    flex:1 1 0; background:none; border:none; cursor:pointer;
+    padding:12px 4px 8px; display:flex; flex-direction:column;
+    align-items:center; gap:5px; color:var(--ink-faint);
+    transition:color .2s ease; position:relative;
+  }
+  .nav button svg{ width:21px; height:21px; }
+  .nav button .lab{
+    font-family:"Optima","Gill Sans",sans-serif; font-size:9px;
+    letter-spacing:.2em; text-transform:uppercase;
+  }
+  .nav button.on{ color:var(--ink); }
+  .nav button.on::before{
+    content:""; position:absolute; top:-2px; left:50%; transform:translateX(-50%);
+    width:34px; height:2px; background:var(--oxblood);
+  }
+  .nav button.on svg{ color:var(--oxblood); }
+</style>
+</head>
+<body>
+  <div class="phone" role="application" aria-label="otium">
+    <div class="notch"></div>
+
+    <!-- masthead -->
+    <header class="masthead">
+      <h1 class="wordmark">otium<span class="dot">.</span></h1>
+      <p class="tagline">attention, on purpose</p>
+      <div class="mast-rules"><div class="r1"></div><div class="r2"></div></div>
+    </header>
+
+    <!-- scroll stage -->
+    <main class="stage" id="stage">
+
+      <!-- ============ INTENT ============ -->
+      <section class="screen active" id="s-intent">
+        <div class="kicker">The Reading Room</div>
+        <h2 class="intent-head">How much time?</h2>
+        <p class="intent-sub">Set your intent. We'll set the table — a finite, considered session, and nothing more.</p>
+
+        <div class="pad-wrap">
+          <div class="pad" id="pad">
+            <div class="axis v"></div>
+            <div class="axis h"></div>
+            <svg class="tether" id="tether" viewBox="0 0 300 240" preserveAspectRatio="none">
+              <line id="tline" x1="150" y1="120" x2="150" y2="120"
+                    stroke="#7a2222" stroke-width="1.4" stroke-dasharray="3 3" opacity="0.75"/>
+            </svg>
+            <div class="corner tl" data-corner="lf"><b>Long</b>Focused · deep</div>
+            <div class="corner tr" data-corner="lv"><b>Long</b>Varied · wide</div>
+            <div class="corner bl" data-corner="qf"><b>Quick</b>Focused · sharp</div>
+            <div class="corner br" data-corner="qv"><b>Quick</b>Varied · light</div>
+            <div class="knob" id="knob"></div>
+          </div>
+          <button class="recenter" id="recenter">◦ tap pad to recentre ◦</button>
+        </div>
+
+        <div class="readout">
+          <div class="num"><span id="rMin">18</span><span class="amp">&amp;</span><span id="rMax">26</span> <span style="font-size:19px; font-style:italic; color:var(--ink-soft);">min</span></div>
+          <div class="lbl">approx <span id="rItems">5</span> items in this sitting</div>
+          <div class="mood" id="rMood">A varied, unhurried reading</div>
+        </div>
+
+        <div class="kicker" style="margin-top:24px;">In the mood for</div>
+        <div class="chips" id="chips">
+          <button class="chip on" data-t="News">News</button>
+          <button class="chip" data-t="Tech">Tech</button>
+          <button class="chip on" data-t="Science">Science</button>
+          <button class="chip" data-t="Curiosity">Curiosity</button>
+          <button class="chip" data-t="Gaming">Gaming</button>
+          <button class="chip on" data-t="Music">Music</button>
+        </div>
+
+        <button class="build" id="build">
+          <span class="flr">§</span> Build my session <span class="flr">§</span>
+        </button>
+      </section>
+
+      <!-- ============ SESSION ============ -->
+      <section class="screen" id="s-session">
+        <div class="kicker">Today's Sitting</div>
+        <h2 class="toc-head">Table of Contents</h2>
+        <p class="toc-meta">4 items <span class="sep">·</span> about 58 minutes</p>
+
+        <!-- cards injected by JS -->
+        <div id="cards"></div>
+
+        <div class="end">
+          <div class="orn">❧</div>
+          <div class="colophon">That's your session.</div>
+          <div class="end-actions">
+            <button class="more" id="moreLike">More like this</button>
+            <button class="done" id="doneBtn">Done</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- ============ LIBRARY ============ -->
+      <section class="screen" id="s-library">
+        <div class="kicker">Your Shelf</div>
+        <h2 class="lib-head">Sources followed</h2>
+        <p class="lib-sub">Tap a weight to tell otium how loudly each voice should speak.</p>
+        <div id="rows"></div>
+        <div class="lib-foot">Four voices on the shelf. Nothing clamouring.</div>
+      </section>
+
+    </main>
+
+    <!-- bottom nav -->
+    <nav class="nav" id="nav">
+      <button data-s="intent" class="on">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4">
+          <circle cx="12" cy="12" r="9"/><path d="M12 7v5l3.5 2"/>
+        </svg>
+        <span class="lab">Intent</span>
+      </button>
+      <button data-s="session">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4">
+          <path d="M6 4h12v16l-6-3-6 3z"/><path d="M9 8h6M9 11h6"/>
+        </svg>
+        <span class="lab">Session</span>
+      </button>
+      <button data-s="library">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4">
+          <path d="M5 4h4v16H5zM11 4h3v16h-3zM16.5 5l3.2.8-3.6 14.6-3.2-.8z"/>
+        </svg>
+        <span class="lab">Library</span>
+      </button>
+    </nav>
+  </div>
+
+<script>
+(function(){
+  "use strict";
+
+  /* ---------- nav ---------- */
+  var nav = document.getElementById('nav');
+  var stage = document.getElementById('stage');
+  function show(name){
+    document.querySelectorAll('.screen').forEach(function(s){ s.classList.remove('active'); });
+    document.getElementById('s-'+name).classList.add('active');
+    nav.querySelectorAll('button').forEach(function(b){ b.classList.toggle('on', b.dataset.s===name); });
+    stage.scrollTop = 0;
+  }
+  nav.addEventListener('click', function(e){
+    var b = e.target.closest('button'); if(!b) return; show(b.dataset.s);
+  });
+
+  /* ---------- analog pad ---------- */
+  var pad = document.getElementById('pad');
+  var knob = document.getElementById('knob');
+  var tline = document.getElementById('tline');
+  var rMin = document.getElementById('rMin');
+  var rMax = document.getElementById('rMax');
+  var rItems = document.getElementById('rItems');
+  var rMood = document.getElementById('rMood');
+  var corners = document.querySelectorAll('.corner');
+
+  var PAD_W = 300, PAD_H = 240;
+  var cx = PAD_W/2, cy = PAD_H/2;
+  var margin = 30; // keep knob inside
+  var maxX = cx - margin, maxY = cy - margin;
+  // normalized position -1..1 ; start slightly up-right to match fixture readout
+  var nx = 0.32, ny = -0.28;
+
+  function moodText(nx, ny){
+    var lenWord = ny < -0.15 ? "unhurried" : (ny > 0.15 ? "quick" : "measured");
+    var varWord = nx > 0.15 ? "varied" : (nx < -0.15 ? "focused" : "balanced");
+    return "A " + varWord + ", " + lenWord + " reading";
+  }
+
+  function nearestCorner(nx, ny){
+    // corners: qf(bl -x,+y) qv(br +x,+y) lf(tl -x,-y) lv(tr +x,-y)
+    var key;
+    var h = nx >= 0 ? 'v' : 'f';        // varied / focused
+    var v = ny <= 0 ? 'l' : 'q';        // long / quick
+    key = v + h; // lf, lv, qf, qv
+    return key;
+  }
+
+  function render(){
+    var px = cx + nx*maxX;
+    var py = cy + ny*maxY;
+    knob.style.left = px + 'px';
+    knob.style.top = py + 'px';
+    knob.style.margin = '-27px 0 0 -27px';
+    tline.setAttribute('x2', px);
+    tline.setAttribute('y2', py);
+
+    // length: up (ny=-1) => long ~ up to 75min ; down (ny=1) => quick ~ 8min
+    // map ny -1..1  to  minutes center 8..70
+    var t = (-ny + 1) / 2;            // 0 (quick) .. 1 (long)
+    var center = Math.round(8 + t*62);        // 8..70
+    // variety widens the band and item count
+    var variety = (nx + 1) / 2;       // 0 focused .. 1 varied
+    var band = Math.round(4 + variety*8 + t*4);
+    var lo = Math.max(3, center - Math.round(band/2));
+    var hi = center + Math.round(band/2);
+    // items scale with time & variety
+    var items = Math.max(2, Math.round((center/9) + variety*2));
+
+    rMin.textContent = lo;
+    rMax.textContent = hi;
+    rItems.textContent = items;
+    rMood.textContent = moodText(nx, ny);
+
+    var near = nearestCorner(nx, ny);
+    corners.forEach(function(c){
+      c.classList.toggle('near', c.dataset.corner === near && (Math.abs(nx)>0.12 || Math.abs(ny)>0.12));
+    });
+  }
+
+  function setFromEvent(e){
+    var rect = pad.getBoundingClientRect();
+    var scaleX = PAD_W / rect.width, scaleY = PAD_H / rect.height;
+    var lx = (e.clientX - rect.left) * scaleX;
+    var ly = (e.clientY - rect.top) * scaleY;
+    nx = (lx - cx) / maxX;
+    ny = (ly - cy) / maxY;
+    nx = Math.max(-1, Math.min(1, nx));
+    ny = Math.max(-1, Math.min(1, ny));
+    render();
+  }
+
+  var dragging = false;
+  pad.addEventListener('pointerdown', function(e){
+    dragging = true;
+    knob.classList.remove('snap');
+    pad.setPointerCapture(e.pointerId);
+    setFromEvent(e);
+  });
+  pad.addEventListener('pointermove', function(e){
+    if(!dragging) return;
+    setFromEvent(e);
+  });
+  function endDrag(){ dragging = false; }
+  pad.addEventListener('pointerup', endDrag);
+  pad.addEventListener('pointercancel', endDrag);
+
+  function recenter(){
+    knob.classList.add('snap');
+    nx = 0; ny = 0; render();
+    setTimeout(function(){ knob.classList.remove('snap'); }, 380);
+  }
+  document.getElementById('recenter').addEventListener('click', recenter);
+
+  render();
+
+  /* ---------- theme chips ---------- */
+  document.getElementById('chips').addEventListener('click', function(e){
+    var c = e.target.closest('.chip'); if(!c) return;
+    c.classList.toggle('on');
+  });
+
+  /* ---------- build -> session ---------- */
+  document.getElementById('build').addEventListener('click', function(){ show('session'); });
+
+  /* ---------- session cards ---------- */
+  var glyphs = {
+    fav:  '<svg class="glyph" viewBox="0 0 24 24"><path d="M12 3l2.6 5.9 6.4.6-4.9 4.2 1.5 6.3L12 17l-5.6 3 1.5-6.3L3 9.5l6.4-.6z" fill="#7a2222"/></svg>',
+    fresh:'<svg class="glyph" viewBox="0 0 24 24" fill="none" stroke="#7a2222" stroke-width="2"><circle cx="12" cy="12" r="9"/><path d="M12 7v6"/><circle cx="12" cy="16.5" r=".6" fill="#7a2222"/></svg>',
+    rare: '<svg class="glyph" viewBox="0 0 24 24" fill="none" stroke="#7a2222" stroke-width="1.8"><path d="M12 3v18M4 8l16 8M20 8L4 16"/></svg>',
+    high: '<svg class="glyph" viewBox="0 0 24 24" fill="none" stroke="#7a2222" stroke-width="2"><path d="M4 20V9M10 20V4M16 20v-7M22 20H2"/></svg>'
+  };
+  var mediaGlyph = {
+    video:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.3" style="width:12px;height:12px;vertical-align:-1px"><rect x="3" y="6" width="14" height="12" rx="2"/><path d="M17 10l4-2v8l-4-2z"/></svg>',
+    article:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.3" style="width:12px;height:12px;vertical-align:-1px"><path d="M5 4h11v16H5zM8 8h5M8 11h5M8 14h3"/><path d="M16 8h3v10a2 2 0 01-2 2"/></svg>',
+    audio:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.3" style="width:12px;height:12px;vertical-align:-1px"><path d="M4 14v-3a8 8 0 0116 0v3"/><rect x="3" y="13" width="4" height="6" rx="1"/><rect x="17" y="13" width="4" height="6" rx="1"/></svg>'
+  };
+
+  var cards = [
+    { reason:"Favorite source",     rk:"fav",   src:"Tom Scott",     dur:"10 min", type:"video",
+      title:"I got hit in the teeth at England's oldest ritual", summary:"" },
+    { reason:"Fresh — posted today", rk:"fresh", src:"The Verge",     dur:"4 min",  type:"article",
+      title:"Apple's entry-level MacBook Pro could get a redesign",
+      summary:"A revamped entry model could arrive as soon as this year, per supply-chain reports." },
+    { reason:"Rare — posts seldom",  rk:"rare",  src:"99% Invisible", dur:"32 min", type:"audio",
+      title:"The Real Book", summary:"" },
+    { reason:"High-weight source",   rk:"high",  src:"Veritasium",    dur:"12 min", type:"video",
+      title:"The universe's biggest unsolved problem", summary:"" }
+  ];
+
+  var heartSVG = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path class="fillheart" d="M12 20s-7-4.5-9.2-8.4C1.2 8.5 3 5.5 6 5.5c2 0 3 1.2 3.7 2.3C10.4 6.7 11.4 5.5 13.4 5.5c3 0 4.8 3 3.2 6.1C15.4 15.5 12 20 12 20z" fill="none"/></svg>';
+
+  var cwrap = document.getElementById('cards');
+  cards.forEach(function(c, i){
+    var el = document.createElement('article');
+    el.className = 'card';
+    el.innerHTML =
+      '<span class="no">' + (i+1) + '</span>' +
+      '<div class="reason">' + glyphs[c.rk] + c.reason + '</div>' +
+      '<h3>' + c.title + '</h3>' +
+      (c.summary ? '<p class="summary">' + c.summary + '</p>' : '') +
+      '<div class="credit"><span class="src">' + c.src + '</span>' +
+        '<span class="dot"></span><span>' + c.dur + '</span>' +
+        '<span class="dot"></span><span class="kind">' + mediaGlyph[c.type] + ' ' + c.type + '</span></div>' +
+      '<div class="actions">' +
+        '<button class="act open">Open</button>' +
+        '<button class="act like">' + heartSVG + 'Like</button>' +
+        '<button class="act skip">Skip</button>' +
+      '</div>';
+    cwrap.appendChild(el);
+  });
+
+  cwrap.addEventListener('click', function(e){
+    var like = e.target.closest('.act.like');
+    if(like){ like.classList.toggle('on'); return; }
+    var skip = e.target.closest('.act.skip');
+    if(skip){
+      var card = skip.closest('.card');
+      card.style.transition = 'opacity .35s ease, transform .35s ease';
+      card.style.opacity = '0.32';
+      card.style.transform = 'translateX(10px)';
+      skip.textContent = 'Skipped';
+      return;
+    }
+  });
+
+  document.getElementById('moreLike').addEventListener('click', function(){ show('intent'); });
+  document.getElementById('doneBtn').addEventListener('click', function(){ show('intent'); });
+
+  /* ---------- library ---------- */
+  var levels = ['very low','low','normal','high','favorite'];
+  function pips(level){
+    var idx = levels.indexOf(level);
+    var out = '<span class="pips">';
+    for(var i=0;i<5;i++){ out += '<span class="pip'+(i<=idx?' on':'')+'"></span>'; }
+    return out + '</span>';
+  }
+  var rows = [
+    { name:"Tom Scott",  kind:"youtube", unseen:15, level:"favorite" },
+    { name:"NPR News",   kind:"rss",     unseen:10, level:"normal" },
+    { name:"Kurzgesagt", kind:"youtube", unseen:15, level:"favorite" },
+    { name:"Hacker News",kind:"rss",     unseen:20, level:"low" }
+  ];
+  var rwrap = document.getElementById('rows');
+  rows.forEach(function(r, i){
+    var el = document.createElement('div');
+    el.className = 'row';
+    el.innerHTML =
+      '<span class="mono">' + String(i+1).padStart(2,'0') + '</span>' +
+      '<div class="body">' +
+        '<p class="name">' + r.name + '</p>' +
+        '<p class="sub">' + r.kind + ' · <span class="unseen">' + r.unseen + ' unseen</span></p>' +
+      '</div>' +
+      '<button class="weight" data-level="' + r.level + '">' + pips(r.level) +
+        '<span class="wl">' + r.level + '</span></button>';
+    rwrap.appendChild(el);
+  });
+
+  rwrap.addEventListener('click', function(e){
+    var w = e.target.closest('.weight'); if(!w) return;
+    var cur = w.dataset.level;
+    var next = levels[(levels.indexOf(cur)+1) % levels.length];
+    w.dataset.level = next;
+    w.querySelector('.wl').textContent = next;
+    w.querySelector('.pips').outerHTML = pips(next);
+  });
+
+})();
+</script>
+</body>
+</html>

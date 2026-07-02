@@ -1,0 +1,120 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>otium · design directions</title>
+<style>
+  :root { --bg:#14130f; --panel:#1d1b15; --ink:#ece4d3; --soft:#b6ac96; --faint:#7d7460; --line:#332f24; --gold:#c9a227; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--ink); font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif; line-height:1.5; }
+  header { padding:28px 20px 12px; max-width:1100px; margin:0 auto; }
+  h1 { font-family:"Iowan Old Style",Palatino,Georgia,serif; font-style:italic; font-weight:400; font-size:30px; margin:0 0 6px; }
+  h1 .g { color:var(--gold); }
+  .lede { color:var(--soft); font-size:15px; max-width:60ch; margin:0 0 4px; }
+  .lede a { color:var(--gold); }
+  .count { color:var(--faint); font-size:13px; letter-spacing:.04em; }
+  .group { max-width:1100px; margin:0 auto; padding:8px 14px 10px; }
+  .group h2 { font-family:"Iowan Old Style",Palatino,Georgia,serif; font-weight:400; font-size:19px; color:var(--soft); border-bottom:1px solid var(--line); padding:22px 6px 8px; margin:0 0 14px; }
+  .grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(230px,1fr)); gap:18px; }
+  .tile { background:var(--panel); border:1px solid var(--line); border-radius:14px; overflow:hidden; display:flex; flex-direction:column; }
+  .preview { position:relative; width:100%; aspect-ratio:390/560; overflow:hidden; background:#000; border-bottom:1px solid var(--line); }
+  .preview iframe { position:absolute; top:0; left:0; width:390px; height:560px; border:0; transform-origin:top left; }
+  .preview a.hit { position:absolute; inset:0; z-index:2; }
+  .cap { padding:12px 14px 14px; }
+  .cap b { font-size:15px; display:block; }
+  .cap .desc { color:var(--soft); font-size:13px; margin:3px 0 10px; min-height:34px; }
+  .cap .open { display:inline-block; color:var(--gold); font-size:13px; letter-spacing:.03em; border:1px solid var(--line); border-radius:8px; padding:7px 12px; }
+  .cap .open:active { background:#c9a2271f; }
+  footer { max-width:1100px; margin:0 auto; padding:30px 20px 60px; color:var(--faint); font-size:13px; }
+  a { text-decoration:none; }
+</style>
+</head>
+<body>
+<header>
+  <h1><span class="g">o</span>tium · design directions</h1>
+  <p class="lede">18 committed visual languages for the same app. Every prototype uses the identical content and the real interactions - the analog-stick intent pad, explainable session cards, the library - so you're comparing <em>design</em>, not features. Tap any tile to open it full-screen and actually drag the pad on your phone.</p>
+  <p class="lede">The skeleton beneath all of them (IA, flows, touch rules, the pad spec) is written up in <a href="EXPERIENCE.md">EXPERIENCE.md</a>.</p>
+  <p class="count" id="count"></p>
+</header>
+<div id="app"></div>
+<footer>
+  Static mockups, shared fixture. Pick a direction (or a few elements from several) and I'll make it the real theme. Some may want palette/contrast tuning - note anything that catches your eye.
+</footer>
+
+<script>
+const GROUPS = [
+  { title: "Light & literary", items: [
+    ["reading-room","Editorial Reading Room","A fine printed magazine — serif, ivory, one oxblood accent. Quiet and timeless."],
+    ["newsprint-broadsheet","Broadsheet Newspaper","Masthead, column rules, ink on newsprint. Dense and authoritative."],
+    ["e-ink-paper","E-Ink Paper","Pure grayscale, crisp serif, glare-free. The literal anti-screen."],
+    ["ma-inkwash","Ma — Ink & Space","Vast calm, one vermilion seal, an ensō dial. Emptiness as a feature."],
+  ]},
+  { title: "Warm & crafted", items: [
+    ["analog-desk","Tactile Analog Desk","Brass, walnut & felt — the pad is a real machined joystick with depth."],
+    ["field-almanac","Naturalist Field Almanac","Aged paper, botanical engraving, sepia & sage. Scholarly, warm."],
+    ["wabi-ceramic","Wabi-Sabi Ceramic","Clay & stone with kintsugi-gold seams. Material, grounded, serene."],
+    ["moleskine-notebook","Personal Notebook","Kraft & dot-grid, hand-drawn ink. Your private reading journal."],
+  ]},
+  { title: "Dark & luminous", items: [
+    ["nocturne","Nocturne OLED","True-black with one warm ember of light. Late-night, expensive-feeling."],
+    ["amber-crt","Amber Terminal","Warm phosphor, mono + serif. A scholar's terminal, not a hacker movie."],
+    ["ritual-tarot","Ritual Reading","Midnight indigo & gold foil — a session drawn like a reading. Ceremonial."],
+    ["stained-glass","Stained Glass","Jewel tones in dark leading, backlit cathedral glow. Reverent."],
+    ["observatory-starchart","Observatory Star Chart","Astrolabe dial, constellation lines. Scientific, exact, wondrous."],
+    ["deco-club","Art Deco Club","Gold linework on onyx-emerald, ceremonial symmetry. Gatsby luxe."],
+    ["blueprint-drafting","Architect Blueprint","Cyan linework on navy — the pad is a plotted coordinate graph. Precise."],
+  ]},
+  { title: "Bold & graphic", items: [
+    ["riso-zine","Risograph Zine","Two overprinted inks, huge condensed type, grain. The hardest anti-bland."],
+    ["bauhaus-primary","Bauhaus","Primary red/blue/yellow, pure geometry. Playful-rational modernism."],
+    ["swiss-brut","Swiss / Brutalist","Stark grid, signal red, huge grotesk, exposed structure. Tool-like."],
+  ]},
+];
+
+const app = document.getElementById("app");
+let total = 0;
+for (const g of GROUPS) {
+  const sec = document.createElement("section");
+  sec.className = "group";
+  const grid = document.createElement("div");
+  grid.className = "grid";
+  sec.innerHTML = `<h2>${g.title}</h2>`;
+  for (const [slug, name, desc] of g.items) {
+    total++;
+    const href = `prototypes/${slug}.html`;
+    const tile = document.createElement("figure");
+    tile.className = "tile";
+    tile.style.margin = "0";
+    tile.innerHTML = `
+      <div class="preview">
+        <iframe src="${href}" scrolling="no" loading="lazy" tabindex="-1"></iframe>
+        <a class="hit" href="${href}" aria-label="${name}"></a>
+      </div>
+      <figcaption class="cap">
+        <b>${name}</b>
+        <div class="desc">${desc}</div>
+        <a class="open" href="${href}">Open full →</a>
+      </figcaption>`;
+    grid.appendChild(tile);
+  }
+  sec.appendChild(grid);
+  app.appendChild(sec);
+}
+document.getElementById("count").textContent = total + " directions · tap to open";
+
+// Scale each live preview to fit its tile width (previews are non-interactive;
+// the overlay link opens the full prototype).
+function fit() {
+  document.querySelectorAll(".preview").forEach((p) => {
+    const f = p.querySelector("iframe");
+    const s = p.clientWidth / 390;
+    f.style.transform = `scale(${s})`;
+  });
+}
+window.addEventListener("resize", fit);
+window.addEventListener("load", fit);
+fit();
+</script>
+</body>
+</html>

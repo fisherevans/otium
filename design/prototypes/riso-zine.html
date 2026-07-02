@@ -1,0 +1,866 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>otium — riso zine</title>
+<style>
+  /* ============ RISOGRAPH ZINE ============
+     Two spot inks — electric cobalt + warm vermilion — on cream.
+     Deliberate misregister, overprint (multiply), halftone + grain.
+     Huge condensed heavy display type. Cut-out shapes. Art-directed. */
+
+  :root{
+    --cream:   #f2e9d0;   /* paper */
+    --cream-2: #eaddb8;   /* deeper paper for wells */
+    --cobalt:  #1f2fe0;   /* spot ink 1 */
+    --cobalt-d:#141fb0;
+    --verm:    #f0402a;   /* spot ink 2 */
+    --verm-d:  #d22d18;
+    --ink:     #14130f;   /* near-black key line */
+    --paper-line: rgba(20,19,15,.16);
+  }
+
+  *{ box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  html,body{ margin:0; padding:0; height:100%; }
+
+  body{
+    background:
+      radial-gradient(120% 80% at 20% 0%, #3a3a44 0%, #26262e 55%, #191920 100%);
+    font-family:"Avenir Next","Futura","Gill Sans",-apple-system,sans-serif;
+    display:flex; align-items:center; justify-content:center;
+    min-height:100vh; overflow-x:hidden;
+    -webkit-font-smoothing:antialiased;
+  }
+
+  /* ---------- phone frame ---------- */
+  .device{
+    position:relative;
+    width:390px; height:844px;
+    border-radius:52px;
+    background:#0b0b0e;
+    padding:11px;
+    box-shadow:
+      0 2px 0 #2a2a30 inset,
+      0 40px 80px -20px rgba(0,0,0,.75),
+      0 0 0 2px #000;
+    flex:0 0 auto;
+  }
+  .device::after{ /* notch */
+    content:""; position:absolute; top:11px; left:50%; transform:translateX(-50%);
+    width:128px; height:30px; background:#0b0b0e; border-radius:0 0 18px 18px; z-index:60;
+  }
+  .screen{
+    position:relative; width:100%; height:100%;
+    border-radius:42px; overflow:hidden;
+    background:var(--cream);
+    display:flex; flex-direction:column;
+  }
+
+  /* paper grain + halftone overlay, applied above everything but non-interactive */
+  .paper-grain{
+    pointer-events:none; position:absolute; inset:0; z-index:50; mix-blend-mode:multiply; opacity:.5;
+  }
+  .paper-halftone{
+    pointer-events:none; position:absolute; inset:0; z-index:2; opacity:.5;
+    background-image:radial-gradient(rgba(20,19,15,.5) 0.6px, transparent 0.7px);
+    background-size:4px 4px;
+    mix-blend-mode:multiply;
+    -webkit-mask-image:linear-gradient(180deg, transparent 0%, #000 70%);
+            mask-image:linear-gradient(180deg, transparent 0%, #000 70%);
+  }
+
+  /* ---------- app content scroller ---------- */
+  .app{
+    position:relative; z-index:5;
+    flex:1 1 auto; overflow-y:auto; overflow-x:hidden;
+    -webkit-overflow-scrolling:touch;
+    padding-top:46px;
+  }
+  .app::-webkit-scrollbar{ display:none; }
+
+  /* status-ish top strip */
+  .topbar{
+    position:absolute; top:0; left:0; right:0; z-index:20;
+    height:46px; display:flex; align-items:center; justify-content:space-between;
+    padding:16px 26px 0;
+    font-family:"SF Mono","Menlo",monospace; font-size:12px; letter-spacing:.05em;
+    color:var(--ink); background:linear-gradient(180deg,var(--cream) 55%, rgba(242,233,208,0));
+  }
+  .topbar .dots{ display:flex; gap:4px; }
+  .topbar .dots i{ width:6px; height:6px; border-radius:50%; background:var(--ink); display:block; }
+  .topbar .dots i:nth-child(2){ background:var(--cobalt); }
+  .topbar .dots i:nth-child(3){ background:var(--verm); }
+
+  /* ---------- wordmark masthead ---------- */
+  .masthead{ padding:6px 22px 14px; position:relative; }
+  .wordmark{
+    font-family:"Futura","Avenir Next",sans-serif;
+    font-weight:800; font-style:italic;
+    font-size:64px; line-height:.8; letter-spacing:-.03em;
+    color:var(--cobalt); margin:0; position:relative; text-transform:lowercase;
+  }
+  .wordmark::before{ /* vermilion misregister ghost */
+    content:"otium"; position:absolute; left:2.5px; top:2.5px;
+    color:var(--verm); mix-blend-mode:multiply; z-index:-1;
+  }
+  .tagline{
+    font-family:"American Typewriter","Courier",monospace;
+    font-size:12.5px; letter-spacing:.02em; color:var(--ink);
+    margin:8px 0 0 3px; text-transform:uppercase; font-weight:600;
+  }
+  .rule{
+    height:0; border-top:2.5px solid var(--ink); margin:12px 22px 0;
+    position:relative;
+  }
+  .rule::after{
+    content:""; position:absolute; left:0; right:38%; top:4px; height:2.5px; background:var(--verm);
+    mix-blend-mode:multiply;
+  }
+
+  /* ============ SCREEN: INTENT ============ */
+  .screen-body{ padding:18px 22px 30px; }
+  .kicker{
+    font-family:"SF Mono","Menlo",monospace; font-size:11px; letter-spacing:.22em;
+    text-transform:uppercase; color:var(--verm-d); font-weight:700; margin:0 0 6px;
+  }
+  .h1{
+    font-family:"Futura","Gill Sans",sans-serif; font-weight:800;
+    font-size:46px; line-height:.9; letter-spacing:-.02em; color:var(--ink);
+    margin:0 0 4px; text-transform:uppercase;
+  }
+  .h1 em{ font-style:normal; color:var(--cobalt); position:relative; }
+
+  /* ---- analog stick pad ---- */
+  .pad-wrap{ margin:22px 0 6px; position:relative; }
+  .pad{
+    position:relative; width:100%; aspect-ratio:1/.86;
+    background:var(--cream-2);
+    border:2.5px solid var(--ink);
+    border-radius:10px;
+    touch-action:none; cursor:grab; overflow:hidden;
+    box-shadow:6px 6px 0 var(--cobalt);
+  }
+  .pad.dragging{ cursor:grabbing; box-shadow:3px 3px 0 var(--cobalt); }
+  /* crosshair guides */
+  .pad .cross{ position:absolute; background:var(--paper-line); z-index:1; }
+  .pad .cross.h{ left:0; right:0; top:50%; height:1.5px; transform:translateY(-.75px);
+     background:repeating-linear-gradient(90deg,var(--paper-line) 0 6px, transparent 6px 12px); }
+  .pad .cross.v{ top:0; bottom:0; left:50%; width:1.5px; transform:translateX(-.75px);
+     background:repeating-linear-gradient(0deg,var(--paper-line) 0 6px, transparent 6px 12px); }
+
+  /* corner mood labels */
+  .corner{
+    position:absolute; z-index:3; font-family:"Futura","Gill Sans",sans-serif;
+    font-weight:800; font-size:11px; line-height:1.02; letter-spacing:.01em;
+    text-transform:uppercase; color:var(--ink); opacity:.42;
+    transition:opacity .18s, color .18s, transform .18s;
+    max-width:74px; pointer-events:none;
+  }
+  .corner b{ display:block; font-size:14px; }
+  .corner.tl{ top:12px; left:12px; text-align:left; }
+  .corner.tr{ top:12px; right:12px; text-align:right; }
+  .corner.bl{ bottom:12px; left:12px; text-align:left; }
+  .corner.br{ bottom:12px; right:12px; text-align:right; }
+  .corner.on{ opacity:1; color:var(--verm-d); transform:scale(1.06); }
+
+  /* axis mini-labels */
+  .axis{ position:absolute; z-index:3; font-family:"SF Mono",monospace; font-size:9px;
+     letter-spacing:.12em; text-transform:uppercase; color:var(--ink); opacity:.5; pointer-events:none; }
+  .axis.top{ top:4px; left:50%; transform:translateX(-50%); }
+  .axis.bot{ bottom:4px; left:50%; transform:translateX(-50%); }
+  .axis.lft{ left:5px; top:50%; transform:translateY(-50%) rotate(-90deg); transform-origin:left center; }
+  .axis.rgt{ right:5px; top:50%; transform:translateY(-50%) rotate(90deg); transform-origin:right center; }
+
+  /* tether + knob */
+  .tether{ position:absolute; z-index:4; height:3px; background:var(--verm);
+     transform-origin:left center; mix-blend-mode:multiply; pointer-events:none; }
+  .knob{
+    position:absolute; z-index:5; width:56px; height:56px; margin:-28px 0 0 -28px;
+    border-radius:50%; background:var(--cobalt); border:2.5px solid var(--ink);
+    box-shadow:0 0 0 6px rgba(31,47,224,.16);
+    display:flex; align-items:center; justify-content:center;
+    transition:box-shadow .15s;
+  }
+  .knob::before{ content:""; position:absolute; width:56px; height:56px; border-radius:50%;
+     background:var(--verm); mix-blend-mode:multiply; left:3px; top:3px; opacity:.85; }
+  .knob svg{ position:relative; z-index:2; }
+  .pad.dragging .knob{ box-shadow:0 0 0 10px rgba(31,47,224,.22); }
+
+  /* readout */
+  .readout{
+    margin:20px 0 2px; display:flex; align-items:baseline; gap:10px; flex-wrap:wrap;
+  }
+  .readout .big{
+    font-family:"Futura","Gill Sans",sans-serif; font-weight:800; font-size:34px;
+    letter-spacing:-.01em; color:var(--ink); line-height:.9;
+  }
+  .readout .big u{ text-decoration:none; color:var(--cobalt); }
+  .readout .items{
+    font-family:"American Typewriter",monospace; font-size:14px; font-weight:600;
+    color:var(--verm-d); text-transform:uppercase; letter-spacing:.02em;
+  }
+  .readout .sub{
+    flex-basis:100%; font-family:"SF Mono",monospace; font-size:10.5px; letter-spacing:.08em;
+    color:var(--ink); opacity:.6; text-transform:uppercase; margin-top:2px;
+  }
+
+  /* section label */
+  .seclabel{
+    font-family:"Futura","Gill Sans",sans-serif; font-weight:800; text-transform:uppercase;
+    font-size:14px; letter-spacing:.04em; color:var(--ink); margin:26px 0 12px;
+    display:flex; align-items:center; gap:9px;
+  }
+  .seclabel::before{ content:""; width:18px; height:18px; background:var(--verm);
+     border:2.5px solid var(--ink); mix-blend-mode:multiply; transform:rotate(0deg);
+     border-radius:3px; flex:0 0 auto; }
+
+  /* theme chips */
+  .chips{ display:flex; flex-wrap:wrap; gap:9px; }
+  .chip{
+    font-family:"Futura","Gill Sans",sans-serif; font-weight:700; font-size:14px;
+    text-transform:uppercase; letter-spacing:.02em;
+    padding:9px 15px; min-height:44px; display:inline-flex; align-items:center;
+    background:var(--cream); color:var(--ink);
+    border:2.5px solid var(--ink); border-radius:40px;
+    cursor:pointer; user-select:none;
+    transition:transform .1s, background .12s, color .12s, box-shadow .12s;
+    box-shadow:3px 3px 0 rgba(20,19,15,.9);
+  }
+  .chip:active{ transform:translate(2px,2px); box-shadow:1px 1px 0 rgba(20,19,15,.9); }
+  .chip.on{ background:var(--cobalt); color:var(--cream); box-shadow:3px 3px 0 var(--verm); }
+
+  /* big build button */
+  .build{
+    margin:30px 0 6px; width:100%; min-height:62px;
+    font-family:"Futura","Gill Sans",sans-serif; font-weight:800; font-size:24px;
+    text-transform:uppercase; letter-spacing:.02em;
+    background:var(--verm); color:var(--cream);
+    border:3px solid var(--ink); border-radius:14px; cursor:pointer;
+    display:flex; align-items:center; justify-content:center; gap:12px;
+    box-shadow:6px 6px 0 var(--cobalt);
+    transition:transform .1s, box-shadow .1s;
+  }
+  .build:active{ transform:translate(3px,3px); box-shadow:3px 3px 0 var(--cobalt); }
+  .build svg{ flex:0 0 auto; }
+
+  /* ============ SCREEN: SESSION ============ */
+  .card{
+    position:relative; background:var(--cream);
+    border:2.5px solid var(--ink); border-radius:12px;
+    padding:16px 16px 14px; margin:0 0 18px;
+    box-shadow:5px 5px 0 var(--cobalt);
+  }
+  .card.verm{ box-shadow:5px 5px 0 var(--verm); }
+  .reason{
+    display:inline-flex; align-items:center; gap:6px;
+    font-family:"American Typewriter",monospace; font-weight:700; font-size:11px;
+    text-transform:uppercase; letter-spacing:.05em;
+    background:var(--cobalt); color:var(--cream);
+    padding:5px 10px; border:2px solid var(--ink); border-radius:20px;
+    margin-bottom:11px;
+  }
+  .card.verm .reason{ background:var(--verm); }
+  .reason svg{ flex:0 0 auto; }
+  .card h3{
+    font-family:"Futura","Gill Sans",sans-serif; font-weight:800; font-size:23px;
+    line-height:.98; letter-spacing:-.01em; color:var(--ink); margin:0 0 8px;
+    text-transform:uppercase;
+  }
+  .card .summary{
+    font-family:"Iowan Old Style","Palatino",Georgia,serif; font-size:14px; line-height:1.35;
+    color:var(--ink); opacity:.86; margin:0 0 10px;
+  }
+  .meta{
+    display:flex; align-items:center; gap:8px; flex-wrap:wrap;
+    font-family:"SF Mono",monospace; font-size:10.5px; letter-spacing:.06em;
+    text-transform:uppercase; color:var(--ink); margin:0 0 14px;
+  }
+  .meta .src{ font-weight:700; color:var(--cobalt); }
+  .card.verm .meta .src{ color:var(--verm-d); }
+  .meta .dot{ opacity:.4; }
+  .mtype{
+    display:inline-flex; align-items:center; gap:5px;
+    border:1.5px solid var(--ink); padding:2px 7px; border-radius:20px; font-weight:700;
+  }
+  .actions{ display:flex; gap:9px; }
+  .act{
+    flex:1 1 auto; min-height:44px;
+    font-family:"Futura","Gill Sans",sans-serif; font-weight:800; font-size:14px;
+    text-transform:uppercase; letter-spacing:.03em;
+    border:2.5px solid var(--ink); border-radius:9px; cursor:pointer;
+    display:flex; align-items:center; justify-content:center; gap:6px;
+    background:var(--cream); color:var(--ink);
+    transition:transform .1s, background .12s, color .12s;
+  }
+  .act:active{ transform:translateY(2px); }
+  .act.open{ background:var(--ink); color:var(--cream); flex:1.4 1 auto; }
+  .act.like.on{ background:var(--verm); color:var(--cream); }
+  .act.skip{ opacity:.85; }
+  .act svg{ flex:0 0 auto; }
+
+  /* session footer */
+  .sess-footer{
+    text-align:center; padding:6px 0 20px;
+  }
+  .sess-footer .stamp{
+    display:inline-block; font-family:"Futura","Gill Sans",sans-serif; font-weight:800;
+    font-size:30px; text-transform:uppercase; color:var(--cobalt); letter-spacing:-.01em;
+    line-height:.95; transform:rotate(-3deg); margin-bottom:4px; position:relative;
+  }
+  .sess-footer .stamp::before{ content:"That's your session."; position:absolute; left:2px; top:2px;
+     color:var(--verm); mix-blend-mode:multiply; z-index:-1; }
+  .sess-footer .tally{
+    font-family:"American Typewriter",monospace; font-size:13px; text-transform:uppercase;
+    letter-spacing:.06em; color:var(--ink); margin:6px 0 18px; font-weight:600;
+  }
+  .foot-actions{ display:flex; gap:10px; }
+  .fbtn{
+    flex:1 1 0; min-height:52px;
+    font-family:"Futura","Gill Sans",sans-serif; font-weight:800; font-size:15px;
+    text-transform:uppercase; letter-spacing:.02em; cursor:pointer;
+    border:3px solid var(--ink); border-radius:12px;
+    display:flex; align-items:center; justify-content:center;
+    transition:transform .1s, box-shadow .1s;
+  }
+  .fbtn.more{ background:var(--cream); color:var(--ink); box-shadow:4px 4px 0 var(--cobalt); }
+  .fbtn.done{ background:var(--cobalt); color:var(--cream); box-shadow:4px 4px 0 var(--verm); }
+  .fbtn:active{ transform:translate(2px,2px); box-shadow:2px 2px 0 var(--verm); }
+
+  /* ============ SCREEN: LIBRARY ============ */
+  .lib-row{
+    display:flex; align-items:center; gap:14px;
+    padding:15px 4px; border-bottom:2.5px solid var(--ink);
+    position:relative;
+  }
+  .lib-row:first-of-type{ border-top:2.5px solid var(--ink); }
+  .lib-badge{
+    flex:0 0 auto; width:46px; height:46px; border-radius:10px;
+    border:2.5px solid var(--ink); display:flex; align-items:center; justify-content:center;
+    font-family:"Futura","Gill Sans",sans-serif; font-weight:800; font-size:20px;
+    color:var(--cream); background:var(--cobalt); text-transform:uppercase;
+    box-shadow:3px 3px 0 var(--verm);
+  }
+  .lib-row:nth-child(even) .lib-badge{ background:var(--verm); box-shadow:3px 3px 0 var(--cobalt); }
+  .lib-main{ flex:1 1 auto; min-width:0; }
+  .lib-main .name{
+    font-family:"Futura","Gill Sans",sans-serif; font-weight:800; font-size:19px;
+    color:var(--ink); text-transform:uppercase; letter-spacing:-.01em; line-height:1;
+  }
+  .lib-main .sub{
+    font-family:"SF Mono",monospace; font-size:10.5px; letter-spacing:.06em;
+    text-transform:uppercase; color:var(--ink); opacity:.65; margin-top:5px;
+  }
+  .lib-main .sub b{ color:var(--verm-d); opacity:1; }
+  .weight{
+    flex:0 0 auto; cursor:pointer; min-height:44px; display:flex; align-items:center;
+    font-family:"American Typewriter",monospace; font-weight:700; font-size:11px;
+    text-transform:uppercase; letter-spacing:.03em;
+    padding:7px 12px; border:2.5px solid var(--ink); border-radius:30px;
+    background:var(--cream); color:var(--ink); white-space:nowrap;
+    transition:transform .1s, background .12s, color .12s;
+  }
+  .weight:active{ transform:scale(.94); }
+  .weight[data-w="favorite"]{ background:var(--verm); color:var(--cream); }
+  .weight[data-w="high"]{ background:var(--cobalt); color:var(--cream); }
+  .weight[data-w="normal"]{ background:var(--cream-2); color:var(--ink); }
+  .weight[data-w="low"]{ background:var(--cream); color:var(--ink); opacity:.75; }
+  .weight[data-w="very low"]{ background:var(--cream); color:var(--ink); opacity:.5; border-style:dashed; }
+  .weight .wdot{ display:inline-block; width:8px; height:8px; border-radius:50%;
+     background:currentColor; margin-right:6px; }
+
+  .lib-intro{
+    font-family:"Iowan Old Style","Palatino",Georgia,serif; font-size:15px; line-height:1.4;
+    color:var(--ink); opacity:.82; margin:0 0 8px; font-style:italic;
+  }
+
+  /* ---------- bottom nav (fixed in frame) ---------- */
+  .nav{
+    position:relative; z-index:40; flex:0 0 auto;
+    display:flex; background:var(--ink);
+    padding:8px 10px calc(8px + env(safe-area-inset-bottom));
+    border-top:3px solid var(--ink);
+  }
+  .nav button{
+    flex:1 1 0; background:none; border:none; cursor:pointer;
+    display:flex; flex-direction:column; align-items:center; gap:3px;
+    padding:8px 0 6px; min-height:56px; color:var(--cream); opacity:.55;
+    font-family:"Futura","Gill Sans",sans-serif; font-weight:800; font-size:11px;
+    text-transform:uppercase; letter-spacing:.08em;
+    transition:opacity .15s, transform .1s;
+  }
+  .nav button svg{ display:block; }
+  .nav button:active{ transform:translateY(1px); }
+  .nav button.active{ opacity:1; color:var(--cream); }
+  .nav button.active .navmark{ background:var(--verm); }
+  .navmark{
+    width:34px; height:5px; border-radius:4px; background:transparent; margin-top:2px;
+    transition:background .18s;
+  }
+
+  /* screen switching */
+  .view{ display:none; }
+  .view.show{ display:block; }
+
+  /* little entrance for cards */
+  @keyframes riseIn{ from{ opacity:0; transform:translateY(14px); } to{ opacity:1; transform:none; } }
+  .view.show .card, .view.show .lib-row{ animation:riseIn .32s both; }
+  .view.show .card:nth-child(2){ animation-delay:.03s; }
+  .view.show .card:nth-child(3){ animation-delay:.06s; }
+  .view.show .card:nth-child(4){ animation-delay:.09s; }
+  .view.show .card:nth-child(5){ animation-delay:.12s; }
+</style>
+</head>
+<body>
+  <div class="device">
+    <div class="screen">
+
+      <!-- SVG grain filter -->
+      <svg class="paper-grain" xmlns="http://www.w3.org/2000/svg">
+        <filter id="grain"><feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="2" stitchTiles="stitch"/>
+          <feColorMatrix type="saturate" values="0"/>
+          <feComponentTransfer><feFuncA type="linear" slope="0.6" intercept="-0.15"/></feComponentTransfer>
+        </filter>
+        <rect width="100%" height="100%" filter="url(#grain)"/>
+      </svg>
+      <div class="paper-halftone"></div>
+
+      <div class="topbar">
+        <span id="clock">9:41</span>
+        <span class="dots"><i></i><i></i><i></i></span>
+      </div>
+
+      <!-- ===== APP SCROLL AREA ===== -->
+      <div class="app" id="app">
+
+        <div class="masthead">
+          <h1 class="wordmark">otium</h1>
+          <div class="tagline">attention, on purpose</div>
+        </div>
+        <div class="rule"></div>
+
+        <!-- ============ INTENT ============ -->
+        <section class="view show" id="view-intent">
+          <div class="screen-body">
+            <p class="kicker">Compose a session</p>
+            <h1 class="h1">How much<br><em>time?</em></h1>
+
+            <!-- analog stick pad -->
+            <div class="pad-wrap">
+              <div class="pad" id="pad">
+                <div class="cross h"></div>
+                <div class="cross v"></div>
+
+                <span class="axis top">long</span>
+                <span class="axis bot">quick</span>
+                <span class="axis lft">focused</span>
+                <span class="axis rgt">varied</span>
+
+                <div class="corner tl" data-corner="tl"><b>Long</b>Focused</div>
+                <div class="corner tr" data-corner="tr"><b>Long</b>Varied</div>
+                <div class="corner bl" data-corner="bl"><b>Quick</b>Focused</div>
+                <div class="corner br" data-corner="br"><b>Quick</b>Varied</div>
+
+                <div class="tether" id="tether"></div>
+                <div class="knob" id="knob">
+                  <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+                    <path d="M10 2v5M10 13v5M2 10h5M13 10h5" stroke="#f2e9d0" stroke-width="2.4" stroke-linecap="round"/>
+                    <circle cx="10" cy="10" r="2.2" fill="#f2e9d0"/>
+                  </svg>
+                </div>
+              </div>
+            </div>
+
+            <div class="readout">
+              <span class="big"><u id="r-time">18–26</u> min</span>
+              <span class="items">~<span id="r-items">5</span> items</span>
+              <span class="sub" id="r-mood">drag the knob · tap center to reset</span>
+            </div>
+
+            <div class="seclabel">In the mood for</div>
+            <div class="chips" id="chips">
+              <span class="chip" data-t="News">News</span>
+              <span class="chip on" data-t="Tech">Tech</span>
+              <span class="chip" data-t="Science">Science</span>
+              <span class="chip on" data-t="Curiosity">Curiosity</span>
+              <span class="chip" data-t="Gaming">Gaming</span>
+              <span class="chip" data-t="Music">Music</span>
+            </div>
+
+            <button class="build" id="buildBtn">
+              Build my session
+              <svg width="26" height="20" viewBox="0 0 26 20" fill="none">
+                <path d="M2 10h20M15 3l7 7-7 7" stroke="#f2e9d0" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+            </button>
+          </div>
+        </section>
+
+        <!-- ============ SESSION ============ -->
+        <section class="view" id="view-session">
+          <div class="screen-body">
+            <p class="kicker">Composed for you</p>
+            <h1 class="h1" style="font-size:38px">Your<br><em>session</em></h1>
+
+            <div style="height:20px"></div>
+
+            <!-- card 1 -->
+            <article class="card">
+              <span class="reason">
+                <svg width="12" height="12" viewBox="0 0 12 12"><path d="M6 1l1.5 3 3.3.4-2.4 2.3.6 3.3L6 8.7 2.9 10.3l.6-3.3L1.1 4.4l3.3-.4z" fill="#f2e9d0"/></svg>
+                Favorite source
+              </span>
+              <h3>I got hit in the teeth at England's oldest ritual</h3>
+              <div class="meta">
+                <span class="src">Tom Scott</span><span class="dot">·</span>
+                <span>10 min</span><span class="dot">·</span>
+                <span class="mtype">▶ Video</span>
+              </div>
+              <div class="actions">
+                <button class="act open">Open</button>
+                <button class="act like">Like</button>
+                <button class="act skip">Skip</button>
+              </div>
+            </article>
+
+            <!-- card 2 -->
+            <article class="card verm">
+              <span class="reason">
+                <svg width="12" height="12" viewBox="0 0 12 12"><circle cx="6" cy="6" r="5" fill="none" stroke="#f2e9d0" stroke-width="1.6"/><path d="M6 3v3l2 1" stroke="#f2e9d0" stroke-width="1.6" stroke-linecap="round"/></svg>
+                Fresh — posted today
+              </span>
+              <h3>Apple's entry-level MacBook Pro could get a redesign</h3>
+              <p class="summary">A revamped entry model could arrive as soon as this year, per supply-chain reports.</p>
+              <div class="meta">
+                <span class="src">The Verge</span><span class="dot">·</span>
+                <span>4 min</span><span class="dot">·</span>
+                <span class="mtype">¶ Article</span>
+              </div>
+              <div class="actions">
+                <button class="act open">Open</button>
+                <button class="act like">Like</button>
+                <button class="act skip">Skip</button>
+              </div>
+            </article>
+
+            <!-- card 3 -->
+            <article class="card">
+              <span class="reason">
+                <svg width="12" height="12" viewBox="0 0 12 12"><path d="M6 1v10M1 6h10" stroke="#f2e9d0" stroke-width="1.6" stroke-linecap="round"/><circle cx="6" cy="6" r="2" fill="#f2e9d0"/></svg>
+                Rare — posts seldom
+              </span>
+              <h3>The Real Book</h3>
+              <div class="meta">
+                <span class="src">99% Invisible</span><span class="dot">·</span>
+                <span>32 min</span><span class="dot">·</span>
+                <span class="mtype">♪ Audio</span>
+              </div>
+              <div class="actions">
+                <button class="act open">Open</button>
+                <button class="act like">Like</button>
+                <button class="act skip">Skip</button>
+              </div>
+            </article>
+
+            <!-- card 4 -->
+            <article class="card verm">
+              <span class="reason">
+                <svg width="12" height="12" viewBox="0 0 12 12"><path d="M6 1l2 4 4 .3-3 2.7 1 4L6 9.8 2 12l1-4L0 5.3 4 5z" transform="translate(0 -0.5)" fill="#f2e9d0"/></svg>
+                High-weight source
+              </span>
+              <h3>The universe's biggest unsolved problem</h3>
+              <div class="meta">
+                <span class="src">Veritasium</span><span class="dot">·</span>
+                <span>12 min</span><span class="dot">·</span>
+                <span class="mtype">▶ Video</span>
+              </div>
+              <div class="actions">
+                <button class="act open">Open</button>
+                <button class="act like">Like</button>
+                <button class="act skip">Skip</button>
+              </div>
+            </article>
+
+            <!-- footer -->
+            <div class="sess-footer">
+              <div class="stamp">That's your session.</div>
+              <div class="tally">4 items — ~58 min</div>
+              <div class="foot-actions">
+                <button class="fbtn more">More like this</button>
+                <button class="fbtn done">Done</button>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- ============ LIBRARY ============ -->
+        <section class="view" id="view-library">
+          <div class="screen-body">
+            <p class="kicker">Sources you follow</p>
+            <h1 class="h1" style="font-size:40px">Your<br><em>library</em></h1>
+
+            <p class="lib-intro" style="margin-top:16px">Tap a weight to say how loudly each source speaks in your sessions.</p>
+
+            <div class="lib-list">
+              <div class="lib-row">
+                <div class="lib-badge">TS</div>
+                <div class="lib-main">
+                  <div class="name">Tom Scott</div>
+                  <div class="sub">youtube · <b>15 unseen</b></div>
+                </div>
+                <button class="weight" data-w="favorite"><span class="wdot"></span>Favorite</button>
+              </div>
+
+              <div class="lib-row">
+                <div class="lib-badge">NP</div>
+                <div class="lib-main">
+                  <div class="name">NPR News</div>
+                  <div class="sub">rss · <b>10 unseen</b></div>
+                </div>
+                <button class="weight" data-w="normal"><span class="wdot"></span>Normal</button>
+              </div>
+
+              <div class="lib-row">
+                <div class="lib-badge">KZ</div>
+                <div class="lib-main">
+                  <div class="name">Kurzgesagt</div>
+                  <div class="sub">youtube · <b>15 unseen</b></div>
+                </div>
+                <button class="weight" data-w="favorite"><span class="wdot"></span>Favorite</button>
+              </div>
+
+              <div class="lib-row">
+                <div class="lib-badge">HN</div>
+                <div class="lib-main">
+                  <div class="name">Hacker News</div>
+                  <div class="sub">rss · <b>20 unseen</b></div>
+                </div>
+                <button class="weight" data-w="low"><span class="wdot"></span>Low</button>
+              </div>
+            </div>
+          </div>
+        </section>
+
+      </div><!-- /app -->
+
+      <!-- ===== BOTTOM NAV ===== -->
+      <nav class="nav" id="nav">
+        <button data-view="intent" class="active">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+            <rect x="4" y="4" width="16" height="16" rx="2" stroke="currentColor" stroke-width="2.2"/>
+            <circle cx="12" cy="12" r="3.4" fill="currentColor"/>
+            <path d="M12 4v3.5M12 16.5V20M4 12h3.5M16.5 12H20" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/>
+          </svg>
+          Intent
+          <span class="navmark"></span>
+        </button>
+        <button data-view="session">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+            <rect x="4" y="4" width="16" height="5" rx="1.4" stroke="currentColor" stroke-width="2.2"/>
+            <rect x="4" y="11.5" width="16" height="5" rx="1.4" stroke="currentColor" stroke-width="2.2"/>
+            <path d="M4 20h11" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/>
+          </svg>
+          Session
+          <span class="navmark"></span>
+        </button>
+        <button data-view="library">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+            <path d="M5 4h3v16H5zM10 4h3v16h-3z" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round"/>
+            <path d="M15.5 5l3 .8-3.2 14.4-3-.8z" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round"/>
+          </svg>
+          Library
+          <span class="navmark"></span>
+        </button>
+      </nav>
+
+    </div>
+  </div>
+
+<script>
+(function(){
+  "use strict";
+
+  /* ---------- nav switching ---------- */
+  var nav = document.getElementById('nav');
+  var app = document.getElementById('app');
+  var views = { intent:'view-intent', session:'view-session', library:'view-library' };
+  function show(v){
+    Object.keys(views).forEach(function(k){
+      document.getElementById(views[k]).classList.toggle('show', k===v);
+    });
+    [].forEach.call(nav.querySelectorAll('button'), function(b){
+      b.classList.toggle('active', b.dataset.view===v);
+    });
+    app.scrollTop = 0;
+  }
+  [].forEach.call(nav.querySelectorAll('button'), function(b){
+    b.addEventListener('click', function(){ show(b.dataset.view); });
+  });
+
+  document.getElementById('buildBtn').addEventListener('click', function(){ show('session'); });
+  document.querySelector('.fbtn.done').addEventListener('click', function(){ show('intent'); });
+  document.querySelector('.fbtn.more').addEventListener('click', function(){ app.scrollTop = 0; });
+
+  /* ---------- theme chips ---------- */
+  [].forEach.call(document.querySelectorAll('#chips .chip'), function(c){
+    c.addEventListener('click', function(){ c.classList.toggle('on'); });
+  });
+
+  /* ---------- session card actions ---------- */
+  [].forEach.call(document.querySelectorAll('.act.like'), function(b){
+    b.addEventListener('click', function(){
+      var on = b.classList.toggle('on');
+      b.textContent = on ? 'Liked' : 'Like';
+    });
+  });
+  [].forEach.call(document.querySelectorAll('.act.skip'), function(b){
+    b.addEventListener('click', function(){
+      var card = b.closest('.card');
+      card.style.transition='opacity .3s, transform .3s';
+      card.style.opacity=.28; card.style.transform='translateX(30px) rotate(2deg)';
+      setTimeout(function(){ card.style.opacity=''; card.style.transform=''; }, 900);
+    });
+  });
+  [].forEach.call(document.querySelectorAll('.act.open'), function(b){
+    b.addEventListener('click', function(){
+      b.textContent='Opening…';
+      setTimeout(function(){ b.textContent='Open'; }, 800);
+    });
+  });
+
+  /* ---------- library weight cycling ---------- */
+  var LEVELS = ['very low','low','normal','high','favorite'];
+  var LABEL = {'very low':'Very low','low':'Low','normal':'Normal','high':'High','favorite':'Favorite'};
+  [].forEach.call(document.querySelectorAll('.weight'), function(w){
+    w.addEventListener('click', function(){
+      var i = LEVELS.indexOf(w.dataset.w);
+      i = (i+1) % LEVELS.length;
+      w.dataset.w = LEVELS[i];
+      w.innerHTML = '<span class="wdot"></span>' + LABEL[LEVELS[i]];
+    });
+  });
+
+  /* ============ ANALOG STICK PAD ============ */
+  var pad    = document.getElementById('pad');
+  var knob   = document.getElementById('knob');
+  var tether = document.getElementById('tether');
+  var rTime  = document.getElementById('r-time');
+  var rItems = document.getElementById('r-items');
+  var rMood  = document.getElementById('r-mood');
+  var corners = {};
+  [].forEach.call(document.querySelectorAll('.corner'), function(c){ corners[c.dataset.corner]=c; });
+
+  var dragging = false;
+
+  function place(nx, ny){
+    // nx,ny normalized -1..1 relative to center. y: -1 top(long) .. +1 bottom(quick)
+    var rect = pad.getBoundingClientRect();
+    var cx = rect.width/2, cy = rect.height/2;
+    // usable radius keeps knob inside border
+    var maxX = cx - 30, maxY = cy - 30;
+    var px = cx + nx*maxX;
+    var py = cy + ny*maxY;
+
+    knob.style.left = px+'px';
+    knob.style.top  = py+'px';
+
+    // tether from center to knob
+    var dx = px - cx, dy = py - cy;
+    var len = Math.sqrt(dx*dx+dy*dy);
+    var ang = Math.atan2(dy, dx) * 180/Math.PI;
+    tether.style.left  = cx+'px';
+    tether.style.top   = (cy-1.5)+'px';
+    tether.style.width = len+'px';
+    tether.style.transform = 'rotate('+ang+'deg)';
+
+    updateReadout(nx, ny);
+  }
+
+  function updateReadout(nx, ny){
+    // length: up (ny=-1) = long, down (ny=+1) = quick
+    // map ny -1..1  ->  long..quick
+    var lengthFactor = (-ny + 1) / 2;   // 0 quick .. 1 long
+    // minutes: quick ~ 8-14, long ~ 45-70
+    var lo = Math.round(8  + lengthFactor*40);
+    var hi = Math.round(14 + lengthFactor*56);
+    // variety: left focused (few, related) .. right varied (more items)
+    var varietyFactor = (nx + 1) / 2;   // 0 focused .. 1 varied
+    var items = Math.round(2 + lengthFactor*4 + varietyFactor*3);
+    if(items<2) items=2;
+
+    rTime.textContent  = lo + '–' + hi;
+    rItems.textContent = items;
+
+    // nearest corner
+    var vert = ny < 0 ? 'Long' : 'Quick';
+    var horz = nx < 0 ? 'Focused' : 'Varied';
+    var key  = (ny<0?'t':'b') + (nx<0?'l':'r');
+    Object.keys(corners).forEach(function(k){ corners[k].classList.toggle('on', k===key); });
+
+    // mood readout only when meaningfully off-center
+    var mag = Math.sqrt(nx*nx + ny*ny);
+    if(mag < 0.18){
+      rMood.textContent = 'drag the knob · tap center to reset';
+    } else {
+      rMood.textContent = vert + ' · ' + horz + ' — ' + moodPhrase(vert,horz);
+    }
+  }
+
+  function moodPhrase(v,h){
+    if(v==='Quick' && h==='Focused') return 'one deep bite';
+    if(v==='Quick' && h==='Varied')  return 'a quick sampler';
+    if(v==='Long'  && h==='Focused') return 'a deep dive';
+    return 'a long browse';
+  }
+
+  function pointerToNorm(e){
+    var rect = pad.getBoundingClientRect();
+    var cx = rect.width/2, cy = rect.height/2;
+    var maxX = cx - 30, maxY = cy - 30;
+    var x = (e.clientX - rect.left) - cx;
+    var y = (e.clientY - rect.top)  - cy;
+    var nx = Math.max(-1, Math.min(1, x/maxX));
+    var ny = Math.max(-1, Math.min(1, y/maxY));
+    return {nx:nx, ny:ny};
+  }
+
+  pad.addEventListener('pointerdown', function(e){
+    dragging = true;
+    pad.classList.add('dragging');
+    pad.setPointerCapture(e.pointerId);
+    var n = pointerToNorm(e);
+    place(n.nx, n.ny);
+  });
+  pad.addEventListener('pointermove', function(e){
+    if(!dragging) return;
+    var n = pointerToNorm(e);
+    place(n.nx, n.ny);
+  });
+  function endDrag(e){
+    if(!dragging) return;
+    dragging = false;
+    pad.classList.remove('dragging');
+  }
+  pad.addEventListener('pointerup', endDrag);
+  pad.addEventListener('pointercancel', endDrag);
+
+  // tap knob / center to recenter (double-tap knob also recenters)
+  knob.addEventListener('click', function(e){ e.stopPropagation(); recenter(); });
+  function recenter(){
+    // smooth-ish snap via transition
+    knob.style.transition = 'left .2s cubic-bezier(.3,1.4,.5,1), top .2s cubic-bezier(.3,1.4,.5,1)';
+    tether.style.transition = 'width .2s, transform .2s';
+    place(0,0);
+    setTimeout(function(){ knob.style.transition=''; tether.style.transition=''; }, 220);
+  }
+
+  // init at center once laid out
+  function initPad(){ place(0.32, -0.42); } // start off-center: leans long-ish/varied to show the readout alive
+  // wait a frame so pad has dimensions
+  requestAnimationFrame(function(){ requestAnimationFrame(initPad); });
+  window.addEventListener('resize', function(){ /* re-place proportionally not tracked; keep simple */ });
+
+})();
+</script>
+</body>
+</html>

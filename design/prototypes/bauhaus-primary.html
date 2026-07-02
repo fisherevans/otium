@@ -1,0 +1,839 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>otium — Bauhaus</title>
+<style>
+  :root{
+    --red:#D4361F;
+    --blue:#1B3A8C;
+    --yellow:#F2C230;
+    --ink:#171310;
+    --paper:#F4EDDF;
+    --paper2:#EDE3CF;
+    --line:#171310;
+  }
+  *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+  html,body{height:100%;}
+  body{
+    background:
+      repeating-linear-gradient(45deg,#3a352d 0 2px,transparent 2px 22px),
+      #2b2822;
+    display:flex;align-items:center;justify-content:center;
+    min-height:100vh;padding:24px;
+    font-family:"Futura","Avenir Next","Century Gothic",sans-serif;
+    color:var(--ink);
+  }
+
+  /* ---------- Phone frame ---------- */
+  .device{
+    width:390px;height:844px;max-height:96vh;
+    background:var(--paper);
+    border-radius:46px;
+    position:relative;
+    box-shadow:0 0 0 3px #000, 0 40px 80px rgba(0,0,0,.55), inset 0 0 0 10px #0c0a08;
+    overflow:hidden;
+    display:flex;flex-direction:column;
+  }
+  .notch{
+    position:absolute;top:0;left:50%;transform:translateX(-50%);
+    width:150px;height:30px;background:#0c0a08;border-radius:0 0 18px 18px;z-index:60;
+  }
+  /* subtle paper grain */
+  .device::after{
+    content:"";position:absolute;inset:0;pointer-events:none;z-index:0;opacity:.5;
+    background-image:radial-gradient(rgba(23,19,16,.05) 1px, transparent 1px);
+    background-size:4px 4px;mix-blend-mode:multiply;
+  }
+
+  /* ---------- Top bar / wordmark ---------- */
+  .topbar{
+    position:relative;z-index:10;
+    padding:44px 22px 14px;
+    display:flex;align-items:flex-end;justify-content:space-between;
+    border-bottom:4px solid var(--ink);
+    background:var(--paper);
+  }
+  .wordmark{
+    font-family:"Futura","Avenir Next",sans-serif;
+    font-weight:500;font-size:30px;letter-spacing:2px;
+    line-height:.8;color:var(--ink);
+  }
+  .wordmark b{color:var(--red);font-weight:700;}
+  .tagline{
+    font-family:"Futura","Avenir Next",sans-serif;
+    font-size:9px;letter-spacing:3px;text-transform:uppercase;
+    color:var(--ink);opacity:.7;margin-top:5px;
+  }
+  .mark-shapes{display:flex;gap:6px;align-items:center;height:26px;}
+  .mark-shapes .sq{width:16px;height:16px;background:var(--blue);}
+  .mark-shapes .ci{width:16px;height:16px;border-radius:50%;background:var(--yellow);}
+  .mark-shapes .tr{width:0;height:0;border-left:8px solid transparent;border-right:8px solid transparent;border-bottom:16px solid var(--red);}
+
+  /* ---------- Scroll area ---------- */
+  .screen{
+    position:relative;z-index:5;
+    flex:1;overflow-y:auto;overflow-x:hidden;
+    -webkit-overflow-scrolling:touch;
+    display:none;
+  }
+  .screen.active{display:block;}
+  .screen::-webkit-scrollbar{display:none;}
+  .pad-wrap-pad, .content-pad{padding:20px 22px 26px;}
+
+  /* ---------- INTENT ---------- */
+  .kicker{
+    font-size:10px;letter-spacing:4px;text-transform:uppercase;
+    color:var(--red);font-weight:700;margin-bottom:6px;
+  }
+  h1.heading{
+    font-family:"Futura","Avenir Next",sans-serif;
+    font-weight:700;font-size:38px;line-height:.92;letter-spacing:-.5px;
+    text-transform:uppercase;margin-bottom:2px;
+  }
+  h1.heading .em{color:var(--blue);}
+
+  .pad-frame{
+    margin:22px auto 8px;
+    width:296px;height:296px;
+    position:relative;
+    background:var(--paper2);
+    border:4px solid var(--ink);
+    touch-action:none;
+    overflow:hidden;
+  }
+  /* corner color quadrants faint */
+  .pad-frame .quad{position:absolute;width:50%;height:50%;opacity:.16;transition:opacity .18s;}
+  .pad-frame .q-tl{top:0;left:0;background:var(--blue);}
+  .pad-frame .q-tr{top:0;right:0;background:var(--red);}
+  .pad-frame .q-bl{bottom:0;left:0;background:var(--ink);}
+  .pad-frame .q-br{bottom:0;right:0;background:var(--yellow);}
+  .pad-frame .quad.near{opacity:.42;}
+
+  /* inscribed circle */
+  .pad-circle{
+    position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);
+    width:250px;height:250px;border-radius:50%;
+    border:3px solid var(--ink);
+    pointer-events:none;
+  }
+  .pad-cross{position:absolute;background:var(--ink);pointer-events:none;opacity:.35;}
+  .pad-cross.h{top:50%;left:8%;right:8%;height:2px;transform:translateY(-50%);}
+  .pad-cross.v{left:50%;top:8%;bottom:8%;width:2px;transform:translateX(-50%);}
+
+  .tether{position:absolute;height:5px;background:var(--ink);transform-origin:left center;
+    top:50%;left:50%;pointer-events:none;z-index:3;border-radius:3px;}
+
+  .knob{
+    position:absolute;top:50%;left:50%;
+    width:66px;height:66px;border-radius:50%;
+    background:var(--red);
+    border:4px solid var(--ink);
+    transform:translate(-50%,-50%);
+    z-index:4;
+    box-shadow:3px 3px 0 rgba(23,19,16,.35);
+    display:flex;align-items:center;justify-content:center;
+    transition:transform .32s cubic-bezier(.2,1.4,.4,1), background .2s;
+    cursor:grab;
+  }
+  .knob.grab{transition:none;cursor:grabbing;}
+  .knob .dot{width:14px;height:14px;border-radius:50%;background:var(--paper);}
+
+  /* corner labels */
+  .pad-label{
+    position:absolute;font-size:9px;letter-spacing:2px;text-transform:uppercase;
+    font-weight:700;line-height:1.15;color:var(--ink);opacity:.55;z-index:5;pointer-events:none;
+    transition:opacity .18s,color .18s;
+  }
+  .pad-label.near{opacity:1;color:var(--red);}
+  .pad-label.tl{top:8px;left:10px;text-align:left;}
+  .pad-label.tr{top:8px;right:10px;text-align:right;}
+  .pad-label.bl{bottom:8px;left:10px;text-align:left;}
+  .pad-label.br{bottom:8px;right:10px;text-align:right;}
+
+  .axis-tag{position:absolute;font-size:8px;letter-spacing:2px;text-transform:uppercase;font-weight:700;color:var(--blue);z-index:5;pointer-events:none;}
+  .axis-tag.top{top:-16px;left:50%;transform:translateX(-50%);}
+  .axis-tag.bottom{bottom:-16px;left:50%;transform:translateX(-50%);}
+  .axis-tag.left{left:-4px;top:50%;transform:translate(-100%,-50%) rotate(-90deg);transform-origin:right center;}
+  .axis-tag.right{right:-4px;top:50%;transform:translate(100%,-50%) rotate(90deg);transform-origin:left center;}
+
+  /* readout */
+  .readout{
+    margin:34px auto 4px;
+    border:4px solid var(--ink);
+    background:var(--yellow);
+    display:flex;align-items:stretch;
+  }
+  .readout .r-main{
+    flex:1;padding:14px 16px;
+  }
+  .readout .r-time{font-family:"Futura","Avenir Next",sans-serif;font-weight:700;font-size:26px;line-height:.9;letter-spacing:-.5px;}
+  .readout .r-sub{font-size:11px;letter-spacing:2px;text-transform:uppercase;margin-top:6px;font-weight:700;}
+  .readout .r-badge{
+    width:64px;background:var(--ink);color:var(--yellow);
+    display:flex;flex-direction:column;align-items:center;justify-content:center;
+    font-weight:700;
+  }
+  .readout .r-badge .n{font-size:30px;line-height:.8;}
+  .readout .r-badge .l{font-size:8px;letter-spacing:2px;margin-top:3px;}
+
+  /* theme chips */
+  .section-label{
+    display:flex;align-items:center;gap:10px;margin:30px 0 14px;
+    font-size:11px;letter-spacing:4px;text-transform:uppercase;font-weight:700;
+  }
+  .section-label::after{content:"";flex:1;height:3px;background:var(--ink);}
+
+  .chips{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;}
+  .chip{
+    position:relative;
+    border:3px solid var(--ink);
+    background:var(--paper);
+    padding:14px 8px 12px;
+    min-height:64px;
+    display:flex;flex-direction:column;align-items:flex-start;justify-content:space-between;
+    font-family:"Futura","Avenir Next",sans-serif;
+    font-weight:700;font-size:13px;letter-spacing:.5px;text-transform:uppercase;
+    cursor:pointer;user-select:none;
+    transition:transform .08s, box-shadow .12s, background .15s;
+  }
+  .chip .glyph{width:20px;height:20px;}
+  .chip:active{transform:translate(2px,2px);}
+  .chip.on{background:var(--ink);color:var(--paper);box-shadow:4px 4px 0 rgba(23,19,16,.25);}
+  .chip.on .glyph *{stroke:var(--paper);fill:none;}
+  .chip.on .glyph .fillsw{fill:var(--yellow);stroke:none;}
+
+  /* build button */
+  .build{
+    margin:28px 0 8px;width:100%;
+    border:4px solid var(--ink);
+    background:var(--red);color:var(--paper);
+    font-family:"Futura","Avenir Next",sans-serif;
+    font-weight:700;font-size:19px;letter-spacing:2px;text-transform:uppercase;
+    padding:20px;
+    display:flex;align-items:center;justify-content:center;gap:14px;
+    cursor:pointer;
+    box-shadow:6px 6px 0 var(--ink);
+    transition:transform .09s, box-shadow .09s;
+  }
+  .build:active{transform:translate(6px,6px);box-shadow:0 0 0 var(--ink);}
+  .build .arrow{width:26px;height:26px;}
+
+  /* ---------- SESSION ---------- */
+  .session-head{
+    display:flex;align-items:baseline;gap:12px;flex-wrap:wrap;margin-bottom:4px;
+  }
+  .card{
+    position:relative;
+    border:4px solid var(--ink);
+    background:var(--paper);
+    margin-bottom:20px;
+    display:flex;flex-direction:column;
+  }
+  .card .cbody{padding:16px 16px 8px;position:relative;}
+  .reason-pill{
+    display:inline-flex;align-items:center;gap:7px;
+    border:3px solid var(--ink);
+    padding:5px 10px 4px;
+    font-size:9px;letter-spacing:2px;text-transform:uppercase;font-weight:700;
+    margin-bottom:12px;
+  }
+  .reason-pill .r-shape{width:11px;height:11px;flex:0 0 auto;}
+  .reason-fav{background:var(--yellow);}
+  .reason-fresh{background:var(--red);color:var(--paper);}
+  .reason-fresh .r-shape{background:var(--paper)!important;}
+  .reason-rare{background:var(--blue);color:var(--paper);}
+  .reason-rare .r-shape{background:var(--paper)!important;}
+  .reason-high{background:var(--paper);}
+
+  .card h2{
+    font-family:"Futura","Avenir Next",sans-serif;
+    font-weight:700;font-size:22px;line-height:1.02;letter-spacing:-.3px;
+    margin-bottom:10px;
+  }
+  .card .summary{font-family:"Iowan Old Style","Palatino",Georgia,serif;font-size:14px;line-height:1.4;color:var(--ink);opacity:.82;margin-bottom:10px;}
+  .meta{
+    display:flex;align-items:center;gap:8px;flex-wrap:wrap;
+    font-size:10px;letter-spacing:1.5px;text-transform:uppercase;font-weight:700;
+    padding-top:2px;
+  }
+  .meta .src{color:var(--blue);}
+  .meta .sep{width:5px;height:5px;background:var(--ink);border-radius:50%;}
+  .meta .mtype{
+    border:2px solid var(--ink);padding:2px 7px;
+  }
+  .mtype.video{background:var(--red);color:var(--paper);border-color:var(--ink);}
+  .mtype.article{background:var(--yellow);}
+  .mtype.audio{background:var(--blue);color:var(--paper);}
+
+  .actions{
+    display:flex;border-top:4px solid var(--ink);
+  }
+  .actions button{
+    flex:1;border:0;background:var(--paper);
+    padding:15px 6px;
+    font-family:"Futura","Avenir Next",sans-serif;
+    font-weight:700;font-size:12px;letter-spacing:1.5px;text-transform:uppercase;
+    display:flex;align-items:center;justify-content:center;gap:7px;
+    cursor:pointer;color:var(--ink);
+    transition:background .12s;
+  }
+  .actions button:active{background:var(--paper2);}
+  .actions .a-open{border-right:4px solid var(--ink);}
+  .actions .a-like{border-right:4px solid var(--ink);}
+  .actions .a-open{background:var(--ink);color:var(--paper);}
+  .actions .a-open:active{background:#2e2822;}
+  .actions svg{width:17px;height:17px;flex:0 0 auto;}
+  .actions .a-like.liked{background:var(--red);color:var(--paper);}
+  .actions .a-like.liked svg *{fill:var(--paper);stroke:var(--paper);}
+
+  .session-footer{
+    border:4px solid var(--ink);background:var(--ink);color:var(--paper);
+    padding:22px 18px;margin-bottom:20px;text-align:center;
+  }
+  .session-footer .ftitle{
+    font-family:"Futura","Avenir Next",sans-serif;font-weight:700;
+    font-size:24px;letter-spacing:.5px;text-transform:uppercase;margin-bottom:4px;
+  }
+  .session-footer .fsub{font-size:10px;letter-spacing:3px;text-transform:uppercase;opacity:.7;margin-bottom:18px;}
+  .session-footer .frow{display:flex;gap:12px;}
+  .session-footer button{
+    flex:1;border:3px solid var(--paper);background:transparent;color:var(--paper);
+    font-family:"Futura","Avenir Next",sans-serif;font-weight:700;font-size:12px;
+    letter-spacing:1.5px;text-transform:uppercase;padding:14px 8px;cursor:pointer;
+    transition:background .12s,color .12s;
+  }
+  .session-footer button.solid{background:var(--yellow);color:var(--ink);border-color:var(--yellow);}
+  .session-footer button:active{background:var(--paper);color:var(--ink);}
+
+  .progress-strip{display:flex;gap:5px;margin:14px 0 22px;}
+  .progress-strip .seg{flex:1;height:8px;background:var(--paper2);border:2px solid var(--ink);}
+  .progress-strip .seg.on{background:var(--red);}
+
+  /* ---------- LIBRARY ---------- */
+  .lib-row{
+    border:4px solid var(--ink);background:var(--paper);
+    margin-bottom:16px;display:flex;align-items:stretch;
+  }
+  .lib-row .avatar{
+    width:56px;flex:0 0 56px;border-right:4px solid var(--ink);
+    display:flex;align-items:center;justify-content:center;
+  }
+  .lib-row .avatar svg{width:26px;height:26px;}
+  .lib-row .lbody{flex:1;padding:12px 14px;display:flex;flex-direction:column;justify-content:center;}
+  .lib-row .lname{font-family:"Futura","Avenir Next",sans-serif;font-weight:700;font-size:17px;letter-spacing:.2px;}
+  .lib-row .lsub{font-size:10px;letter-spacing:1.5px;text-transform:uppercase;font-weight:700;margin-top:4px;opacity:.7;}
+  .weight-pill{
+    align-self:center;margin:0 12px;
+    border:3px solid var(--ink);padding:8px 10px;
+    font-size:9px;letter-spacing:1.5px;text-transform:uppercase;font-weight:700;
+    cursor:pointer;user-select:none;text-align:center;min-width:74px;
+    display:flex;flex-direction:column;align-items:center;gap:5px;
+    transition:transform .08s;
+  }
+  .weight-pill:active{transform:scale(.94);}
+  .wbars{display:flex;gap:3px;align-items:flex-end;height:16px;}
+  .wbars i{width:5px;background:var(--ink);display:block;}
+  .weight-pill.very-low{background:var(--paper2);}
+  .weight-pill.low{background:var(--paper2);}
+  .weight-pill.normal{background:var(--blue);color:var(--paper);}
+  .weight-pill.normal .wbars i{background:var(--paper);}
+  .weight-pill.high{background:var(--red);color:var(--paper);}
+  .weight-pill.high .wbars i{background:var(--paper);}
+  .weight-pill.favorite{background:var(--yellow);color:var(--ink);}
+
+  /* ---------- Bottom nav ---------- */
+  .nav{
+    position:relative;z-index:40;flex:0 0 auto;
+    display:flex;background:var(--paper);
+    border-top:4px solid var(--ink);
+    padding-bottom:22px;
+  }
+  .nav button{
+    flex:1;border:0;background:transparent;cursor:pointer;
+    padding:12px 4px 8px;
+    display:flex;flex-direction:column;align-items:center;gap:6px;
+    font-family:"Futura","Avenir Next",sans-serif;
+    font-weight:700;font-size:9px;letter-spacing:2px;text-transform:uppercase;color:var(--ink);
+    position:relative;
+  }
+  .nav button + button{border-left:3px solid var(--ink);}
+  .nav .nshape{width:22px;height:22px;display:flex;align-items:center;justify-content:center;}
+  .nav .nshape svg{width:22px;height:22px;}
+  .nav button.on{background:var(--ink);color:var(--paper);}
+  .nav button.on .nshape svg *{stroke:var(--paper);}
+  .nav button.on .nshape svg .nfill{fill:var(--yellow);stroke:none;}
+
+  .fade-in{animation:fade .32s ease;}
+  @keyframes fade{from{opacity:0;transform:translateY(8px);}to{opacity:1;transform:none;}}
+</style>
+</head>
+<body>
+<div class="device">
+  <div class="notch"></div>
+
+  <!-- TOP BAR -->
+  <div class="topbar">
+    <div>
+      <div class="wordmark">oti<b>u</b>m</div>
+      <div class="tagline">attention, on purpose</div>
+    </div>
+    <div class="mark-shapes">
+      <div class="tr"></div>
+      <div class="ci"></div>
+      <div class="sq"></div>
+    </div>
+  </div>
+
+  <!-- ============ INTENT ============ -->
+  <section class="screen active" id="screen-intent">
+    <div class="content-pad">
+      <div class="kicker">Compose a session</div>
+      <h1 class="heading">How much<br><span class="em">time?</span></h1>
+
+      <!-- PAD -->
+      <div style="position:relative;margin-top:8px;">
+        <div class="axis-tag top">Long</div>
+        <div class="axis-tag bottom">Quick</div>
+        <div class="axis-tag left">Focused</div>
+        <div class="axis-tag right">Varied</div>
+
+        <div class="pad-frame" id="pad">
+          <div class="quad q-tl" data-corner="tl"></div>
+          <div class="quad q-tr" data-corner="tr"></div>
+          <div class="quad q-bl" data-corner="bl"></div>
+          <div class="quad q-br" data-corner="br"></div>
+
+          <div class="pad-cross h"></div>
+          <div class="pad-cross v"></div>
+          <div class="pad-circle"></div>
+
+          <div class="pad-label tl" data-corner="tl">Long /<br>Focused</div>
+          <div class="pad-label tr" data-corner="tr">Long /<br>Varied</div>
+          <div class="pad-label bl" data-corner="bl">Quick /<br>Focused</div>
+          <div class="pad-label br" data-corner="br">Quick /<br>Varied</div>
+
+          <div class="tether" id="tether"></div>
+          <div class="knob" id="knob"><div class="dot"></div></div>
+        </div>
+      </div>
+
+      <!-- READOUT -->
+      <div class="readout">
+        <div class="r-main">
+          <div class="r-time" id="ro-time">18–26 min</div>
+          <div class="r-sub" id="ro-variety">Balanced mix</div>
+        </div>
+        <div class="r-badge">
+          <div class="n" id="ro-count">5</div>
+          <div class="l">Items</div>
+        </div>
+      </div>
+
+      <!-- THEMES -->
+      <div class="section-label">Themes</div>
+      <div class="chips" id="chips">
+        <div class="chip" data-theme="News">
+          <svg class="glyph" viewBox="0 0 24 24"><rect class="fillsw" x="3" y="5" width="18" height="14" fill="#F2C230"/><rect x="3" y="5" width="18" height="14" fill="none" stroke="#171310" stroke-width="2"/><line x1="7" y1="9" x2="17" y2="9" stroke="#171310" stroke-width="2"/><line x1="7" y1="13" x2="13" y2="13" stroke="#171310" stroke-width="2"/></svg>
+          News
+        </div>
+        <div class="chip" data-theme="Tech">
+          <svg class="glyph" viewBox="0 0 24 24"><circle class="fillsw" cx="12" cy="12" r="4" fill="#1B3A8C"/><circle cx="12" cy="12" r="4" fill="none" stroke="#171310" stroke-width="2"/><line x1="12" y1="2" x2="12" y2="6" stroke="#171310" stroke-width="2"/><line x1="12" y1="18" x2="12" y2="22" stroke="#171310" stroke-width="2"/><line x1="2" y1="12" x2="6" y2="12" stroke="#171310" stroke-width="2"/><line x1="18" y1="12" x2="22" y2="12" stroke="#171310" stroke-width="2"/></svg>
+          Tech
+        </div>
+        <div class="chip" data-theme="Science">
+          <svg class="glyph" viewBox="0 0 24 24"><polygon class="fillsw" points="12,3 21,20 3,20" fill="#D4361F"/><polygon points="12,3 21,20 3,20" fill="none" stroke="#171310" stroke-width="2"/><circle cx="12" cy="15" r="1.6" fill="#171310"/></svg>
+          Science
+        </div>
+        <div class="chip" data-theme="Curiosity">
+          <svg class="glyph" viewBox="0 0 24 24"><circle class="fillsw" cx="12" cy="12" r="9" fill="#F2C230"/><circle cx="12" cy="12" r="9" fill="none" stroke="#171310" stroke-width="2"/><path d="M9 9.5a3 3 0 0 1 5.6 1.5c0 2-3 2.2-3 4" fill="none" stroke="#171310" stroke-width="2"/><circle cx="11.6" cy="17" r="1.1" fill="#171310"/></svg>
+          Curiosity
+        </div>
+        <div class="chip" data-theme="Gaming">
+          <svg class="glyph" viewBox="0 0 24 24"><rect class="fillsw" x="3" y="8" width="18" height="9" rx="4.5" fill="#1B3A8C"/><rect x="3" y="8" width="18" height="9" rx="4.5" fill="none" stroke="#171310" stroke-width="2"/><line x1="8" y1="10.5" x2="8" y2="14.5" stroke="#171310" stroke-width="2"/><line x1="6" y1="12.5" x2="10" y2="12.5" stroke="#171310" stroke-width="2"/><circle cx="16" cy="12.5" r="1.4" fill="#171310"/></svg>
+          Gaming
+        </div>
+        <div class="chip" data-theme="Music">
+          <svg class="glyph" viewBox="0 0 24 24"><circle class="fillsw" cx="8" cy="17" r="3" fill="#D4361F"/><circle cx="8" cy="17" r="3" fill="none" stroke="#171310" stroke-width="2"/><line x1="11" y1="17" x2="11" y2="6" stroke="#171310" stroke-width="2"/><path d="M11 6l7-2v4" fill="none" stroke="#171310" stroke-width="2"/></svg>
+          Music
+        </div>
+      </div>
+
+      <!-- BUILD -->
+      <button class="build" id="buildBtn">
+        Build my session
+        <svg class="arrow" viewBox="0 0 24 24" fill="none"><line x1="3" y1="12" x2="20" y2="12" stroke="#F4EDDF" stroke-width="3"/><polyline points="14,6 21,12 14,18" stroke="#F4EDDF" stroke-width="3" fill="none"/></svg>
+      </button>
+    </div>
+  </section>
+
+  <!-- ============ SESSION ============ -->
+  <section class="screen" id="screen-session">
+    <div class="content-pad">
+      <div class="kicker">Your finite session</div>
+      <h1 class="heading">Composed<br><span class="em">for now</span></h1>
+
+      <div class="progress-strip">
+        <div class="seg on"></div><div class="seg"></div><div class="seg"></div><div class="seg"></div>
+      </div>
+
+      <!-- CARD 1 -->
+      <article class="card">
+        <div class="cbody">
+          <span class="reason-pill reason-fav"><span class="r-shape" style="background:#171310;border-radius:50%"></span>Favorite source</span>
+          <h2>I got hit in the teeth at England's oldest ritual</h2>
+          <div class="meta"><span class="src">Tom Scott</span><span class="sep"></span><span>10 min</span><span class="sep"></span><span class="mtype video">Video</span></div>
+        </div>
+        <div class="actions">
+          <button class="a-open">Open ▸</button>
+          <button class="a-like"><svg viewBox="0 0 24 24" fill="none"><path d="M12 20 4 12a4.5 4.5 0 0 1 8-3 4.5 4.5 0 0 1 8 3z" stroke="#171310" stroke-width="2"/></svg>Like</button>
+          <button class="a-skip">Skip ✕</button>
+        </div>
+      </article>
+
+      <!-- CARD 2 -->
+      <article class="card">
+        <div class="cbody">
+          <span class="reason-pill reason-fresh"><span class="r-shape"></span>Fresh — posted today</span>
+          <h2>Apple's entry-level MacBook Pro could get a redesign</h2>
+          <p class="summary">A revamped entry model could arrive as soon as this year, per supply-chain reports.</p>
+          <div class="meta"><span class="src">The Verge</span><span class="sep"></span><span>4 min</span><span class="sep"></span><span class="mtype article">Article</span></div>
+        </div>
+        <div class="actions">
+          <button class="a-open">Open ▸</button>
+          <button class="a-like"><svg viewBox="0 0 24 24" fill="none"><path d="M12 20 4 12a4.5 4.5 0 0 1 8-3 4.5 4.5 0 0 1 8 3z" stroke="#171310" stroke-width="2"/></svg>Like</button>
+          <button class="a-skip">Skip ✕</button>
+        </div>
+      </article>
+
+      <!-- CARD 3 -->
+      <article class="card">
+        <div class="cbody">
+          <span class="reason-pill reason-rare"><span class="r-shape"></span>Rare — posts seldom</span>
+          <h2>The Real Book</h2>
+          <div class="meta"><span class="src">99% Invisible</span><span class="sep"></span><span>32 min</span><span class="sep"></span><span class="mtype audio">Audio</span></div>
+        </div>
+        <div class="actions">
+          <button class="a-open">Open ▸</button>
+          <button class="a-like"><svg viewBox="0 0 24 24" fill="none"><path d="M12 20 4 12a4.5 4.5 0 0 1 8-3 4.5 4.5 0 0 1 8 3z" stroke="#171310" stroke-width="2"/></svg>Like</button>
+          <button class="a-skip">Skip ✕</button>
+        </div>
+      </article>
+
+      <!-- CARD 4 -->
+      <article class="card">
+        <div class="cbody">
+          <span class="reason-pill reason-high"><span class="r-shape" style="background:#D4361F"></span>High-weight source</span>
+          <h2>The universe's biggest unsolved problem</h2>
+          <div class="meta"><span class="src">Veritasium</span><span class="sep"></span><span>12 min</span><span class="sep"></span><span class="mtype video">Video</span></div>
+        </div>
+        <div class="actions">
+          <button class="a-open">Open ▸</button>
+          <button class="a-like"><svg viewBox="0 0 24 24" fill="none"><path d="M12 20 4 12a4.5 4.5 0 0 1 8-3 4.5 4.5 0 0 1 8 3z" stroke="#171310" stroke-width="2"/></svg>Like</button>
+          <button class="a-skip">Skip ✕</button>
+        </div>
+      </article>
+
+      <!-- FOOTER -->
+      <div class="session-footer">
+        <div class="ftitle">That's your session.</div>
+        <div class="fsub">4 items — ~58 min</div>
+        <div class="frow">
+          <button>More like this</button>
+          <button class="solid">Done</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ LIBRARY ============ -->
+  <section class="screen" id="screen-library">
+    <div class="content-pad">
+      <div class="kicker">Feeds you follow</div>
+      <h1 class="heading">Your<br><span class="em">library</span></h1>
+      <div style="height:20px"></div>
+
+      <!-- ROW: Tom Scott -->
+      <div class="lib-row">
+        <div class="avatar" style="background:#F2C230"><svg viewBox="0 0 24 24" fill="none"><polygon points="9,7 18,12 9,17" fill="#171310"/></svg></div>
+        <div class="lbody">
+          <div class="lname">Tom Scott</div>
+          <div class="lsub">YouTube · 15 unseen</div>
+        </div>
+        <div class="weight-pill favorite" data-weight="4">
+          <div class="wbars"><i style="height:5px"></i><i style="height:9px"></i><i style="height:13px"></i><i style="height:16px"></i></div>
+          Favorite
+        </div>
+      </div>
+
+      <!-- ROW: NPR News -->
+      <div class="lib-row">
+        <div class="avatar" style="background:#D4361F"><svg viewBox="0 0 24 24" fill="none"><rect x="4" y="5" width="16" height="14" fill="none" stroke="#F4EDDF" stroke-width="2"/><line x1="7" y1="9" x2="17" y2="9" stroke="#F4EDDF" stroke-width="2"/><line x1="7" y1="13" x2="13" y2="13" stroke="#F4EDDF" stroke-width="2"/></svg></div>
+        <div class="lbody">
+          <div class="lname">NPR News</div>
+          <div class="lsub">RSS · 10 unseen</div>
+        </div>
+        <div class="weight-pill normal" data-weight="2">
+          <div class="wbars"><i style="height:5px"></i><i style="height:9px"></i><i style="height:5px;opacity:.3"></i><i style="height:5px;opacity:.3"></i></div>
+          Normal
+        </div>
+      </div>
+
+      <!-- ROW: Kurzgesagt -->
+      <div class="lib-row">
+        <div class="avatar" style="background:#1B3A8C"><svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="7" fill="none" stroke="#F4EDDF" stroke-width="2"/><polygon points="10,8 16,12 10,16" fill="#F4EDDF"/></svg></div>
+        <div class="lbody">
+          <div class="lname">Kurzgesagt</div>
+          <div class="lsub">YouTube · 15 unseen</div>
+        </div>
+        <div class="weight-pill favorite" data-weight="4">
+          <div class="wbars"><i style="height:5px"></i><i style="height:9px"></i><i style="height:13px"></i><i style="height:16px"></i></div>
+          Favorite
+        </div>
+      </div>
+
+      <!-- ROW: Hacker News -->
+      <div class="lib-row">
+        <div class="avatar" style="background:#171310"><svg viewBox="0 0 24 24" fill="none"><rect x="4" y="5" width="16" height="14" fill="none" stroke="#F2C230" stroke-width="2"/><line x1="7" y1="9" x2="17" y2="9" stroke="#F2C230" stroke-width="2"/><line x1="7" y1="13" x2="13" y2="13" stroke="#F2C230" stroke-width="2"/></svg></div>
+        <div class="lbody">
+          <div class="lname">Hacker News</div>
+          <div class="lsub">RSS · 20 unseen</div>
+        </div>
+        <div class="weight-pill low" data-weight="1">
+          <div class="wbars"><i style="height:5px"></i><i style="height:5px;opacity:.3"></i><i style="height:5px;opacity:.3"></i><i style="height:5px;opacity:.3"></i></div>
+          Low
+        </div>
+      </div>
+
+      <div style="border:3px dashed var(--ink);padding:16px;text-align:center;font-size:10px;letter-spacing:2px;text-transform:uppercase;font-weight:700;opacity:.6;margin-top:6px;">
+        Tap a weight to re-tune the mix
+      </div>
+    </div>
+  </section>
+
+  <!-- BOTTOM NAV -->
+  <nav class="nav" id="nav">
+    <button data-screen="intent" class="on">
+      <span class="nshape"><svg viewBox="0 0 24 24" fill="none"><rect x="4" y="4" width="16" height="16" stroke="#171310" stroke-width="2"/><circle class="nfill" cx="12" cy="12" r="4" fill="#171310"/></svg></span>
+      Intent
+    </button>
+    <button data-screen="session">
+      <span class="nshape"><svg viewBox="0 0 24 24" fill="none"><rect x="4" y="5" width="16" height="4" fill="#171310"/><rect x="4" y="14" width="16" height="4" stroke="#171310" stroke-width="2"/></svg></span>
+      Session
+    </button>
+    <button data-screen="library">
+      <span class="nshape"><svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="8" stroke="#171310" stroke-width="2"/><line x1="12" y1="4" x2="12" y2="20" stroke="#171310" stroke-width="2"/></svg></span>
+      Library
+    </button>
+  </nav>
+</div>
+
+<script>
+(function(){
+  "use strict";
+
+  /* ---------- NAV ---------- */
+  var nav = document.getElementById('nav');
+  var navBtns = nav.querySelectorAll('button');
+  var screens = {
+    intent: document.getElementById('screen-intent'),
+    session: document.getElementById('screen-session'),
+    library: document.getElementById('screen-library')
+  };
+  function show(name){
+    for(var k in screens){
+      screens[k].classList.toggle('active', k===name);
+    }
+    screens[name].classList.remove('fade-in'); void screens[name].offsetWidth;
+    screens[name].classList.add('fade-in');
+    navBtns.forEach(function(b){ b.classList.toggle('on', b.dataset.screen===name); });
+    screens[name].scrollTop = 0;
+  }
+  navBtns.forEach(function(b){
+    b.addEventListener('click', function(){ show(b.dataset.screen); });
+  });
+  document.getElementById('buildBtn').addEventListener('click', function(){ show('session'); });
+
+  /* ---------- ANALOG PAD ---------- */
+  var pad = document.getElementById('pad');
+  var knob = document.getElementById('knob');
+  var tether = document.getElementById('tether');
+  var quads = pad.querySelectorAll('.quad');
+  var labels = pad.querySelectorAll('.pad-label');
+
+  var roTime = document.getElementById('ro-time');
+  var roVar = document.getElementById('ro-variety');
+  var roCount = document.getElementById('ro-count');
+
+  var R = 96; // max drag radius (px) from center
+  var cx=0, cy=0; // knob offset from center
+  var dragging = false;
+
+  function padCenter(){
+    var r = pad.getBoundingClientRect();
+    return { x: r.left + r.width/2, y: r.top + r.height/2 };
+  }
+
+  function render(){
+    knob.style.transform = 'translate(calc(-50% + '+cx+'px), calc(-50% + '+cy+'px))';
+    // tether
+    var len = Math.sqrt(cx*cx + cy*cy);
+    var ang = Math.atan2(cy, cx) * 180/Math.PI;
+    tether.style.width = len + 'px';
+    tether.style.transform = 'rotate('+ang+'deg)';
+
+    // quadrant based on sign; corner label brightening
+    var nx = cx / R;  // -1..1  (right = varied)
+    var ny = cy / R;  // -1..1  (down = quick)
+
+    var corner = null;
+    if(len > 10){
+      if(ny < 0 && nx < 0) corner='tl';       // long/focused
+      else if(ny < 0 && nx >= 0) corner='tr';  // long/varied
+      else if(ny >= 0 && nx < 0) corner='bl';  // quick/focused
+      else corner='br';                        // quick/varied
+    }
+    quads.forEach(function(q){ q.classList.toggle('near', q.dataset.corner===corner); });
+    labels.forEach(function(l){ l.classList.toggle('near', l.classList.contains(corner)); });
+
+    // knob color by vertical (length) mood
+    knob.style.background = ny < -0.15 ? 'var(--blue)' : (ny > 0.15 ? 'var(--red)' : 'var(--ink)');
+
+    updateReadout(nx, ny);
+  }
+
+  function updateReadout(nx, ny){
+    // vertical: down(+) = quick short, up(-) = long
+    // map ny in [-1,1] to minutes. ny=-1 -> ~60, ny=0 -> ~22, ny=1 -> ~8
+    var t = (ny + 1)/2; // 0 (top/long) .. 1 (bottom/quick)
+    var mid = Math.round(60 - t*52); // 60 down to 8
+    var lo = Math.max(3, mid - 4);
+    var hi = mid + 4;
+    roTime.textContent = lo + '–' + hi + ' min';
+
+    // horizontal: variety
+    var v = (nx + 1)/2; // 0 focused .. 1 varied
+    var vlabel;
+    if(v < 0.28) vlabel = 'Focused — deep';
+    else if(v < 0.46) vlabel = 'Mostly focused';
+    else if(v < 0.6) vlabel = 'Balanced mix';
+    else if(v < 0.78) vlabel = 'Varied';
+    else vlabel = 'Wide variety';
+    roVar.textContent = vlabel;
+
+    // item count ~ from length. long -> fewer long items or more? Use time budget.
+    var count = Math.max(2, Math.round((mid/60)*7 + (v*2)));
+    roCount.textContent = count;
+  }
+
+  function pointerAt(clientX, clientY){
+    var c = padCenter();
+    var dx = clientX - c.x;
+    var dy = clientY - c.y;
+    var len = Math.sqrt(dx*dx + dy*dy);
+    if(len > R){ dx = dx/len*R; dy = dy/len*R; }
+    cx = dx; cy = dy;
+    render();
+  }
+
+  function down(e){
+    dragging = true;
+    knob.classList.add('grab');
+    pad.setPointerCapture && e.pointerId!=null && pad.setPointerCapture(e.pointerId);
+    pointerAt(e.clientX, e.clientY);
+    e.preventDefault();
+  }
+  function move(e){
+    if(!dragging) return;
+    pointerAt(e.clientX, e.clientY);
+    e.preventDefault();
+  }
+  function up(e){
+    if(!dragging) return;
+    dragging = false;
+    knob.classList.remove('grab');
+    // spring back to center (tap-to-recenter feel + release recenter)
+    recenter();
+    e.preventDefault();
+  }
+  function recenter(){
+    cx = 0; cy = 0;
+    // animate via transition on knob (already set), tether just snaps
+    knob.style.transform = 'translate(-50%,-50%)';
+    tether.style.width = '0px';
+    quads.forEach(function(q){ q.classList.remove('near'); });
+    labels.forEach(function(l){ l.classList.remove('near'); });
+    knob.style.background = 'var(--red)';
+    updateReadout(0,0);
+  }
+
+  // pointer events (covers touch + mouse on modern iOS/Safari)
+  pad.addEventListener('pointerdown', down);
+  window.addEventListener('pointermove', move);
+  window.addEventListener('pointerup', up);
+  window.addEventListener('pointercancel', up);
+
+  // fallback touch for older engines
+  pad.addEventListener('touchstart', function(e){ var t=e.touches[0]; dragging=true; knob.classList.add('grab'); pointerAt(t.clientX,t.clientY); e.preventDefault(); }, {passive:false});
+  pad.addEventListener('touchmove', function(e){ if(!dragging)return; var t=e.touches[0]; pointerAt(t.clientX,t.clientY); e.preventDefault(); }, {passive:false});
+  pad.addEventListener('touchend', function(e){ if(!dragging)return; dragging=false; knob.classList.remove('grab'); recenter(); e.preventDefault(); }, {passive:false});
+
+  // initial default readout (matches spec-ish "18-26 min - 5 items")
+  roTime.textContent = '18–26 min';
+  roVar.textContent = 'Balanced mix';
+  roCount.textContent = '5';
+
+  /* ---------- THEME CHIPS ---------- */
+  document.getElementById('chips').addEventListener('click', function(e){
+    var chip = e.target.closest('.chip');
+    if(!chip) return;
+    chip.classList.toggle('on');
+  });
+  // preselect a couple to show state
+  document.querySelector('.chip[data-theme="Tech"]').classList.add('on');
+  document.querySelector('.chip[data-theme="Music"]').classList.add('on');
+
+  /* ---------- LIKE / SKIP ---------- */
+  document.querySelectorAll('.a-like').forEach(function(b){
+    b.addEventListener('click', function(){ b.classList.toggle('liked'); });
+  });
+  document.querySelectorAll('.a-skip').forEach(function(b){
+    b.addEventListener('click', function(){
+      var card = b.closest('.card');
+      card.style.transition='opacity .25s, transform .25s';
+      card.style.opacity='.35';
+      card.style.transform='translateX(10px)';
+      setTimeout(function(){ card.style.opacity='1'; card.style.transform='none'; }, 900);
+    });
+  });
+
+  /* ---------- LIBRARY WEIGHT CYCLE ---------- */
+  var WEIGHTS = ['very-low','low','normal','high','favorite'];
+  var WLABEL = {'very-low':'Very low','low':'Low','normal':'Normal','high':'High','favorite':'Favorite'};
+  function barsFor(level){
+    var n = WEIGHTS.indexOf(level); // 0..4
+    var heights = [5,9,13,16];
+    var html='';
+    for(var i=0;i<4;i++){
+      var active = i <= (n-1);
+      html += '<i style="height:'+heights[i]+'px;'+(active?'':'opacity:.3;height:5px;')+'"></i>';
+    }
+    return html;
+  }
+  document.querySelectorAll('.weight-pill').forEach(function(p){
+    p.addEventListener('click', function(){
+      var cur = WEIGHTS.find(function(w){ return p.classList.contains(w); }) || 'normal';
+      var next = WEIGHTS[(WEIGHTS.indexOf(cur)+1) % WEIGHTS.length];
+      WEIGHTS.forEach(function(w){ p.classList.remove(w); });
+      p.classList.add(next);
+      p.querySelector('.wbars').innerHTML = barsFor(next);
+      // rebuild label text node (last child)
+      p.childNodes[p.childNodes.length-1].nodeValue = ' ' + WLABEL[next];
+    });
+  });
+
+})();
+</script>
+</body>
+</html>

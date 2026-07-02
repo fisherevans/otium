@@ -1,0 +1,732 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>otium — blueprint</title>
+<style>
+  :root{
+    --navy:#0a2540;
+    --navy-deep:#071b30;
+    --navy-line:#12395c;
+    --cyan:#5fd3ff;
+    --cyan-dim:#3a9dc4;
+    --ink:#e8f4fb;
+    --ink-dim:#8fb6cf;
+    --white:#f4fbff;
+    --amber:#f2b544;
+    --grid:rgba(95,211,255,0.10);
+    --grid-strong:rgba(95,211,255,0.22);
+    --hair:rgba(150,205,235,0.28);
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;margin:0;padding:0;}
+  html,body{height:100%;}
+  body{
+    background:#161b22;
+    background-image:
+      radial-gradient(circle at 50% 0%, #23303c 0%, #12161c 60%, #0c0f13 100%);
+    display:flex;align-items:center;justify-content:center;
+    min-height:100vh;padding:18px;
+    font-family:"Menlo","SF Mono",ui-monospace,monospace;
+    -webkit-font-smoothing:antialiased;
+  }
+
+  /* ------------ phone frame ------------ */
+  .phone{
+    position:relative;width:390px;height:844px;max-height:96vh;
+    border-radius:46px;
+    background:var(--navy-deep);
+    padding:11px;
+    box-shadow:
+      0 0 0 2px #2a3138,
+      0 0 0 11px #0b0e12,
+      0 0 0 12px #313842,
+      0 34px 80px rgba(0,0,0,0.65);
+  }
+  .screen{
+    position:relative;width:100%;height:100%;
+    border-radius:36px;overflow:hidden;
+    background:var(--navy);
+    background-image:
+      linear-gradient(var(--grid) 1px,transparent 1px),
+      linear-gradient(90deg,var(--grid) 1px,transparent 1px),
+      linear-gradient(var(--grid-strong) 1px,transparent 1px),
+      linear-gradient(90deg,var(--grid-strong) 1px,transparent 1px);
+    background-size:19px 19px,19px 19px,95px 95px,95px 95px;
+    background-position:-1px -1px,-1px -1px,-1px -1px,-1px -1px;
+    display:flex;flex-direction:column;
+  }
+  .screen::before{
+    /* paper grain / vignette */
+    content:"";position:absolute;inset:0;pointer-events:none;z-index:6;
+    background:radial-gradient(circle at 50% 40%,transparent 55%,rgba(3,12,22,0.55) 100%);
+    mix-blend-mode:multiply;
+  }
+  /* notch */
+  .notch{
+    position:absolute;top:0;left:50%;transform:translateX(-50%);
+    width:150px;height:26px;background:var(--navy-deep);
+    border-bottom-left-radius:16px;border-bottom-right-radius:16px;z-index:20;
+  }
+
+  /* ------------ top title block ------------ */
+  .topbar{
+    position:relative;z-index:8;flex:0 0 auto;
+    padding:34px 18px 10px;
+    border-bottom:1px solid var(--hair);
+  }
+  .topbar .rule{
+    position:absolute;left:0;right:0;bottom:-1px;height:1px;background:var(--hair);
+  }
+  .wordmark{
+    display:flex;align-items:baseline;gap:9px;
+  }
+  .wordmark h1{
+    font-family:"Didot","Hoefler Text",Georgia,serif;
+    font-weight:400;font-style:italic;
+    font-size:31px;letter-spacing:0.5px;color:var(--white);
+    line-height:1;
+  }
+  .wordmark .tag{
+    font-family:"Menlo",monospace;font-size:8.5px;letter-spacing:2.5px;
+    text-transform:uppercase;color:var(--cyan-dim);
+  }
+  .titleblock{
+    margin-top:10px;display:flex;justify-content:space-between;align-items:flex-end;
+    font-size:8px;letter-spacing:1.5px;text-transform:uppercase;color:var(--ink-dim);
+  }
+  .titleblock .cell{display:flex;flex-direction:column;gap:2px;}
+  .titleblock .cell b{color:var(--cyan);font-weight:500;letter-spacing:1.5px;}
+  .titleblock .cell.r{text-align:right;align-items:flex-end;}
+
+  /* ------------ scroll body ------------ */
+  .body{
+    position:relative;z-index:7;flex:1 1 auto;overflow-y:auto;overflow-x:hidden;
+    -webkit-overflow-scrolling:touch;
+    padding:18px 18px 96px;
+  }
+  .body::-webkit-scrollbar{width:0;}
+
+  .view{display:none;}
+  .view.active{display:block;animation:fade .32s ease;}
+  @keyframes fade{from{opacity:0;transform:translateY(6px);}to{opacity:1;transform:none;}}
+
+  /* section label with dimension tick */
+  .seclabel{
+    display:flex;align-items:center;gap:8px;
+    font-size:9px;letter-spacing:2.5px;text-transform:uppercase;color:var(--ink-dim);
+    margin:2px 0 14px;
+  }
+  .seclabel .num{color:var(--cyan);}
+  .seclabel .ln{flex:1;height:1px;background:var(--hair);position:relative;}
+  .seclabel .ln::before,.seclabel .ln::after{
+    content:"";position:absolute;top:-2px;width:1px;height:5px;background:var(--hair);
+  }
+  .seclabel .ln::before{left:0;}
+  .seclabel .ln::after{right:0;}
+
+  h2.q{
+    font-family:"Didot","Hoefler Text",Georgia,serif;
+    font-weight:400;font-size:27px;color:var(--white);line-height:1.05;
+    margin-bottom:4px;letter-spacing:.3px;
+  }
+  .subq{font-size:9.5px;letter-spacing:1px;color:var(--ink-dim);margin-bottom:20px;}
+
+  /* ============ INTENT : plotted graph pad ============ */
+  .pad-wrap{position:relative;margin:2px 0 6px;}
+  .pad{
+    position:relative;width:100%;height:262px;
+    border:1px solid var(--hair);
+    background:rgba(4,20,36,0.45);
+    touch-action:none;cursor:crosshair;overflow:hidden;
+    border-radius:2px;
+  }
+  /* corner registration marks */
+  .pad .reg{position:absolute;width:11px;height:11px;pointer-events:none;}
+  .pad .reg::before,.pad .reg::after{content:"";position:absolute;background:var(--cyan-dim);}
+  .pad .reg::before{width:11px;height:1px;top:5px;}
+  .pad .reg::after{height:11px;width:1px;left:5px;}
+  .pad .reg.tl{top:4px;left:4px;} .pad .reg.tr{top:4px;right:4px;}
+  .pad .reg.bl{bottom:4px;left:4px;} .pad .reg.br{bottom:4px;right:4px;}
+
+  .pad svg.plot{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;}
+
+  .corner{
+    position:absolute;font-size:8px;letter-spacing:1.2px;text-transform:uppercase;
+    color:var(--ink-dim);line-height:1.35;pointer-events:none;transition:color .2s,opacity .2s;
+    opacity:.55;
+  }
+  .corner b{display:block;color:var(--ink-dim);font-weight:500;}
+  .corner.tl{top:9px;left:18px;} .corner.tr{top:9px;right:18px;text-align:right;}
+  .corner.bl{bottom:9px;left:18px;} .corner.br{bottom:9px;right:18px;text-align:right;}
+  .corner.hot{opacity:1;color:var(--cyan);}
+  .corner.hot b{color:var(--white);}
+
+  .knob{
+    position:absolute;top:50%;left:50%;width:34px;height:34px;
+    transform:translate(-50%,-50%);pointer-events:none;z-index:4;
+  }
+  .knob .ring{
+    position:absolute;inset:0;border:1.5px solid var(--cyan);border-radius:50%;
+    background:rgba(95,211,255,0.10);
+    box-shadow:0 0 10px rgba(95,211,255,0.5),inset 0 0 6px rgba(95,211,255,0.3);
+  }
+  .knob .dot{
+    position:absolute;top:50%;left:50%;width:6px;height:6px;border-radius:50%;
+    background:var(--white);transform:translate(-50%,-50%);
+    box-shadow:0 0 6px var(--cyan);
+  }
+  .knob .xr,.knob .yr{
+    position:absolute;font-size:7.5px;color:var(--cyan);letter-spacing:.5px;
+    background:rgba(7,27,48,0.85);padding:1px 3px;white-space:nowrap;
+  }
+  .knob .xr{top:50%;left:40px;transform:translateY(-50%);}
+  .knob .yr{left:50%;top:-16px;transform:translateX(-50%);}
+  .knob.dragging .ring{background:rgba(95,211,255,0.22);}
+
+  .axis-tag{
+    position:absolute;font-size:7.5px;letter-spacing:1.5px;text-transform:uppercase;
+    color:var(--cyan-dim);pointer-events:none;
+  }
+  .axis-tag.x{bottom:-16px;right:2px;}
+  .axis-tag.y{top:50%;left:-14px;transform:rotate(-90deg);transform-origin:left;}
+
+  .recenter{
+    margin:22px 0 4px;display:flex;align-items:center;justify-content:center;gap:7px;
+    font-size:8px;letter-spacing:2px;text-transform:uppercase;color:var(--ink-dim);
+    border:1px dashed var(--hair);background:transparent;width:100%;padding:8px;
+    border-radius:2px;transition:.15s;
+  }
+  .recenter:active{background:rgba(95,211,255,0.08);color:var(--cyan);}
+
+  /* readout dimension line */
+  .readout{
+    margin:16px 0 4px;padding:14px 14px;
+    border:1px solid var(--hair);background:rgba(4,20,36,0.4);border-radius:2px;
+    position:relative;
+  }
+  .readout .dimline{
+    display:flex;align-items:center;gap:0;margin-bottom:11px;
+  }
+  .readout .dimline .cap{width:1px;height:10px;background:var(--cyan-dim);}
+  .readout .dimline .span{flex:1;height:1px;background:var(--cyan-dim);position:relative;}
+  .readout .dimline .val{
+    position:absolute;top:-9px;left:50%;transform:translateX(-50%);
+    background:var(--navy);padding:0 8px;font-size:8px;letter-spacing:1.5px;color:var(--cyan);
+    white-space:nowrap;
+  }
+  .readout .big{
+    font-family:"Didot","Hoefler Text",Georgia,serif;font-size:23px;color:var(--white);
+    display:flex;align-items:baseline;gap:10px;letter-spacing:.4px;
+  }
+  .readout .big .items{
+    font-family:"Menlo",monospace;font-size:11px;color:var(--cyan);letter-spacing:1px;
+  }
+
+  /* theme chips */
+  .chips{display:flex;flex-wrap:wrap;gap:8px;margin-top:14px;}
+  .chip{
+    font-family:"Menlo",monospace;font-size:10px;letter-spacing:1.5px;text-transform:uppercase;
+    color:var(--ink-dim);border:1px solid var(--hair);background:transparent;
+    padding:9px 13px;border-radius:2px;position:relative;min-height:38px;
+    display:flex;align-items:center;gap:7px;transition:.15s;
+  }
+  .chip .box{
+    width:9px;height:9px;border:1px solid var(--cyan-dim);position:relative;flex:0 0 auto;
+  }
+  .chip.on{color:var(--white);border-color:var(--cyan);background:rgba(95,211,255,0.08);}
+  .chip.on .box{background:var(--cyan);border-color:var(--cyan);box-shadow:0 0 6px var(--cyan);}
+  .chip:active{transform:scale(.96);}
+
+  /* big build button */
+  .build{
+    margin-top:24px;width:100%;padding:17px;
+    background:var(--cyan);color:var(--navy-deep);
+    font-family:"Menlo",monospace;font-size:12px;letter-spacing:3px;text-transform:uppercase;
+    font-weight:700;border:none;border-radius:2px;position:relative;
+    box-shadow:0 0 22px rgba(95,211,255,0.35);transition:.15s;
+  }
+  .build .corners{position:absolute;inset:4px;pointer-events:none;}
+  .build .corners span{position:absolute;width:7px;height:7px;border:1px solid rgba(7,27,48,0.55);}
+  .build .corners span:nth-child(1){top:0;left:0;border-right:none;border-bottom:none;}
+  .build .corners span:nth-child(2){top:0;right:0;border-left:none;border-bottom:none;}
+  .build .corners span:nth-child(3){bottom:0;left:0;border-right:none;border-top:none;}
+  .build .corners span:nth-child(4){bottom:0;right:0;border-left:none;border-top:none;}
+  .build:active{transform:scale(.98);box-shadow:0 0 10px rgba(95,211,255,0.3);}
+
+  /* ============ SESSION cards ============ */
+  .card{
+    border:1px solid var(--hair);background:rgba(4,20,36,0.42);
+    border-radius:2px;padding:15px 15px 12px;margin-bottom:14px;position:relative;
+    animation:fade .3s ease both;
+  }
+  .card .idx{
+    position:absolute;top:-1px;right:-1px;
+    font-size:8px;letter-spacing:1px;color:var(--navy-deep);background:var(--cyan-dim);
+    padding:3px 6px;
+  }
+  .reason{
+    display:inline-flex;align-items:center;gap:6px;
+    font-size:8px;letter-spacing:2px;text-transform:uppercase;color:var(--amber);
+    border:1px solid rgba(242,181,68,0.4);padding:4px 8px;border-radius:2px;
+    margin-bottom:11px;background:rgba(242,181,68,0.06);
+  }
+  .reason .dot{width:5px;height:5px;background:var(--amber);border-radius:50%;
+    box-shadow:0 0 5px var(--amber);}
+  .card h3{
+    font-family:"Didot","Hoefler Text",Georgia,serif;font-weight:400;
+    font-size:19px;line-height:1.18;color:var(--white);margin-bottom:8px;letter-spacing:.2px;
+  }
+  .card .summ{font-size:10px;line-height:1.5;color:var(--ink-dim);margin-bottom:11px;
+    font-family:"Menlo",monospace;}
+  .card .meta{
+    display:flex;align-items:center;gap:9px;flex-wrap:wrap;
+    font-size:8.5px;letter-spacing:1.3px;text-transform:uppercase;color:var(--ink-dim);
+    margin-bottom:13px;padding-bottom:12px;border-bottom:1px dashed var(--hair);
+  }
+  .card .meta .src{color:var(--ink);}
+  .card .meta .sep{width:3px;height:3px;background:var(--cyan-dim);border-radius:50%;}
+  .card .meta .type{color:var(--cyan);border:1px solid var(--hair);padding:2px 6px;}
+  .actions{display:flex;gap:8px;}
+  .act{
+    flex:1;padding:11px 6px;min-height:44px;border:1px solid var(--hair);background:transparent;
+    font-family:"Menlo",monospace;font-size:9px;letter-spacing:1.8px;text-transform:uppercase;
+    color:var(--ink-dim);border-radius:2px;display:flex;align-items:center;justify-content:center;gap:6px;
+    transition:.14s;
+  }
+  .act svg{width:12px;height:12px;stroke:currentColor;fill:none;stroke-width:1.4;}
+  .act.open{color:var(--navy-deep);background:var(--cyan);border-color:var(--cyan);font-weight:700;}
+  .act:active{transform:scale(.96);}
+  .act.like.on{color:var(--amber);border-color:var(--amber);background:rgba(242,181,68,0.08);}
+  .act.like.on svg{fill:var(--amber);}
+
+  .sfoot{
+    margin-top:26px;padding-top:20px;border-top:1px solid var(--hair);text-align:center;
+    position:relative;
+  }
+  .sfoot::before{
+    content:"";position:absolute;top:-4px;left:50%;transform:translateX(-50%);
+    width:7px;height:7px;border:1px solid var(--cyan-dim);background:var(--navy);border-radius:50%;
+  }
+  .sfoot .that{
+    font-family:"Didot","Hoefler Text",Georgia,serif;font-size:19px;color:var(--white);
+    letter-spacing:.3px;margin-bottom:6px;
+  }
+  .sfoot .fr{font-size:9px;letter-spacing:2px;text-transform:uppercase;color:var(--cyan);margin-bottom:18px;}
+  .sfoot .fbtns{display:flex;gap:10px;}
+  .fbtn{
+    flex:1;padding:14px;border:1px solid var(--hair);background:transparent;border-radius:2px;
+    font-family:"Menlo",monospace;font-size:10px;letter-spacing:2px;text-transform:uppercase;
+    color:var(--ink-dim);transition:.15s;min-height:44px;
+  }
+  .fbtn.done{background:var(--cyan);color:var(--navy-deep);border-color:var(--cyan);font-weight:700;}
+  .fbtn:active{transform:scale(.97);}
+
+  /* ============ LIBRARY ============ */
+  .srow{
+    display:flex;align-items:center;gap:13px;
+    border:1px solid var(--hair);background:rgba(4,20,36,0.42);border-radius:2px;
+    padding:14px;margin-bottom:12px;position:relative;
+  }
+  .srow .glyph{
+    flex:0 0 auto;width:38px;height:38px;border:1px solid var(--hair);border-radius:2px;
+    display:flex;align-items:center;justify-content:center;position:relative;
+    background:rgba(95,211,255,0.05);
+  }
+  .srow .glyph svg{width:19px;height:19px;stroke:var(--cyan);fill:none;stroke-width:1.3;}
+  .srow .info{flex:1;min-width:0;}
+  .srow .info .nm{
+    font-family:"Didot","Hoefler Text",Georgia,serif;font-size:17px;color:var(--white);
+    letter-spacing:.2px;margin-bottom:3px;
+  }
+  .srow .info .sub{
+    font-size:8.5px;letter-spacing:1.4px;text-transform:uppercase;color:var(--ink-dim);
+    display:flex;align-items:center;gap:7px;
+  }
+  .srow .info .sub .kind{color:var(--cyan-dim);}
+  .srow .info .sub .un b{color:var(--ink);}
+  .wpill{
+    flex:0 0 auto;font-family:"Menlo",monospace;font-size:8px;letter-spacing:1.3px;
+    text-transform:uppercase;padding:7px 9px;border-radius:2px;border:1px solid var(--hair);
+    color:var(--ink-dim);text-align:center;min-width:74px;transition:.15s;line-height:1.3;
+  }
+  .wpill .lv{display:flex;gap:2px;justify-content:center;margin-top:4px;}
+  .wpill .lv i{width:4px;height:8px;background:var(--hair);display:block;}
+  .wpill.favorite{color:var(--amber);border-color:rgba(242,181,68,0.45);}
+  .wpill.favorite .lv i{background:var(--amber);box-shadow:0 0 4px var(--amber);}
+  .wpill.high{color:var(--cyan);border-color:var(--cyan);}
+  .wpill.high .lv i:nth-child(-n+4){background:var(--cyan);}
+  .wpill.normal{color:var(--ink);}
+  .wpill.normal .lv i:nth-child(-n+3){background:var(--ink-dim);}
+  .wpill.low .lv i:nth-child(-n+2){background:var(--ink-dim);}
+  .wpill:active{transform:scale(.95);}
+
+  .libnote{
+    margin-top:22px;padding:12px;border:1px dashed var(--hair);border-radius:2px;
+    font-size:8.5px;letter-spacing:1px;line-height:1.6;color:var(--ink-dim);
+    font-family:"Menlo",monospace;
+  }
+  .libnote b{color:var(--cyan-dim);}
+
+  /* ============ bottom nav ============ */
+  .nav{
+    position:absolute;bottom:0;left:0;right:0;z-index:15;
+    display:flex;background:var(--navy-deep);
+    border-top:1px solid var(--hair);
+    padding-bottom:20px;
+  }
+  .nav::before{
+    content:"";position:absolute;top:-1px;left:0;right:0;height:1px;
+    background:repeating-linear-gradient(90deg,var(--cyan-dim) 0 6px,transparent 6px 12px);
+    opacity:.4;
+  }
+  .navbtn{
+    flex:1;background:none;border:none;padding:13px 0 9px;
+    display:flex;flex-direction:column;align-items:center;gap:5px;
+    color:var(--ink-dim);transition:.15s;position:relative;
+  }
+  .navbtn svg{width:20px;height:20px;stroke:currentColor;fill:none;stroke-width:1.3;}
+  .navbtn .lb{font-size:8px;letter-spacing:2px;text-transform:uppercase;}
+  .navbtn .no{font-size:6.5px;letter-spacing:1px;color:var(--cyan-dim);opacity:.6;}
+  .navbtn.active{color:var(--cyan);}
+  .navbtn.active::after{
+    content:"";position:absolute;top:0;left:50%;transform:translateX(-50%);
+    width:26px;height:2px;background:var(--cyan);box-shadow:0 0 8px var(--cyan);
+  }
+  .navbtn:active{transform:scale(.94);}
+</style>
+</head>
+<body>
+<div class="phone">
+  <div class="notch"></div>
+  <div class="screen">
+
+    <!-- ===== top title block ===== -->
+    <div class="topbar">
+      <div class="wordmark">
+        <h1>otium</h1>
+        <span class="tag">attention, on purpose</span>
+      </div>
+      <div class="titleblock">
+        <div class="cell"><span>SHEET</span><b id="tb-sheet">A-01 / INTENT</b></div>
+        <div class="cell"><span>SCALE</span><b>1:1</b></div>
+        <div class="cell r"><span>REV</span><b>2026.07</b></div>
+      </div>
+      <div class="rule"></div>
+    </div>
+
+    <!-- ===== scroll body ===== -->
+    <div class="body" id="body">
+
+      <!-- ---------- VIEW: INTENT ---------- -->
+      <section class="view active" id="v-intent">
+        <div class="seclabel"><span class="num">01</span><span>SESSION PARAMETERS</span><span class="ln"></span></div>
+        <h2 class="q">How much time?</h2>
+        <p class="subq">Drag the point. Down/up = length · left/right = variety.</p>
+
+        <div class="pad-wrap">
+          <div class="pad" id="pad">
+            <span class="reg tl"></span><span class="reg tr"></span>
+            <span class="reg bl"></span><span class="reg br"></span>
+
+            <svg class="plot" id="plot" viewBox="0 0 300 262" preserveAspectRatio="none">
+              <!-- static crosshair axes -->
+              <line x1="150" y1="0" x2="150" y2="262" stroke="rgba(95,211,255,0.22)" stroke-width="1"/>
+              <line x1="0" y1="131" x2="300" y2="131" stroke="rgba(95,211,255,0.22)" stroke-width="1"/>
+              <!-- tick marks on axes -->
+              <g stroke="rgba(95,211,255,0.35)" stroke-width="1">
+                <line x1="75" y1="127" x2="75" y2="135"/><line x1="225" y1="127" x2="225" y2="135"/>
+                <line x1="146" y1="65" x2="154" y2="65"/><line x1="146" y1="196" x2="154" y2="196"/>
+              </g>
+              <!-- dashed guide lines to knob -->
+              <line id="gx" x1="150" y1="131" x2="150" y2="131" stroke="var(--cyan)" stroke-width="1" stroke-dasharray="3 3" opacity="0.7"/>
+              <line id="gy" x1="150" y1="131" x2="150" y2="131" stroke="var(--cyan)" stroke-width="1" stroke-dasharray="3 3" opacity="0.7"/>
+              <!-- tether center->knob -->
+              <line id="tether" x1="150" y1="131" x2="150" y2="131" stroke="var(--cyan)" stroke-width="1.4"/>
+              <circle cx="150" cy="131" r="2.5" fill="none" stroke="rgba(95,211,255,0.6)" stroke-width="1"/>
+            </svg>
+
+            <div class="corner tl" data-c="lf"><b>LONG</b>focused</div>
+            <div class="corner tr" data-c="lv"><b>LONG</b>varied</div>
+            <div class="corner bl" data-c="qf"><b>QUICK</b>focused</div>
+            <div class="corner br" data-c="qv"><b>QUICK</b>varied</div>
+
+            <span class="axis-tag x">VARIETY →</span>
+            <span class="axis-tag y">LENGTH →</span>
+
+            <div class="knob" id="knob">
+              <div class="ring"></div><div class="dot"></div>
+              <span class="xr" id="xr">x +0.0</span>
+              <span class="yr" id="yr">y +0.0</span>
+            </div>
+          </div>
+          <button class="recenter" id="recenter">↺ tap to recenter · reset to neutral</button>
+        </div>
+
+        <div class="readout">
+          <div class="dimline">
+            <span class="cap"></span><span class="span"><span class="val" id="dimval">18–26 min</span></span><span class="cap"></span>
+          </div>
+          <div class="big"><span id="ro-time">18–26 min</span><span class="items" id="ro-items">~5 items</span></div>
+        </div>
+
+        <div class="seclabel" style="margin-top:26px"><span class="num">02</span><span>THEME FILTER — MULTI</span><span class="ln"></span></div>
+        <div class="chips" id="chips">
+          <button class="chip" data-t="News"><span class="box"></span>News</button>
+          <button class="chip on" data-t="Tech"><span class="box"></span>Tech</button>
+          <button class="chip" data-t="Science"><span class="box"></span>Science</button>
+          <button class="chip on" data-t="Curiosity"><span class="box"></span>Curiosity</button>
+          <button class="chip" data-t="Gaming"><span class="box"></span>Gaming</button>
+          <button class="chip" data-t="Music"><span class="box"></span>Music</button>
+        </div>
+
+        <button class="build" id="build">
+          <span class="corners"><span></span><span></span><span></span><span></span></span>
+          Build my session →
+        </button>
+      </section>
+
+      <!-- ---------- VIEW: SESSION ---------- -->
+      <section class="view" id="v-session">
+        <div class="seclabel"><span class="num">03</span><span>COMPOSED SESSION</span><span class="ln"></span></div>
+        <h2 class="q">Your session</h2>
+        <p class="subq">4 items composed · every entry annotated with cause.</p>
+        <div id="cards"></div>
+
+        <div class="sfoot">
+          <div class="that">That's your session.</div>
+          <div class="fr">4 items · ~58 min</div>
+          <div class="fbtns">
+            <button class="fbtn" id="morelike">More like this</button>
+            <button class="fbtn done" id="donebtn">Done</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- ---------- VIEW: LIBRARY ---------- -->
+      <section class="view" id="v-library">
+        <div class="seclabel"><span class="num">04</span><span>SOURCE REGISTER</span><span class="ln"></span></div>
+        <h2 class="q">Library</h2>
+        <p class="subq">Tap a weight pill to re-plot a source's influence.</p>
+        <div id="rows"></div>
+        <div class="libnote">
+          <b>NOTE.</b> Weight sets how heavily a source is plotted into a composed
+          session. Favorites are always considered first; low sinks toward the margin.
+        </div>
+      </section>
+
+    </div><!-- /body -->
+
+    <!-- ===== bottom nav ===== -->
+    <nav class="nav" id="nav">
+      <button class="navbtn active" data-v="intent">
+        <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="7"/><line x1="12" y1="2" x2="12" y2="6"/><line x1="12" y1="18" x2="12" y2="22"/><line x1="2" y1="12" x2="6" y2="12"/><line x1="18" y1="12" x2="22" y2="12"/><circle cx="12" cy="12" r="1.6" fill="currentColor" stroke="none"/></svg>
+        <span class="lb">Intent</span><span class="no">A-01</span>
+      </button>
+      <button class="navbtn" data-v="session">
+        <svg viewBox="0 0 24 24"><line x1="4" y1="6" x2="20" y2="6"/><line x1="4" y1="12" x2="20" y2="12"/><line x1="4" y1="18" x2="14" y2="18"/></svg>
+        <span class="lb">Session</span><span class="no">A-02</span>
+      </button>
+      <button class="navbtn" data-v="library">
+        <svg viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16"/><line x1="4" y1="9" x2="20" y2="9"/><line x1="4" y1="14" x2="20" y2="14"/></svg>
+        <span class="lb">Library</span><span class="no">A-03</span>
+      </button>
+    </nav>
+
+  </div>
+</div>
+
+<script>
+(function(){
+  "use strict";
+
+  /* ---------------- nav ---------------- */
+  var sheets = {intent:"A-01 / INTENT", session:"A-02 / SESSION", library:"A-03 / LIBRARY"};
+  var nav = document.getElementById("nav");
+  var body = document.getElementById("body");
+  function show(v){
+    document.querySelectorAll(".view").forEach(function(s){s.classList.remove("active");});
+    document.getElementById("v-"+v).classList.add("active");
+    document.querySelectorAll(".navbtn").forEach(function(b){b.classList.toggle("active",b.dataset.v===v);});
+    document.getElementById("tb-sheet").textContent = sheets[v];
+    body.scrollTop = 0;
+  }
+  nav.addEventListener("click",function(e){
+    var b = e.target.closest(".navbtn"); if(!b) return; show(b.dataset.v);
+  });
+
+  /* ---------------- intent pad ---------------- */
+  var pad = document.getElementById("pad");
+  var knob = document.getElementById("knob");
+  var tether = document.getElementById("tether");
+  var gx = document.getElementById("gx"), gy = document.getElementById("gy");
+  var xr = document.getElementById("xr"), yr = document.getElementById("yr");
+  var roTime = document.getElementById("ro-time"), roItems = document.getElementById("ro-items");
+  var dimval = document.getElementById("dimval");
+  var corners = document.querySelectorAll(".corner");
+  // normalized -1..1 for x and y
+  var nx = 0, ny = 0, dragging = false;
+
+  function updateReadout(){
+    // ny: +1 = up = long, -1 = down = quick.  map to minutes.
+    var center = 30 + ny*22;            // ~8..52 center minutes
+    var lo = Math.max(3, Math.round(center - 6));
+    var hi = Math.round(center + 6);
+    // variety widens item count spread; length drives base count
+    var baseItems = Math.max(2, Math.round(2 + (ny+1)*2.2));
+    var varied = Math.round(Math.abs(nx)*2);
+    var items = baseItems + varied;
+    roTime.textContent = lo+"–"+hi+" min";
+    dimval.textContent = lo+"–"+hi+" min";
+    roItems.textContent = "~"+items+" items";
+    xr.textContent = "x "+(nx>=0?"+":"")+nx.toFixed(1);
+    yr.textContent = "y "+(ny>=0?"+":"")+ny.toFixed(1);
+
+    // brighten nearest corner
+    var target;
+    if(ny>=0 && nx<0) target="lf"; else if(ny>=0 && nx>=0) target="lv";
+    else if(ny<0 && nx<0) target="qf"; else target="qv";
+    // only light a corner if we've moved meaningfully
+    var moved = Math.hypot(nx,ny) > 0.18;
+    corners.forEach(function(c){ c.classList.toggle("hot", moved && c.dataset.c===target); });
+  }
+
+  function place(px,py){
+    var r = pad.getBoundingClientRect();
+    var cx = r.width/2, cy = r.height/2;
+    var pad_edge = 22;
+    var maxX = cx - pad_edge, maxY = cy - pad_edge;
+    var dx = px - r.left - cx;
+    var dy = py - r.top - cy;
+    dx = Math.max(-maxX,Math.min(maxX,dx));
+    dy = Math.max(-maxY,Math.min(maxY,dy));
+    nx = dx/maxX;
+    ny = -dy/maxY;  // invert: up is positive
+    // move knob (px within pad)
+    var kx = cx+dx, ky = cy+dy;
+    knob.style.left = kx+"px"; knob.style.top = ky+"px";
+    // svg uses viewBox 300x262 stretched; map px->viewBox
+    var vx = (kx/r.width)*300, vy = (ky/r.height)*262;
+    tether.setAttribute("x2",vx); tether.setAttribute("y2",vy);
+    gx.setAttribute("x1",vx); gx.setAttribute("y1",vy); gx.setAttribute("x2",vx); gx.setAttribute("y2","131");
+    gy.setAttribute("x1",vx); gy.setAttribute("y1",vy); gy.setAttribute("x2","150"); gy.setAttribute("y2",vy);
+    updateReadout();
+  }
+  function recenter(){
+    var r = pad.getBoundingClientRect();
+    knob.style.left="50%"; knob.style.top="50%";
+    tether.setAttribute("x2","150"); tether.setAttribute("y2","131");
+    gx.setAttribute("x1","150"); gx.setAttribute("y1","131"); gx.setAttribute("x2","150"); gx.setAttribute("y2","131");
+    gy.setAttribute("x1","150"); gy.setAttribute("y1","131"); gy.setAttribute("x2","150"); gy.setAttribute("y2","131");
+    nx=0; ny=0; updateReadout();
+  }
+
+  pad.addEventListener("pointerdown",function(e){
+    dragging=true; knob.classList.add("dragging");
+    pad.setPointerCapture(e.pointerId); place(e.clientX,e.clientY); e.preventDefault();
+  });
+  pad.addEventListener("pointermove",function(e){
+    if(!dragging) return; place(e.clientX,e.clientY); e.preventDefault();
+  });
+  function endDrag(){ dragging=false; knob.classList.remove("dragging"); }
+  pad.addEventListener("pointerup",endDrag);
+  pad.addEventListener("pointercancel",endDrag);
+  document.getElementById("recenter").addEventListener("click",recenter);
+
+  // init readout at neutral
+  updateReadout();
+
+  /* ---------------- theme chips ---------------- */
+  document.getElementById("chips").addEventListener("click",function(e){
+    var c = e.target.closest(".chip"); if(!c) return; c.classList.toggle("on");
+  });
+
+  /* ---------------- build -> session ---------------- */
+  document.getElementById("build").addEventListener("click",function(){ show("session"); });
+  document.getElementById("donebtn").addEventListener("click",function(){ show("intent"); recenter(); });
+  document.getElementById("morelike").addEventListener("click",function(){
+    var el=document.getElementById("cards"); el.style.opacity="0.4";
+    setTimeout(function(){ el.style.transition="opacity .35s"; el.style.opacity="1"; body.scrollTop=0; },220);
+  });
+
+  /* ---------------- session cards fixture ---------------- */
+  var cards = [
+    {reason:"Favorite source", title:"I got hit in the teeth at England's oldest ritual",
+     src:"Tom Scott", dur:"10 min", type:"video"},
+    {reason:"Fresh — posted today", title:"Apple's entry-level MacBook Pro could get a redesign",
+     src:"The Verge", dur:"4 min", type:"article",
+     summ:"A revamped entry model could arrive as soon as this year, per supply-chain reports."},
+    {reason:"Rare — posts seldom", title:"The Real Book",
+     src:"99% Invisible", dur:"32 min", type:"audio"},
+    {reason:"High-weight source", title:"The universe's biggest unsolved problem",
+     src:"Veritasium", dur:"12 min", type:"video"}
+  ];
+  var heartOpen = '<svg viewBox="0 0 24 24"><path d="M4 8 L12 4 L20 8 L20 16 L12 20 L4 16 Z"/></svg>';
+  var likeIcon = '<svg viewBox="0 0 24 24"><path d="M12 21 C12 21 3 14 3 8.5 A4.5 4.5 0 0 1 12 6 A4.5 4.5 0 0 1 21 8.5 C21 14 12 21 12 21 Z"/></svg>';
+  var skipIcon = '<svg viewBox="0 0 24 24"><line x1="6" y1="6" x2="18" y2="18"/><line x1="18" y1="6" x2="6" y2="18"/></svg>';
+  var openIcon = '<svg viewBox="0 0 24 24"><path d="M8 5 L18 12 L8 19 Z"/></svg>';
+
+  var wrap = document.getElementById("cards");
+  cards.forEach(function(c,i){
+    var el = document.createElement("div");
+    el.className = "card"; el.style.animationDelay = (i*0.06)+"s";
+    el.innerHTML =
+      '<span class="idx">'+String(i+1).padStart(2,"0")+' / 04</span>'+
+      '<span class="reason"><span class="dot"></span>'+c.reason+'</span>'+
+      '<h3>'+c.title+'</h3>'+
+      (c.summ?'<div class="summ">'+c.summ+'</div>':'')+
+      '<div class="meta"><span class="src">'+c.src+'</span><span class="sep"></span>'+
+        '<span>'+c.dur+'</span><span class="sep"></span><span class="type">'+c.type+'</span></div>'+
+      '<div class="actions">'+
+        '<button class="act open">'+openIcon+'Open</button>'+
+        '<button class="act like">'+likeIcon+'Like</button>'+
+        '<button class="act skip">'+skipIcon+'Skip</button>'+
+      '</div>';
+    wrap.appendChild(el);
+  });
+  wrap.addEventListener("click",function(e){
+    var like = e.target.closest(".act.like");
+    if(like){ like.classList.toggle("on"); return; }
+    var skip = e.target.closest(".act.skip");
+    if(skip){ var card=skip.closest(".card"); card.style.transition=".3s"; card.style.opacity="0.28";
+      card.style.transform="translateX(14px)"; return; }
+  });
+
+  /* ---------------- library rows fixture ---------------- */
+  var yt = '<svg viewBox="0 0 24 24"><rect x="3" y="6" width="18" height="12" rx="2"/><path d="M10 9 L15 12 L10 15 Z" fill="var(--cyan)" stroke="none"/></svg>';
+  var rss = '<svg viewBox="0 0 24 24"><path d="M5 19 A2 2 0 1 0 5 15 A2 2 0 0 0 5 19 Z" fill="var(--cyan)" stroke="none"/><path d="M5 11 A8 8 0 0 1 13 19"/><path d="M5 6 A13 13 0 0 1 18 19"/></svg>';
+  var srcs = [
+    {nm:"Tom Scott", kind:"youtube", un:15, w:"favorite", glyph:yt},
+    {nm:"NPR News", kind:"rss", un:10, w:"normal", glyph:rss},
+    {nm:"Kurzgesagt", kind:"youtube", un:15, w:"favorite", glyph:yt},
+    {nm:"Hacker News", kind:"rss", un:20, w:"low", glyph:rss}
+  ];
+  var wLabel = {favorite:"FAVORITE", high:"HIGH", normal:"NORMAL", low:"LOW", "very low":"VERY LOW"};
+  var wCycle = ["very low","low","normal","high","favorite"];
+  var wClass = {"very low":"low", low:"low", normal:"normal", high:"high", favorite:"favorite"};
+
+  var rows = document.getElementById("rows");
+  srcs.forEach(function(s){
+    var el = document.createElement("div"); el.className="srow";
+    el.innerHTML =
+      '<div class="glyph">'+s.glyph+'</div>'+
+      '<div class="info"><div class="nm">'+s.nm+'</div>'+
+        '<div class="sub"><span class="kind">'+s.kind+'</span><span class="sep">·</span>'+
+        '<span class="un"><b>'+s.un+'</b> unseen</span></div></div>'+
+      '<button class="wpill '+wClass[s.w]+'" data-w="'+s.w+'">'+wLabel[s.w]+
+        '<span class="lv"><i></i><i></i><i></i><i></i><i></i></span></button>';
+    rows.appendChild(el);
+  });
+  rows.addEventListener("click",function(e){
+    var p = e.target.closest(".wpill"); if(!p) return;
+    var cur = p.dataset.w;
+    var next = wCycle[(wCycle.indexOf(cur)+1)%wCycle.length];
+    p.dataset.w = next;
+    p.className = "wpill "+wClass[next];
+    p.firstChild.textContent = wLabel[next];
+  });
+
+})();
+</script>
+</body>
+</html>

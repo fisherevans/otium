@@ -1,0 +1,883 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>otium — attention, on purpose</title>
+<style>
+  /* ============================================================
+     otium · "Amber Terminal (refined)"
+     A scholar's terminal: warm amber phosphor on near-black,
+     mono body, one classic serif for headings, hairline ASCII
+     rules, a very subtle scanline + vignette. Calm, deliberate.
+     ============================================================ */
+
+  :root{
+    --bg:        #0b0906;   /* near-black, warm */
+    --bg-raise:  #12100b;   /* raised panel */
+    --bg-sink:   #080604;   /* recessed */
+    --ink:       #f4b860;   /* primary amber phosphor */
+    --ink-soft:  #c98a3c;   /* dimmer amber */
+    --ink-dim:   #7c5a2e;   /* labels, hairlines */
+    --ink-ghost: #4a381f;   /* faintest ornament */
+    --glow:      #ffcf7a;   /* highlight / active */
+    --hot:       #ff8a3c;   /* accent (like / warm state) */
+    --paper:     #1a150d;   /* card fill */
+    --line:      #3a2c17;   /* hairline */
+    --ok:        #9fd08a;   /* rare cool phosphor for contrast */
+    font-size: 16px;
+  }
+
+  *{ box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  html,body{ margin:0; padding:0; height:100%; }
+
+  body{
+    background:
+      radial-gradient(120% 80% at 50% -10%, #241a10 0%, #0c0a07 55%, #050403 100%);
+    display:flex; align-items:center; justify-content:center;
+    min-height:100dvh;
+    font-family: "SF Mono", Menlo, ui-monospace, monospace;
+    color: var(--ink);
+    padding: 20px;
+    overscroll-behavior:none;
+  }
+
+  /* ---------- phone frame ---------- */
+  .device{
+    position:relative;
+    width:390px; height:844px;
+    max-height: calc(100dvh - 24px);
+    border-radius:52px;
+    background:#000;
+    padding:11px;
+    box-shadow:
+      0 0 0 2px #241a12,
+      0 0 0 11px #0a0805,
+      0 30px 80px rgba(0,0,0,.7),
+      0 2px 0 rgba(255,200,120,.05) inset;
+  }
+  .screen{
+    position:relative;
+    width:100%; height:100%;
+    border-radius:42px;
+    overflow:hidden;
+    background: var(--bg);
+    display:flex; flex-direction:column;
+    isolation:isolate;
+  }
+
+  /* CRT overlays -------------------------------------------------- */
+  .screen::before{ /* scanlines — very subtle */
+    content:""; position:absolute; inset:0; z-index:40; pointer-events:none;
+    background: repeating-linear-gradient(
+      to bottom,
+      rgba(0,0,0,0) 0px,
+      rgba(0,0,0,0) 2px,
+      rgba(0,0,0,.16) 3px);
+    mix-blend-mode:multiply;
+    opacity:.55;
+  }
+  .screen::after{ /* vignette + phosphor bloom */
+    content:""; position:absolute; inset:0; z-index:41; pointer-events:none;
+    background:
+      radial-gradient(130% 100% at 50% 40%, rgba(0,0,0,0) 55%, rgba(0,0,0,.55) 100%);
+    box-shadow: inset 0 0 90px rgba(0,0,0,.6);
+  }
+  .grain{
+    position:absolute; inset:0; z-index:39; pointer-events:none; opacity:.05;
+    mix-blend-mode:screen;
+  }
+
+  /* ---------- status bar ---------- */
+  .statusbar{
+    height:44px; flex:0 0 44px;
+    display:flex; align-items:center; justify-content:space-between;
+    padding:0 22px 0 26px;
+    font-size:12px; letter-spacing:.06em;
+    color:var(--ink-soft);
+    z-index:20;
+  }
+  .statusbar .clock{ font-variant-numeric:tabular-nums; color:var(--glow); }
+  .sigil{ display:flex; gap:5px; align-items:center; }
+  .sigil svg{ display:block; }
+
+  /* ---------- app header ---------- */
+  header.brand{
+    flex:0 0 auto; padding:6px 24px 12px;
+    z-index:20;
+  }
+  .wordmark{
+    font-family:"Hoefler Text", "Iowan Old Style", Palatino, Georgia, serif;
+    font-size:30px; font-weight:600; letter-spacing:.01em;
+    color:var(--glow);
+    text-shadow:0 0 14px rgba(255,180,90,.28);
+    line-height:1; display:flex; align-items:baseline; gap:2px;
+  }
+  .wordmark .brk{ color:var(--ink-dim); font-family:"SF Mono",Menlo,monospace; font-size:22px; }
+  .tagline{
+    margin-top:6px; font-size:11.5px; letter-spacing:.22em; text-transform:uppercase;
+    color:var(--ink-dim);
+  }
+  .tagline .cur{
+    display:inline-block; width:8px; height:13px; margin-left:3px;
+    background:var(--ink-soft); vertical-align:-2px;
+    animation:blink 1.15s steps(1) infinite;
+  }
+  @keyframes blink{ 0%,50%{opacity:1;} 51%,100%{opacity:0;} }
+
+  /* ---------- scroll region ---------- */
+  .content{
+    flex:1 1 auto; overflow-y:auto; overflow-x:hidden;
+    -webkit-overflow-scrolling:touch;
+    padding:2px 20px 26px;
+    z-index:10;
+    scrollbar-width:none;
+  }
+  .content::-webkit-scrollbar{ display:none; }
+  .view{ display:none; animation:boot .4s ease both; }
+  .view.active{ display:block; }
+  @keyframes boot{
+    from{ opacity:0; transform:translateY(6px); filter:brightness(.4); }
+    to{ opacity:1; transform:none; filter:none; }
+  }
+
+  /* ASCII section rule ------------------------------------------- */
+  .rule{
+    color:var(--ink-ghost); font-size:12px; letter-spacing:.02em;
+    white-space:nowrap; overflow:hidden; user-select:none;
+    margin:14px 0 12px; height:14px;
+  }
+  .kicker{
+    font-size:11px; letter-spacing:.24em; text-transform:uppercase;
+    color:var(--ink-dim); display:flex; align-items:center; gap:8px;
+    margin:0 0 4px;
+  }
+  .kicker::before{ content:"//"; color:var(--ink-ghost); }
+
+  h2.q{
+    font-family:"Hoefler Text","Iowan Old Style",Palatino,Georgia,serif;
+    font-size:27px; font-weight:600; line-height:1.1;
+    color:var(--ink); margin:2px 0 2px;
+    text-shadow:0 0 12px rgba(244,184,96,.16);
+  }
+
+  /* ============================================================
+     INTENT — the analog-stick pad
+     ============================================================ */
+  .pad-wrap{ margin:14px 0 4px; }
+  .pad{
+    position:relative;
+    width:100%; aspect-ratio:1.15 / 1;
+    border:1px solid var(--line);
+    border-radius:14px;
+    background:
+      linear-gradient(180deg, #14110b, #0c0a06);
+    box-shadow: inset 0 0 40px rgba(0,0,0,.6), inset 0 0 0 1px rgba(255,190,100,.02);
+    overflow:hidden; touch-action:none; cursor:grab;
+  }
+  .pad:active{ cursor:grabbing; }
+  .pad .grid{ position:absolute; inset:0; pointer-events:none; }
+  .pad .frame-lbl{
+    position:absolute; font-size:10px; letter-spacing:.14em; text-transform:uppercase;
+    color:var(--ink-dim); pointer-events:none; white-space:nowrap;
+  }
+  .frame-lbl.top{ top:9px; left:50%; transform:translateX(-50%); }
+  .frame-lbl.bot{ bottom:9px; left:50%; transform:translateX(-50%); }
+  .frame-lbl.left{ left:10px; top:50%; transform:translateY(-50%) rotate(-90deg); transform-origin:left center; }
+  .frame-lbl.right{ right:10px; top:50%; transform:translateY(-50%) rotate(90deg); transform-origin:right center; }
+
+  /* mood corner labels */
+  .corner{
+    position:absolute; font-size:10px; line-height:1.25; letter-spacing:.06em;
+    color:var(--ink-ghost); pointer-events:none;
+    transition:color .18s, text-shadow .18s; text-transform:uppercase;
+  }
+  .corner .c-a{ display:block; }
+  .corner.tl{ top:26px; left:16px; text-align:left;}
+  .corner.tr{ top:26px; right:16px; text-align:right;}
+  .corner.bl{ bottom:26px; left:16px; text-align:left;}
+  .corner.br{ bottom:26px; right:16px; text-align:right;}
+  .corner.near{ color:var(--glow); text-shadow:0 0 10px rgba(255,200,120,.5); }
+
+  /* tether + knob (SVG line drawn in JS via transform) */
+  .tether{
+    position:absolute; left:0; top:0; height:2px; transform-origin:left center;
+    background:linear-gradient(90deg, rgba(255,180,90,.15), var(--ink-soft));
+    pointer-events:none; z-index:3; border-radius:2px;
+  }
+  .origin{
+    position:absolute; width:8px; height:8px; border-radius:50%;
+    background:var(--ink-ghost); z-index:2; pointer-events:none;
+    box-shadow:0 0 0 4px rgba(124,90,46,.12);
+  }
+  .knob{
+    position:absolute; width:52px; height:52px; border-radius:50%;
+    z-index:4; pointer-events:none;
+    background:radial-gradient(circle at 38% 34%, var(--glow), var(--ink) 42%, var(--ink-soft) 72%, #6e4c22 100%);
+    box-shadow:
+      0 0 22px rgba(255,190,100,.5),
+      0 0 0 1px rgba(255,220,160,.4) inset,
+      0 6px 14px rgba(0,0,0,.55);
+    display:flex; align-items:center; justify-content:center;
+    transition:box-shadow .12s, transform .05s;
+  }
+  .knob::before{
+    content:""; width:12px; height:12px; border-radius:50%;
+    background:rgba(20,12,4,.55);
+    box-shadow:inset 0 1px 3px rgba(0,0,0,.7);
+  }
+  .knob.grabbed{ box-shadow:0 0 34px rgba(255,200,120,.7), 0 0 0 1px rgba(255,230,180,.6) inset, 0 8px 18px rgba(0,0,0,.6); }
+
+  /* readout */
+  .readout{
+    margin:16px 0 2px; text-align:center;
+    display:flex; flex-direction:column; align-items:center; gap:4px;
+  }
+  .readout .big{
+    font-size:22px; letter-spacing:.02em; color:var(--glow);
+    text-shadow:0 0 12px rgba(255,200,120,.3); font-variant-numeric:tabular-nums;
+  }
+  .readout .big b{ color:var(--ink); font-weight:400; }
+  .readout .sub{
+    font-size:12px; letter-spacing:.14em; text-transform:uppercase; color:var(--ink-dim);
+  }
+  .readout .sub .arrow{ color:var(--ink-ghost); }
+  .recenter{
+    margin-top:8px; font-size:10.5px; letter-spacing:.16em; text-transform:uppercase;
+    color:var(--ink-dim); background:none; border:none; font-family:inherit;
+    padding:6px 10px; min-height:34px; cursor:pointer;
+  }
+  .recenter:active{ color:var(--glow); }
+
+  /* theme chips */
+  .chips{ display:flex; flex-wrap:wrap; gap:9px; margin-top:10px; }
+  .chip{
+    font-family:inherit; font-size:13px; letter-spacing:.04em;
+    color:var(--ink-soft);
+    background:var(--bg-raise);
+    border:1px solid var(--line);
+    border-radius:8px; padding:10px 13px; min-height:44px;
+    display:flex; align-items:center; gap:7px; cursor:pointer;
+    transition:.14s;
+  }
+  .chip .box{
+    width:13px; height:13px; border:1px solid var(--ink-dim); border-radius:2px;
+    display:flex; align-items:center; justify-content:center; flex:0 0 auto;
+    color:transparent; font-size:11px; line-height:1;
+  }
+  .chip.on{
+    color:var(--glow); border-color:var(--ink-soft);
+    background:linear-gradient(180deg, #1e1710, #14100a);
+    box-shadow:0 0 14px rgba(255,180,90,.12), inset 0 0 0 1px rgba(255,190,100,.06);
+  }
+  .chip.on .box{ color:var(--glow); border-color:var(--ink-soft); background:rgba(255,190,100,.08); }
+  .chip:active{ transform:translateY(1px); }
+
+  /* big primary button */
+  .cta{
+    margin-top:20px; width:100%;
+    font-family:inherit; font-size:15px; letter-spacing:.14em; text-transform:uppercase;
+    color:var(--bg);
+    background:linear-gradient(180deg, var(--glow), var(--ink) 60%, var(--ink-soft));
+    border:none; border-radius:11px; padding:0 18px; min-height:56px;
+    cursor:pointer; position:relative; overflow:hidden;
+    box-shadow:0 0 26px rgba(255,180,90,.28), 0 4px 0 #6e4c22;
+    display:flex; align-items:center; justify-content:center; gap:10px; font-weight:600;
+    transition:transform .08s, box-shadow .12s;
+  }
+  .cta:active{ transform:translateY(3px); box-shadow:0 0 20px rgba(255,180,90,.25), 0 1px 0 #6e4c22; }
+  .cta .brk{ color:rgba(11,9,6,.55); }
+
+  /* ============================================================
+     SESSION — explainable cards
+     ============================================================ */
+  .session-head{ display:flex; align-items:flex-end; justify-content:space-between; margin-bottom:2px; }
+  .session-head .meter{
+    font-size:11px; letter-spacing:.1em; text-transform:uppercase; color:var(--ink-dim);
+    text-align:right; line-height:1.5;
+  }
+  .session-head .meter b{ color:var(--glow); font-weight:400; }
+
+  .card{
+    position:relative;
+    border:1px solid var(--line);
+    border-radius:12px;
+    background:linear-gradient(180deg, var(--paper), #100c07);
+    padding:14px 15px 12px;
+    margin:14px 0;
+    box-shadow:0 0 0 1px rgba(0,0,0,.3), inset 0 0 0 1px rgba(255,190,100,.02);
+  }
+  .card .idx{
+    position:absolute; top:12px; right:14px;
+    font-size:11px; color:var(--ink-ghost); letter-spacing:.1em;
+  }
+  .reason{
+    display:inline-flex; align-items:center; gap:6px;
+    font-size:10.5px; letter-spacing:.13em; text-transform:uppercase;
+    color:var(--ink-soft);
+    border:1px solid var(--line); border-radius:5px;
+    padding:4px 8px; margin-bottom:9px; background:rgba(255,180,90,.04);
+  }
+  .reason .dot{ width:5px; height:5px; border-radius:50%; background:var(--hot); box-shadow:0 0 6px var(--hot); }
+  .reason.fresh .dot{ background:var(--ok); box-shadow:0 0 6px var(--ok); }
+  .reason.rare .dot{ background:var(--ink-soft); box-shadow:0 0 6px var(--ink-soft); animation:blink 1.6s steps(1) infinite;}
+  .reason.high .dot{ background:var(--glow); box-shadow:0 0 6px var(--glow); }
+
+  .card h3{
+    font-family:"Hoefler Text","Iowan Old Style",Palatino,Georgia,serif;
+    font-size:19px; font-weight:600; line-height:1.24; margin:2px 34px 0 0;
+    color:var(--ink);
+  }
+  .card .summ{ font-size:13px; line-height:1.5; color:var(--ink-soft); margin:8px 0 0; }
+  .meta{
+    display:flex; align-items:center; gap:8px; margin-top:10px;
+    font-size:11.5px; letter-spacing:.05em; color:var(--ink-dim);
+  }
+  .meta .src{ color:var(--ink-soft); }
+  .meta .sep{ color:var(--ink-ghost); }
+  .meta .type{ text-transform:uppercase; letter-spacing:.12em; font-size:10px; color:var(--ink-dim); }
+
+  .actions{
+    display:flex; gap:8px; margin-top:13px;
+    border-top:1px dashed var(--line); padding-top:11px;
+  }
+  .act{
+    flex:1; font-family:inherit; font-size:12px; letter-spacing:.08em; text-transform:uppercase;
+    color:var(--ink-soft); background:var(--bg-raise);
+    border:1px solid var(--line); border-radius:8px; min-height:44px;
+    display:flex; align-items:center; justify-content:center; gap:6px; cursor:pointer;
+    transition:.12s;
+  }
+  .act:active{ transform:translateY(1px); background:#181208; }
+  .act.open{ color:var(--glow); border-color:var(--ink-dim); }
+  .act svg{ display:block; }
+  .act.like.on{
+    color:var(--hot); border-color:var(--hot);
+    background:rgba(255,138,60,.09); text-shadow:0 0 8px rgba(255,138,60,.4);
+  }
+  .act.like.on svg{ fill:var(--hot); }
+
+  .session-footer{
+    text-align:center; margin:22px 0 8px; padding-top:6px;
+  }
+  .session-footer .eof{
+    color:var(--ink-ghost); font-size:12px; letter-spacing:.12em; margin-bottom:12px;
+  }
+  .session-footer .line{
+    font-family:"Hoefler Text",Palatino,Georgia,serif; font-style:italic;
+    font-size:17px; color:var(--ink-soft); margin-bottom:16px;
+  }
+  .footer-btns{ display:flex; gap:10px; }
+  .btn-ghost{
+    flex:1; font-family:inherit; font-size:12px; letter-spacing:.1em; text-transform:uppercase;
+    color:var(--ink-soft); background:transparent; border:1px solid var(--line);
+    border-radius:10px; min-height:50px; cursor:pointer; transition:.12s;
+    display:flex; align-items:center; justify-content:center; gap:7px;
+  }
+  .btn-ghost:active{ transform:translateY(1px); }
+  .btn-ghost.done{ color:var(--glow); border-color:var(--ink-soft); background:rgba(255,180,90,.05); }
+
+  /* ============================================================
+     LIBRARY
+     ============================================================ */
+  .lib-row{
+    display:flex; align-items:center; gap:13px;
+    border-bottom:1px solid var(--line);
+    padding:16px 2px;
+  }
+  .lib-row:first-of-type{ border-top:1px solid var(--line); }
+  .lib-glyph{
+    flex:0 0 auto; width:38px; height:38px; border-radius:9px;
+    border:1px solid var(--line); background:var(--bg-sink);
+    display:flex; align-items:center; justify-content:center;
+    color:var(--ink-soft); font-size:15px;
+    font-family:"Hoefler Text",Palatino,Georgia,serif;
+  }
+  .lib-main{ flex:1 1 auto; min-width:0; }
+  .lib-main .name{
+    font-family:"Hoefler Text",Palatino,Georgia,serif; font-size:17px; color:var(--ink);
+    line-height:1.15;
+  }
+  .lib-main .sub{
+    font-size:11px; letter-spacing:.08em; color:var(--ink-dim); margin-top:3px;
+    text-transform:uppercase;
+  }
+  .lib-main .sub .u{ color:var(--ink-soft); }
+  .weight{
+    flex:0 0 auto; font-family:inherit; font-size:10.5px; letter-spacing:.1em; text-transform:uppercase;
+    border:1px solid var(--line); border-radius:20px; padding:8px 12px; min-height:44px;
+    display:flex; flex-direction:column; align-items:center; justify-content:center; gap:3px;
+    background:var(--bg-raise); color:var(--ink-soft); cursor:pointer; min-width:78px;
+    transition:.14s;
+  }
+  .weight .bars{ display:flex; gap:2px; align-items:flex-end; height:9px; }
+  .weight .bars i{ width:3px; background:var(--ink-ghost); border-radius:1px; display:block; }
+  .weight .bars i.f{ background:var(--ink-soft); }
+  .weight.favorite{ color:var(--glow); border-color:var(--ink-soft); background:rgba(255,180,90,.06); box-shadow:0 0 12px rgba(255,180,90,.1); }
+  .weight.favorite .bars i.f{ background:var(--glow); box-shadow:0 0 4px rgba(255,200,120,.6); }
+  .weight.high .bars i.f{ background:var(--ink); }
+  .weight:active{ transform:scale(.97); }
+
+  .lib-note{
+    margin-top:22px; font-size:11.5px; line-height:1.6; color:var(--ink-dim);
+    border-left:2px solid var(--line); padding:2px 0 2px 12px;
+    font-style:italic; font-family:"Hoefler Text",Palatino,Georgia,serif;
+  }
+
+  /* ============================================================
+     bottom nav
+     ============================================================ */
+  nav.tabbar{
+    flex:0 0 auto; height:76px;
+    display:flex; align-items:stretch;
+    border-top:1px solid var(--line);
+    background:linear-gradient(180deg, #0e0b07, #060503);
+    z-index:30; padding-bottom:8px;
+  }
+  .tab{
+    flex:1; background:none; border:none; font-family:inherit; cursor:pointer;
+    display:flex; flex-direction:column; align-items:center; justify-content:center; gap:5px;
+    color:var(--ink-dim); font-size:10px; letter-spacing:.14em; text-transform:uppercase;
+    transition:color .15s; position:relative; min-height:44px;
+  }
+  .tab svg{ display:block; }
+  .tab .caret{ position:absolute; top:8px; opacity:0; color:var(--ink-soft); font-size:10px; transition:.15s; }
+  .tab.active{ color:var(--glow); text-shadow:0 0 10px rgba(255,200,120,.4); }
+  .tab.active svg{ filter:drop-shadow(0 0 6px rgba(255,200,120,.5)); }
+  .tab.active .caret{ opacity:1; }
+  .tab:active{ color:var(--glow); }
+</style>
+</head>
+<body>
+<div class="device">
+  <div class="screen">
+    <!-- SVG grain -->
+    <svg class="grain" xmlns="http://www.w3.org/2000/svg">
+      <filter id="n"><feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="2" stitchTiles="stitch"/></filter>
+      <rect width="100%" height="100%" filter="url(#n)"/>
+    </svg>
+
+    <!-- status bar -->
+    <div class="statusbar">
+      <span class="clock" id="clock">9:41</span>
+      <span class="sigil">
+        <svg width="17" height="11" viewBox="0 0 17 11"><g fill="#c98a3c"><rect x="0" y="3" width="2.5" height="8" rx="1"/><rect x="3.5" y="1.5" width="2.5" height="9.5" rx="1"/><rect x="7" y="0" width="2.5" height="11" rx="1" fill="#f4b860"/></g></svg>
+        <svg width="16" height="11" viewBox="0 0 16 11"><path d="M8 2.2C5.6 2.2 3.5 3.1 2 4.6l1.1 1.1C4.3 4.5 6 3.8 8 3.8s3.7.7 4.9 1.9L14 4.6C12.5 3.1 10.4 2.2 8 2.2z" fill="#7c5a2e"/><path d="M8 5.4c-1.4 0-2.6.5-3.5 1.4l1.1 1.1C6.2 7.3 7 7 8 7s1.8.3 2.4.9l1.1-1.1C10.6 5.9 9.4 5.4 8 5.4z" fill="#c98a3c"/><circle cx="8" cy="9.3" r="1.2" fill="#f4b860"/></svg>
+        <svg width="26" height="12" viewBox="0 0 26 12"><rect x="0.5" y="1.5" width="21" height="9" rx="2.5" fill="none" stroke="#7c5a2e"/><rect x="23" y="4" width="2" height="4" rx="1" fill="#7c5a2e"/><rect x="2" y="3" width="16" height="6" rx="1" fill="#f4b860"/></svg>
+      </span>
+    </div>
+
+    <!-- brand header -->
+    <header class="brand">
+      <div class="wordmark"><span class="brk">[</span>otium<span class="brk">]</span></div>
+      <div class="tagline">attention, on purpose<span class="cur"></span></div>
+    </header>
+
+    <!-- ================= CONTENT ================= -->
+    <div class="content" id="content">
+
+      <!-- ---------- INTENT ---------- -->
+      <section class="view active" id="view-intent">
+        <div class="rule" data-rule></div>
+        <div class="kicker">session composer</div>
+        <h2 class="q">How much time?</h2>
+
+        <div class="pad-wrap">
+          <div class="pad" id="pad">
+            <svg class="grid" viewBox="0 0 100 100" preserveAspectRatio="none">
+              <line x1="50" y1="4" x2="50" y2="96" stroke="#2a2011" stroke-width="0.4" stroke-dasharray="1.5 2.5"/>
+              <line x1="4" y1="50" x2="96" y2="50" stroke="#2a2011" stroke-width="0.4" stroke-dasharray="1.5 2.5"/>
+              <circle cx="50" cy="50" r="30" fill="none" stroke="#221a0e" stroke-width="0.4" stroke-dasharray="1 2"/>
+              <circle cx="50" cy="50" r="15" fill="none" stroke="#221a0e" stroke-width="0.4" stroke-dasharray="1 2"/>
+            </svg>
+            <span class="frame-lbl top">long session</span>
+            <span class="frame-lbl bot">quick session</span>
+            <span class="frame-lbl left">focused</span>
+            <span class="frame-lbl right">varied</span>
+
+            <div class="corner tl" data-corner="tl"><span class="c-a">long ·</span><span class="c-a">focused</span></div>
+            <div class="corner tr" data-corner="tr"><span class="c-a">· long</span><span class="c-a">varied</span></div>
+            <div class="corner bl" data-corner="bl"><span class="c-a">quick ·</span><span class="c-a">focused</span></div>
+            <div class="corner br" data-corner="br"><span class="c-a">· quick</span><span class="c-a">varied</span></div>
+
+            <div class="origin" id="origin"></div>
+            <div class="tether" id="tether"></div>
+            <div class="knob" id="knob"></div>
+          </div>
+        </div>
+
+        <div class="readout">
+          <div class="big" id="ro-time">18–26 min</div>
+          <div class="sub"><span class="arrow">└─</span> ~<span id="ro-items">5</span> items <span class="arrow">·</span> <span id="ro-mode">balanced</span></div>
+          <button class="recenter" id="recenter">⟲ tap pad to recenter</button>
+        </div>
+
+        <div class="rule" data-rule></div>
+        <div class="kicker">in the mood for</div>
+        <div class="chips" id="chips">
+          <button class="chip" data-theme="News"><span class="box">×</span>News</button>
+          <button class="chip on" data-theme="Tech"><span class="box">×</span>Tech</button>
+          <button class="chip" data-theme="Science"><span class="box">×</span>Science</button>
+          <button class="chip on" data-theme="Curiosity"><span class="box">×</span>Curiosity</button>
+          <button class="chip" data-theme="Gaming"><span class="box">×</span>Gaming</button>
+          <button class="chip on" data-theme="Music"><span class="box">×</span>Music</button>
+        </div>
+
+        <button class="cta" id="build">
+          <span class="brk">&gt;_</span> Build my session
+        </button>
+        <div style="height:6px"></div>
+      </section>
+
+      <!-- ---------- SESSION ---------- -->
+      <section class="view" id="view-session">
+        <div class="rule" data-rule></div>
+        <div class="session-head">
+          <div>
+            <div class="kicker">composed for you</div>
+            <h2 class="q">Your session</h2>
+          </div>
+          <div class="meter">runtime<br><b>~58 min</b> · <b>4</b> items</div>
+        </div>
+
+        <!-- card 1 -->
+        <article class="card">
+          <span class="idx">01</span>
+          <span class="reason"><span class="dot"></span>Favorite source</span>
+          <h3>I got hit in the teeth at England's oldest ritual</h3>
+          <div class="meta"><span class="src">Tom Scott</span><span class="sep">·</span><span>10 min</span><span class="sep">·</span><span class="type">video</span></div>
+          <div class="actions">
+            <button class="act open">▸ Open</button>
+            <button class="act like"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 21C-4 11 4 2 12 7c8-5 16 4 0 14z"/></svg>Like</button>
+            <button class="act skip">Skip ✕</button>
+          </div>
+        </article>
+
+        <!-- card 2 -->
+        <article class="card">
+          <span class="idx">02</span>
+          <span class="reason fresh"><span class="dot"></span>Fresh — posted today</span>
+          <h3>Apple's entry-level MacBook Pro could get a redesign</h3>
+          <p class="summ">A revamped entry model could arrive as soon as this year, per supply-chain reports.</p>
+          <div class="meta"><span class="src">The Verge</span><span class="sep">·</span><span>4 min</span><span class="sep">·</span><span class="type">article</span></div>
+          <div class="actions">
+            <button class="act open">▸ Open</button>
+            <button class="act like"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 21C-4 11 4 2 12 7c8-5 16 4 0 14z"/></svg>Like</button>
+            <button class="act skip">Skip ✕</button>
+          </div>
+        </article>
+
+        <!-- card 3 -->
+        <article class="card">
+          <span class="idx">03</span>
+          <span class="reason rare"><span class="dot"></span>Rare — posts seldom</span>
+          <h3>The Real Book</h3>
+          <div class="meta"><span class="src">99% Invisible</span><span class="sep">·</span><span>32 min</span><span class="sep">·</span><span class="type">audio</span></div>
+          <div class="actions">
+            <button class="act open">▸ Open</button>
+            <button class="act like"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 21C-4 11 4 2 12 7c8-5 16 4 0 14z"/></svg>Like</button>
+            <button class="act skip">Skip ✕</button>
+          </div>
+        </article>
+
+        <!-- card 4 -->
+        <article class="card">
+          <span class="idx">04</span>
+          <span class="reason high"><span class="dot"></span>High-weight source</span>
+          <h3>The universe's biggest unsolved problem</h3>
+          <div class="meta"><span class="src">Veritasium</span><span class="sep">·</span><span>12 min</span><span class="sep">·</span><span class="type">video</span></div>
+          <div class="actions">
+            <button class="act open">▸ Open</button>
+            <button class="act like"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 21C-4 11 4 2 12 7c8-5 16 4 0 14z"/></svg>Like</button>
+            <button class="act skip">Skip ✕</button>
+          </div>
+        </article>
+
+        <div class="session-footer">
+          <div class="eof">─── end of session ───</div>
+          <div class="line">That's your session.</div>
+          <div class="footer-btns">
+            <button class="btn-ghost">+ More like this</button>
+            <button class="btn-ghost done">✓ Done</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- ---------- LIBRARY ---------- -->
+      <section class="view" id="view-library">
+        <div class="rule" data-rule></div>
+        <div class="kicker">sources you follow</div>
+        <h2 class="q">Library</h2>
+        <div style="height:8px"></div>
+
+        <div class="lib-row">
+          <div class="lib-glyph">TS</div>
+          <div class="lib-main">
+            <div class="name">Tom Scott</div>
+            <div class="sub">youtube · <span class="u">15 unseen</span></div>
+          </div>
+          <button class="weight favorite">
+            <span class="bars"><i class="f" style="height:3px"></i><i class="f" style="height:5px"></i><i class="f" style="height:7px"></i><i class="f" style="height:9px"></i></span>
+            favorite
+          </button>
+        </div>
+
+        <div class="lib-row">
+          <div class="lib-glyph">NP</div>
+          <div class="lib-main">
+            <div class="name">NPR News</div>
+            <div class="sub">rss · <span class="u">10 unseen</span></div>
+          </div>
+          <button class="weight normal">
+            <span class="bars"><i class="f" style="height:3px"></i><i class="f" style="height:5px"></i><i style="height:7px"></i><i style="height:9px"></i></span>
+            normal
+          </button>
+        </div>
+
+        <div class="lib-row">
+          <div class="lib-glyph">Ku</div>
+          <div class="lib-main">
+            <div class="name">Kurzgesagt</div>
+            <div class="sub">youtube · <span class="u">15 unseen</span></div>
+          </div>
+          <button class="weight favorite">
+            <span class="bars"><i class="f" style="height:3px"></i><i class="f" style="height:5px"></i><i class="f" style="height:7px"></i><i class="f" style="height:9px"></i></span>
+            favorite
+          </button>
+        </div>
+
+        <div class="lib-row">
+          <div class="lib-glyph">HN</div>
+          <div class="lib-main">
+            <div class="name">Hacker News</div>
+            <div class="sub">rss · <span class="u">20 unseen</span></div>
+          </div>
+          <button class="weight low">
+            <span class="bars"><i class="f" style="height:3px"></i><i style="height:5px"></i><i style="height:7px"></i><i style="height:9px"></i></span>
+            low
+          </button>
+        </div>
+
+        <div class="lib-note">
+          Weight decides how loudly a source argues for a slot in your session — not
+          whether you'll ever see it. Turn one down; it waits its turn. Nothing shouts here.
+        </div>
+        <div style="height:8px"></div>
+      </section>
+
+    </div>
+
+    <!-- ================= NAV ================= -->
+    <nav class="tabbar" id="tabbar">
+      <button class="tab active" data-view="intent">
+        <span class="caret">▾</span>
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
+        Intent
+      </button>
+      <button class="tab" data-view="session">
+        <span class="caret">▾</span>
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M4 6h13M4 12h16M4 18h10"/><circle cx="20" cy="6" r="1.4" fill="currentColor" stroke="none"/></svg>
+        Session
+      </button>
+      <button class="tab" data-view="library">
+        <span class="caret">▾</span>
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M5 4h4v16H5zM11 4h3v16h-3zM16.5 5l3.5 1-3 14.5-3.5-1z"/></svg>
+        Library
+      </button>
+    </nav>
+
+  </div>
+</div>
+
+<script>
+(function(){
+  "use strict";
+
+  /* ---------- clock ---------- */
+  function tick(){
+    var d=new Date();
+    var h=d.getHours()%12; if(h===0) h=12;
+    var m=d.getMinutes(); if(m<10) m="0"+m;
+    document.getElementById('clock').textContent=h+":"+m;
+  }
+  tick(); setInterval(tick,10000);
+
+  /* ---------- ASCII rules: fill width with ── ornament ---------- */
+  function drawRules(){
+    document.querySelectorAll('[data-rule]').forEach(function(el){
+      var w=el.clientWidth||330;
+      var n=Math.max(8,Math.floor(w/6.2));
+      var s="┈".repeat(n-3)+" ◆";
+      el.textContent="◆ "+s;
+    });
+  }
+
+  /* ---------- nav ---------- */
+  var tabbar=document.getElementById('tabbar');
+  var content=document.getElementById('content');
+  tabbar.addEventListener('click',function(e){
+    var b=e.target.closest('.tab'); if(!b) return;
+    var view=b.dataset.view;
+    tabbar.querySelectorAll('.tab').forEach(function(t){ t.classList.toggle('active', t===b); });
+    ['intent','session','library'].forEach(function(v){
+      document.getElementById('view-'+v).classList.toggle('active', v===view);
+    });
+    content.scrollTop=0;
+    drawRules();
+  });
+
+  /* ============================================================
+     analog-stick pad
+     ============================================================ */
+  var pad=document.getElementById('pad');
+  var knob=document.getElementById('knob');
+  var tether=document.getElementById('tether');
+  var origin=document.getElementById('origin');
+  var roTime=document.getElementById('ro-time');
+  var roItems=document.getElementById('ro-items');
+  var roMode=document.getElementById('ro-mode');
+
+  var state={x:0,y:0}; // -1..1 ; y up = long
+  var dragging=false;
+
+  function place(){
+    var r=pad.getBoundingClientRect();
+    var cx=r.width/2, cy=r.height/2;
+    var pad_x=knob.offsetWidth/2+8, pad_y=knob.offsetHeight/2+8;
+    var maxX=cx-pad_x, maxY=cy-pad_y;
+    var px=cx+state.x*maxX;
+    var py=cy-state.y*maxY;
+    // origin dot
+    origin.style.left=(cx-4)+"px"; origin.style.top=(cy-4)+"px";
+    // knob
+    knob.style.left=(px-knob.offsetWidth/2)+"px";
+    knob.style.top=(py-knob.offsetHeight/2)+"px";
+    // tether
+    var dx=px-cx, dy=py-cy;
+    var len=Math.sqrt(dx*dx+dy*dy);
+    var ang=Math.atan2(dy,dx)*180/Math.PI;
+    tether.style.left=cx+"px"; tether.style.top=(cy-1)+"px";
+    tether.style.width=len+"px";
+    tether.style.transform="rotate("+ang+"deg)";
+    tether.style.opacity=len>4?1:0;
+    updateReadout();
+  }
+
+  function updateReadout(){
+    // vertical -> length. y in -1..1 (up=long)
+    var t=(state.y+1)/2; // 0 quick .. 1 long
+    var lo=Math.round(6+t*46);        // 6 .. 52
+    var hi=Math.round(lo+6+t*14);     // widen band as longer
+    roTime.textContent=lo+"–"+hi+" min";
+    // items scale with time + variety spread
+    var vr=Math.abs(state.x);
+    var items=Math.max(2,Math.round(2+t*7+vr*2));
+    roItems.textContent=items;
+    // mode label by horizontal
+    var mode;
+    if(state.x<-0.33) mode="focused";
+    else if(state.x>0.33) mode="varied";
+    else mode="balanced";
+    roMode.textContent=mode;
+
+    // brighten nearest corner
+    var nx=state.x>=0?1:-1, ny=state.y>=0?1:-1;
+    var key=(ny>0?"t":"b")+(nx<0?"l":"r");
+    // only light a corner if pushed out enough
+    var pushed=(Math.abs(state.x)+Math.abs(state.y))>0.28;
+    document.querySelectorAll('.corner').forEach(function(c){
+      c.classList.toggle('near', pushed && c.dataset.corner===key);
+    });
+  }
+
+  function fromEvent(e){
+    var r=pad.getBoundingClientRect();
+    var cx=r.width/2, cy=r.height/2;
+    var pad_x=knob.offsetWidth/2+8, pad_y=knob.offsetHeight/2+8;
+    var maxX=cx-pad_x, maxY=cy-pad_y;
+    var lx=e.clientX-r.left-cx;
+    var ly=e.clientY-r.top-cy;
+    state.x=Math.max(-1,Math.min(1, lx/maxX));
+    state.y=Math.max(-1,Math.min(1, -ly/maxY));
+    place();
+  }
+
+  pad.addEventListener('pointerdown',function(e){
+    dragging=true; knob.classList.add('grabbed');
+    pad.setPointerCapture(e.pointerId);
+    fromEvent(e);
+  });
+  pad.addEventListener('pointermove',function(e){
+    if(!dragging) return;
+    fromEvent(e);
+  });
+  function release(){
+    if(!dragging) return;
+    dragging=false; knob.classList.remove('grabbed');
+  }
+  pad.addEventListener('pointerup',release);
+  pad.addEventListener('pointercancel',release);
+
+  function recenter(){
+    state.x=0; state.y=0;
+    knob.style.transition="left .28s cubic-bezier(.2,1.3,.4,1), top .28s cubic-bezier(.2,1.3,.4,1)";
+    place();
+    setTimeout(function(){ knob.style.transition="box-shadow .12s, transform .05s"; },300);
+  }
+  // tap pad (no drag movement) recenters
+  var downPt=null;
+  pad.addEventListener('pointerdown',function(e){ downPt={x:e.clientX,y:e.clientY,t:Date.now()}; });
+  pad.addEventListener('pointerup',function(e){
+    if(!downPt) return;
+    var moved=Math.hypot(e.clientX-downPt.x, e.clientY-downPt.y);
+    if(moved<6 && Date.now()-downPt.t<300){ recenter(); }
+    downPt=null;
+  });
+  document.getElementById('recenter').addEventListener('click',recenter);
+
+  /* ---------- chips ---------- */
+  document.getElementById('chips').addEventListener('click',function(e){
+    var c=e.target.closest('.chip'); if(!c) return;
+    c.classList.toggle('on');
+  });
+
+  /* ---------- build button -> session ---------- */
+  document.getElementById('build').addEventListener('click',function(){
+    tabbar.querySelector('[data-view="session"]').click();
+  });
+
+  /* ---------- like toggles ---------- */
+  document.querySelectorAll('.act.like').forEach(function(b){
+    b.addEventListener('click',function(){ b.classList.toggle('on'); });
+  });
+  /* skip: dim the card */
+  document.querySelectorAll('.act.skip').forEach(function(b){
+    b.addEventListener('click',function(){
+      var card=b.closest('.card');
+      var skipped=card.style.opacity==="0.4";
+      card.style.transition="opacity .25s, filter .25s";
+      card.style.opacity=skipped?"1":"0.4";
+      card.style.filter=skipped?"none":"grayscale(.5)";
+    });
+  });
+  /* weight pills cycle a soft "acknowledge" pulse */
+  document.querySelectorAll('.weight').forEach(function(w){
+    w.addEventListener('click',function(){
+      w.animate([{transform:'scale(.95)'},{transform:'scale(1)'}],{duration:180,easing:'ease-out'});
+    });
+  });
+
+  /* ---------- init ---------- */
+  function boot(){
+    drawRules();
+    // set an opinionated default push (short-ish, slightly varied) then settle to center
+    state.x=0; state.y=0;
+    place();
+  }
+  // wait a frame for layout
+  requestAnimationFrame(function(){ requestAnimationFrame(boot); });
+  window.addEventListener('resize',function(){ drawRules(); place(); });
+})();
+</script>
+</body>
+</html>

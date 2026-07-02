@@ -1,0 +1,847 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<title>otium — wabi-sabi ceramic</title>
+<style>
+  /* ---------------------------------------------------------------
+     otium · Wabi-Sabi Ceramic
+     Warm clay, stone, oatmeal glaze. Kintsugi gold seams as accent.
+     Quiet serif. Hand-thrown, imperfect, grounded, serene.
+  ----------------------------------------------------------------*/
+  :root{
+    --paper:      #e6dbc7;   /* oatmeal glaze */
+    --paper-hi:   #efe6d5;   /* lighter throw */
+    --paper-lo:   #dccdb4;   /* shadowed clay */
+    --clay:       #bd875d;   /* terracotta */
+    --clay-deep:  #97603c;   /* fired clay */
+    --stone:      #6d6153;   /* stone knob */
+    --stone-lo:   #514637;
+    --ink:        #37302a;   /* umber ink */
+    --ink-soft:   #7a6c5b;   /* soft slip */
+    --ink-faint:  #a3937d;
+    --gold:       #c39a3f;   /* kintsugi */
+    --gold-hi:    #e4c76b;
+    --gold-lo:    #9a7622;
+    --line:       #c9b899;   /* hairline */
+    --backdrop:   #201c17;
+    --serif: "Iowan Old Style","Palatino Linotype","Palatino","Book Antiqua",Georgia,"Times New Roman",serif;
+    --deco: "Optima","Copperplate","Gill Sans",var(--serif);
+    --mono: "SF Mono","Menlo",ui-monospace,monospace;
+  }
+
+  *{ box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  html,body{ margin:0; padding:0; height:100%; }
+  body{
+    background:
+      radial-gradient(120% 90% at 50% -10%, #2c261f 0%, var(--backdrop) 60%, #17130f 100%);
+    color:var(--ink);
+    font-family:var(--serif);
+    display:flex; align-items:center; justify-content:center;
+    min-height:100dvh;
+    padding:22px;
+    overflow:hidden;
+  }
+
+  /* ---- phone frame ---- */
+  .phone{
+    position:relative;
+    width:390px; height:844px;
+    max-height:calc(100dvh - 24px);
+    border-radius:52px;
+    background:#0b0908;
+    padding:11px;
+    box-shadow:
+      0 2px 3px rgba(0,0,0,.6),
+      0 30px 70px -20px rgba(0,0,0,.75),
+      inset 0 0 0 2px #322a22,
+      inset 0 0 0 11px #0b0908;
+  }
+  .screen{
+    position:relative;
+    width:100%; height:100%;
+    border-radius:42px;
+    overflow:hidden;
+    background:var(--paper);
+    display:flex; flex-direction:column;
+    isolation:isolate;
+  }
+  /* fired-clay grain overlay across whole app */
+  .screen::before{
+    content:""; position:absolute; inset:0; z-index:0; pointer-events:none;
+    background-image:var(--grain);
+    background-size:280px 280px;
+    opacity:.5; mix-blend-mode:multiply;
+  }
+  /* soft vignette / kiln shading */
+  .screen::after{
+    content:""; position:absolute; inset:0; z-index:0; pointer-events:none;
+    background:
+      radial-gradient(140% 60% at 50% -8%, rgba(255,248,235,.5), transparent 55%),
+      radial-gradient(130% 80% at 50% 108%, rgba(70,52,34,.28), transparent 55%);
+    mix-blend-mode:multiply; opacity:.7;
+  }
+
+  /* notch */
+  .notch{
+    position:absolute; top:14px; left:50%; transform:translateX(-50%);
+    width:118px; height:30px; background:#0b0908; border-radius:16px; z-index:40;
+  }
+
+  /* ---- app scaffolding ---- */
+  .app{ position:relative; z-index:2; display:flex; flex-direction:column; height:100%; }
+  .view{
+    flex:1; overflow-y:auto; overflow-x:hidden;
+    -webkit-overflow-scrolling:touch;
+    padding:56px 26px 118px;
+    display:none;
+    animation:rise .5s cubic-bezier(.22,.68,.28,1) both;
+  }
+  .view.active{ display:block; }
+  @keyframes rise{ from{ opacity:0; transform:translateY(10px); } to{ opacity:1; transform:none; } }
+
+  /* ---- wordmark header ---- */
+  .brand{ text-align:center; margin-bottom:18px; }
+  .brand .mark{
+    font-family:var(--serif); font-style:italic; font-weight:400;
+    font-size:40px; letter-spacing:.5px; color:var(--ink);
+    line-height:1;
+  }
+  .brand .mark .dot{ color:var(--gold); font-style:normal; }
+  .brand .tag{
+    font-family:var(--deco); text-transform:uppercase;
+    letter-spacing:.34em; font-size:9.5px; font-weight:600;
+    color:var(--ink-soft); margin-top:9px; padding-left:.34em;
+  }
+  /* kintsugi hairline under the brand */
+  .seam-brand{ display:block; margin:14px auto 0; width:130px; height:9px; opacity:.9; }
+
+  h2.title{
+    font-family:var(--serif); font-weight:400; font-size:27px;
+    letter-spacing:.2px; margin:6px 0 3px; color:var(--ink);
+  }
+  .sub{
+    font-family:var(--deco); text-transform:uppercase; letter-spacing:.22em;
+    font-size:9.5px; color:var(--ink-faint); font-weight:600; margin-bottom:20px;
+  }
+
+  /* =========================================================
+     THE PAD — a thrown clay dish with a stone knob
+  ==========================================================*/
+  .pad-wrap{ display:flex; flex-direction:column; align-items:center; margin:6px 0 6px; }
+  .pad{
+    position:relative;
+    width:266px; height:266px;
+    touch-action:none;
+    cursor:grab;
+    user-select:none;
+  }
+  .pad:active{ cursor:grabbing; }
+  .pad svg.dish{ position:absolute; inset:0; width:100%; height:100%; display:block; overflow:visible; }
+
+  .corner{
+    position:absolute; z-index:3; pointer-events:none;
+    font-family:var(--deco); text-transform:uppercase;
+    font-size:8px; letter-spacing:.16em; line-height:1.35; font-weight:600;
+    color:var(--ink-faint);
+    transition:color .3s ease, opacity .3s ease, transform .3s ease;
+    opacity:.62;
+  }
+  .corner b{ display:block; font-size:8.5px; letter-spacing:.18em; }
+  .corner.tl{ top:12px; left:14px; text-align:left; }
+  .corner.tr{ top:12px; right:14px; text-align:right; }
+  .corner.bl{ bottom:12px; left:14px; text-align:left; }
+  .corner.br{ bottom:12px; right:14px; text-align:right; }
+  .corner.hot{ color:var(--clay-deep); opacity:1; transform:scale(1.06); }
+  .corner.hot b{ color:var(--gold-lo); }
+
+  /* the stone knob */
+  .knob{
+    position:absolute; top:50%; left:50%; z-index:5;
+    width:78px; height:78px; margin:-39px 0 0 -39px;
+    border-radius:50% 49% 51% 50% / 50% 51% 49% 50%;
+    background:
+      radial-gradient(60% 55% at 38% 32%, #8d8072 0%, var(--stone) 46%, var(--stone-lo) 100%);
+    box-shadow:
+      inset 0 3px 6px rgba(255,246,232,.28),
+      inset 0 -6px 12px rgba(24,18,12,.55),
+      0 10px 20px -6px rgba(30,22,14,.6),
+      0 2px 4px rgba(0,0,0,.35);
+    touch-action:none;
+    will-change:transform;
+    transition:transform .06s linear;
+  }
+  .knob.snap{ transition:transform .55s cubic-bezier(.34,1.42,.5,1); }
+  .knob::after{
+    content:""; position:absolute; inset:0; border-radius:inherit;
+    background-image:var(--grain); background-size:120px 120px;
+    opacity:.4; mix-blend-mode:multiply;
+  }
+  .knob .glaze{
+    position:absolute; top:14px; left:20px; width:24px; height:16px;
+    border-radius:50%; background:rgba(255,250,240,.4); filter:blur(2px);
+  }
+
+  .readout{
+    margin-top:16px; text-align:center; min-height:52px;
+  }
+  .readout .big{
+    font-family:var(--serif); font-size:26px; color:var(--ink);
+    letter-spacing:.3px;
+  }
+  .readout .big b{ font-weight:400; color:var(--clay-deep); }
+  .readout .items{
+    font-family:var(--mono); font-size:12px; letter-spacing:.5px;
+    color:var(--ink-soft); margin-top:5px;
+  }
+  .readout .items .sep{ color:var(--gold); padding:0 4px; }
+
+  /* =========================================================
+     THEME CHIPS
+  ==========================================================*/
+  .section-label{
+    font-family:var(--deco); text-transform:uppercase; letter-spacing:.22em;
+    font-size:9.5px; color:var(--ink-faint); font-weight:600;
+    margin:26px 0 13px; display:flex; align-items:center; gap:10px;
+  }
+  .section-label::after{ content:""; flex:1; height:1px; background:linear-gradient(90deg,var(--line),transparent); }
+
+  .chips{ display:flex; flex-wrap:wrap; gap:9px; }
+  .chip{
+    font-family:var(--serif); font-size:15px; color:var(--ink-soft);
+    padding:9px 16px; min-height:44px; display:inline-flex; align-items:center;
+    border-radius:22px 21px 22px 21px / 21px 22px 21px 22px;
+    background:var(--paper-hi);
+    border:1px solid var(--line);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,.35), 0 1px 2px rgba(60,45,30,.08);
+    transition:transform .12s ease, background .25s ease, color .25s ease, border-color .25s ease, box-shadow .25s ease;
+    cursor:pointer; position:relative;
+  }
+  .chip:active{ transform:scale(.95); }
+  .chip.on{
+    color:#faf3e4;
+    background:
+      radial-gradient(120% 130% at 30% 20%, var(--clay) 0%, var(--clay-deep) 100%);
+    border-color:var(--clay-deep);
+    box-shadow: inset 0 1px 2px rgba(255,240,220,.3), 0 4px 10px -4px rgba(90,55,30,.5);
+  }
+  .chip.on::before{
+    content:""; position:absolute; left:11px; top:50%; width:5px; height:5px; margin-top:-2.5px;
+    border-radius:50%; background:var(--gold-hi); box-shadow:0 0 5px var(--gold);
+  }
+  .chip.on{ padding-left:23px; }
+
+  /* =========================================================
+     BUILD BUTTON — glazed clay slab with gold seam
+  ==========================================================*/
+  .build{
+    margin-top:30px; width:100%; min-height:60px;
+    border:none; cursor:pointer; position:relative;
+    border-radius:20px 19px 20px 19px / 19px 20px 19px 20px;
+    background:
+      radial-gradient(130% 160% at 28% 12%, #c58f63 0%, var(--clay-deep) 58%, #7f4e2e 100%);
+    color:#fbf3e5;
+    font-family:var(--serif); font-size:19px; letter-spacing:.4px;
+    box-shadow:
+      inset 0 1px 1px rgba(255,240,220,.4),
+      inset 0 -5px 12px rgba(50,28,14,.5),
+      0 12px 26px -10px rgba(80,45,22,.7);
+    transition:transform .12s ease, box-shadow .12s ease;
+    overflow:hidden;
+    display:flex; align-items:center; justify-content:center; gap:10px;
+  }
+  .build:active{ transform:translateY(2px) scale(.99);
+    box-shadow: inset 0 2px 6px rgba(50,28,14,.6), 0 6px 14px -10px rgba(80,45,22,.7); }
+  .build .seam-btn{ position:absolute; inset:0; width:100%; height:100%; pointer-events:none; opacity:.9; }
+  .build span{ position:relative; z-index:2; }
+
+  /* =========================================================
+     SESSION CARDS
+  ==========================================================*/
+  .session-head{ margin-bottom:20px; }
+  .card{
+    position:relative;
+    background:linear-gradient(178deg, var(--paper-hi), var(--paper));
+    border:1px solid var(--line);
+    border-radius:20px 22px 21px 23px / 22px 20px 23px 21px;
+    padding:18px 18px 16px;
+    margin-bottom:16px;
+    box-shadow:
+      inset 0 1px 0 rgba(255,255,255,.4),
+      0 6px 16px -10px rgba(70,48,28,.4);
+    animation:rise .55s cubic-bezier(.22,.68,.28,1) both;
+  }
+  /* kintsugi seam running down the left edge of each card */
+  .card .kseam{
+    position:absolute; left:-1px; top:10px; bottom:10px; width:12px;
+    pointer-events:none; overflow:visible;
+  }
+  .reason{
+    display:inline-flex; align-items:center; gap:6px;
+    font-family:var(--deco); text-transform:uppercase; letter-spacing:.16em;
+    font-size:9px; font-weight:600; color:var(--gold-lo);
+    padding:5px 11px 5px 10px; border-radius:12px;
+    background:rgba(196,155,63,.12);
+    border:1px solid rgba(196,155,63,.4);
+    margin-bottom:11px;
+  }
+  .reason .dotg{ width:5px; height:5px; border-radius:50%; background:var(--gold); box-shadow:0 0 4px var(--gold-hi); }
+  .card h3{
+    font-family:var(--serif); font-weight:400; font-size:20px; line-height:1.28;
+    margin:0 0 9px; color:var(--ink); letter-spacing:.1px;
+  }
+  .card .csum{
+    font-family:var(--serif); font-size:14px; line-height:1.5; color:var(--ink-soft);
+    margin:0 0 12px; font-style:italic;
+  }
+  .meta{
+    display:flex; align-items:center; gap:9px; flex-wrap:wrap;
+    font-family:var(--mono); font-size:11px; letter-spacing:.3px; color:var(--ink-soft);
+    margin-bottom:15px;
+  }
+  .meta .src{ color:var(--ink); font-family:var(--serif); font-size:14px; letter-spacing:0; }
+  .meta .mdot{ width:3px; height:3px; border-radius:50%; background:var(--ink-faint); }
+  .mtype{
+    font-family:var(--deco); text-transform:uppercase; font-size:8.5px; letter-spacing:.14em;
+    padding:3px 8px; border-radius:8px; border:1px solid var(--line);
+    color:var(--ink-soft); background:var(--paper-lo);
+  }
+
+  .actions{ display:flex; gap:9px; }
+  .act{
+    flex:1; min-height:44px; cursor:pointer;
+    font-family:var(--serif); font-size:15px;
+    border-radius:14px 13px 14px 13px / 13px 14px 13px 14px;
+    display:inline-flex; align-items:center; justify-content:center; gap:7px;
+    transition:transform .12s ease, background .2s ease, color .2s ease, border-color .2s ease;
+    border:1px solid var(--line);
+    background:var(--paper-hi); color:var(--ink);
+  }
+  .act:active{ transform:scale(.94); }
+  .act.open{
+    background:radial-gradient(130% 150% at 30% 15%, var(--clay), var(--clay-deep));
+    color:#fbf3e5; border-color:var(--clay-deep); flex:1.5;
+    box-shadow: inset 0 1px 1px rgba(255,240,220,.35), 0 4px 10px -5px rgba(90,55,30,.5);
+  }
+  .act.like svg{ width:18px; height:18px; }
+  .act.like .heart{ fill:none; stroke:var(--stone); stroke-width:1.6; transition:.25s; }
+  .act.like.liked{ color:var(--gold-lo); border-color:var(--gold); background:rgba(196,155,63,.12); }
+  .act.like.liked .heart{ fill:var(--gold); stroke:var(--gold-lo); }
+  .act.skip{ color:var(--ink-soft); background:transparent; border-style:dashed; }
+
+  /* session footer */
+  .sfoot{
+    margin-top:26px; text-align:center;
+    padding-top:26px;
+  }
+  .sfoot .seam-foot{ display:block; margin:0 auto 20px; width:160px; height:11px; opacity:.9; }
+  .sfoot .done-line{
+    font-family:var(--serif); font-style:italic; font-size:22px; color:var(--ink);
+  }
+  .sfoot .fread{
+    font-family:var(--mono); font-size:12px; letter-spacing:.5px; color:var(--ink-soft);
+    margin-top:8px;
+  }
+  .sfoot .fread .sep{ color:var(--gold); padding:0 4px; }
+  .foot-btns{ display:flex; gap:11px; margin-top:22px; }
+  .fbtn{
+    flex:1; min-height:52px; cursor:pointer; font-family:var(--serif); font-size:16px;
+    border-radius:16px 15px 16px 15px / 15px 16px 15px 16px;
+    transition:transform .12s ease;
+    display:flex; align-items:center; justify-content:center;
+  }
+  .fbtn:active{ transform:scale(.97); }
+  .fbtn.more{ background:var(--paper-hi); color:var(--ink); border:1px solid var(--line);
+    box-shadow: inset 0 1px 0 rgba(255,255,255,.4); }
+  .fbtn.donebtn{
+    background:radial-gradient(130% 150% at 30% 15%, var(--clay), var(--clay-deep));
+    color:#fbf3e5; border:1px solid var(--clay-deep);
+    box-shadow: inset 0 1px 1px rgba(255,240,220,.35), 0 6px 14px -6px rgba(90,55,30,.5);
+  }
+
+  /* =========================================================
+     LIBRARY
+  ==========================================================*/
+  .lib-row{
+    position:relative; display:flex; align-items:center; gap:14px;
+    padding:16px 4px; border-bottom:1px solid var(--line);
+  }
+  .lib-row:last-of-type{ border-bottom:none; }
+  .lib-glyph{
+    width:46px; height:46px; flex:0 0 auto; border-radius:50% 48% 52% 49% / 49% 52% 48% 51%;
+    background:radial-gradient(60% 55% at 38% 30%, var(--paper-hi), var(--paper-lo));
+    border:1px solid var(--line);
+    display:flex; align-items:center; justify-content:center;
+    box-shadow: inset 0 1px 2px rgba(255,255,255,.4), inset 0 -3px 6px rgba(80,55,32,.15);
+    font-family:var(--serif); font-style:italic; font-size:20px; color:var(--clay-deep);
+  }
+  .lib-info{ flex:1; min-width:0; }
+  .lib-info .lname{ font-family:var(--serif); font-size:18px; color:var(--ink); letter-spacing:.1px; }
+  .lib-info .lsub{
+    font-family:var(--mono); font-size:11px; letter-spacing:.3px; color:var(--ink-soft); margin-top:3px;
+  }
+  .lib-info .lsub .u{ color:var(--clay-deep); }
+  .wpill{
+    flex:0 0 auto; cursor:pointer; min-height:44px; min-width:92px;
+    display:flex; flex-direction:column; align-items:center; justify-content:center;
+    padding:6px 12px; border-radius:15px 14px 15px 14px / 14px 15px 14px 15px;
+    background:var(--paper-hi); border:1px solid var(--line);
+    transition:transform .12s ease, background .25s ease, border-color .25s ease;
+    box-shadow: inset 0 1px 0 rgba(255,255,255,.4);
+  }
+  .wpill:active{ transform:scale(.95); }
+  .wpill .wlabel{
+    font-family:var(--deco); text-transform:uppercase; letter-spacing:.14em;
+    font-size:9px; font-weight:600; color:var(--ink-soft);
+  }
+  .wpill .wbars{ display:flex; gap:3px; margin-top:5px; align-items:flex-end; height:12px; }
+  .wpill .wbars i{ width:5px; background:var(--ink-faint); border-radius:1px; display:block; transition:.25s; }
+  .wpill .wbars i:nth-child(1){ height:5px; }
+  .wpill .wbars i:nth-child(2){ height:8px; }
+  .wpill .wbars i:nth-child(3){ height:11px; }
+  /* weight levels 0..4 */
+  .wpill[data-lvl="0"] .wlabel{ color:var(--ink-faint); }
+  .wpill[data-lvl="1"] .wbars i.a1{ background:var(--stone); }
+  .wpill[data-lvl="2"] .wbars i.a1,.wpill[data-lvl="2"] .wbars i.a2{ background:var(--clay); }
+  .wpill[data-lvl="3"] .wbars i.a1,.wpill[data-lvl="3"] .wbars i.a2,.wpill[data-lvl="3"] .wbars i.a3{ background:var(--clay-deep); }
+  .wpill[data-lvl="4"]{ background:rgba(196,155,63,.13); border-color:var(--gold); }
+  .wpill[data-lvl="4"] .wlabel{ color:var(--gold-lo); }
+  .wpill[data-lvl="4"] .wbars i{ background:var(--gold); }
+  .wpill[data-lvl="0"] .wbars i{ background:var(--ink-faint); opacity:.5; }
+  .wpill[data-lvl="0"] .wbars i.a1{ background:var(--stone); opacity:1; }
+
+  /* =========================================================
+     BOTTOM NAV — fixed inside the frame
+  ==========================================================*/
+  .nav{
+    position:absolute; left:0; right:0; bottom:0; z-index:30;
+    height:88px; padding:8px 22px 26px;
+    display:flex; align-items:flex-start; justify-content:space-around;
+    background:linear-gradient(180deg, rgba(230,219,199,0), var(--paper) 42%);
+    backdrop-filter:blur(2px);
+  }
+  .nav::before{
+    content:""; position:absolute; top:6px; left:26px; right:26px; height:10px;
+    background:var(--nav-seam) center/contain no-repeat;
+    opacity:.85; pointer-events:none;
+  }
+  .nav-btn{
+    flex:1; background:none; border:none; cursor:pointer;
+    display:flex; flex-direction:column; align-items:center; gap:5px;
+    padding:12px 0 0; color:var(--ink-faint);
+    transition:color .25s ease, transform .12s ease;
+    font-family:var(--deco); text-transform:uppercase; letter-spacing:.16em;
+    font-size:9px; font-weight:600;
+  }
+  .nav-btn:active{ transform:scale(.9); }
+  .nav-btn svg{ width:24px; height:24px; }
+  .nav-btn svg *{ transition:.25s; }
+  .nav-btn.on{ color:var(--clay-deep); }
+  .nav-btn.on .ic{ stroke:var(--clay-deep); }
+  .nav-btn.on .icf{ fill:var(--gold); }
+  .nav-btn .ic{ stroke:var(--ink-faint); fill:none; stroke-width:1.5; }
+  .nav-btn .icf{ fill:none; }
+
+  /* scrollbar hush */
+  .view::-webkit-scrollbar{ width:0; }
+</style>
+</head>
+<body>
+<div class="phone">
+  <div class="screen">
+    <div class="notch"></div>
+    <div class="app">
+
+      <!-- ============ INTENT ============ -->
+      <section class="view active" id="view-intent">
+        <div class="brand">
+          <div class="mark">otium<span class="dot">.</span></div>
+          <div class="tag">attention, on purpose</div>
+          <svg class="seam-brand" viewBox="0 0 130 9" fill="none">
+            <path d="M2 5 L20 4.2 L32 5.6 L46 4 L60 5.2 L74 4.4 L90 5.6 L104 4.6 L118 5.2 L128 4.6"
+                  stroke="url(#gb)" stroke-width="1.4" stroke-linecap="round"/>
+            <path d="M32 5.6 L36 2.5 M60 5.2 L64 8 M90 5.6 L94 3" stroke="url(#gb)" stroke-width="1" stroke-linecap="round" opacity=".7"/>
+            <defs><linearGradient id="gb" x1="0" y1="0" x2="130" y2="0">
+              <stop offset="0" stop-color="#9a7622"/><stop offset=".5" stop-color="#e4c76b"/><stop offset="1" stop-color="#9a7622"/>
+            </linearGradient></defs>
+          </svg>
+        </div>
+
+        <h2 class="title">How much time?</h2>
+        <div class="sub">pull the stone to compose</div>
+
+        <div class="pad-wrap">
+          <div class="pad" id="pad">
+            <svg class="dish" viewBox="0 0 266 266" preserveAspectRatio="none">
+              <defs>
+                <radialGradient id="dishg" cx="42%" cy="34%" r="72%">
+                  <stop offset="0" stop-color="#efe6d5"/>
+                  <stop offset="55%" stop-color="#dccdb4"/>
+                  <stop offset="100%" stop-color="#c3ae8c"/>
+                </radialGradient>
+                <linearGradient id="kg" x1="0" y1="0" x2="266" y2="266">
+                  <stop offset="0" stop-color="#9a7622"/>
+                  <stop offset=".5" stop-color="#e4c76b"/>
+                  <stop offset="1" stop-color="#9a7622"/>
+                </linearGradient>
+                <radialGradient id="wellg" cx="50%" cy="50%" r="50%">
+                  <stop offset="0" stop-color="#c8b593"/>
+                  <stop offset="70%" stop-color="#d7c8ac"/>
+                  <stop offset="100%" stop-color="#d7c8ac" stop-opacity="0"/>
+                </radialGradient>
+              </defs>
+              <!-- thrown dish body, irregular rounded square -->
+              <path d="M40 12
+                       C120 4, 150 6, 226 14
+                       C256 20, 262 52, 254 128
+                       C260 200, 252 240, 220 252
+                       C150 262, 110 260, 44 252
+                       C14 244, 6 210, 12 130
+                       C6 56, 12 22, 40 12 Z"
+                    fill="url(#dishg)" stroke="#b39d78" stroke-width="1.4"/>
+              <!-- inner well shadow -->
+              <ellipse cx="133" cy="140" rx="96" ry="92" fill="url(#wellg)" opacity=".55"/>
+              <!-- concentric throwing rings -->
+              <ellipse cx="133" cy="138" rx="104" ry="100" fill="none" stroke="#bda986" stroke-width=".7" opacity=".5"/>
+              <ellipse cx="133" cy="139" rx="78" ry="75" fill="none" stroke="#bda986" stroke-width=".6" opacity=".4"/>
+              <ellipse cx="133" cy="140" rx="50" ry="48" fill="none" stroke="#bda986" stroke-width=".6" opacity=".35"/>
+              <!-- kintsugi repair seam wandering across the dish -->
+              <path d="M20 96 C60 88, 84 120, 118 108 C150 96, 168 138, 208 120 C232 110, 246 130, 250 150"
+                    fill="none" stroke="url(#kg)" stroke-width="1.7" stroke-linecap="round" opacity=".55"/>
+              <path d="M118 108 L110 84 M118 108 L128 130 M208 120 L216 100"
+                    fill="none" stroke="url(#kg)" stroke-width="1" stroke-linecap="round" opacity=".4"/>
+              <!-- crosshair whisper at center -->
+              <line x1="133" y1="120" x2="133" y2="158" stroke="#b39d78" stroke-width=".8" opacity=".35"/>
+              <line x1="114" y1="139" x2="152" y2="139" stroke="#b39d78" stroke-width=".8" opacity=".35"/>
+              <!-- live tether (gold kintsugi) center -> knob -->
+              <path id="tether" d="M133 139 L133 139" fill="none" stroke="url(#kg)" stroke-width="2.4" stroke-linecap="round"/>
+              <circle id="tether-cap" cx="133" cy="139" r="3" fill="#e4c76b"/>
+            </svg>
+
+            <div class="corner tl"><b>LONG</b>focused</div>
+            <div class="corner tr"><b>LONG</b>varied</div>
+            <div class="corner bl"><b>QUICK</b>focused</div>
+            <div class="corner br"><b>QUICK</b>varied</div>
+
+            <div class="knob" id="knob"><span class="glaze"></span></div>
+          </div>
+
+          <div class="readout">
+            <div class="big"><b id="r-min">18–26</b> min</div>
+            <div class="items">~<span id="r-items">5</span> items<span class="sep">·</span><span id="r-mood">balanced</span></div>
+          </div>
+        </div>
+
+        <div class="section-label">In the mood for</div>
+        <div class="chips" id="chips">
+          <button class="chip" data-t="News">News</button>
+          <button class="chip on" data-t="Tech">Tech</button>
+          <button class="chip" data-t="Science">Science</button>
+          <button class="chip on" data-t="Curiosity">Curiosity</button>
+          <button class="chip" data-t="Gaming">Gaming</button>
+          <button class="chip" data-t="Music">Music</button>
+        </div>
+
+        <button class="build" id="build">
+          <svg class="seam-btn" viewBox="0 0 340 60" preserveAspectRatio="none" fill="none">
+            <path d="M0 44 C60 40, 90 50, 150 42 C210 34, 250 48, 340 40"
+                  stroke="#e4c76b" stroke-width="1.1" stroke-linecap="round" opacity=".35"/>
+          </svg>
+          <span>Build my session</span>
+        </button>
+      </section>
+
+      <!-- ============ SESSION ============ -->
+      <section class="view" id="view-session">
+        <div class="session-head">
+          <h2 class="title">Your session</h2>
+          <div class="sub">4 items · composed for you</div>
+        </div>
+        <div id="cards"></div>
+
+        <div class="sfoot">
+          <svg class="seam-foot" viewBox="0 0 160 11" fill="none">
+            <path d="M2 6 L22 4.6 L38 7 L54 4.4 L72 6.4 L90 4.6 L108 7 L126 5 L144 6.4 L158 5"
+                  stroke="url(#gf)" stroke-width="1.5" stroke-linecap="round"/>
+            <path d="M38 7 L42 10 M72 6.4 L76 3 M108 7 L112 10 M126 5 L122 2.4" stroke="url(#gf)" stroke-width="1" stroke-linecap="round" opacity=".7"/>
+            <defs><linearGradient id="gf" x1="0" y1="0" x2="160" y2="0">
+              <stop offset="0" stop-color="#9a7622"/><stop offset=".5" stop-color="#e4c76b"/><stop offset="1" stop-color="#9a7622"/>
+            </linearGradient></defs>
+          </svg>
+          <div class="done-line">That’s your session.</div>
+          <div class="fread">4 items<span class="sep">·</span>~58 min</div>
+          <div class="foot-btns">
+            <button class="fbtn more" id="more">More like this</button>
+            <button class="fbtn donebtn" id="done">Done</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- ============ LIBRARY ============ -->
+      <section class="view" id="view-library">
+        <div class="session-head">
+          <h2 class="title">Your library</h2>
+          <div class="sub">weight the voices you follow</div>
+        </div>
+        <div id="lib"></div>
+      </section>
+
+      <!-- ============ NAV ============ -->
+      <nav class="nav" id="nav">
+        <button class="nav-btn on" data-view="intent">
+          <svg viewBox="0 0 24 24"><circle class="ic" cx="12" cy="12" r="9"/><circle class="icf ic" cx="12" cy="12" r="3" fill="none"/></svg>
+          Intent
+        </button>
+        <button class="nav-btn" data-view="session">
+          <svg viewBox="0 0 24 24"><path class="ic" d="M4 6h16 M4 12h16 M4 18h10" stroke-linecap="round"/><circle class="icf" cx="20" cy="18" r="2.4" fill="none"/></svg>
+          Session
+        </button>
+        <button class="nav-btn" data-view="library">
+          <svg viewBox="0 0 24 24"><path class="ic" d="M5 4h5v16H5z M14 4h5v16h-5z" stroke-linejoin="round"/><path class="icf ic" d="M10 8h4" fill="none"/></svg>
+          Library
+        </button>
+      </nav>
+
+    </div>
+  </div>
+</div>
+
+<script>
+/* ---- SVG grain data-uris (feTurbulence, zero network) ---- */
+(function(){
+  const grain =
+    "url(\"data:image/svg+xml;utf8,"+
+    encodeURIComponent(
+      '<svg xmlns="http://www.w3.org/2000/svg" width="280" height="280">'+
+      '<filter id="n"><feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="2" stitchTiles="stitch"/>'+
+      '<feColorMatrix type="matrix" values="0 0 0 0 0.32  0 0 0 0 0.24  0 0 0 0 0.15  0 0 0 0.9 0"/></filter>'+
+      '<rect width="280" height="280" filter="url(%23n)" opacity="0.35"/></svg>'
+    )+"\")";
+  const navseam =
+    "url(\"data:image/svg+xml;utf8,"+
+    encodeURIComponent(
+      '<svg xmlns="http://www.w3.org/2000/svg" width="320" height="10" viewBox="0 0 320 10">'+
+      '<defs><linearGradient id="g" x1="0" x2="320"><stop offset="0" stop-color="%239a7622"/>'+
+      '<stop offset="0.5" stop-color="%23e4c76b"/><stop offset="1" stop-color="%239a7622"/></linearGradient></defs>'+
+      '<path d="M2 5 L40 4 L70 6 L110 4.4 L150 5.6 L190 4.2 L230 6 L270 4.6 L300 5.4 L318 4.6" '+
+      'fill="none" stroke="url(%23g)" stroke-width="1.3" stroke-linecap="round"/></svg>'
+    )+"\")";
+  document.documentElement.style.setProperty('--grain', grain);
+  document.documentElement.style.setProperty('--nav-seam', navseam);
+})();
+
+/* ================= NAV ================= */
+const nav = document.getElementById('nav');
+const views = { intent:'view-intent', session:'view-session', library:'view-library' };
+function show(name){
+  Object.values(views).forEach(id=>document.getElementById(id).classList.remove('active'));
+  document.getElementById(views[name]).classList.add('active');
+  [...nav.children].forEach(b=>b.classList.toggle('on', b.dataset.view===name));
+  document.querySelectorAll('.view').forEach(v=>v.scrollTop=0);
+}
+nav.querySelectorAll('.nav-btn').forEach(b=>b.addEventListener('click',()=>show(b.dataset.view)));
+
+/* ================= THE PAD ================= */
+const pad = document.getElementById('pad');
+const knob = document.getElementById('knob');
+const tether = document.getElementById('tether');
+const tcap = document.getElementById('tether-cap');
+const rMin = document.getElementById('r-min');
+const rItems = document.getElementById('r-items');
+const rMood = document.getElementById('r-mood');
+const corners = { tl:document.querySelector('.corner.tl'), tr:document.querySelector('.corner.tr'),
+                  bl:document.querySelector('.corner.bl'), br:document.querySelector('.corner.br') };
+
+const MAXR = 88;        // clamp radius from center (px)
+const CX = 133, CY = 139; // svg center in viewBox units (matches 266 pad)
+const SVG_SCALE = 266/266; // pad px == viewBox units here
+let cur = {x:0, y:0};
+let dragging = false, moved = false, startPt=null;
+
+function clampToPad(dx, dy){
+  const d = Math.hypot(dx, dy);
+  if(d > MAXR){ const k = MAXR/d; return {x:dx*k, y:dy*k}; }
+  return {x:dx, y:dy};
+}
+
+function render(){
+  knob.style.transform = `translate(${cur.x}px, ${cur.y}px)`;
+  // tether in svg viewBox coords (pad is 266px wide == 266 units)
+  const tx = CX + cur.x, ty = CY + cur.y;
+  // slightly wandering kintsugi tether (a mid kink) instead of dead-straight
+  const mx = CX + cur.x*0.5 + (-cur.y*0.10);
+  const my = CY + cur.y*0.5 + (cur.x*0.10);
+  tether.setAttribute('d', `M${CX} ${CY} Q ${mx.toFixed(1)} ${my.toFixed(1)} ${tx.toFixed(1)} ${ty.toFixed(1)}`);
+  tcap.setAttribute('cx', tx.toFixed(1));
+  tcap.setAttribute('cy', ty.toFixed(1));
+
+  // normalized: up(+)=long, right(+)=varied
+  const nY = -cur.y / MAXR;   // -1..1
+  const nX =  cur.x / MAXR;   // -1..1
+
+  // session length: center ~22 min, up longer, down shorter
+  let mid = 24 + nY*34;
+  if(mid < 7) mid = 7;
+  const lo = Math.max(4, Math.round(mid*0.82));
+  const hi = Math.round(mid*1.16);
+  rMin.textContent = `${lo}–${hi}`;
+
+  // item count: total time / avg length; variety -> more, shorter items
+  const avg = 15 - nX*7.5;            // focused=longer items, varied=shorter
+  let items = Math.round(mid / Math.max(4, avg));
+  items = Math.max(1, Math.min(12, items));
+  rItems.textContent = items;
+
+  // mood word
+  const var_ = nX > 0.28 ? 'varied' : nX < -0.28 ? 'focused' : 'balanced';
+  const len_ = nY > 0.28 ? 'long'   : nY < -0.28 ? 'quick'   : 'measured';
+  rMood.textContent = (len_==='measured'&&var_==='balanced') ? 'balanced' : `${len_} · ${var_}`;
+
+  // brighten nearest corner
+  const q = { tl: (nY>0 && nX<0), tr:(nY>0 && nX>0), bl:(nY<0 && nX<0), br:(nY<0 && nX>0) };
+  const mag = Math.hypot(nX,nY);
+  Object.keys(corners).forEach(k=>{
+    corners[k].classList.toggle('hot', mag>0.22 && q[k]);
+  });
+}
+
+function pointFromEvent(e){
+  const r = pad.getBoundingClientRect();
+  const cx = r.left + r.width/2;
+  const cy = r.top + r.height/2;
+  return { x:e.clientX - cx, y:e.clientY - cy };
+}
+
+pad.addEventListener('pointerdown', e=>{
+  dragging = true; moved = false;
+  startPt = {x:e.clientX, y:e.clientY};
+  knob.classList.remove('snap');
+  pad.setPointerCapture(e.pointerId);
+  const p = pointFromEvent(e);
+  cur = clampToPad(p.x, p.y);
+  render();
+});
+pad.addEventListener('pointermove', e=>{
+  if(!dragging) return;
+  if(Math.hypot(e.clientX-startPt.x, e.clientY-startPt.y) > 4) moved = true;
+  const p = pointFromEvent(e);
+  cur = clampToPad(p.x, p.y);
+  render();
+});
+function endDrag(e){
+  if(!dragging) return;
+  dragging = false;
+  // tap (no drag) => recenter with a springy snap
+  if(!moved){
+    knob.classList.add('snap');
+    cur = {x:0, y:0};
+    render();
+  }
+}
+pad.addEventListener('pointerup', endDrag);
+pad.addEventListener('pointercancel', endDrag);
+
+// start slightly off-center (upper-left-ish) so the readout shows a real state
+cur = clampToPad(-14, -24); render();
+
+/* ================= CHIPS ================= */
+document.getElementById('chips').addEventListener('click', e=>{
+  const c = e.target.closest('.chip'); if(!c) return;
+  c.classList.toggle('on');
+});
+
+/* ================= BUILD / FOOTER ================= */
+document.getElementById('build').addEventListener('click', ()=> show('session'));
+document.getElementById('done').addEventListener('click', ()=> show('intent'));
+document.getElementById('more').addEventListener('click', ()=>{
+  const cards = document.getElementById('cards');
+  cards.style.animation='none'; void cards.offsetWidth; cards.style.animation='';
+  document.getElementById('view-session').scrollTop = 0;
+});
+
+/* ================= SESSION CARDS (fixture) ================= */
+const seam = `<svg class="kseam" viewBox="0 0 12 200" preserveAspectRatio="none" fill="none">
+  <path d="M6 4 C3 30, 9 52, 5 84 C2 112, 8 140, 5 168 C4 182, 7 192, 6 196"
+        stroke="url(#kc)" stroke-width="2" stroke-linecap="round"/>
+  <path d="M5 84 L1 74 M5 84 L10 96 M5 168 L1 160" stroke="url(#kc)" stroke-width="1.1" stroke-linecap="round" opacity=".6"/>
+  <defs><linearGradient id="kc" x1="0" y1="0" x2="0" y2="200">
+    <stop offset="0" stop-color="#9a7622"/><stop offset=".5" stop-color="#e4c76b"/><stop offset="1" stop-color="#9a7622"/>
+  </linearGradient></defs></svg>`;
+
+const heartSvg = `<svg viewBox="0 0 24 24"><path class="heart" d="M12 20 C12 20 4 14.5 4 9.2 C4 6.3 6.2 4.5 8.6 4.5 C10.2 4.5 11.4 5.4 12 6.6 C12.6 5.4 13.8 4.5 15.4 4.5 C17.8 4.5 20 6.3 20 9.2 C20 14.5 12 20 12 20 Z"/></svg>`;
+
+const cardsData = [
+  { reason:'Favorite source', title:'I got hit in the teeth at England’s oldest ritual',
+    src:'Tom Scott', dur:'10 min', type:'video' },
+  { reason:'Fresh · posted today', title:'Apple’s entry-level MacBook Pro could get a redesign',
+    src:'The Verge', dur:'4 min', type:'article',
+    summary:'A revamped entry model could arrive as soon as this year, per supply-chain reports.' },
+  { reason:'Rare · posts seldom', title:'The Real Book',
+    src:'99% Invisible', dur:'32 min', type:'audio' },
+  { reason:'High-weight source', title:'The universe’s biggest unsolved problem',
+    src:'Veritasium', dur:'12 min', type:'video' }
+];
+
+const cardsEl = document.getElementById('cards');
+cardsEl.innerHTML = cardsData.map((c,i)=>`
+  <article class="card" style="animation-delay:${i*0.07}s">
+    ${seam}
+    <span class="reason"><span class="dotg"></span>${c.reason}</span>
+    <h3>${c.title}</h3>
+    ${c.summary ? `<p class="csum">${c.summary}</p>` : ''}
+    <div class="meta">
+      <span class="src">${c.src}</span><span class="mdot"></span>
+      <span>${c.dur}</span><span class="mdot"></span>
+      <span class="mtype">${c.type}</span>
+    </div>
+    <div class="actions">
+      <button class="act open">Open</button>
+      <button class="act like" aria-label="Like">${heartSvg}</button>
+      <button class="act skip">Skip</button>
+    </div>
+  </article>`).join('');
+
+cardsEl.addEventListener('click', e=>{
+  const like = e.target.closest('.act.like');
+  if(like){ like.classList.toggle('liked'); return; }
+  const skip = e.target.closest('.act.skip');
+  if(skip){ const card = skip.closest('.card');
+    card.style.transition='opacity .3s, transform .3s';
+    card.style.opacity='.4'; card.style.transform='translateX(8px)';
+    setTimeout(()=>{ card.style.opacity=''; card.style.transform=''; }, 900);
+  }
+});
+
+/* ================= LIBRARY (fixture) ================= */
+const WEIGHTS = ['very low','low','normal','high','favorite']; // lvl 0..4
+const libData = [
+  { name:'Tom Scott',  kind:'youtube', unseen:15, lvl:4 },
+  { name:'NPR News',   kind:'rss',     unseen:10, lvl:2 },
+  { name:'Kurzgesagt', kind:'youtube', unseen:15, lvl:4 },
+  { name:'Hacker News',kind:'rss',     unseen:20, lvl:1 }
+];
+function initial(n){ return n.trim()[0]; }
+const libEl = document.getElementById('lib');
+libEl.innerHTML = libData.map(s=>`
+  <div class="lib-row">
+    <div class="lib-glyph">${initial(s.name)}</div>
+    <div class="lib-info">
+      <div class="lname">${s.name}</div>
+      <div class="lsub">${s.kind} · <span class="u">${s.unseen} unseen</span></div>
+    </div>
+    <button class="wpill" data-lvl="${s.lvl}">
+      <span class="wlabel">${WEIGHTS[s.lvl]}</span>
+      <span class="wbars"><i class="a1"></i><i class="a2"></i><i class="a3"></i></span>
+    </button>
+  </div>`).join('');
+
+libEl.addEventListener('click', e=>{
+  const p = e.target.closest('.wpill'); if(!p) return;
+  let lvl = (parseInt(p.dataset.lvl,10)+1) % 5;
+  p.dataset.lvl = lvl;
+  p.querySelector('.wlabel').textContent = WEIGHTS[lvl];
+});
+</script>
+</body>
+</html>
