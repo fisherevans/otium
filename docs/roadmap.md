@@ -1,64 +1,40 @@
 # otium - roadmap
 
-Milestones mirror the interview's staging. "Built" = works end to end in the
-current code; "Next" = nearest unbuilt work.
+A narrative of where the product is headed. **Open work lives in GitHub
+issues + milestones, not here** - this doc is orientation, not a task list. See
+[CLAUDE.md - Tracking & work definition](../CLAUDE.md#tracking--work-definition-github-issues).
 
-## Milestone 1 - Session engine (in progress)
+    gh issue list                          # the whole backlog
+    gh issue list --milestone "…"          # a single stream
 
-The core loop: ingest → normalize → rank → time-boxed session.
+## Where things stand
 
-Built:
-- SQLite store + schema (sources, feeds, items, item_state, sessions, events).
-- Feed ingest (`internal/server/feeds`): RSS/Atom, YouTube channel feeds,
-  podcasts; media-type classification + duration.
-- Session builder (`internal/server/session`): deterministic
-  `weight × freshness × rarity` scoring, per-source caps, diversity, greedy fill
-  to a duration range, per-item reason strings.
-- API: sources CRUD, feeds, `POST /session`, item events, on-demand + interval
-  fetch.
-- Web: intent screen with the two-axis duration pad, theme chips, session cards
-  with reasons + open/like/skip, source library with in-place weight cycling.
-- OIDC auth (auth.fisher.sh) + dev bypass.
+The **session engine** is built and works end to end locally: ingest
+(RSS/YouTube/podcast) → rank → a time-boxed, paced, single-item stream. "How
+much time" is a wall-clock budget, not a summed item duration; the ranker stages
+a queue and the client paces it against elapsed time, with pacing check-ins and
+skip-rate + predicted-items feedback into ranking. Follow-import (OPML + YouTube
+Takeout CSV) is in. Auth is a confidential OIDC client of auth.fisher.sh with a
+local dev bypass.
 
-Next (still M1):
-- **Feed ↔ source assignment UI.** Feeds exist server-side and drive theme
-  chips, but there's no UI yet to put a source in a feed (the API replaces a
-  feed's whole source set; per-source toggle needs a read-modify-write or a new
-  add/remove endpoint). Until then, sessions run against "everything you follow."
-- **Cadence over a real window.** Rarity currently derives cadence from the
-  items currently in a source's feed, but RSS truncates to ~10-15 recent
-  entries, so a high-volume source reads as "rare." Fix: compute cadence from
-  observed publish timestamps accumulated over time (we now store every item),
-  not from a single feed snapshot.
-- Per-source drill-in view ("catch up on this creator": recent / most-recent
-  ordering). API exists (`GET /sources/{id}/items`); no UI.
-- Session persistence/resume in the UI (session_id is returned + stored).
+What it is **not** yet: deployed (the whole `Deploy to homelab` milestone -
+k3s, the Hydra client, the Cloudflare route, observability), themed (the
+`Design system` milestone - 18 candidate directions sit in [`design/`](../design/)
+awaiting a pick), or fleshed out on curation/discovery/intelligence.
 
-## Milestone 2 - Better curation
+## The milestones
 
-- Per-source weights already land; add long-press "more/less of this" in the
-  session cards (Reddit-style nudge).
-- Tunable freshness half-life + diversity per feed (constants today).
-- Feed health dashboard (sources, active/dormant, uploads/day, % skipped).
-- "Why this item?" expanded panel (score breakdown, not just the one-line
-  reason).
+- **Session engine** - the core loop; mostly built, with refinements open
+  (behavioral pace, cadence fix, feed↔source UI, drill-in).
+- **Curation & controls** - weights, feed health, tuning, "why this item".
+- **Discovery & trials** - trial sources, like-based recs, the discovery queue,
+  mapping locked-down platforms (TikTok/IG/Patreon) to real feeds.
+- **Intelligence & agent** - user-facing stats, a JSON/agent API, the LLM
+  operator that tunes feeds conversationally.
+- **Deploy to homelab** - stand it up gated at `otium.fisher.sh`, phone flow end
+  to end. The original mandate.
+- **Design system** - pick a visual language and wire it in.
 
-## Milestone 3 - Discovery
-
-- Trial source state machine (schema has `state`/`trial_until`); trial review
-  surfaced in-flow at an exposure threshold.
-- Like-based recommendations with explanations ("because you liked X").
-- Discovery as a contextual review queue, per-feed or global.
-
-## Milestone 4 - Intelligence
-
-- LLM operator: conversational feed tuning, natural-language rules, agent-driven
-  discovery, feed audits. Reads the events/stats JSON surface, proposes changes
-  via the same API, user approves.
-
-## Cross-cutting / ops (not yet done)
-
-- k3s deploy manifests in nottingham-cloud (`k3s/projects/otium/`), OIDC client
-  registration with Hydra, Cloudflare route for `otium.fisher.sh`, Datadog
-  http_check. Tracked in the nottingham-cloud onboarding issue.
-- Stats/insights views + the JSON/agent export endpoint.
+The product thesis these serve is in [product.md](product.md); the
+theme-independent experience rules are in
+[../design/EXPERIENCE.md](../design/EXPERIENCE.md).
