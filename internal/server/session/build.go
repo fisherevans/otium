@@ -35,12 +35,17 @@ var defaultDurationSec = map[string]int{
 	"unknown": 180,
 }
 
-// Request is a session ask: a duration range and (implicitly, via the candidate
-// pool) a set of themes.
+// Request is a session ask. MinLow/MinHigh are the user's wall-clock time budget
+// (minutes) - they are NOT used to size the item set. The session is a ranked
+// queue the client paces against elapsed time; QueueSize bounds how many items
+// to stage up front (the client refills as it goes).
 type Request struct {
-	MinLow  int // lower bound, minutes
-	MinHigh int // upper bound, minutes
+	MinLow    int // lower bound, minutes (client-side pacing budget)
+	MinHigh   int // upper bound, minutes (client-side pacing budget)
+	QueueSize int // max items to stage (0 -> default)
 }
+
+const defaultQueueSize = 30
 
 // Selected is one item chosen for the session, with the ranker's rationale.
 type Selected struct {
@@ -66,21 +71,25 @@ type scored struct {
 	dur      int
 	reason   string
 	sourceID int64
+	taken    bool
 }
 
-// Build ranks the candidate pool and greedily fills a session to the requested
-// time budget, capping per-source volume and avoiding back-to-back items from
-// the same source.
+// Build ranks the candidate pool and stages a queue of the top items, capping
+// per-source volume and avoiding back-to-back items from the same source. It is
+// count-bounded, NOT duration-bounded: the client consumes this queue paced by
+// the user's elapsed wall-clock time (a skimmed article costs seconds, a watched
+// video costs minutes - only the user's clock knows), refilling as it goes.
 func Build(req Request, pool []store.Candidate, now time.Time) Result {
-	target := (req.MinLow + req.MinHigh) * 60 / 2 // aim for the middle of the range
-	hardCap := req.MinHigh * 60
+	k := req.QueueSize
+	if k <= 0 {
+		k = defaultQueueSize
+	}
 
 	ranked := make([]scored, 0, len(pool))
 	for _, c := range pool {
-		s := scoreOf(c, now)
 		ranked = append(ranked, scored{
 			c:        c,
-			score:    s,
+			score:    scoreOf(c, now),
 			dur:      estDuration(c),
 			reason:   reasonOf(c, now),
 			sourceID: c.SourceID,
@@ -93,32 +102,31 @@ func Build(req Request, pool []store.Candidate, now time.Time) Result {
 	total := 0
 	lastSource := int64(-1)
 
-	// Two passes over the ranked list. The diversity rule (no back-to-back same
-	// source) can skip an item; a second pass lets skipped-but-eligible items in
-	// rather than dropping them.
-	for pass := 0; pass < 2 && total < target; pass++ {
+	// Two passes. Pass 1 enforces the per-source cap and no-back-to-back
+	// diversity; pass 2 relaxes both slightly to fill the queue when the pool is
+	// thin, rather than returning a short list.
+	for pass := 0; pass < 2 && len(out) < k; pass++ {
 		for i := range ranked {
-			if total >= target {
+			if len(out) >= k {
 				break
 			}
 			r := &ranked[i]
-			if r.dur < 0 { // already taken (marked)
+			if r.taken {
 				continue
 			}
 			cap := r.c.PerSessionCap
 			if cap <= 0 {
 				cap = 2
 			}
-			if perSourceUsed[r.sourceID] >= cap {
-				continue
-			}
-			// Diversity: on the first pass, skip an item whose source matches the
-			// previous pick if there's still room to come back to it.
-			if pass == 0 && r.sourceID == lastSource {
-				continue
-			}
-			if total+r.dur > hardCap && len(out) > 0 {
-				continue // don't blow past the upper bound once we have something
+			if pass == 0 {
+				if perSourceUsed[r.sourceID] >= cap {
+					continue
+				}
+				if r.sourceID == lastSource {
+					continue // diversity: no back-to-back on the first pass
+				}
+			} else if perSourceUsed[r.sourceID] >= cap+2 {
+				continue // pass 2 relaxes the cap a little to fill the queue
 			}
 			out = append(out, Selected{
 				Item:        r.c.Item,
@@ -130,13 +138,13 @@ func Build(req Request, pool []store.Candidate, now time.Time) Result {
 			total += r.dur
 			perSourceUsed[r.sourceID]++
 			lastSource = r.sourceID
-			r.dur = -1 // mark taken
+			r.taken = true
 		}
 	}
 
 	return Result{
 		Items:        out,
-		TotalSeconds: total,
+		TotalSeconds: total, // informational only; not a budget
 		TargetLow:    req.MinLow,
 		TargetHigh:   req.MinHigh,
 		PoolSize:     len(pool),

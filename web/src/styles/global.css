@@ -357,6 +357,39 @@ h1.display {
   border-color: var(--good);
 }
 
+/* --- session pacing: time budget bar + check-in --- */
+.timebar {
+  height: 4px;
+  border-radius: 999px;
+  background: var(--bg-card);
+  overflow: hidden;
+  margin-top: 4px;
+}
+.timebar-fill {
+  height: 100%;
+  background: var(--accent);
+  transition: width 0.9s linear;
+}
+.checkin {
+  background: var(--accent-soft);
+  border: 1px solid var(--accent);
+  border-radius: var(--radius);
+  padding: 14px 16px;
+  margin: 4px 0 16px;
+}
+.checkin p {
+  margin: 0 0 12px;
+  font-size: 15px;
+  color: var(--ink);
+}
+.checkin-actions {
+  display: flex;
+  gap: 8px;
+}
+.checkin-actions .act {
+  flex: 1;
+}
+
 /* --- source library rows --- */
 .row {
   display: flex;

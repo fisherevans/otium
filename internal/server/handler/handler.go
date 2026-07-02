@@ -263,9 +263,9 @@ func (h *Handler) BuildSession(w http.ResponseWriter, r *http.Request) {
 	if err := h.db.SaveSession(r.Context(), sid, uid, body.MinLow, body.MinHigh, strings.Join(body.Themes, ","), ids); err != nil {
 		h.log.Warn("save session failed", "err", err)
 	}
-	if err := h.db.MarkSurfaced(r.Context(), uid, ids); err != nil {
-		h.log.Warn("mark surfaced failed", "err", err)
-	}
+	// Items are NOT marked surfaced here - the queue is paced client-side, so an
+	// item is only "seen" once it actually reaches the user (a `seen` event).
+	// Otherwise a staged-but-unconsumed item would be burned.
 	_ = h.db.LogEvent(r.Context(), uid, "session_build", nil, nil, sid,
 		`{"count":`+strconv.Itoa(len(ids))+`,"themes":"`+strings.Join(body.Themes, ",")+`"}`)
 
@@ -282,10 +282,20 @@ func (h *Handler) ItemEvent(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var body struct {
-		Type      string `json:"type"` // open | like | skip | save | dismiss
+		Type      string `json:"type"` // seen | open | like | skip | save | dismiss
 		SessionID string `json:"session_id"`
 	}
 	if !decode(w, r, &body) {
+		return
+	}
+	// `seen` = the item actually reached the user in the paced queue. Mark it
+	// surfaced without downgrading a stronger state (a liked item stays liked).
+	if body.Type == "seen" {
+		if err := h.db.MarkSurfaced(r.Context(), uid, []int64{itemID}); err != nil {
+			serverError(w, h.log, "mark seen", err)
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"ok": true})
 		return
 	}
 	stateFor := map[string]string{

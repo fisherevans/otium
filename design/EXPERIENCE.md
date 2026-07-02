@@ -20,8 +20,13 @@ intent, it's wrong here by definition.
    for - never an infinite timeline, never pull-to-refresh-for-more.
 2. **Explainable, always.** If something is on screen, the app can say why in one
    human phrase. The "reason" is a first-class UI element, not a debug detail.
-3. **Explicit signals only.** Like / skip / open / weight are deliberate taps. No
-   dwell-time tracking, no scroll-velocity inference, nothing implicit.
+3. **Explicit signals drive curation.** Like / skip / open / weight are
+   deliberate taps, and only these shape ranking. The one allowed *implicit*
+   read is pace: if you're clearly flicking past items, otium may surface a
+   **visible check-in** ("want a different mix?"). The boundary is strict - pace
+   can trigger a question that serves your intent, but it never silently
+   re-ranks or feeds you more. No dwell-time-for-engagement, no behavioral
+   surveillance.
 4. **Calm, not urgent.** No badges, no unread counts, no red dots, no streaks, no
    "you're missing out." End-states are restful, not nagging.
 5. **The user is the editor.** Weight, caps, trials, and (later) the LLM operator
@@ -50,15 +55,19 @@ like" while consuming - that's discovery's job, on its own terms.
 ## The core loop
 
 ```
-  Intent  ──build──▶  Session  ──▶  act on items (open / like / skip)
+  Intent  ──build──▶  Session (a time-boxed, paced stream)
     ▲                    │
-    │                    ├── "More like this" → appends the next fresh batch
-    └────── Done ────────┘         (never an infinite auto-load)
+    │                    ├── items served one at a time, you open / like / skip
+    │                    ├── refills as you go — but only until your time budget
+    │                    ├── low-end: "keep going or wrap up?"  high-end: winds down
+    │                    ├── flicking past fast: "want a different mix?"
+    └────── Done ────────┘
 ```
 
 Notice what's absent: there's no "for you" landing feed, no home timeline that
 loads on launch. Launch lands on **Intent** - a question, not content. You must
-express an intent to get anything, and what you get is bounded.
+express an intent to get anything, and what you get is bounded - not by a fixed
+item count, but by *your clock*.
 
 ## Screen specs
 
@@ -80,20 +89,31 @@ One primary action per screen. The pad is the hero; everything else supports it.
 
 ### Session
 
-Purpose: present a finite, ordered, explainable set; let the user act with
-minimum friction.
+Purpose: a **time-boxed, paced stream** of ranked, explainable items - consumed
+one at a time until *your elapsed time* hits the budget. Not a fixed batch: you
+skim or skip most items, so a set sized to "20 minutes of reading" is wrong. The
+budget is *your* wall-clock, and the server just supplies a good ranked queue.
 
-- A quiet header: `4 items - ~58 min` (+ themes). This is the *whole* session -
-  a knowable quantity, not a scroll into the void.
-- A vertical stack of **item cards** (spec below), in ranked order.
-- A **calm footer**, always reachable by scrolling to the end:
-  - "That's your session." (affirming closure, not "keep going")
-  - **More like this** - appends the next fresh batch *below* (items already
-    shown are marked seen server-side, so more = genuinely new). This is
-    opt-in load-more, never auto-infinite.
-  - **Done** - back to Intent, no guilt.
-- When the well is dry: "That's everything new" - a *good* outcome, framed as
-  being caught up.
+- A quiet **time bar + label** (`~8 min of 5-25 min`) instead of an item count.
+  It measures *elapsed active time* (paused while the phone is locked), so it
+  reflects attention actually spent.
+- A ranked **queue of item cards** (spec below), served in order and **refilled
+  as you approach the end** - so it feels like a continuous one-at-a-time flow,
+  not a batch that runs out. Refill happens *only while inside the time budget*.
+- **Seen-on-view:** an item is marked seen (and won't recur) only when it
+  actually scrolls into view - not when it's staged. Staging a queue never burns
+  items you didn't reach.
+- **Pacing check-ins** (a visible banner, dismissible):
+  - *Low end of the range:* "You've spent ~X min - keep going or wrap up?"
+  - *High end:* winds down - "that's about your time. Done, or a few more?"
+  - *Fast-flicking:* several quick skips in a row → "want a different mix?"
+    (the one allowed implicit signal - see principle 3).
+- **Done** is always reachable, no guilt. When the well is dry: "That's
+  everything new" - a *good* outcome, being caught up.
+
+Presentation note: today this is a paced vertical card list. A more focused
+single-card-at-a-time mode (swipe to advance) is a live option and fits the
+"one at a time" intent even more literally - a future toggle, not a rebuild.
 
 ### Library
 
@@ -218,11 +238,13 @@ The chosen theme restyles these, but the set is fixed:
 
 ## Anti-patterns (otium must never)
 
-- Land on an infinite/auto-loading feed.
+- Land on an infinite/auto-loading feed. (A *session* refills, but only within
+  your chosen time budget, then winds down - that's bounded, not infinite.)
 - Show unread counts, badges, or red notification dots.
 - Auto-play or auto-advance content.
 - Use streaks, daily goals, or FOMO nudges.
-- Track or act on implicit signals (dwell, scroll speed).
+- Use implicit signals to rank or feed you more. (Pace may trigger a *visible
+  check-in* that offers to stop or pivot - never a silent re-rank.)
 - Interleave discovery/recommendations into a consumption session.
 - Hide the "why" behind an unexplained algorithm.
 - Nag on exit. Leaving satisfied is a success, not churn.
