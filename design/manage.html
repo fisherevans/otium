@@ -1,0 +1,143 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>otium · managing feeds — UX studies</title>
+<style>
+  :root{
+    --bg:#13120e; --panel:#1c1a14; --ink:#ece4d3; --soft:#b7ad97; --faint:#847a66;
+    --line:#302c22; --rule:#413b2e; --gold:#c9a227;
+    --serif:"Iowan Old Style",Palatino,Georgia,serif;
+    --sans:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+    --mono:"SF Mono",Menlo,ui-monospace,monospace;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--sans);line-height:1.6;-webkit-font-smoothing:antialiased;}
+  .wrap{max-width:1080px;margin:0 auto;padding:0 20px;}
+  a{color:var(--gold);text-decoration:none;}
+  .hero{padding:50px 0 22px;border-bottom:1px solid var(--line);max-width:740px;}
+  .kicker{font-family:var(--mono);font-size:12px;letter-spacing:.18em;text-transform:uppercase;color:var(--faint);margin:0 0 14px;}
+  h1{font-family:var(--serif);font-weight:400;font-size:36px;line-height:1.12;margin:0 0 14px;}
+  h1 .g{color:var(--gold);font-style:italic;}
+  .dek{font-size:18px;color:var(--soft);margin:0 0 16px;}
+  .toplinks{display:flex;gap:12px;flex-wrap:wrap;margin-top:14px;font-family:var(--mono);font-size:13px;}
+  .toplinks a{border:1px solid var(--rule);border-radius:9px;padding:8px 13px;}
+  .prose{max-width:740px;font-size:16.5px;color:#ded6c4;}
+  .prose p{margin:16px 0;}
+  .callout{border-left:2px solid var(--gold);background:#c9a2270f;padding:12px 16px;margin:22px 0;border-radius:0 8px 8px 0;font-size:15.5px;color:var(--soft);}
+  .callout b{color:var(--ink);}
+  .dir{margin:30px 0 8px;border-top:1px solid var(--line);padding-top:26px;}
+  .dir .pv{position:relative;width:100%;aspect-ratio:390/600;overflow:hidden;border:1px solid var(--rule);border-radius:14px;background:#2c2b28;box-shadow:0 10px 34px #0008;}
+  .dir .pv iframe{position:absolute;top:0;left:0;width:390px;height:600px;border:0;transform-origin:top left;}
+  .dir .pv a.hit{position:absolute;inset:0;z-index:3;}
+  .dir .pv .badge{position:absolute;z-index:4;right:10px;bottom:10px;background:#000000cc;color:#fff;font-family:var(--mono);font-size:11px;letter-spacing:.04em;padding:7px 11px;border-radius:999px;pointer-events:none;}
+  .dir h3{font-family:var(--serif);font-weight:400;font-size:23px;margin:0 0 2px;}
+  .dir .num{color:var(--faint);font-family:var(--mono);font-size:14px;margin-right:8px;}
+  .meta-line{font-size:14.5px;color:var(--soft);margin:9px 0;}
+  .meta-line b{color:var(--ink);font-weight:600;}
+  .chips{display:flex;flex-wrap:wrap;gap:5px;margin:10px 0;}
+  .chips i{font-style:normal;font-family:var(--mono);font-size:10.5px;color:var(--faint);border:1px solid var(--rule);border-radius:5px;padding:3px 7px;}
+  .trade{color:var(--faint);font-size:13.5px;margin:8px 0 0;}
+  .openbtn{display:inline-block;margin-top:10px;font-family:var(--mono);font-size:13px;border:1px solid var(--rule);border-radius:9px;padding:9px 14px;color:var(--gold);}
+  .openbtn:active{background:#c9a2271f;}
+  @media(min-width:860px){ .dir{display:grid;grid-template-columns:300px 1fr;gap:30px;align-items:start;} .dir .pv{position:sticky;top:20px;} }
+  footer{border-top:1px solid var(--line);margin-top:48px;padding:32px 0 80px;color:var(--faint);font-size:14px;max-width:740px;}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="hero">
+    <p class="kicker">otium · managing feeds — UX studies</p>
+    <h1>Shaping the <span class="g">library</span></h1>
+    <p class="dek">Seven ways to manage your sources — adjust weights, organize feeds, add/archive, and read what you follow. Same e-ink language, same fixture; only the organizing idea differs.</p>
+    <div class="toplinks">
+      <a href="MANAGE-FEATURES.md">the feature list (the "what")</a>
+      <a href="eink.html">← consumption studies</a>
+      <a href="EXPERIENCE.md">experience guidelines</a>
+    </div>
+  </div>
+
+  <div class="prose">
+    <p>These all cover the same feature set — weight (very low → favorite), per-source cap, feed membership, add/archive/edit, sort, and feed-health insight — but they organize it around different ideas. Every preview is live; tap it to open full-screen and actually change a weight, sort, or archive something. All grayscale, so weight and noise read through ink density and marks, not color.</p>
+    <div class="callout"><b>How to read this.</b> The through-line is <em>turn down, don't cut off</em> — so pay attention to how each makes reweighting feel, since that's the gesture you'll do most. You can also mix ("the health dashboard up top, the expandable list below," or "the mixing-board faders inside the detail sheet"). And these answer the open questions in the feature doc differently — e.g. buckets vs faders vs steppers for weight.</p>
+  </div>
+
+  <div id="app"></div>
+
+  <div class="prose">
+    <p style="border-top:1px solid var(--line);padding-top:22px;color:var(--soft)">Pick a primary structure (how the library is organized) and a weight gesture (how you turn a source up/down) — they can come from different studies. Tell me the combination and I'll build the real management surface in the app.</p>
+  </div>
+
+  <footer>
+    Static, interactive mockups on a shared fixture (noisy vs rare sources, favorites, a dormant channel). Committed under <span style="font-family:var(--mono)">design/prototypes/manage/</span>. The feature palette + open questions are in <a href="MANAGE-FEATURES.md">MANAGE-FEATURES.md</a>.
+  </footer>
+</div>
+
+<script>
+const D = [
+  { slug:"manage-list-expand", name:"List + Expandable Rows", grp:"Everyday",
+    approach:"One scrollable list; each row shows a compact grayscale signal and taps to unfold an inline panel with all its controls.",
+    weight:"A vertical 5-cell ink meter reads weight at a glance; unfolding reveals a 5-bucket selector that fills with ink and stamps the row on change.",
+    strengths:["Legible default, one tap deep","Signal all in grayscale marks","Outlier insight with real numbers + one-tap turn-down"],
+    trade:"Only one row is comfortable to work at a time; bulk tuning means a lot of expand/collapse." },
+  { slug:"manage-detail-sheet", name:"Master-Detail", grp:"Everyday",
+    approach:"A minimal sortable list; tapping opens a full-screen detail page with every control and stat for that one source.",
+    weight:"A cumulative 5-column ink equalizer ladder — tap a column to set the level, with a stamp-pulse and a one-line consequence hint.",
+    strengths:["Everything for one source in one roomy place","Weight reads as turning a level up/down","Honest health card with real share/skip numbers"],
+    trade:"Managing many means round-trips in and out of detail; no bulk editing or cross-source comparison." },
+  { slug:"manage-by-feed", name:"Grouped by Feed", grp:"Organized",
+    approach:"The library as an org chart: collapsible theme sections, each header carrying feed health (count, avg % skipped, noisy/dormant flag) with rename + add-source built in.",
+    weight:"Tap a source to open its drawer and set weight on a 5-step ascending ladder (taller/darker = heavier) with an e-ink snap-tick.",
+    strengths:["Theme-first mental model","Per-feed health at a glance","Outlier insight flows into one-tap turn-down/cap"],
+    trade:"Rigid: a source you can't place, or cross-feed comparisons, fight the strict one-feed-per-section hierarchy." },
+  { slug:"manage-table", name:"Dense Sortable Table", grp:"Power",
+    approach:"A power-user spreadsheet: rows = sources, columns = weight / posts-day / unseen / % skipped / feed, all sortable, built to compare everything at once.",
+    weight:"Inline −/gauge/+ stepper per row for quick nudges, plus a big 5-segment control in the expand drawer for precise setting.",
+    strengths:["Total density; sort any column","Compare all sources at a glance","Real math behind every noisy flag"],
+    trade:"Five columns + a stepper on a 390px frame is dense and small-targeted — great control, less calm/browsable." },
+  { slug:"manage-swipe", name:"Swipe Actions", grp:"Power",
+    approach:"A dense list you tune by swiping — horizontal drag is the whole grammar, with a revealed tray and long-press as escalations.",
+    weight:"Swipe right nudges weight up a bucket, left nudges down, committing on release with a rotated ink stamp of the new level.",
+    strengths:["Fast one-handed bulk tuning","Turn-down is the default gesture","Mute/Archive kept behind a deliberate tray"],
+    trade:"The overloaded left-swipe (small = nudge, far = tray) has a discoverability/mis-trigger cost until learned." },
+  { slug:"manage-mixing-board", name:"Mixing Board", grp:"Distinctive",
+    approach:"Every source is a channel strip on an engraved e-ink console, anchored to one shared vertical weight scale — reweighting the library feels like mixing.",
+    weight:"Drag a physical fader between five engraved detents (very low → favorite); ink fill rises with weight, detail sheet stays in sync.",
+    strengths:["Reweighting many feels tactile and fast","Pure-grayscale position + ink density","Health banner → straight to the fader/cap"],
+    trade:"Horizontal channels show only ~2-3 at once, so scanning a big library takes more swiping than a vertical list." },
+  { slug:"manage-health", name:"Health-First Dashboard", grp:"Distinctive",
+    approach:"Leads with insight, not a list: feed-health cards + outlier callouts up top ('BBC is 40% of your News, 40% skipped — turn down?'), each with a one-tap fix; the full list is secondary below.",
+    weight:"A 5-bar equalizer meter on every row and enlarged in the sheet — tap a bar to set the bucket, filled bars invert with a stamp.",
+    strengths:["Insight-first; tuning flows from stated numbers","No black-box nudges","Turn-down/cap/archive act inline with Undo"],
+    trade:"The always-on Signal section costs vertical space and can feel repetitive once flagged sources are resolved." },
+];
+
+const app = document.getElementById("app");
+D.forEach((d, idx) => {
+  const href = `prototypes/manage/${d.slug}.html`;
+  const chips = d.strengths.map((s) => `<i>${s}</i>`).join("");
+  const fig = document.createElement("div");
+  fig.className = "dir";
+  fig.innerHTML = `
+    <div class="pv">
+      <iframe src="${href}" scrolling="no" loading="lazy" tabindex="-1"></iframe>
+      <a class="hit" href="${href}" aria-label="Open ${d.name}"></a>
+      <span class="badge">tap to try ↗</span>
+    </div>
+    <div class="body">
+      <h3><span class="num">${String(idx + 1).padStart(2, "0")}</span>${d.name} <span style="font-family:var(--mono);font-size:11px;color:var(--faint);letter-spacing:.06em">· ${d.grp}</span></h3>
+      <p class="meta-line"><b>Idea:</b> ${d.approach}</p>
+      <p class="meta-line"><b>Weight gesture:</b> ${d.weight}</p>
+      <div class="chips">${chips}</div>
+      <p class="trade"><b>Trade-off:</b> ${d.trade}</p>
+      <a class="openbtn" href="${href}">Open full-screen ↗</a>
+    </div>`;
+  app.appendChild(fig);
+});
+
+function fit(){ document.querySelectorAll(".dir .pv").forEach((p)=>{ p.querySelector("iframe").style.transform=`scale(${p.clientWidth/390})`; }); }
+window.addEventListener("resize",fit); window.addEventListener("load",fit); fit();
+</script>
+</body>
+</html>

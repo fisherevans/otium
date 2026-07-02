@@ -1,0 +1,961 @@
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>otium — e-ink · manage library (table)</title>
+<style>
+  :root{
+    --paper:#f4f2ec;
+    --paper-2:#efece3;
+    --ink:#1a1815;
+    --ink-soft:#4b4740;
+    --ink-mute:#8b857a;
+    --rule:#c9c3b5;
+    --rule-hard:#1a1815;
+    --hair:#d9d4c8;
+    --serif:"Charter","Iowan Old Style","Georgia",serif;
+    --grot:"Helvetica Neue","Arial",sans-serif;
+    --mono:"SF Mono","Menlo",ui-monospace,monospace;
+    --didot:"Didot","Hoefler Text","Baskerville",serif;
+    /* shared column template - header + every row align to this */
+    --cols: 1fr 84px 40px 34px 46px;
+  }
+
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+  html,body{height:100%;margin:0;}
+  body{
+    background:#3b3a36;
+    background-image:radial-gradient(circle at 30% 20%, #4a4844 0%, #2c2b28 70%);
+    display:flex;align-items:center;justify-content:center;
+    min-height:100vh;
+    font-family:var(--serif);
+    -webkit-font-smoothing:antialiased;
+    padding:18px;
+  }
+
+  /* ---------- phone frame ---------- */
+  .phone{
+    position:relative;
+    width:390px;height:844px;max-height:calc(100vh - 24px);
+    background:var(--paper);
+    border-radius:44px;
+    box-shadow:0 0 0 2px #111, 0 0 0 12px #16150f, 0 30px 70px rgba(0,0,0,.55);
+    overflow:hidden;
+    display:flex;flex-direction:column;
+  }
+  .phone::before{
+    content:"";position:absolute;inset:0;pointer-events:none;z-index:30;
+    background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='140' height='140'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/><feColorMatrix type='saturate' values='0'/></filter><rect width='140' height='140' filter='url(%23n)' opacity='0.05'/></svg>");
+    mix-blend-mode:multiply;opacity:.6;
+  }
+
+  /* status bar */
+  .status{
+    position:relative;z-index:4;
+    display:flex;justify-content:space-between;align-items:center;
+    padding:14px 26px 6px;
+    font-family:var(--mono);font-size:12px;letter-spacing:.03em;color:var(--ink);
+    flex:0 0 auto;
+  }
+  .status .dots{display:flex;gap:3px;align-items:center;}
+  .status .bar{width:2px;background:var(--ink);}
+  .status .bar:nth-child(1){height:5px}
+  .status .bar:nth-child(2){height:7px}
+  .status .bar:nth-child(3){height:9px}
+  .status .bar:nth-child(4){height:11px}
+
+  /* ---------- app header ---------- */
+  header.app{
+    position:relative;z-index:4;flex:0 0 auto;
+    padding:2px 22px 10px;
+    border-bottom:1.5px solid var(--rule-hard);
+    display:flex;align-items:flex-end;justify-content:space-between;
+  }
+  .wordmark{
+    font-family:var(--didot);
+    font-size:30px;line-height:.9;letter-spacing:.01em;color:var(--ink);font-weight:400;
+  }
+  .hmeta{display:flex;flex-direction:column;align-items:flex-end;gap:3px;padding-bottom:3px;}
+  .hmeta .lib{font-family:var(--grot);font-size:9.5px;letter-spacing:.26em;text-transform:uppercase;color:var(--ink-mute);}
+  .hmeta .cnt{font-family:var(--mono);font-size:11px;letter-spacing:.02em;color:var(--ink-soft);}
+
+  /* ---------- feed filter rail ---------- */
+  .rail{
+    position:relative;z-index:4;flex:0 0 auto;
+    display:flex;align-items:center;gap:0;
+    padding:9px 22px;border-bottom:1px solid var(--hair);
+    overflow-x:auto;overflow-y:hidden;scrollbar-width:none;
+    -webkit-overflow-scrolling:touch;
+  }
+  .rail::-webkit-scrollbar{width:0;height:0;}
+  .chip{
+    flex:0 0 auto;cursor:pointer;background:var(--paper);
+    font-family:var(--grot);font-size:10px;letter-spacing:.14em;text-transform:uppercase;
+    color:var(--ink-soft);border:1px solid var(--rule);
+    padding:6px 11px;margin-right:7px;white-space:nowrap;
+    display:inline-flex;align-items:center;gap:6px;
+  }
+  .chip .n{font-family:var(--mono);font-size:9px;color:var(--ink-mute);letter-spacing:0;}
+  .chip.on{background:var(--ink);color:var(--paper);border-color:var(--ink);}
+  .chip.on .n{color:var(--paper);}
+  .chip.add{border-style:dashed;color:var(--ink-mute);}
+  .chip .rn{width:78px;font-family:var(--grot);font-size:10px;letter-spacing:.05em;text-transform:uppercase;border:0;background:transparent;color:var(--paper);outline:none;padding:0;}
+
+  /* ---------- toolbar: add + edit-feeds + reset ---------- */
+  .tools{
+    position:relative;z-index:4;flex:0 0 auto;
+    display:flex;align-items:center;gap:0;
+    padding:8px 22px;border-bottom:1.5px solid var(--rule-hard);
+  }
+  .tbtn{
+    cursor:pointer;background:var(--paper);border:1.5px solid var(--rule-hard);
+    font-family:var(--grot);font-size:9.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink);
+    padding:7px 12px;display:inline-flex;align-items:center;gap:7px;
+  }
+  .tbtn:active{transform:translateY(1px);}
+  .tbtn + .tbtn{margin-left:8px;}
+  .tbtn.ghost{border-color:var(--rule);color:var(--ink-soft);}
+  .tbtn .plus{font-family:var(--mono);font-size:14px;line-height:1;}
+  .tools .spacer{flex:1;}
+  .sortlbl{font-family:var(--mono);font-size:10px;color:var(--ink-mute);letter-spacing:.02em;white-space:nowrap;}
+
+  /* ---------- scroll stage ---------- */
+  .stage{position:relative;flex:1 1 auto;overflow:hidden;z-index:3;min-height:0;}
+  .flash{position:absolute;inset:0;z-index:20;pointer-events:none;background:var(--ink);opacity:0;}
+  .flash.go{animation:refresh .30s steps(2,end) forwards;}
+  @keyframes refresh{0%{opacity:0}40%{opacity:.94}41%{opacity:.05}72%{opacity:.5}100%{opacity:0}}
+  .snapflash{position:absolute;inset:0;z-index:19;pointer-events:none;background:var(--ink);opacity:0;}
+  .snapflash.tick{animation:snaptick .16s steps(2,end) forwards;}
+  @keyframes snaptick{0%{opacity:0}45%{opacity:.10}100%{opacity:0}}
+
+  .scroll{
+    position:absolute;inset:0;overflow-y:auto;overflow-x:hidden;
+    -webkit-overflow-scrolling:touch;scrollbar-width:none;
+  }
+  .scroll::-webkit-scrollbar{width:0;height:0;}
+
+  /* ---------- outlier insight card ---------- */
+  .insight{
+    margin:14px 15px 6px;border:1.5px solid var(--rule-hard);background:var(--paper-2);
+    box-shadow:5px 5px 0 rgba(26,24,21,.10);
+    padding:13px 14px 12px;position:relative;
+  }
+  .insight .ihd{
+    display:flex;align-items:center;gap:7px;margin-bottom:8px;
+    font-family:var(--grot);font-size:9px;letter-spacing:.22em;text-transform:uppercase;color:var(--ink);
+  }
+  .insight .ihd .sq{width:8px;height:8px;background:var(--ink);}
+  .insight .ihd .nav{margin-left:auto;display:flex;gap:4px;}
+  .insight .ihd .nav b{
+    cursor:pointer;font-family:var(--mono);font-size:11px;color:var(--ink-soft);
+    border:1px solid var(--rule);width:20px;height:18px;display:flex;align-items:center;justify-content:center;
+  }
+  .insight .isrc{font-family:var(--serif);font-size:19px;line-height:1.15;color:var(--ink);margin:0 0 6px;}
+  .insight .isrc em{font-style:italic;}
+  .insight .idesc{font-family:var(--serif);font-size:13.5px;line-height:1.42;color:var(--ink-soft);margin:0 0 11px;}
+  .insight .idesc b{color:var(--ink);font-weight:600;}
+  .insight .iacts{display:flex;gap:8px;}
+  .insight .ibtn{
+    cursor:pointer;flex:1;background:var(--paper);border:1.5px solid var(--rule-hard);color:var(--ink);
+    font-family:var(--grot);font-size:9.5px;letter-spacing:.12em;text-transform:uppercase;
+    padding:9px 8px;display:flex;align-items:center;justify-content:center;gap:6px;min-height:38px;
+  }
+  .insight .ibtn.solid{background:var(--ink);color:var(--paper);}
+  .insight .ibtn:active{transform:translateY(1px);}
+  .insight .idismiss{
+    position:absolute;top:8px;right:9px;display:none;
+  }
+
+  /* ---------- table ---------- */
+  .thead{
+    position:sticky;top:0;z-index:8;background:var(--paper);
+    display:grid;grid-template-columns:var(--cols);
+    border-top:1.5px solid var(--rule-hard);border-bottom:1.5px solid var(--rule-hard);
+  }
+  .th{
+    display:flex;align-items:center;gap:3px;cursor:pointer;user-select:none;
+    font-family:var(--grot);font-size:9px;letter-spacing:.13em;text-transform:uppercase;color:var(--ink-soft);
+    padding:9px 6px;min-height:34px;position:relative;justify-content:center;text-align:center;
+  }
+  .th:first-child{justify-content:flex-start;padding-left:15px;}
+  .th + .th{border-left:1px solid var(--hair);}
+  .th.act{color:var(--ink);font-weight:700;}
+  .th .caret{width:7px;height:7px;flex:0 0 auto;opacity:0;}
+  .th.act .caret{opacity:1;}
+  .th .caret svg{display:block;}
+
+  .trow{
+    display:grid;grid-template-columns:var(--cols);
+    border-bottom:1px solid var(--hair);position:relative;
+    background:var(--paper);
+  }
+  .trow.exp{background:var(--paper-2);}
+  .cell{padding:8px 5px;min-height:60px;display:flex;flex-direction:column;justify-content:center;align-items:center;position:relative;}
+  .cell + .cell{border-left:1px solid var(--hair);}
+
+  /* source cell */
+  .cell.src{align-items:flex-start;padding-left:15px;padding-right:7px;cursor:pointer;}
+  .sname{display:flex;align-items:center;gap:7px;width:100%;}
+  .sname .kg{flex:0 0 auto;width:15px;height:15px;}
+  .sname .kg *{stroke:var(--ink-soft);fill:none;}
+  .sname .ttl{
+    font-family:var(--serif);font-size:15px;line-height:1.1;color:var(--ink);
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+  }
+  .sname .cx{margin-left:auto;flex:0 0 auto;transition:transform .2s steps(2);color:var(--ink-mute);}
+  .trow.exp .sname .cx{transform:rotate(90deg);}
+  .ssub{
+    display:flex;align-items:center;gap:7px;margin-top:5px;padding-left:22px;
+    font-family:var(--grot);font-size:8px;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-mute);
+  }
+  .ssub .feed{color:var(--ink-soft);}
+  .ssub .flag{display:inline-flex;align-items:center;gap:4px;color:var(--ink);}
+  .ssub .flag.noisy{font-weight:700;}
+  .ssub .flag .m{width:7px;height:7px;flex:0 0 auto;}
+  .ssub .unseenmini{margin-left:auto;font-family:var(--mono);font-size:8.5px;letter-spacing:0;color:var(--ink-mute);}
+
+  /* weight cell: - gauge + , with level word under */
+  .cell.wt{padding:6px 4px;}
+  .wgrid{display:grid;grid-template-columns:22px 1fr 22px;grid-template-rows:auto auto;align-items:center;width:100%;gap:2px 2px;}
+  .wstep{
+    grid-row:1 / span 2;cursor:pointer;background:var(--paper);border:1px solid var(--rule-hard);
+    color:var(--ink);font-family:var(--mono);font-size:14px;line-height:1;
+    height:40px;display:flex;align-items:center;justify-content:center;
+  }
+  .wstep:active{background:var(--ink);color:var(--paper);}
+  .wstep.dis{opacity:.3;pointer-events:none;}
+  .gauge{grid-row:1;grid-column:2;display:flex;align-items:flex-end;justify-content:center;gap:2px;height:20px;}
+  .gauge i{width:100%;background:var(--paper);border:1px solid var(--rule-hard);}
+  .gauge i:nth-child(1){height:9px}
+  .gauge i:nth-child(2){height:12px}
+  .gauge i:nth-child(3){height:15px}
+  .gauge i:nth-child(4){height:18px}
+  .gauge i:nth-child(5){height:21px}
+  .gauge i.on{background:var(--ink);}
+  .gauge i.fav{background:var(--ink);box-shadow:0 0 0 1.5px var(--paper),0 0 0 2.5px var(--ink);}
+  .wlvl{grid-row:2;grid-column:2;text-align:center;font-family:var(--grot);font-size:7.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-soft);margin-top:3px;white-space:nowrap;}
+  .wlvl.fav{color:var(--ink);font-weight:700;}
+  .gauge.bump{animation:pop .26s steps(3,end);}
+  @keyframes pop{0%{transform:scale(.6)}60%{transform:scale(1.14)}100%{transform:scale(1)}}
+
+  /* numeric cells */
+  .num{font-family:var(--mono);font-variant-numeric:tabular-nums;font-size:13px;color:var(--ink);letter-spacing:-.01em;line-height:1;}
+  .num.hi{font-weight:700;}
+  .num.mute{color:var(--ink-mute);font-size:12px;}
+  .mbar{width:28px;height:3px;background:var(--hair);position:relative;margin-top:5px;}
+  .mbar > i{position:absolute;left:0;top:0;bottom:0;background:var(--ink);}
+  .mbar.hollow > i{background:var(--ink-mute);}
+  .csub{font-family:var(--grot);font-size:7px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-mute);margin-top:4px;}
+
+  /* ---------- expand drawer ---------- */
+  .drawer{
+    background:var(--paper-2);border-bottom:1.5px solid var(--rule-hard);
+    padding:0 15px;overflow:hidden;max-height:0;
+    transition:max-height .28s steps(6,end);
+  }
+  .drawer.open{max-height:420px;}
+  .dinner{padding:14px 0 16px;}
+  .drow{margin-bottom:15px;}
+  .drow:last-child{margin-bottom:0;}
+  .dlbl{
+    font-family:var(--grot);font-size:9px;letter-spacing:.2em;text-transform:uppercase;color:var(--ink-mute);
+    display:flex;align-items:center;gap:8px;margin-bottom:8px;
+  }
+  .dlbl .val{color:var(--ink);font-family:var(--mono);letter-spacing:.02em;text-transform:none;font-size:11px;margin-left:auto;}
+
+  /* big segmented weight in drawer */
+  .wseg{display:flex;border:1.5px solid var(--rule-hard);}
+  .wseg button{
+    flex:1;cursor:pointer;background:var(--paper);border:0;border-left:1px solid var(--rule);
+    font-family:var(--grot);font-size:8.5px;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-soft);
+    padding:11px 2px;min-height:44px;line-height:1.25;
+  }
+  .wseg button:first-child{border-left:0;}
+  .wseg button.on{background:var(--ink);color:var(--paper);font-weight:700;}
+  .wseg button:active{background:var(--paper-2);}
+  .wseg button.on:active{background:var(--ink);}
+
+  /* cap stepper */
+  .cap{display:flex;align-items:stretch;border:1.5px solid var(--rule-hard);width:100%;}
+  .cap button{
+    cursor:pointer;width:52px;background:var(--paper);border:0;border-right:1px solid var(--rule);
+    font-family:var(--mono);font-size:18px;color:var(--ink);
+  }
+  .cap button:last-child{border-right:0;border-left:1px solid var(--rule);}
+  .cap button:active{background:var(--ink);color:var(--paper);}
+  .cap .capval{
+    flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;
+    font-family:var(--serif);font-size:16px;color:var(--ink);padding:9px 0;
+  }
+  .cap .capval small{font-family:var(--grot);font-size:8px;letter-spacing:.14em;text-transform:uppercase;color:var(--ink-mute);}
+
+  /* feed membership chips */
+  .fchips{display:flex;flex-wrap:wrap;gap:7px;}
+  .fchip{
+    cursor:pointer;background:var(--paper);border:1px solid var(--rule);color:var(--ink-soft);
+    font-family:var(--grot);font-size:9.5px;letter-spacing:.1em;text-transform:uppercase;padding:7px 10px;min-height:34px;
+    display:inline-flex;align-items:center;gap:5px;
+  }
+  .fchip.on{background:var(--ink);color:var(--paper);border-color:var(--ink);}
+  .fchip .tick{font-family:var(--mono);font-size:10px;}
+
+  /* drawer actions */
+  .dacts{display:flex;gap:8px;}
+  .dact{
+    cursor:pointer;flex:1;background:var(--paper);border:1.5px solid var(--rule-hard);color:var(--ink);
+    font-family:var(--grot);font-size:9px;letter-spacing:.12em;text-transform:uppercase;
+    padding:10px 4px;min-height:42px;display:flex;align-items:center;justify-content:center;gap:6px;
+  }
+  .dact:active{transform:translateY(1px);}
+  .dact.warn.armed{background:var(--ink);color:var(--paper);border-color:var(--ink);}
+  .dact .g{width:13px;height:13px;}
+  .dact .g *{stroke:currentColor;fill:none;}
+
+  /* inline title edit */
+  .editrow{display:flex;gap:8px;align-items:center;}
+  .editrow input{
+    flex:1;font-family:var(--serif);font-size:16px;color:var(--ink);
+    background:var(--paper);border:1.5px solid var(--rule-hard);padding:9px 10px;outline:none;
+  }
+  .editrow button{
+    cursor:pointer;background:var(--ink);color:var(--paper);border:0;
+    font-family:var(--grot);font-size:9px;letter-spacing:.14em;text-transform:uppercase;padding:0 14px;min-height:40px;
+  }
+
+  /* stamp animation on archive */
+  .trow.stamping{animation:stampfade .34s steps(3,end) forwards;}
+  @keyframes stampfade{0%{opacity:1}30%{opacity:.2;filter:contrast(.5)}100%{opacity:0;max-height:0;padding:0;overflow:hidden}}
+
+  /* archived section footer */
+  .archsec{margin:8px 15px 24px;}
+  .archsec .ahd{
+    display:flex;align-items:center;gap:8px;cursor:pointer;
+    font-family:var(--grot);font-size:9px;letter-spacing:.2em;text-transform:uppercase;color:var(--ink-mute);
+    border-top:1px dashed var(--rule);padding-top:12px;
+  }
+  .archsec .arow{
+    display:flex;align-items:center;gap:10px;padding:11px 2px;border-bottom:1px solid var(--hair);
+  }
+  .archsec .arow .an{font-family:var(--serif);font-size:15px;color:var(--ink-soft);flex:1;}
+  .archsec .arow .af{font-family:var(--grot);font-size:8px;letter-spacing:.1em;text-transform:uppercase;color:var(--ink-mute);}
+  .archsec .restore{
+    cursor:pointer;background:var(--paper);border:1.5px solid var(--rule-hard);color:var(--ink);
+    font-family:var(--grot);font-size:8.5px;letter-spacing:.12em;text-transform:uppercase;padding:7px 11px;min-height:34px;
+  }
+  .archbody{display:none;}
+  .archbody.open{display:block;}
+
+  .foot{
+    text-align:center;font-family:var(--mono);font-size:10px;color:var(--ink-mute);
+    letter-spacing:.03em;padding:6px 0 26px;
+  }
+
+  /* ---------- add-source sheet ---------- */
+  .sheet{
+    position:absolute;inset:0;z-index:16;background:var(--paper);
+    transform:translateY(101%);transition:transform .34s steps(4,end);
+    display:flex;flex-direction:column;padding:22px 22px;
+  }
+  .sheet.up{transform:translateY(0);}
+  .sheet .shead{
+    display:flex;align-items:center;justify-content:space-between;
+    border-bottom:1.5px solid var(--rule-hard);padding-bottom:12px;margin-bottom:18px;
+  }
+  .sheet .shead .k{font-family:var(--grot);font-size:10px;letter-spacing:.24em;text-transform:uppercase;color:var(--ink-mute);}
+  .sheet .xclose{
+    width:34px;height:34px;border:1.5px solid var(--rule-hard);background:var(--paper);cursor:pointer;
+    display:flex;align-items:center;justify-content:center;font-family:var(--grot);font-size:16px;color:var(--ink);
+  }
+  .sheet h3{font-family:var(--didot);font-weight:400;font-size:26px;color:var(--ink);margin:0 0 4px;}
+  .fld{margin-top:16px;}
+  .fld label{display:block;font-family:var(--grot);font-size:9px;letter-spacing:.2em;text-transform:uppercase;color:var(--ink-mute);margin-bottom:7px;}
+  .fld input, .fld select{
+    width:100%;font-family:var(--serif);font-size:16px;color:var(--ink);
+    background:var(--paper-2);border:1.5px solid var(--rule-hard);padding:12px 12px;outline:none;
+    -webkit-appearance:none;appearance:none;border-radius:0;
+  }
+  .fld input::placeholder{color:var(--ink-mute);}
+  .fld .hint{font-family:var(--mono);font-size:10px;color:var(--ink-mute);margin-top:6px;letter-spacing:.02em;}
+  .sheet .addbtn{
+    margin-top:auto;min-height:54px;border:1.5px solid var(--rule-hard);background:var(--ink);color:var(--paper);
+    font-family:var(--serif);font-size:17px;display:flex;align-items:center;justify-content:center;gap:10px;cursor:pointer;
+  }
+  .sheet .addbtn:active{transform:translateY(1px);}
+</style>
+
+<div class="phone" id="phone">
+
+  <div class="status">
+    <span>9:41</span>
+    <span class="dots" aria-hidden="true">
+      <span class="bar"></span><span class="bar"></span><span class="bar"></span><span class="bar"></span>
+      &nbsp;<svg width="22" height="11" viewBox="0 0 22 11"><rect x="0.5" y="0.5" width="18" height="10" rx="2" fill="none" stroke="#1a1815"/><rect x="19" y="3.5" width="2" height="4" fill="#1a1815"/><rect x="2" y="2" width="13" height="7" fill="#1a1815"/></svg>
+    </span>
+  </div>
+
+  <header class="app">
+    <div class="wordmark">otium</div>
+    <div class="hmeta">
+      <span class="lib">Library</span>
+      <span class="cnt" id="cnt">13 sources</span>
+    </div>
+  </header>
+
+  <div class="rail" id="rail"><!-- feed chips --></div>
+
+  <div class="tools">
+    <button class="tbtn" id="addBtn"><span class="plus">+</span> Add</button>
+    <button class="tbtn ghost" id="feedEdit">Feeds</button>
+    <span class="spacer"></span>
+    <span class="sortlbl" id="sortLbl">sorted: weight ↓</span>
+  </div>
+
+  <div class="stage">
+    <div class="flash" id="flash"></div>
+    <div class="snapflash" id="snapflash"></div>
+
+    <div class="scroll" id="scroll">
+      <div id="insightMount"></div>
+
+      <div class="thead" id="thead">
+        <div class="th" data-sort="name">Source <span class="caret"></span></div>
+        <div class="th" data-sort="weight">Wt <span class="caret"></span></div>
+        <div class="th" data-sort="perday">/day <span class="caret"></span></div>
+        <div class="th" data-sort="unseen">New <span class="caret"></span></div>
+        <div class="th" data-sort="skip">Skip <span class="caret"></span></div>
+      </div>
+
+      <div id="tbody"><!-- rows --></div>
+
+      <div class="archsec" id="archsec"></div>
+      <div class="foot" id="foot"></div>
+    </div>
+
+    <!-- add source sheet -->
+    <div class="sheet" id="sheet">
+      <div class="shead">
+        <span class="k">Add a source</span>
+        <button class="xclose" id="sheetClose" aria-label="Close">&times;</button>
+      </div>
+      <h3>New source</h3>
+      <div class="fld">
+        <label>Feed URL</label>
+        <input id="fUrl" type="text" placeholder="https:// … /feed.xml" autocomplete="off" autocapitalize="off" spellcheck="false">
+        <div class="hint">RSS, YouTube channel, or podcast feed.</div>
+      </div>
+      <div class="fld">
+        <label>Title</label>
+        <input id="fTitle" type="text" placeholder="optional — pulled from the feed" autocomplete="off">
+      </div>
+      <div class="fld">
+        <label>Feed / theme</label>
+        <select id="fFeed"></select>
+      </div>
+      <button class="addbtn" id="doAdd">Add to library</button>
+    </div>
+  </div>
+</div>
+
+<script>
+(function(){
+  "use strict";
+
+  var WEIGHTS = ['very low','low','normal','high','favorite'];
+  var FEEDS = ['News','Comedy','Science','Tech','Music','Curiosity'];
+
+  var kinds = {
+    rss:'<svg class="kg" viewBox="0 0 15 15"><circle cx="3.4" cy="11.6" r="1.5" fill="#4b4740" stroke="none"/><path d="M2.5 7.2a5.3 5.3 0 0 1 5.3 5.3M2.5 3.4a9.1 9.1 0 0 1 9.1 9.1" stroke-width="1.3" stroke-linecap="round"/></svg>',
+    youtube:'<svg class="kg" viewBox="0 0 15 15"><rect x="1.3" y="3.2" width="12.4" height="8.6" rx="2.4" stroke-width="1.3"/><path d="M6.3 5.9v3.2l2.9-1.6z" fill="#4b4740" stroke="none"/></svg>',
+    podcast:'<svg class="kg" viewBox="0 0 15 15"><rect x="5.4" y="1.5" width="4.2" height="7.4" rx="2.1" stroke-width="1.3"/><path d="M3.4 7.2a4.1 4.1 0 0 0 8.2 0M7.5 11.3v2.2" stroke-width="1.3" stroke-linecap="round"/></svg>'
+  };
+
+  // flag glyphs
+  var mFilled = '<svg class="m" viewBox="0 0 8 8"><rect x="1" y="1" width="6" height="6" fill="#1a1815"/></svg>';
+  var mOpen   = '<svg class="m" viewBox="0 0 8 8"><circle cx="4" cy="4" r="2.6" fill="none" stroke="#1a1815" stroke-width="1.1"/></svg>';
+  var mHollow = '<svg class="m" viewBox="0 0 8 8"><rect x="1" y="1" width="6" height="6" fill="none" stroke="#1a1815" stroke-width="1.1"/></svg>';
+
+  function caretSvg(dir){
+    return dir==='asc'
+      ? '<svg width="7" height="7" viewBox="0 0 7 7"><path d="M3.5 1L6.2 5.5H0.8z" fill="#1a1815"/></svg>'
+      : '<svg width="7" height="7" viewBox="0 0 7 7"><path d="M3.5 6L0.8 1.5H6.2z" fill="#1a1815"/></svg>';
+  }
+
+  // id, title, feeds[], w(0-4), kind, unseen, perday, skip(null=dormant), flag, dormant, last, cap(null=off), archived
+  var sources = [
+    {id:1, title:'NPR News',      feeds:['News'],      w:2, kind:'rss',     unseen:12, perday:8,   skip:22,  flag:null,        dormant:false, cap:null},
+    {id:2, title:'BBC News',      feeds:['News'],      w:2, kind:'rss',     unseen:20, perday:30,  skip:40,  flag:'noisy',     dormant:false, cap:4},
+    {id:3, title:'Tom Scott',     feeds:['Curiosity'], w:4, kind:'youtube', unseen:3,  perday:0.2, skip:5,   flag:'rare',      dormant:false, cap:null},
+    {id:4, title:'Kurzgesagt',    feeds:['Science'],   w:4, kind:'youtube', unseen:2,  perday:0.1, skip:8,   flag:'rare',      dormant:false, cap:null},
+    {id:5, title:'Veritasium',    feeds:['Science'],   w:3, kind:'youtube', unseen:4,  perday:0.2, skip:12,  flag:null,        dormant:false, cap:null},
+    {id:6, title:'The Verge',     feeds:['Tech'],      w:3, kind:'rss',     unseen:18, perday:15,  skip:35,  flag:'noisy',     dormant:false, cap:5},
+    {id:7, title:'Hacker News',   feeds:['Tech'],      w:1, kind:'rss',     unseen:40, perday:30,  skip:60,  flag:'very noisy',dormant:false, cap:3},
+    {id:8, title:'99% Invisible', feeds:['Curiosity'], w:4, kind:'podcast', unseen:1,  perday:0.1, skip:3,   flag:'rare',      dormant:false, cap:null},
+    {id:9, title:'Scumbag Dad',   feeds:['Comedy'],    w:2, kind:'youtube', unseen:8,  perday:1,   skip:15,  flag:null,        dormant:false, cap:null},
+    {id:10,title:'Ryan George',   feeds:['Comedy'],    w:3, kind:'youtube', unseen:2,  perday:0.3, skip:10,  flag:null,        dormant:false, cap:null},
+    {id:11,title:'NPR Music',     feeds:['Music'],     w:1, kind:'rss',     unseen:6,  perday:2,   skip:45,  flag:null,        dormant:false, cap:null},
+    {id:12,title:'Pitchfork',     feeds:['Music'],     w:2, kind:'rss',     unseen:10, perday:5,   skip:30,  flag:null,        dormant:false, cap:null},
+    {id:13,title:'CGP Grey',      feeds:['Curiosity'], w:3, kind:'youtube', unseen:0,  perday:0,   skip:null,flag:null,        dormant:true,  last:'~4 months ago', cap:null}
+  ];
+  var nextId = 14;
+
+  var CAP_STEPS = [null,1,2,3,4,5,6,8,10];
+
+  // ---- UI state ----
+  var filterFeed = 'All';
+  var sortKey = 'weight';
+  var sortDir = 'desc';
+  var expandedId = null;
+  var archOpen = false;
+  var feedEditMode = false;
+  var deleteArm = null; // id currently armed for delete
+
+  var scroll = document.getElementById('scroll');
+  var tbody  = document.getElementById('tbody');
+  var flash  = document.getElementById('flash');
+  var snapflash = document.getElementById('snapflash');
+
+  function flashRefresh(){ flash.classList.remove('go'); void flash.offsetWidth; flash.classList.add('go'); }
+  function snapTick(){ snapflash.classList.remove('tick'); void snapflash.offsetWidth; snapflash.classList.add('tick'); }
+
+  // ---------- derived helpers ----------
+  function fmtDay(v){
+    if(v===0) return '0';
+    if(v<1) return v.toFixed(1);
+    return String(v);
+  }
+  function feedVolume(feed){ // total perday across active sources that include feed
+    return sources.reduce(function(a,s){ return (!s.archived && !s.dormant && s.feeds.indexOf(feed)>=0) ? a+s.perday : a; },0);
+  }
+  function feedCounts(){
+    var c={All:0};
+    FEEDS.forEach(function(f){c[f]=0;});
+    sources.forEach(function(s){
+      if(s.archived) return;
+      c.All++;
+      s.feeds.forEach(function(f){ if(c[f]!==undefined) c[f]++; });
+    });
+    return c;
+  }
+
+  // ---------- feed rail ----------
+  var rail = document.getElementById('rail');
+  function renderRail(){
+    var c=feedCounts();
+    var html = chipHtml('All', c.All);
+    FEEDS.forEach(function(f){ html += chipHtml(f, c[f]); });
+    html += '<span class="chip add" data-newfeed="1">+ Feed</span>';
+    rail.innerHTML = html;
+  }
+  function chipHtml(name, n){
+    var on = filterFeed===name ? ' on':'';
+    if(feedEditMode && name!=='All'){
+      return '<span class="chip'+on+'" data-feed="'+name+'"><input class="rn" data-rnfeed="'+name+'" value="'+name+'"></span>';
+    }
+    return '<span class="chip'+on+'" data-feed="'+name+'">'+name+' <span class="n">'+n+'</span></span>';
+  }
+  rail.addEventListener('click', function(e){
+    var add=e.target.closest('[data-newfeed]');
+    if(add){ createFeed(); return; }
+    if(feedEditMode) return; // clicks are for the rename inputs
+    var chip=e.target.closest('[data-feed]');
+    if(chip){ filterFeed=chip.getAttribute('data-feed'); render(); }
+  });
+  rail.addEventListener('keydown', function(e){
+    if(e.key==='Enter' && e.target.classList.contains('rn')){ e.target.blur(); }
+  });
+  rail.addEventListener('change', function(e){
+    var inp=e.target.closest('[data-rnfeed]');
+    if(inp){ renameFeed(inp.getAttribute('data-rnfeed'), inp.value.trim()); }
+  });
+
+  function createFeed(){
+    var name = prompt('New feed / theme name:');
+    if(!name) return;
+    name=name.trim();
+    if(!name || FEEDS.indexOf(name)>=0) return;
+    FEEDS.push(name);
+    flashRefresh();
+    renderRail(); renderFeedSelect();
+  }
+  function renameFeed(oldName, newName){
+    if(!newName || newName===oldName) return;
+    var i=FEEDS.indexOf(oldName); if(i<0) return;
+    if(FEEDS.indexOf(newName)>=0){ renderRail(); return; }
+    FEEDS[i]=newName;
+    sources.forEach(function(s){ var j=s.feeds.indexOf(oldName); if(j>=0) s.feeds[j]=newName; });
+    if(filterFeed===oldName) filterFeed=newName;
+    render();
+  }
+
+  document.getElementById('feedEdit').addEventListener('click', function(){
+    feedEditMode=!feedEditMode;
+    this.classList.toggle('ghost', !feedEditMode);
+    this.textContent = feedEditMode ? 'Done' : 'Feeds';
+    renderRail();
+  });
+
+  // ---------- sort header ----------
+  var thead=document.getElementById('thead');
+  thead.addEventListener('click', function(e){
+    var th=e.target.closest('.th'); if(!th) return;
+    var key=th.getAttribute('data-sort');
+    if(sortKey===key){ sortDir = sortDir==='asc' ? 'desc':'asc'; }
+    else { sortKey=key; sortDir = (key==='name') ? 'asc' : 'desc'; }
+    flashRefresh();
+    render();
+  });
+
+  function applySort(list){
+    var dir = sortDir==='asc' ? 1 : -1;
+    return list.slice().sort(function(a,b){
+      var av,bv;
+      switch(sortKey){
+        case 'name':   return a.title.localeCompare(b.title)*dir;
+        case 'weight': av=a.w; bv=b.w; break;
+        case 'perday': av=a.perday; bv=b.perday; break;
+        case 'unseen': av=a.unseen; bv=b.unseen; break;
+        case 'skip':   av=(a.skip==null?-1:a.skip); bv=(b.skip==null?-1:b.skip); break;
+        default: av=0; bv=0;
+      }
+      if(av===bv) return a.title.localeCompare(b.title);
+      return (av-bv)*dir;
+    });
+  }
+
+  function syncHeader(){
+    var lbl={name:'name',weight:'weight',perday:'noise',unseen:'unseen',skip:'skipped'}[sortKey];
+    document.getElementById('sortLbl').textContent='sorted: '+lbl+' '+(sortDir==='asc'?'↑':'↓');
+    Array.prototype.forEach.call(thead.children,function(th){
+      var active = th.getAttribute('data-sort')===sortKey;
+      th.classList.toggle('act',active);
+      th.querySelector('.caret').innerHTML = active ? caretSvg(sortDir) : '';
+    });
+  }
+
+  // ---------- density helpers (grayscale signal) ----------
+  function dayClass(v){ return v>=10 ? 'num hi' : (v<1 ? 'num mute' : 'num'); }
+  function skipClass(v){ if(v==null) return 'num mute'; return v>=40 ? 'num hi' : (v<15?'num mute':'num'); }
+
+  // ---------- row render ----------
+  function rowHtml(s){
+    var flagHtml='';
+    if(s.dormant){ flagHtml='<span class="flag">'+mHollow+'dormant</span>'; }
+    else if(s.flag==='very noisy'){ flagHtml='<span class="flag noisy">'+mFilled+'very noisy</span>'; }
+    else if(s.flag==='noisy'){ flagHtml='<span class="flag noisy">'+mFilled+'noisy</span>'; }
+    else if(s.flag==='rare'){ flagHtml='<span class="flag">'+mOpen+'rare</span>'; }
+
+    var feedTxt = s.feeds.length ? s.feeds.join(' · ') : 'unfiled';
+
+    // weight gauge
+    var g='';
+    for(var i=0;i<5;i++){
+      var on = i<=s.w;
+      var cls = on ? (s.w===4?'on fav':'on') : '';
+      g += '<i class="'+cls+'"></i>';
+    }
+    var wlvlCls = s.w===4 ? 'wlvl fav' : 'wlvl';
+
+    // day
+    var dayBar = Math.min(100, (s.perday/30)*100);
+    var dayHtml = s.dormant
+      ? '<span class="num mute">0</span><div class="mbar hollow"><i style="width:0"></i></div>'
+      : '<span class="'+dayClass(s.perday)+'">'+fmtDay(s.perday)+'</span><div class="mbar"><i style="width:'+dayBar+'%"></i></div>';
+
+    // skip
+    var skipHtml = s.skip==null
+      ? '<span class="num mute">&mdash;</span><div class="csub">idle</div>'
+      : '<span class="'+skipClass(s.skip)+'">'+s.skip+'%</span><div class="mbar"><i style="width:'+s.skip+'%"></i></div>';
+
+    var capBadge = s.cap!=null ? '<span class="unseenmini">cap '+s.cap+'</span>' : '';
+
+    return ''+
+    '<div class="trow'+(expandedId===s.id?' exp':'')+'" data-row="'+s.id+'">'+
+      '<div class="cell src" data-expand="'+s.id+'">'+
+        '<div class="sname">'+kinds[s.kind]+
+          '<span class="ttl">'+s.title+'</span>'+
+          '<span class="cx"><svg width="9" height="9" viewBox="0 0 9 9"><path d="M3 1.5L6.5 4.5 3 7.5" fill="none" stroke="#8b857a" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg></span>'+
+        '</div>'+
+        '<div class="ssub"><span class="feed">'+feedTxt+'</span>'+flagHtml+capBadge+'</div>'+
+      '</div>'+
+      '<div class="cell wt">'+
+        '<div class="wgrid">'+
+          '<button class="wstep'+(s.w<=0?' dis':'')+'" data-w="down" data-id="'+s.id+'">&minus;</button>'+
+          '<div class="gauge" data-gauge="'+s.id+'">'+g+'</div>'+
+          '<button class="wstep'+(s.w>=4?' dis':'')+'" data-w="up" data-id="'+s.id+'">+</button>'+
+          '<div class="'+wlvlCls+'">'+WEIGHTS[s.w]+'</div>'+
+        '</div>'+
+      '</div>'+
+      '<div class="cell day">'+dayHtml+'</div>'+
+      '<div class="cell new"><span class="num'+(s.unseen>=20?' hi':(s.unseen===0?' mute':''))+'">'+s.unseen+'</span></div>'+
+      '<div class="cell skip">'+skipHtml+'</div>'+
+    '</div>'+
+    drawerHtml(s);
+  }
+
+  function drawerHtml(s){
+    var open = expandedId===s.id;
+    var seg='';
+    for(var i=0;i<5;i++){
+      seg += '<button data-setw="'+i+'" data-id="'+s.id+'" class="'+(i===s.w?'on':'')+'">'+WEIGHTS[i].replace(' ','<br>')+'</button>';
+    }
+    var capTxt = s.cap==null ? '<div class="capval"><span>&infin;</span><small>no cap</small></div>'
+                             : '<div class="capval"><span>'+s.cap+'</span><small>max / session</small></div>';
+    var fchips='';
+    FEEDS.forEach(function(f){
+      var on=s.feeds.indexOf(f)>=0;
+      fchips += '<span class="fchip'+(on?' on':'')+'" data-togfeed="'+f+'" data-id="'+s.id+'">'+(on?'<span class="tick">&checkmark;</span>':'')+f+'</span>';
+    });
+    var armed = deleteArm===s.id;
+
+    return ''+
+    '<div class="drawer'+(open?' open':'')+'" data-drawer="'+s.id+'">'+
+      '<div class="dinner">'+
+        '<div class="drow">'+
+          '<div class="dlbl">Weight <span class="val">'+WEIGHTS[s.w]+'</span></div>'+
+          '<div class="wseg">'+seg+'</div>'+
+        '</div>'+
+        '<div class="drow">'+
+          '<div class="dlbl">Per-session cap'+(s.perday>=10?' <span class="val">'+fmtDay(s.perday)+'/day incoming</span>':'')+'</div>'+
+          '<div class="cap">'+
+            '<button data-cap="down" data-id="'+s.id+'">&minus;</button>'+
+            capTxt+
+            '<button data-cap="up" data-id="'+s.id+'">+</button>'+
+          '</div>'+
+        '</div>'+
+        '<div class="drow">'+
+          '<div class="dlbl">Feeds</div>'+
+          '<div class="fchips">'+fchips+'</div>'+
+        '</div>'+
+        '<div class="drow">'+
+          '<div class="editrow">'+
+            '<input data-title="'+s.id+'" value="'+s.title.replace(/"/g,'&quot;')+'">'+
+            '<button data-savetitle="'+s.id+'">Save</button>'+
+          '</div>'+
+        '</div>'+
+        '<div class="drow">'+
+          '<div class="dacts">'+
+            '<button class="dact" data-archive="'+s.id+'"><span class="g"><svg viewBox="0 0 15 15"><rect x="1.5" y="2.5" width="12" height="3" stroke-width="1.3"/><path d="M2.8 5.5v7h9.4v-7M5.8 8.5h3.4" stroke-width="1.3" stroke-linecap="round"/></svg></span>Archive</button>'+
+            '<button class="dact warn'+(armed?' armed':'')+'" data-delete="'+s.id+'"><span class="g"><svg viewBox="0 0 15 15"><path d="M3 4h9M6 4V2.5h3V4M4 4l.6 8.5h5.8L11 4M6 6.3v4M9 6.3v4" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg></span>'+(armed?'Confirm?':'Delete')+'</button>'+
+          '</div>'+
+        '</div>'+
+      '</div>'+
+    '</div>';
+  }
+
+  // ---------- archived section ----------
+  function renderArch(){
+    var archived = sources.filter(function(s){return s.archived;});
+    var el=document.getElementById('archsec');
+    if(archived.length===0){ el.innerHTML=''; return; }
+    var rows = archived.map(function(s){
+      return '<div class="arow"><span class="an">'+s.title+'</span><span class="af">'+s.feeds.join(' · ')+'</span>'+
+        '<span class="restore" data-restore="'+s.id+'">Restore</span></div>';
+    }).join('');
+    el.innerHTML = '<div class="ahd" data-toggle-arch="1">'+(archOpen?'&#9660;':'&#9654;')+' '+archived.length+' archived</div>'+
+      '<div class="archbody'+(archOpen?' open':'')+'">'+rows+'</div>';
+  }
+
+  // ---------- outlier insight ----------
+  var dismissed = false;
+  var insightIdx = 0;
+  function outliers(){
+    return sources.filter(function(s){
+      return !s.archived && !s.dormant && s.flag && (s.flag==='noisy'||s.flag==='very noisy');
+    }).map(function(s){
+      var vol=feedVolume(s.feeds[0]);
+      var share = vol>0 ? Math.round(s.perday/vol*100) : 0;
+      var score = (s.skip/100)*(share/100)*s.perday;
+      return {s:s, share:share, score:score};
+    }).sort(function(a,b){return b.score-a.score;});
+  }
+  function renderInsight(){
+    var mount=document.getElementById('insightMount');
+    if(dismissed){ mount.innerHTML=''; return; }
+    var outs=outliers();
+    if(outs.length===0){ mount.innerHTML=''; return; }
+    if(insightIdx>=outs.length) insightIdx=0;
+    var o=outs[insightIdx], s=o.s;
+    // suggest the right lever, transparently
+    var lever, leverLbl;
+    if(s.w>0){ lever='turndown'; leverLbl='Turn down &rarr; '+WEIGHTS[s.w-1]; }
+    else if(s.cap==null){ lever='cap'; leverLbl='Add a cap'; }
+    else { lever='archive'; leverLbl='Archive'; }
+
+    var desc = 'It\'s <b>'+o.share+'%</b> of your '+s.feeds[0]+' volume at <b>'+fmtDay(s.perday)+'/day</b>, and you skip <b>'+s.skip+'%</b> of it. '+
+      (s.w===0 ? 'Already at '+WEIGHTS[0]+' &mdash; a cap or archive is the next lever.' :
+       'Weight is currently '+WEIGHTS[s.w]+'.');
+
+    mount.innerHTML =
+      '<div class="insight">'+
+        '<div class="ihd"><span class="sq"></span>Feed outlier'+
+          (outs.length>1?'<span class="nav"><b data-inav="-1">&lsaquo;</b><b data-inav="1">&rsaquo;</b></span>':'')+
+        '</div>'+
+        '<div class="isrc"><em>'+s.title+'</em></div>'+
+        '<div class="idesc">'+desc+'</div>'+
+        '<div class="iacts">'+
+          '<button class="ibtn solid" data-lever="'+lever+'" data-id="'+s.id+'">'+leverLbl+'</button>'+
+          '<button class="ibtn" data-idismiss="1">Dismiss</button>'+
+        '</div>'+
+      '</div>';
+  }
+
+  // ---------- main render ----------
+  function render(){
+    var st=scroll.scrollTop;
+    var list = sources.filter(function(s){
+      if(s.archived) return false;
+      if(filterFeed!=='All' && s.feeds.indexOf(filterFeed)<0) return false;
+      return true;
+    });
+    list = applySort(list);
+    tbody.innerHTML = list.map(rowHtml).join('');
+    syncHeader();
+    renderRail();
+    renderArch();
+    renderInsight();
+
+    var active = sources.filter(function(s){return !s.archived;}).length;
+    var archived = sources.length-active;
+    document.getElementById('cnt').textContent = active+' source'+(active===1?'':'s');
+    document.getElementById('foot').textContent = list.length+' shown'+(archived?' · '+archived+' archived':'')+' · otium';
+
+    scroll.scrollTop=st;
+  }
+
+  // ---------- interactions (delegated) ----------
+  function getSrc(id){ return sources.find(function(s){return s.id===+id;}); }
+
+  tbody.addEventListener('click', function(e){
+    var t;
+    // weight stepper
+    if((t=e.target.closest('[data-w]'))){
+      var s=getSrc(t.getAttribute('data-id'));
+      if(t.getAttribute('data-w')==='up' && s.w<4) s.w++;
+      else if(t.getAttribute('data-w')==='down' && s.w>0) s.w--;
+      snapTick();
+      var wasExpanded=expandedId; render();
+      var gz=tbody.querySelector('[data-gauge="'+s.id+'"]'); if(gz){ gz.classList.add('bump'); }
+      return;
+    }
+    // segmented weight in drawer
+    if((t=e.target.closest('[data-setw]'))){
+      var s2=getSrc(t.getAttribute('data-id'));
+      s2.w=+t.getAttribute('data-setw'); snapTick(); render(); return;
+    }
+    // cap stepper
+    if((t=e.target.closest('[data-cap]'))){
+      var s3=getSrc(t.getAttribute('data-id'));
+      var idx=CAP_STEPS.indexOf(s3.cap); if(idx<0) idx=0;
+      idx += t.getAttribute('data-cap')==='up' ? 1 : -1;
+      idx=Math.max(0,Math.min(CAP_STEPS.length-1,idx));
+      s3.cap=CAP_STEPS[idx]; snapTick(); render(); return;
+    }
+    // feed membership toggle
+    if((t=e.target.closest('[data-togfeed]'))){
+      var s4=getSrc(t.getAttribute('data-id'));
+      var f=t.getAttribute('data-togfeed');
+      var j=s4.feeds.indexOf(f);
+      if(j>=0) s4.feeds.splice(j,1); else s4.feeds.push(f);
+      snapTick(); render(); return;
+    }
+    // save title
+    if((t=e.target.closest('[data-savetitle]'))){
+      var s5=getSrc(t.getAttribute('data-savetitle'));
+      var inp=tbody.querySelector('[data-title="'+s5.id+'"]');
+      if(inp && inp.value.trim()){ s5.title=inp.value.trim(); }
+      flashRefresh(); render(); return;
+    }
+    // archive
+    if((t=e.target.closest('[data-archive]'))){
+      var s6=getSrc(t.getAttribute('data-archive'));
+      var rowEl=tbody.querySelector('[data-row="'+s6.id+'"]');
+      expandedId=null; deleteArm=null;
+      if(rowEl){
+        rowEl.classList.add('stamping');
+        setTimeout(function(){ s6.archived=true; render(); },320);
+      } else { s6.archived=true; render(); }
+      return;
+    }
+    // delete (two-tap)
+    if((t=e.target.closest('[data-delete]'))){
+      var id=+t.getAttribute('data-delete');
+      if(deleteArm!==id){ deleteArm=id; render(); return; }
+      sources = sources.filter(function(s){return s.id!==id;});
+      deleteArm=null; expandedId=null; flashRefresh(); render(); return;
+    }
+    // expand toggle (source cell)
+    if((t=e.target.closest('[data-expand]'))){
+      var id2=+t.getAttribute('data-expand');
+      expandedId = expandedId===id2 ? null : id2;
+      deleteArm=null;
+      render();
+      return;
+    }
+  });
+
+  // insight actions
+  document.getElementById('insightMount').addEventListener('click', function(e){
+    var t;
+    if((t=e.target.closest('[data-idismiss]'))){ dismissed=true; renderInsight(); return; }
+    if((t=e.target.closest('[data-inav]'))){
+      var outs=outliers();
+      insightIdx=(insightIdx+ (+t.getAttribute('data-inav')) + outs.length)%outs.length;
+      renderInsight(); return;
+    }
+    if((t=e.target.closest('[data-lever]'))){
+      var s=getSrc(t.getAttribute('data-id'));
+      var lever=t.getAttribute('data-lever');
+      if(lever==='turndown' && s.w>0){ s.w--; snapTick(); }
+      else if(lever==='cap'){ s.cap = s.cap==null ? 3 : s.cap; expandedId=s.id; }
+      else if(lever==='archive'){ s.archived=true; }
+      flashRefresh(); render();
+      return;
+    }
+  });
+
+  // archived toggle + restore
+  document.getElementById('archsec').addEventListener('click', function(e){
+    var t;
+    if((t=e.target.closest('[data-toggle-arch]'))){ archOpen=!archOpen; renderArch(); return; }
+    if((t=e.target.closest('[data-restore]'))){
+      var s=getSrc(t.getAttribute('data-restore'));
+      s.archived=false; flashRefresh(); render(); return;
+    }
+  });
+
+  // ---------- add source sheet ----------
+  var sheet=document.getElementById('sheet');
+  var fFeed=document.getElementById('fFeed');
+  function renderFeedSelect(){
+    fFeed.innerHTML = FEEDS.map(function(f){return '<option value="'+f+'">'+f+'</option>';}).join('');
+  }
+  document.getElementById('addBtn').addEventListener('click', function(){
+    document.getElementById('fUrl').value='';
+    document.getElementById('fTitle').value='';
+    renderFeedSelect();
+    flashRefresh();
+    setTimeout(function(){ sheet.classList.add('up'); },120);
+  });
+  document.getElementById('sheetClose').addEventListener('click', function(){
+    sheet.classList.remove('up'); flashRefresh();
+  });
+  document.getElementById('doAdd').addEventListener('click', function(){
+    var url=document.getElementById('fUrl').value.trim();
+    var title=document.getElementById('fTitle').value.trim();
+    var feed=fFeed.value;
+    if(!title){
+      if(url){
+        title = url.replace(/^https?:\/\//,'').replace(/^www\./,'').split('/')[0];
+      } else { title='New source'; }
+    }
+    var kind = /youtube|youtu\.be/.test(url) ? 'youtube' : (/podcast|\.rss|anchor|libsyn|transistor/.test(url) ? 'podcast' : 'rss');
+    sources.push({id:nextId++, title:title, feeds:[feed], w:2, kind:kind, unseen:0, perday:0, skip:null, flag:null, dormant:false, cap:null, fresh:true});
+    filterFeed='All'; sortKey='name'; sortDir='asc';
+    sheet.classList.remove('up');
+    flashRefresh();
+    setTimeout(render,120);
+  });
+
+  // ---------- init ----------
+  renderFeedSelect();
+  render();
+})();
+</script>
