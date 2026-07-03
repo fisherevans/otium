@@ -43,8 +43,8 @@ func (h *Handler) ParseImport(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) CommitImport(w http.ResponseWriter, r *http.Request) {
 	uid := userID(r)
 	var body struct {
-		Sources           []importer.Candidate `json:"sources"`
-		CreateFeedsFolders bool                `json:"create_feeds_from_folders"`
+		Sources            []importer.Candidate `json:"sources"`
+		CreateFeedsFolders bool                 `json:"create_feeds_from_folders"`
 	}
 	if !decode(w, r, &body) {
 		return
@@ -88,6 +88,18 @@ func (h *Handler) CommitImport(w http.ResponseWriter, r *http.Request) {
 				feedIDs[c.Category] = fid
 			}
 			_ = h.db.AddFeedSource(r.Context(), fid, id)
+			continue
+		}
+		// Auto-tag untagged YouTube sources into the Videos feed (#53) so future
+		// YouTube-Takeout imports land there instead of an untagged mass. Only when
+		// the candidate carries no folder/category of its own.
+		if c.Kind == "youtube" && c.Category == "" {
+			f, err := h.db.GetOrCreateVideosFeed(r.Context(), uid)
+			if err != nil {
+				h.log.Warn("import: videos feed create failed", "err", err)
+				continue
+			}
+			_ = h.db.AddFeedSource(r.Context(), f.ID, id)
 		}
 	}
 

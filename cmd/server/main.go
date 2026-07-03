@@ -142,6 +142,13 @@ func ingestLoop(ctx context.Context, db *store.DB, ing *feeds.Ingester, cfg *ser
 			log.Warn("ingest loop: no user yet", "err", err)
 			return
 		}
+		// One-time, marker-guarded grouping of untagged YouTube sources into the
+		// Videos feed (#53). No-ops after the first run.
+		if grouped, err := db.BackfillVideosFeed(ctx, u.ID); err != nil {
+			log.Warn("videos backfill failed", "err", err)
+		} else if grouped > 0 {
+			log.Info("videos backfill: grouped untagged youtube sources", "count", grouped)
+		}
 		n, err := ing.FetchAll(ctx, u.ID)
 		if err != nil {
 			log.Warn("ingest loop error", "err", err)

@@ -164,6 +164,92 @@ func (db *DB) GetOrCreateFeed(ctx context.Context, userID int64, name, slug, col
 	return db.CreateFeed(ctx, userID, name, slug, color)
 }
 
+// Videos feed (#53): the auto-grouping bucket for untagged YouTube sources.
+const (
+	videosFeedName = "Videos"
+	videosFeedSlug = "videos"
+	videosFeedIcon = "film" // Clapperboard glyph; see web/src/lib/feedIcons.ts
+	// videosBackfillKey gates the one-time untagged-YouTube grouping so it runs
+	// exactly once and never re-groups sources Fisher later pulls out by hand.
+	videosBackfillKey = "videos_backfill_done"
+)
+
+// GetOrCreateVideosFeed returns the user's Videos feed, creating it (with the
+// film icon) if absent. Idempotent via the (user_id, slug) unique constraint;
+// if the feed already exists its name/icon are left untouched so a later manual
+// rename or re-icon survives.
+func (db *DB) GetOrCreateVideosFeed(ctx context.Context, userID int64) (*Feed, error) {
+	if _, err := db.sql.ExecContext(ctx,
+		`INSERT INTO feeds (user_id, name, slug, icon) VALUES (?, ?, ?, ?)
+		 ON CONFLICT(user_id, slug) DO NOTHING`,
+		userID, videosFeedName, videosFeedSlug, videosFeedIcon); err != nil {
+		return nil, err
+	}
+	var f Feed
+	err := db.sql.QueryRowContext(ctx,
+		`SELECT id, name, slug, color, icon FROM feeds WHERE user_id = ? AND slug = ?`,
+		userID, videosFeedSlug).Scan(&f.ID, &f.Name, &f.Slug, &f.Color, &f.Icon)
+	if err != nil {
+		return nil, err
+	}
+	f.UserID = userID
+	return &f, nil
+}
+
+// BackfillVideosFeed is a one-time, marker-guarded migration (#53): it ensures
+// the Videos feed exists and assigns every youtube-kind source that currently
+// belongs to NO feed to it. Guarded by the kv 'videos_backfill_done' flag so it
+// runs exactly once per user and never re-groups sources later pulled out.
+// Returns the number of sources assigned (0 on every run after the first).
+func (db *DB) BackfillVideosFeed(ctx context.Context, userID int64) (int, error) {
+	if _, done, err := db.kvGet(ctx, userID, videosBackfillKey); err != nil {
+		return 0, err
+	} else if done {
+		return 0, nil
+	}
+	f, err := db.GetOrCreateVideosFeed(ctx, userID)
+	if err != nil {
+		return 0, err
+	}
+	res, err := db.sql.ExecContext(ctx,
+		`INSERT OR IGNORE INTO feed_sources (feed_id, source_id)
+		 SELECT ?, s.id FROM sources s
+		 WHERE s.user_id = ? AND s.kind = 'youtube'
+		   AND NOT EXISTS (SELECT 1 FROM feed_sources fs WHERE fs.source_id = s.id)`,
+		f.ID, userID)
+	if err != nil {
+		return 0, err
+	}
+	n, _ := res.RowsAffected()
+	if err := db.kvSet(ctx, userID, videosBackfillKey, "1"); err != nil {
+		return 0, err
+	}
+	return int(n), nil
+}
+
+// --- kv (one-time migration markers / settings flags) ---
+
+func (db *DB) kvGet(ctx context.Context, userID int64, key string) (string, bool, error) {
+	var v string
+	err := db.sql.QueryRowContext(ctx,
+		`SELECT value FROM kv WHERE user_id = ? AND key = ?`, userID, key).Scan(&v)
+	if err == sql.ErrNoRows {
+		return "", false, nil
+	}
+	if err != nil {
+		return "", false, err
+	}
+	return v, true, nil
+}
+
+func (db *DB) kvSet(ctx context.Context, userID int64, key, value string) error {
+	_, err := db.sql.ExecContext(ctx,
+		`INSERT INTO kv (user_id, key, value) VALUES (?, ?, ?)
+		 ON CONFLICT(user_id, key) DO UPDATE SET value = excluded.value`,
+		userID, key, value)
+	return err
+}
+
 // UpdateFeed patches a feed's presentation fields (name, color, icon) and the
 // per-feed ranker overrides (half-life, diversity). Only non-nil fields are
 // applied. Scoped to the owning user.

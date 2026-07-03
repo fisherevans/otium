@@ -144,3 +144,13 @@ CREATE TABLE IF NOT EXISTS events (
 );
 
 CREATE INDEX IF NOT EXISTS idx_events_user_at ON events(user_id, at DESC);
+
+-- Per-user key/value flags for one-time migrations and settings markers. Used
+-- to gate idempotent backfills that must run exactly once and then never fight a
+-- later manual change (e.g. the Videos-feed backfill, key 'videos_backfill_done').
+CREATE TABLE IF NOT EXISTS kv (
+    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    key     TEXT NOT NULL,
+    value   TEXT NOT NULL DEFAULT '',
+    PRIMARY KEY (user_id, key)
+);
