@@ -240,6 +240,17 @@ export default function SessionPage() {
   // Tap-to-open (#47): a click on the card body opens the item, but a scroll-snap
   // drag must not count as a tap. Track the pointer from press to release and
   // treat anything past a small move threshold as a scroll, not a tap.
+  //
+  // Swipe-to-advance (#10): a deliberate horizontal drag on the focused card
+  // advances it - the same path as the Next button (next == skip). The gesture
+  // is fenced off from the two neighbours it could collide with:
+  //   - vertical scroll-snap: the card carries `touch-action: pan-y`, so the
+  //     browser keeps vertical panning and hands horizontal motion to us; we also
+  //     require the horizontal delta to dominate the vertical one.
+  //   - tap-to-open: any qualifying swipe is >> the 10px move threshold, so it
+  //     already trips `moved` and cardClick bails before openItem.
+  const SWIPE_DIST = 60; // px of horizontal travel to count as a swipe
+  const SWIPE_DOMINANCE = 1.3; // horizontal must beat vertical by this factor
   const press = useRef<{ x: number; y: number; moved: boolean } | null>(null);
   function cardPointerDown(e: ReactPointerEvent) {
     press.current = { x: e.clientX, y: e.clientY, moved: false };
@@ -248,10 +259,23 @@ export default function SessionPage() {
     const p = press.current;
     if (p && (Math.abs(e.clientX - p.x) > 10 || Math.abs(e.clientY - p.y) > 10)) p.moved = true;
   }
+  function cardPointerUp(e: ReactPointerEvent, i: number) {
+    const p = press.current;
+    if (!p) return;
+    const dx = e.clientX - p.x;
+    const dy = e.clientY - p.y;
+    // Left swipe on the still-focused card = advance. Left only: there's no
+    // "back", so a right drag intentionally does nothing (it falls through to a
+    // no-op tap since `moved` is set).
+    if (i === current && dx <= -SWIPE_DIST && Math.abs(dx) >= Math.abs(dy) * SWIPE_DOMINANCE) {
+      p.moved = true; // keep cardClick from treating the follow-up click as a tap
+      next();
+    }
+  }
   function cardClick(sel: Selected) {
     const p = press.current;
     press.current = null;
-    if (p?.moved) return; // it was a scroll, not a tap
+    if (p?.moved) return; // it was a scroll or a swipe, not a tap
     openItem(sel);
   }
 
@@ -347,6 +371,7 @@ export default function SessionPage() {
             }}
             onPointerDown={cardPointerDown}
             onPointerMove={cardPointerMove}
+            onPointerUp={(e) => cardPointerUp(e, i)}
             onClick={() => cardClick(it)}
             role="link"
           >

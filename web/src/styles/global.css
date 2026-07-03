@@ -443,6 +443,9 @@ h1.display {
   padding: 20px;
   border-bottom: 1px solid var(--hair);
   transition: opacity 0.3s steps(3);
+  /* #10: reserve horizontal motion for the swipe-to-advance gesture while the
+     browser keeps handling vertical scroll-snap panning. */
+  touch-action: pan-y;
 }
 .snap.away {
   opacity: 0.35;
