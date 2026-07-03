@@ -1312,3 +1312,163 @@ h1.display {
   pointer-events: none;
   animation: einkflash 0.28s steps(3) forwards;
 }
+
+/* ============================================================
+   Feed mix / insights (#49) - donut + ranked share bars
+   ============================================================ */
+.mix-empty {
+  font-family: var(--serif);
+  font-style: italic;
+  color: var(--ink-mute);
+  margin: 24px 0;
+}
+
+/* donut header: compact grayscale pie (top-N + other) with a labelled legend */
+.mix-donut-wrap {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 12px 0 6px;
+  border-bottom: 1.5px solid var(--rule-hard);
+}
+.mix-donut-wrap svg {
+  flex: 0 0 auto;
+}
+.mix-legend {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  flex: 1;
+  min-width: 0;
+}
+.mix-legend li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--grot);
+  font-size: 12px;
+  padding: 2px 0;
+}
+.mix-swatch {
+  flex: 0 0 auto;
+  width: 11px;
+  height: 11px;
+  border: 1px solid var(--rule-hard);
+}
+.mix-legend-nm {
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--ink-soft);
+}
+.mix-legend-pct {
+  font-family: var(--mono);
+  color: var(--ink);
+}
+
+/* ranked list */
+.mix-list {
+  margin-top: 4px;
+}
+.mix-row {
+  display: block;
+  width: 100%;
+  text-align: left;
+  background: none;
+  border: none;
+  border-bottom: 1px solid var(--hair);
+  padding: 12px 2px;
+}
+.mix-row:active {
+  background: var(--paper-3);
+}
+.mix-row.prune {
+  border-left: 2px solid var(--ink);
+  padding-left: 10px;
+}
+.mix-row-top {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+.mix-ico {
+  flex: 0 0 auto;
+  display: inline-flex;
+  color: var(--ink-soft);
+}
+.mix-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border: 1.5px solid var(--ink-mute);
+  border-radius: 50%;
+}
+.mix-name {
+  flex: 1;
+  min-width: 0;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.mix-share {
+  flex: 0 0 auto;
+  font-family: var(--didot);
+  font-size: 18px;
+}
+.mix-bar {
+  position: relative;
+  height: 10px;
+  margin: 8px 0 6px;
+  background: var(--paper-3);
+  border: 1px solid var(--hair);
+}
+.mix-fill {
+  position: absolute;
+  top: 0;
+  left: 0;
+  height: 100%;
+  background: var(--ink);
+}
+/* the "wants to be" extension: hollow, hatched - shows share lost to skipping */
+.mix-ghost {
+  position: absolute;
+  top: 0;
+  height: 100%;
+  border: 1px dashed var(--ink-mute);
+  border-left: none;
+  background-image: repeating-linear-gradient(
+    45deg,
+    transparent,
+    transparent 3px,
+    var(--rule) 3px,
+    var(--rule) 4px
+  );
+}
+.mix-meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--ink-mute);
+}
+.mix-wants {
+  font-style: normal;
+  color: var(--ink-soft);
+}
+.mix-prune-tag {
+  margin-left: auto;
+  font-family: var(--grot);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink);
+  border: 1px solid var(--rule-hard);
+  padding: 1px 6px;
+}
+.mix-sheet {
+  padding: 4px 2px 8px;
+}

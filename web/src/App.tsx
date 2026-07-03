@@ -4,6 +4,7 @@ import HomePage from "@/pages/HomePage";
 import SessionPage from "@/pages/SessionPage";
 import SourcesPage from "@/pages/SourcesPage";
 import ImportPage from "@/pages/ImportPage";
+import MixPage from "@/pages/MixPage";
 
 export default function App() {
   const { loading, unauthenticated } = useAuth();
@@ -49,6 +50,7 @@ export default function App() {
           <Route path="/" element={<HomePage />} />
           <Route path="/session" element={<SessionPage />} />
           <Route path="/sources" element={<SourcesPage />} />
+          <Route path="/mix" element={<MixPage />} />
           <Route path="/import" element={<ImportPage />} />
         </Routes>
       </main>

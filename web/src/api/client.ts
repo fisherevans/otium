@@ -106,6 +106,37 @@ export interface CommitResult {
   refreshing: boolean;
 }
 
+// Feed "mix" view (#49). Per source: its live effective share of the feed
+// (current freshness-decayed ranker score incl. skip penalty, normalized) paired
+// with intended_share (same, minus the skip penalty) and skip_pct. A big
+// intended slice you mostly skip is the inefficiency signal.
+export interface MixSource {
+  source_id: number;
+  source_title: string;
+  feed: FeedRef | null; // primary feed; null for a feedless source
+  effective_share: number; // 0..1, sums to 1 across sources
+  intended_share: number; // 0..1, "wants to be" (no skip penalty)
+  skip_pct: number; // 0..1
+  item_count: number;
+  weight: number; // current multiplier (map via bucketOf for the control)
+}
+
+export interface MixFeed {
+  feed: FeedRef | null; // null = feedless bucket
+  effective_share: number;
+  intended_share: number;
+  source_count: number;
+  item_count: number;
+}
+
+export interface MixResponse {
+  scope: "all" | "feed";
+  feed?: string; // slug, when scope === "feed"
+  sources: MixSource[];
+  feeds: MixFeed[];
+  totals: { source_count: number; item_count: number };
+}
+
 export class Unauthorized extends Error {}
 
 function handleAuth(status: number) {
@@ -167,6 +198,9 @@ export const api = {
   setSourceFeeds: (id: number, feedSlugs: string[]) =>
     req<{ ok: boolean }>("PUT", `/sources/${id}/feeds`, { feed_slugs: feedSlugs }),
   sourceItems: (id: number) => req<Item[]>("GET", `/sources/${id}/items`),
+
+  mix: (feedSlug?: string) =>
+    req<MixResponse>("GET", `/mix${feedSlug ? `?feed=${encodeURIComponent(feedSlug)}` : ""}`),
 
   buildSession: (minLow: number, minHigh: number, themes: string[]) =>
     req<BuildResponse>("POST", "/session", { min_low: minLow, min_high: minHigh, themes }),

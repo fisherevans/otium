@@ -139,6 +139,9 @@ export default function SourcesPage() {
         <button className="btn ghost" style={{ marginTop: 0 }} onClick={fetchNow} disabled={fetching}>
           {fetching ? "Refreshing…" : "Refresh"}
         </button>
+        <button className="btn ghost" style={{ marginTop: 0 }} onClick={() => nav("/mix")}>
+          Feed mix
+        </button>
         {feeds.length > 0 && (
           <button className="btn ghost" style={{ marginTop: 0 }} onClick={() => setIconsOpen(true)}>
             Feed icons
