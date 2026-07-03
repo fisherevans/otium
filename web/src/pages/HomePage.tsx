@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { api, type Feed, type Source } from "@/api/client";
 
 const round5 = (v: number) => Math.max(0, Math.round(v / 5) * 5);
+const clamp01 = (v: number) => Math.min(1, Math.max(0, v));
 
 // The pad encodes an intent in one gesture:
 //   X (left->right) = session length, ~5 min to ~60 min.
@@ -79,6 +80,31 @@ export default function HomePage() {
     setPos({ x: 0.5, y: 0.5 });
   }
 
+  // #3: keyboard control for the pad itself. Arrows nudge the knob in 0.1 steps
+  // (one 5-min notch on X, one flexibility notch on Y) so the pad is operable
+  // without a pointer, mirroring the drag.
+  function onPadKey(e: React.KeyboardEvent) {
+    const step = 0.1;
+    let { x, y } = pos;
+    if (e.key === "ArrowLeft") x -= step;
+    else if (e.key === "ArrowRight") x += step;
+    else if (e.key === "ArrowUp") y += step;
+    else if (e.key === "ArrowDown") y -= step;
+    else if (e.key === "Home") { x = 0.5; y = 0.5; }
+    else return;
+    e.preventDefault();
+    setPos({ x: clamp01(x), y: clamp01(y) });
+  }
+  // #3: non-gesture path. The sliders write the same pos the pad does, so pad
+  // and sliders stay in sync automatically (both derive from `pos`). Length maps
+  // to the X axis via the center minute value; flexibility maps straight to Y.
+  function setLengthMin(centerMin: number) {
+    setPos((p) => ({ ...p, x: clamp01((centerMin - 5) / 55) }));
+  }
+  function setFlexPct(pct: number) {
+    setPos((p) => ({ ...p, y: clamp01(pct / 100) }));
+  }
+
   function toggle(slug: string) {
     setPicked((p) => (p.includes(slug) ? p.filter((s) => s !== slug) : [...p, slug]));
   }
@@ -103,6 +129,10 @@ export default function HomePage() {
           onPointerMove={onMove}
           onPointerUp={onUp}
           onPointerCancel={onUp}
+          role="group"
+          tabIndex={0}
+          onKeyDown={onPadKey}
+          aria-label={`Intent pad. Drag the knob, or use arrow keys, or the length and flexibility sliders below. Currently ${describe(low, high, center, h).toLowerCase()}.`}
         >
           <div className="pad-grid" />
           {/* axis labels: X = length, Y = flexibility */}
@@ -119,7 +149,7 @@ export default function HomePage() {
             style={{ left: `${pos.x * 100}%`, top: `${(1 - pos.y) * 100}%` }}
           />
         </div>
-        <p className="pad-descriptor" onClick={recenter} title="tap to recenter">
+        <p className="pad-descriptor" onClick={recenter} title="tap to recenter" aria-live="polite">
           {describe(low, high, center, h)}
         </p>
         <div className="pad-readout">
@@ -131,6 +161,39 @@ export default function HomePage() {
               <span className="small">flexible</span>
             </>
           )}
+        </div>
+
+        {/* #3: non-gesture path - two labeled sliders that drive the same pos as
+            the pad, for keyboard/AT users and anyone who can't drag. */}
+        <div className="pad-fallback">
+          <label className="pad-slider">
+            <span className="pad-slider-label">Length</span>
+            <input
+              type="range"
+              min={5}
+              max={60}
+              step={5}
+              value={center}
+              onChange={(e) => setLengthMin(Number(e.target.value))}
+              aria-label="Session length in minutes"
+              aria-valuetext={`${center} minutes`}
+            />
+            <span className="pad-slider-val">{center}m</span>
+          </label>
+          <label className="pad-slider">
+            <span className="pad-slider-label">Flexibility</span>
+            <input
+              type="range"
+              min={0}
+              max={100}
+              step={10}
+              value={Math.round(pos.y * 100)}
+              onChange={(e) => setFlexPct(Number(e.target.value))}
+              aria-label="Range flexibility"
+              aria-valuetext={h === 0 ? "exact target" : `plus or minus ${h} minutes`}
+            />
+            <span className="pad-slider-val">{h === 0 ? "exact" : `±${h}m`}</span>
+          </label>
         </div>
       </div>
 
