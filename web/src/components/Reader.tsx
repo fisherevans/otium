@@ -4,12 +4,14 @@ import { BottomSheet } from "./BottomSheet";
 import { renderSummary } from "@/lib/html";
 import { fmtDate } from "@/lib/format";
 
-// In-app reader (#41). Renders the item's stored text (the RSS `summary`) inline
-// so a session doesn't have to bounce to a browser tab. v1 is the sanitized
-// summary - full body for feeds that ship it, an excerpt for those that don't.
-// When there's no text (e.g. YouTube), it degrades to a calm "open externally"
-// state. Reading in place is deliberately NOT an engagement signal; only the
-// explicit external-open handoff calls onOpen.
+// In-app reader (#41). Renders the item's stored text inline so a session
+// doesn't have to bounce to a browser tab. Prefers the full body (`content`,
+// content:encoded stored raw at ingest - #58) and falls back to the short
+// `summary` when a feed ships no full body. Both go through the same DOMPurify
+// sanitizer, which whitelists formatting tags so paragraphs/links/lists/quotes
+// render. When there's no text at all (e.g. YouTube), it degrades to a calm
+// "open externally" state. Reading in place is deliberately NOT an engagement
+// signal; only the explicit external-open handoff calls onOpen.
 export function Reader({
   item,
   sourceTitle,
@@ -23,7 +25,12 @@ export function Reader({
   onClose: () => void;
   onOpen: () => void;
 }) {
-  const rendered = useMemo(() => renderSummary(item?.summary), [item?.summary]);
+  // Prefer the full body; fall back to the short summary when content is empty
+  // (old items pre-#58, or feeds that ship no full body).
+  const rendered = useMemo(
+    () => renderSummary(item?.content?.trim() ? item.content : item?.summary),
+    [item?.content, item?.summary],
+  );
 
   return (
     <BottomSheet open={open} onClose={onClose} variant="tall" kicker={item?.media_type ?? ""}>

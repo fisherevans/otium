@@ -73,7 +73,8 @@ type Item struct {
 	ExternalID   string    `json:"-"`
 	URL          string    `json:"url"`
 	Title        string    `json:"title"`
-	Summary      string    `json:"summary"`
+	Summary      string    `json:"summary"` // short plain-text card preview
+	Content      string    `json:"content"` // full body, raw HTML; sanitized client-side (#58)
 	Author       string    `json:"author"`
 	ThumbnailURL string    `json:"thumbnail_url"`
 	MediaType    string    `json:"media_type"` // short | long | article | audio | live | unknown

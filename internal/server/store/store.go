@@ -54,13 +54,28 @@ func migrate(sdb *sql.DB) error {
 	if err := ensureColumn(sdb, "feeds", "half_life_days", `ALTER TABLE feeds ADD COLUMN half_life_days REAL NOT NULL DEFAULT 0`); err != nil {
 		return err
 	}
-	return ensureColumn(sdb, "feeds", "diversity", `ALTER TABLE feeds ADD COLUMN diversity INTEGER NOT NULL DEFAULT 0`)
+	if err := ensureColumn(sdb, "feeds", "diversity", `ALTER TABLE feeds ADD COLUMN diversity INTEGER NOT NULL DEFAULT 0`); err != nil {
+		return err
+	}
+	// items.content (#58): full article body as raw HTML, rendered in the reader.
+	return ensureColumn(sdb, "items", "content", `ALTER TABLE items ADD COLUMN content TEXT NOT NULL DEFAULT ''`)
 }
 
 // ensureColumn adds a column via ddl only if it isn't already present. This is
 // the idempotent guard that lets an ALTER run on every boot without erroring on
 // an already-migrated database.
 func ensureColumn(sdb *sql.DB, table, column, ddl string) error {
+	// Skip if the table doesn't exist yet. In production schema.sql's CREATE TABLE
+	// runs first so this never trips, but it keeps migrate() safe to call against a
+	// partial DB (e.g. a test that only sets up one table).
+	var tableExists int
+	if err := sdb.QueryRowContext(context.Background(),
+		`SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name = ?`, table).Scan(&tableExists); err != nil {
+		return err
+	}
+	if tableExists == 0 {
+		return nil
+	}
 	var exists int
 	err := sdb.QueryRowContext(context.Background(),
 		`SELECT COUNT(*) FROM pragma_table_info(?) WHERE name = ?`, table, column).Scan(&exists)
@@ -147,6 +162,92 @@ func (db *DB) GetOrCreateFeed(ctx context.Context, userID int64, name, slug, col
 		return nil, err
 	}
 	return db.CreateFeed(ctx, userID, name, slug, color)
+}
+
+// Videos feed (#53): the auto-grouping bucket for untagged YouTube sources.
+const (
+	videosFeedName = "Videos"
+	videosFeedSlug = "videos"
+	videosFeedIcon = "film" // Clapperboard glyph; see web/src/lib/feedIcons.ts
+	// videosBackfillKey gates the one-time untagged-YouTube grouping so it runs
+	// exactly once and never re-groups sources Fisher later pulls out by hand.
+	videosBackfillKey = "videos_backfill_done"
+)
+
+// GetOrCreateVideosFeed returns the user's Videos feed, creating it (with the
+// film icon) if absent. Idempotent via the (user_id, slug) unique constraint;
+// if the feed already exists its name/icon are left untouched so a later manual
+// rename or re-icon survives.
+func (db *DB) GetOrCreateVideosFeed(ctx context.Context, userID int64) (*Feed, error) {
+	if _, err := db.sql.ExecContext(ctx,
+		`INSERT INTO feeds (user_id, name, slug, icon) VALUES (?, ?, ?, ?)
+		 ON CONFLICT(user_id, slug) DO NOTHING`,
+		userID, videosFeedName, videosFeedSlug, videosFeedIcon); err != nil {
+		return nil, err
+	}
+	var f Feed
+	err := db.sql.QueryRowContext(ctx,
+		`SELECT id, name, slug, color, icon FROM feeds WHERE user_id = ? AND slug = ?`,
+		userID, videosFeedSlug).Scan(&f.ID, &f.Name, &f.Slug, &f.Color, &f.Icon)
+	if err != nil {
+		return nil, err
+	}
+	f.UserID = userID
+	return &f, nil
+}
+
+// BackfillVideosFeed is a one-time, marker-guarded migration (#53): it ensures
+// the Videos feed exists and assigns every youtube-kind source that currently
+// belongs to NO feed to it. Guarded by the kv 'videos_backfill_done' flag so it
+// runs exactly once per user and never re-groups sources later pulled out.
+// Returns the number of sources assigned (0 on every run after the first).
+func (db *DB) BackfillVideosFeed(ctx context.Context, userID int64) (int, error) {
+	if _, done, err := db.kvGet(ctx, userID, videosBackfillKey); err != nil {
+		return 0, err
+	} else if done {
+		return 0, nil
+	}
+	f, err := db.GetOrCreateVideosFeed(ctx, userID)
+	if err != nil {
+		return 0, err
+	}
+	res, err := db.sql.ExecContext(ctx,
+		`INSERT OR IGNORE INTO feed_sources (feed_id, source_id)
+		 SELECT ?, s.id FROM sources s
+		 WHERE s.user_id = ? AND s.kind = 'youtube'
+		   AND NOT EXISTS (SELECT 1 FROM feed_sources fs WHERE fs.source_id = s.id)`,
+		f.ID, userID)
+	if err != nil {
+		return 0, err
+	}
+	n, _ := res.RowsAffected()
+	if err := db.kvSet(ctx, userID, videosBackfillKey, "1"); err != nil {
+		return 0, err
+	}
+	return int(n), nil
+}
+
+// --- kv (one-time migration markers / settings flags) ---
+
+func (db *DB) kvGet(ctx context.Context, userID int64, key string) (string, bool, error) {
+	var v string
+	err := db.sql.QueryRowContext(ctx,
+		`SELECT value FROM kv WHERE user_id = ? AND key = ?`, userID, key).Scan(&v)
+	if err == sql.ErrNoRows {
+		return "", false, nil
+	}
+	if err != nil {
+		return "", false, err
+	}
+	return v, true, nil
+}
+
+func (db *DB) kvSet(ctx context.Context, userID int64, key, value string) error {
+	_, err := db.sql.ExecContext(ctx,
+		`INSERT INTO kv (user_id, key, value) VALUES (?, ?, ?)
+		 ON CONFLICT(user_id, key) DO UPDATE SET value = excluded.value`,
+		userID, key, value)
+	return err
 }
 
 // UpdateFeed patches a feed's presentation fields (name, color, icon) and the
@@ -455,19 +556,46 @@ func (db *DB) SourcesToFetch(ctx context.Context, userID int64) ([]Source, error
 // --- items ---
 
 // UpsertItem inserts an item if its (source_id, external_id) is new. Returns
-// true if a new row was created.
+// true only when a genuinely new row was inserted, so the ingest "new_items"
+// count stays accurate.
+//
+// For an item that already exists, it backfills content when the stored content
+// is empty (#58): pre-#58 items - and items ingested before a feed started
+// shipping content:encoded - gain their full body on the next re-fetch, without
+// clobbering an already-populated body or touching any other column. Feeds
+// truncate to ~15 recent entries, so this reaches exactly the recent,
+// session-surfaced items; older ones age out still empty, which is fine.
+//
+// A backfill is deliberately a separate UPDATE rather than an ON CONFLICT DO
+// UPDATE: SQLite's RowsAffected reports 1 for both a fresh insert and a
+// WHERE-satisfied upsert-update, so folding the two into one statement would let
+// a backfill masquerade as a new insert. Keeping the insert on ON CONFLICT DO
+// NOTHING preserves the exact rows-affected isNew derivation. Interaction state
+// lives in item_state/events, never in items, so a backfill can't disturb
+// seen/skip history.
 func (db *DB) UpsertItem(ctx context.Context, it *Item) (bool, error) {
 	res, err := db.sql.ExecContext(ctx,
-		`INSERT INTO items (source_id, external_id, url, title, summary, author, thumbnail_url, media_type, duration_sec, published_at)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		`INSERT INTO items (source_id, external_id, url, title, summary, content, author, thumbnail_url, media_type, duration_sec, published_at)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		 ON CONFLICT(source_id, external_id) DO NOTHING`,
-		it.SourceID, it.ExternalID, it.URL, it.Title, it.Summary, it.Author, it.ThumbnailURL,
+		it.SourceID, it.ExternalID, it.URL, it.Title, it.Summary, it.Content, it.Author, it.ThumbnailURL,
 		def(it.MediaType, "unknown"), it.DurationSec, it.PublishedAt.UTC().Format(time.RFC3339))
 	if err != nil {
 		return false, err
 	}
-	n, _ := res.RowsAffected()
-	return n > 0, nil
+	if n, _ := res.RowsAffected(); n > 0 {
+		return true, nil // genuinely new insert
+	}
+	// Existing row: backfill content only when it's empty and we actually have a
+	// body to write. Once populated the WHERE guard makes this a no-op.
+	if it.Content != "" {
+		if _, err := db.sql.ExecContext(ctx,
+			`UPDATE items SET content = ? WHERE source_id = ? AND external_id = ? AND content = ''`,
+			it.Content, it.SourceID, it.ExternalID); err != nil {
+			return false, err
+		}
+	}
+	return false, nil
 }
 
 func (db *DB) MarkFetched(ctx context.Context, sourceID int64, fetchErr string) error {
@@ -481,7 +609,7 @@ func (db *DB) MarkFetched(ctx context.Context, sourceID int64, fetchErr string) 
 // "catch up on this creator" drill-in view.
 func (db *DB) ListRecentItemsBySource(ctx context.Context, userID, sourceID int64, limit int) ([]Item, error) {
 	rows, err := db.sql.QueryContext(ctx,
-		`SELECT id, source_id, url, title, summary, author, thumbnail_url, media_type, duration_sec, published_at, fetched_at
+		`SELECT id, source_id, url, title, summary, content, author, thumbnail_url, media_type, duration_sec, published_at, fetched_at
 		 FROM items WHERE source_id = ? ORDER BY published_at DESC LIMIT ?`, sourceID, limit)
 	if err != nil {
 		return nil, err
@@ -497,7 +625,7 @@ func (db *DB) ListRecentItemsBySource(ctx context.Context, userID, sourceID int6
 // PrimaryFeedsForSources; a feedless source COALESCEs to 0 (global defaults).
 // Both queries must select these in this order so scanCandidates can read either
 // result set. The ? placeholders are the cadence-window bound, twice.
-const candidateCols = `i.id, i.source_id, i.url, i.title, i.summary, i.author, i.thumbnail_url,
+const candidateCols = `i.id, i.source_id, i.url, i.title, i.summary, i.content, i.author, i.thumbnail_url,
 	             i.media_type, i.duration_sec, i.published_at, i.fetched_at,
 	             s.title, s.weight, s.per_session_cap,
 	             (SELECT COUNT(*) FROM items i2 WHERE i2.source_id = s.id
@@ -560,7 +688,7 @@ func scanCandidates(rows *sql.Rows, windowDays int) ([]Candidate, error) {
 		var winCount int
 		var winSpan, halfLife float64
 		var diversity int
-		if err := rows.Scan(&c.ID, &c.SourceID, &c.URL, &c.Title, &c.Summary, &c.Author, &c.ThumbnailURL,
+		if err := rows.Scan(&c.ID, &c.SourceID, &c.URL, &c.Title, &c.Summary, &c.Content, &c.Author, &c.ThumbnailURL,
 			&c.MediaType, &c.DurationSec, &pub, &fetched,
 			&c.SourceTitle, &c.SourceWeight, &c.PerSessionCap,
 			&winCount, &winSpan, &halfLife, &diversity); err != nil {
@@ -666,7 +794,7 @@ func (db *DB) ItemsByIDs(ctx context.Context, ids []int64) ([]Item, error) {
 	if len(ids) == 0 {
 		return nil, nil
 	}
-	q := `SELECT id, source_id, url, title, summary, author, thumbnail_url, media_type, duration_sec, published_at, fetched_at
+	q := `SELECT id, source_id, url, title, summary, content, author, thumbnail_url, media_type, duration_sec, published_at, fetched_at
 	      FROM items WHERE id IN (` + placeholders(len(ids)) + `)`
 	args := make([]any, len(ids))
 	for i, id := range ids {
@@ -685,7 +813,7 @@ func scanItems(rows *sql.Rows) ([]Item, error) {
 	for rows.Next() {
 		var it Item
 		var pub, fetched string
-		if err := rows.Scan(&it.ID, &it.SourceID, &it.URL, &it.Title, &it.Summary, &it.Author,
+		if err := rows.Scan(&it.ID, &it.SourceID, &it.URL, &it.Title, &it.Summary, &it.Content, &it.Author,
 			&it.ThumbnailURL, &it.MediaType, &it.DurationSec, &pub, &fetched); err != nil {
 			return nil, err
 		}

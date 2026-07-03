@@ -96,11 +96,15 @@ func normalize(s store.Source, e *gofeed.Item) *store.Item {
 
 	dur := durationSeconds(e)
 	it := &store.Item{
-		SourceID:     s.ID,
-		ExternalID:   extID,
-		URL:          e.Link,
-		Title:        strings.TrimSpace(e.Title),
-		Summary:      clip(stripTags(firstNonEmpty(e.Description, e.Content)), 500),
+		SourceID:   s.ID,
+		ExternalID: extID,
+		URL:        e.Link,
+		Title:      strings.TrimSpace(e.Title),
+		Summary:    clip(stripTags(firstNonEmpty(e.Description, e.Content)), 500),
+		// Full body as raw HTML for the in-app reader (#58): prefer content:encoded
+		// (e.Content) over the teaser (e.Description). Not stripped or clipped - the
+		// reader sanitizes it client-side via DOMPurify.
+		Content:      firstNonEmpty(e.Content, e.Description),
 		Author:       authorName(e),
 		ThumbnailURL: thumbnail(e),
 		DurationSec:  dur,

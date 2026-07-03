@@ -56,7 +56,8 @@ export interface Item {
   source_id: number;
   url: string;
   title: string;
-  summary: string;
+  summary: string; // short plain-text card preview
+  content: string; // full body, raw HTML; sanitized client-side before render (#58)
   author: string;
   thumbnail_url: string;
   media_type: string;
