@@ -16,6 +16,15 @@ const SIG_LABEL: Record<SigKey, string> = {
   dormant: "dormant",
 };
 
+type SortKey = "weight" | "alpha" | "feed" | "skipped" | "noisy";
+const SORTS: { k: SortKey; label: string }[] = [
+  { k: "weight", label: "weight" },
+  { k: "alpha", label: "a-z" },
+  { k: "feed", label: "feed" },
+  { k: "skipped", label: "skipped" },
+  { k: "noisy", label: "noisy" },
+];
+
 // p-th percentile of the positive values (skip zeros, which mean "no sample").
 function pctl(vals: number[], p: number): number {
   const v = vals.filter((x) => x > 0).sort((a, b) => a - b);
@@ -30,6 +39,8 @@ export default function SourcesPage() {
   const [ffeed, setFfeed] = useState<string | null>(null);
   const [fstate, setFstate] = useState<"followed" | "archived" | "all">("followed");
   const [fsignal, setFsignal] = useState<SigKey | null>(null);
+  const [sort, setSort] = useState<SortKey>("weight");
+  const [group, setGroup] = useState(false);
   const [open, setOpen] = useState<number | null>(null);
   const [adding, setAdding] = useState(false);
   const [url, setUrl] = useState("");
@@ -106,6 +117,70 @@ export default function SourcesPage() {
     [base, fsignal, p75ppd, p75skip, median],
   );
 
+  const feedBySlug = useMemo(() => {
+    const m = new Map<string, Feed>();
+    feeds.forEach((f) => m.set(f.slug, f));
+    return m;
+  }, [feeds]);
+
+  // A source can belong to several feeds; its "primary" feed (for feed-sort and
+  // for grouping) is the one that sorts first in the feed order.
+  function primaryFeed(s: Source): Feed | null {
+    let best: Feed | null = null;
+    for (const sl of s.feed_slugs ?? []) {
+      const f = feedBySlug.get(sl);
+      if (!f) continue;
+      if (!best || f.sort < best.sort || (f.sort === best.sort && f.name < best.name)) best = f;
+    }
+    return best;
+  }
+
+  const sorted = useMemo(() => {
+    const arr = [...shown];
+    const byTitle = (a: Source, b: Source) => a.title.localeCompare(b.title, undefined, { sensitivity: "base" });
+    arr.sort((a, b) => {
+      switch (sort) {
+        case "alpha":
+          return byTitle(a, b);
+        case "skipped":
+          return (b.skip_pct ?? 0) - (a.skip_pct ?? 0) || byTitle(a, b);
+        case "noisy":
+          return (b.posts_per_day ?? 0) - (a.posts_per_day ?? 0) || byTitle(a, b);
+        case "feed": {
+          const fa = primaryFeed(a);
+          const fb = primaryFeed(b);
+          const ra = fa ? fa.sort : Infinity;
+          const rb = fb ? fb.sort : Infinity;
+          return ra - rb || (fa?.name ?? "~").localeCompare(fb?.name ?? "~") || byTitle(a, b);
+        }
+        case "weight":
+        default:
+          return b.weight - a.weight || byTitle(a, b);
+      }
+    });
+    return arr;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [shown, sort, feedBySlug]);
+
+  // When grouping, bucket the already-sorted list by primary feed; feedless
+  // sources fall into a trailing "No feed" group.
+  const groups = useMemo(() => {
+    if (!group) return null;
+    const m = new Map<string, { feed: Feed | null; items: Source[] }>();
+    for (const s of sorted) {
+      const f = primaryFeed(s);
+      const key = f?.slug ?? "__none";
+      if (!m.has(key)) m.set(key, { feed: f, items: [] });
+      m.get(key)!.items.push(s);
+    }
+    return [...m.values()].sort((a, b) => {
+      if (!a.feed) return 1;
+      if (!b.feed) return -1;
+      return a.feed.sort - b.feed.sort || a.feed.name.localeCompare(b.feed.name);
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [group, sorted, feedBySlug]);
+
   function showToast(msg: string, undo?: () => void) {
     setToast({ msg, undo });
     window.setTimeout(() => setToast((t) => (t && t.msg === msg ? null : t)), 4500);
@@ -168,12 +243,15 @@ export default function SourcesPage() {
     reload();
   }
 
+  // Row signal line. Uses the same classify() thresholds as the signal filter
+  // so what a row is labelled matches what the filter selects.
   function signal(s: Source): string {
-    const parts = [`${s.unseen_count ?? 0} unseen`];
+    const c = classify(s);
     const ppd = s.posts_per_day ?? 0;
-    if (ppd === 0 && (s.item_count ?? 0) > 0) parts.push("dormant");
-    else if (median > 0 && ppd / median >= 1.8) parts.push(`${(ppd / median).toFixed(1)}× noisy`);
-    if ((s.skip_pct ?? 0) >= 0.4) parts.push(`${Math.round((s.skip_pct ?? 0) * 100)}% skip`);
+    const parts = [`${s.unseen_count ?? 0} unseen`];
+    if (c.dormant) parts.push("dormant");
+    else if (c.noisy) parts.push(median > 0 && ppd > 0 ? `${(ppd / median).toFixed(1)}× noisy` : "noisy");
+    if (c.skipped) parts.push(`${Math.round((s.skip_pct ?? 0) * 100)}% skip`);
     return parts.join(" · ");
   }
 
@@ -237,7 +315,7 @@ export default function SourcesPage() {
         ))}
       </div>
       {/* filter by behavioral signal (relative to the feed/state set above) */}
-      <div className="lib-sub">
+      <div className="lib-sub noline">
         <span className="lib-lbl">signal</span>
         <button className={`lib-seg ${!fsignal ? "on" : ""}`} onClick={() => setFsignal(null)}>any</button>
         {(["most-skipped", "noisy", "dormant"] as const).map((sg) => (
@@ -245,10 +323,33 @@ export default function SourcesPage() {
             {SIG_LABEL[sg]}
           </button>
         ))}
+      </div>
+      {/* sort + optional group-by-feed */}
+      <div className="lib-sub">
+        <span className="lib-lbl">sort</span>
+        {SORTS.map((o) => (
+          <button key={o.k} className={`lib-seg ${sort === o.k ? "on" : ""}`} onClick={() => setSort(o.k)}>
+            {o.label}
+          </button>
+        ))}
+        <button className={`lib-seg ${group ? "on" : ""}`} onClick={() => setGroup((g) => !g)} style={{ marginLeft: 8 }}>
+          group
+        </button>
         <span className="lib-count">{shown.length} of {sources.length}</span>
       </div>
 
-      {shown.map((s) => {
+      {(groups ?? [{ feed: null as Feed | null, items: sorted }]).map((g) => {
+        const GIc = g.feed ? feedIcon(g.feed.icon) : null;
+        return (
+        <div key={g.feed ? g.feed.slug : "__flat"}>
+          {group && (
+            <div className="lib-group">
+              {GIc && <GIc size={14} strokeWidth={1.75} aria-hidden />}
+              <span>{g.feed ? g.feed.name : "No feed"}</span>
+              <span className="cnt">{g.items.length}</span>
+            </div>
+          )}
+          {g.items.map((s) => {
         const isOpen = open === s.id;
         const b = bucketOf(s.weight);
         const ppd = s.posts_per_day ?? 0;
@@ -340,6 +441,9 @@ export default function SourcesPage() {
               </div>
             )}
           </div>
+        );
+      })}
+        </div>
         );
       })}
 

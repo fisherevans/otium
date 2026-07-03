@@ -809,6 +809,25 @@ h1.display {
   color: var(--ink-mute);
   margin-right: 2px;
 }
+.lib-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 18px 0 2px;
+  padding-bottom: 7px;
+  border-bottom: 1.5px solid var(--rule-hard);
+  font-family: var(--grot);
+  font-size: 12px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+}
+.lib-group .cnt {
+  margin-left: auto;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--ink-mute);
+}
 .lib-row {
   border-bottom: 1px solid var(--hair);
 }
