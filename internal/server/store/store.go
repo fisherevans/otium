@@ -54,13 +54,28 @@ func migrate(sdb *sql.DB) error {
 	if err := ensureColumn(sdb, "feeds", "half_life_days", `ALTER TABLE feeds ADD COLUMN half_life_days REAL NOT NULL DEFAULT 0`); err != nil {
 		return err
 	}
-	return ensureColumn(sdb, "feeds", "diversity", `ALTER TABLE feeds ADD COLUMN diversity INTEGER NOT NULL DEFAULT 0`)
+	if err := ensureColumn(sdb, "feeds", "diversity", `ALTER TABLE feeds ADD COLUMN diversity INTEGER NOT NULL DEFAULT 0`); err != nil {
+		return err
+	}
+	// items.content (#58): full article body as raw HTML, rendered in the reader.
+	return ensureColumn(sdb, "items", "content", `ALTER TABLE items ADD COLUMN content TEXT NOT NULL DEFAULT ''`)
 }
 
 // ensureColumn adds a column via ddl only if it isn't already present. This is
 // the idempotent guard that lets an ALTER run on every boot without erroring on
 // an already-migrated database.
 func ensureColumn(sdb *sql.DB, table, column, ddl string) error {
+	// Skip if the table doesn't exist yet. In production schema.sql's CREATE TABLE
+	// runs first so this never trips, but it keeps migrate() safe to call against a
+	// partial DB (e.g. a test that only sets up one table).
+	var tableExists int
+	if err := sdb.QueryRowContext(context.Background(),
+		`SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name = ?`, table).Scan(&tableExists); err != nil {
+		return err
+	}
+	if tableExists == 0 {
+		return nil
+	}
 	var exists int
 	err := sdb.QueryRowContext(context.Background(),
 		`SELECT COUNT(*) FROM pragma_table_info(?) WHERE name = ?`, table, column).Scan(&exists)
@@ -458,10 +473,10 @@ func (db *DB) SourcesToFetch(ctx context.Context, userID int64) ([]Source, error
 // true if a new row was created.
 func (db *DB) UpsertItem(ctx context.Context, it *Item) (bool, error) {
 	res, err := db.sql.ExecContext(ctx,
-		`INSERT INTO items (source_id, external_id, url, title, summary, author, thumbnail_url, media_type, duration_sec, published_at)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		`INSERT INTO items (source_id, external_id, url, title, summary, content, author, thumbnail_url, media_type, duration_sec, published_at)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		 ON CONFLICT(source_id, external_id) DO NOTHING`,
-		it.SourceID, it.ExternalID, it.URL, it.Title, it.Summary, it.Author, it.ThumbnailURL,
+		it.SourceID, it.ExternalID, it.URL, it.Title, it.Summary, it.Content, it.Author, it.ThumbnailURL,
 		def(it.MediaType, "unknown"), it.DurationSec, it.PublishedAt.UTC().Format(time.RFC3339))
 	if err != nil {
 		return false, err
@@ -481,7 +496,7 @@ func (db *DB) MarkFetched(ctx context.Context, sourceID int64, fetchErr string) 
 // "catch up on this creator" drill-in view.
 func (db *DB) ListRecentItemsBySource(ctx context.Context, userID, sourceID int64, limit int) ([]Item, error) {
 	rows, err := db.sql.QueryContext(ctx,
-		`SELECT id, source_id, url, title, summary, author, thumbnail_url, media_type, duration_sec, published_at, fetched_at
+		`SELECT id, source_id, url, title, summary, content, author, thumbnail_url, media_type, duration_sec, published_at, fetched_at
 		 FROM items WHERE source_id = ? ORDER BY published_at DESC LIMIT ?`, sourceID, limit)
 	if err != nil {
 		return nil, err
@@ -497,7 +512,7 @@ func (db *DB) ListRecentItemsBySource(ctx context.Context, userID, sourceID int6
 // PrimaryFeedsForSources; a feedless source COALESCEs to 0 (global defaults).
 // Both queries must select these in this order so scanCandidates can read either
 // result set. The ? placeholders are the cadence-window bound, twice.
-const candidateCols = `i.id, i.source_id, i.url, i.title, i.summary, i.author, i.thumbnail_url,
+const candidateCols = `i.id, i.source_id, i.url, i.title, i.summary, i.content, i.author, i.thumbnail_url,
 	             i.media_type, i.duration_sec, i.published_at, i.fetched_at,
 	             s.title, s.weight, s.per_session_cap,
 	             (SELECT COUNT(*) FROM items i2 WHERE i2.source_id = s.id
@@ -560,7 +575,7 @@ func scanCandidates(rows *sql.Rows, windowDays int) ([]Candidate, error) {
 		var winCount int
 		var winSpan, halfLife float64
 		var diversity int
-		if err := rows.Scan(&c.ID, &c.SourceID, &c.URL, &c.Title, &c.Summary, &c.Author, &c.ThumbnailURL,
+		if err := rows.Scan(&c.ID, &c.SourceID, &c.URL, &c.Title, &c.Summary, &c.Content, &c.Author, &c.ThumbnailURL,
 			&c.MediaType, &c.DurationSec, &pub, &fetched,
 			&c.SourceTitle, &c.SourceWeight, &c.PerSessionCap,
 			&winCount, &winSpan, &halfLife, &diversity); err != nil {
@@ -666,7 +681,7 @@ func (db *DB) ItemsByIDs(ctx context.Context, ids []int64) ([]Item, error) {
 	if len(ids) == 0 {
 		return nil, nil
 	}
-	q := `SELECT id, source_id, url, title, summary, author, thumbnail_url, media_type, duration_sec, published_at, fetched_at
+	q := `SELECT id, source_id, url, title, summary, content, author, thumbnail_url, media_type, duration_sec, published_at, fetched_at
 	      FROM items WHERE id IN (` + placeholders(len(ids)) + `)`
 	args := make([]any, len(ids))
 	for i, id := range ids {
@@ -685,7 +700,7 @@ func scanItems(rows *sql.Rows) ([]Item, error) {
 	for rows.Next() {
 		var it Item
 		var pub, fetched string
-		if err := rows.Scan(&it.ID, &it.SourceID, &it.URL, &it.Title, &it.Summary, &it.Author,
+		if err := rows.Scan(&it.ID, &it.SourceID, &it.URL, &it.Title, &it.Summary, &it.Content, &it.Author,
 			&it.ThumbnailURL, &it.MediaType, &it.DurationSec, &pub, &fetched); err != nil {
 			return nil, err
 		}

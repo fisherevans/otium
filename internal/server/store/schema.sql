@@ -88,7 +88,14 @@ CREATE TABLE IF NOT EXISTS items (
     external_id   TEXT NOT NULL,                     -- guid / link, dedup key
     url           TEXT NOT NULL,
     title         TEXT NOT NULL,
+    -- short plain-text preview for the CARD (stripped + clipped at ingest).
     summary       TEXT NOT NULL DEFAULT '',
+    -- full article body as raw (unsanitized) HTML, preferring content:encoded
+    -- then description. Rendered in the reader through a client-side DOMPurify
+    -- sanitizer. Empty for items ingested before this column existed - upsert is
+    -- insert-only, so old rows stay empty until they age out; new items get it.
+    -- Added additively via migrate() for databases created before this column.
+    content       TEXT NOT NULL DEFAULT '',
     author        TEXT NOT NULL DEFAULT '',
     thumbnail_url TEXT NOT NULL DEFAULT '',
     -- short | long | article | audio | live | unknown
