@@ -121,6 +121,43 @@ frontend change. (`/tmp/shots.js`, local `npm i --no-save playwright`.)
 4. **#56** share/copy · **#52** extract the 3 partial feeds · then the e-ink/Palma
    bets (#59/#60/#61/#62).
 
+## 2026-07-03 (later still) · Density review + content/library round
+
+### Shipped
+- **v0.10.0** - library simplification: #64 five action buttons collapsed into a
+  Manage sheet, #65 rows drill into the clean SourceDetail sheet (added feeds/
+  delete so nothing lost). Verified at Palma res: list starts high, 6 sources
+  visible vs 2-3.
+- **v0.11.0** - #58 full content:encoded body rendered in the reader (backfills
+  existing items on re-fetch, isNew intact + test-locked), #53 Videos feed for
+  untagged YouTube sources. Verified end-to-end: a full multi-paragraph article
+  renders in the reader at Palma res (the central "content doesn't render right"
+  complaint, fixed).
+
+### Density review (Fisher asked: review every state, break apart dense pages)
+Swept all workflow states at Palma-2 res. Only the **library** was overloaded
+(fixed above). Everything else - session card, source-detail sheet, mix, import,
+home pad - reads as one-thing-per-screen. Recorded; the mix view in particular is
+a model of calm density.
+
+### Parallelism, done right this time
+Ran the content-feed and library-simplify agents concurrently in **isolated git
+worktrees** (`../otium-content`, `../otium-library`) - no shared-checkout
+collision. Both merged clean (near-disjoint files). This is the pattern for
+parallel otium agents going forward.
+
+### Screenshot harness is now load-bearing
+Every frontend deploy this round was screenshot-verified at Palma res before
+ship. It caught a real error panel (turned out to be a wrong-slug test artifact,
+not a product bug - the mood chips pass lowercase feed slugs correctly) and
+confirmed the content-render + library rework visually. Worth the loop.
+
+### New net-new issues from the UX audit still open
+#56 share, #57 collections (needs model nod), #59 offline cache, #60 e-ink mode +
+volume advance, #61 reader typography, #62 session TTS, #63 scoped search, #52
+extract-3-feeds. Plus #4 desktop, #33/#39/#19 curation design calls, Discovery
+(#20-23), and the dwell gate (#6/#5).
+
 ### Reconciled without building (v0.6.x)
 - **#37 (confirm + undo) closed** - already delivered by the List+Expand
   management surface (archive/delete confirms + undo toast were live since
