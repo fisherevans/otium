@@ -319,20 +319,29 @@ export default function SessionPage() {
             ref={(el) => {
               itemEls.current[i] = el;
             }}
+            onPointerDown={cardPointerDown}
+            onPointerMove={cardPointerMove}
+            onClick={() => cardClick(it)}
+            role="link"
           >
-            <span className="reason">{it.reason}</span>
+            <span className="reason" onClick={(e) => e.stopPropagation()}>
+              {it.reason}
+            </span>
             {i === current && (
-              <button className="item-more" onClick={() => setMenuOpen(true)} aria-label="More actions">
+              <button
+                className="item-more"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setMenuOpen(true);
+                }}
+                aria-label="More actions"
+              >
                 ···
               </button>
             )}
-            <Media item={it.item} />
             <h3>{it.item.title}</h3>
-            <div className="meta">
-              <span>{it.source_title}</span>
-              <span>·</span>
-              <span>{it.item.media_type === "audio" ? mins(it.item.duration_sec || it.est_duration_sec) : it.item.media_type}</span>
-            </div>
+            <Media item={it.item} />
+            <Identity sel={it} />
             {it.item.summary && <p className="excerpt">{it.item.summary}</p>}
           </div>
         ))}
