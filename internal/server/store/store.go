@@ -35,7 +35,37 @@ func Open(path string) (*DB, error) {
 		sdb.Close()
 		return nil, fmt.Errorf("apply schema: %w", err)
 	}
+	if err := migrate(sdb); err != nil {
+		sdb.Close()
+		return nil, fmt.Errorf("migrate schema: %w", err)
+	}
 	return &DB{sql: sdb}, nil
+}
+
+// migrate applies additive, idempotent schema changes for databases that
+// predate a column. schema.sql's CREATE TABLE statements are IF NOT EXISTS, so
+// they never touch an existing table - column adds have to run separately.
+// SQLite has no ADD COLUMN IF NOT EXISTS, so each add is guarded on
+// pragma_table_info. Every migration here must be safe to run on every boot.
+func migrate(sdb *sql.DB) error {
+	return ensureColumn(sdb, "feeds", "icon", `ALTER TABLE feeds ADD COLUMN icon TEXT NOT NULL DEFAULT ''`)
+}
+
+// ensureColumn adds a column via ddl only if it isn't already present. This is
+// the idempotent guard that lets an ALTER run on every boot without erroring on
+// an already-migrated database.
+func ensureColumn(sdb *sql.DB, table, column, ddl string) error {
+	var exists int
+	err := sdb.QueryRowContext(context.Background(),
+		`SELECT COUNT(*) FROM pragma_table_info(?) WHERE name = ?`, table, column).Scan(&exists)
+	if err != nil {
+		return err
+	}
+	if exists > 0 {
+		return nil
+	}
+	_, err = sdb.ExecContext(context.Background(), ddl)
+	return err
 }
 
 func (db *DB) Close() error { return db.sql.Close() }
@@ -66,7 +96,7 @@ func (db *DB) UpsertUserByUsername(ctx context.Context, username, email string) 
 
 func (db *DB) ListFeeds(ctx context.Context, userID int64) ([]Feed, error) {
 	rows, err := db.sql.QueryContext(ctx,
-		`SELECT f.id, f.name, f.slug, f.color, f.sort, f.created_at,
+		`SELECT f.id, f.name, f.slug, f.color, f.icon, f.sort, f.created_at,
 		        (SELECT COUNT(*) FROM feed_sources fs WHERE fs.feed_id = f.id) AS source_count
 		 FROM feeds f WHERE f.user_id = ? ORDER BY f.sort, f.name`, userID)
 	if err != nil {
@@ -77,7 +107,7 @@ func (db *DB) ListFeeds(ctx context.Context, userID int64) ([]Feed, error) {
 	for rows.Next() {
 		var f Feed
 		var created string
-		if err := rows.Scan(&f.ID, &f.Name, &f.Slug, &f.Color, &f.Sort, &created, &f.SourceCount); err != nil {
+		if err := rows.Scan(&f.ID, &f.Name, &f.Slug, &f.Color, &f.Icon, &f.Sort, &created, &f.SourceCount); err != nil {
 			return nil, err
 		}
 		f.CreatedAt = parseTime(created)
@@ -111,6 +141,69 @@ func (db *DB) GetOrCreateFeed(ctx context.Context, userID int64, name, slug, col
 		return nil, err
 	}
 	return db.CreateFeed(ctx, userID, name, slug, color)
+}
+
+// UpdateFeed patches a feed's presentation fields (name, color, icon). Only
+// non-nil fields are applied. Scoped to the owning user.
+func (db *DB) UpdateFeed(ctx context.Context, userID, id int64, name, color, icon *string) error {
+	var sets []string
+	var args []any
+	if name != nil {
+		sets = append(sets, "name = ?")
+		args = append(args, *name)
+	}
+	if color != nil {
+		sets = append(sets, "color = ?")
+		args = append(args, *color)
+	}
+	if icon != nil {
+		sets = append(sets, "icon = ?")
+		args = append(args, *icon)
+	}
+	if len(sets) == 0 {
+		return nil
+	}
+	args = append(args, id, userID)
+	_, err := db.sql.ExecContext(ctx,
+		`UPDATE feeds SET `+strings.Join(sets, ", ")+` WHERE id = ? AND user_id = ?`, args...)
+	return err
+}
+
+// PrimaryFeedsForSources resolves the single "primary" feed for each of the
+// given sources, for the session card's identity line. A source in exactly one
+// feed maps to that feed; a source in several maps to the deterministic winner
+// (lowest feed sort, then lowest id). A source in no feed is absent from the map
+// (the card then renders source-only). Rows come back ordered so the first row
+// per source_id is its primary.
+func (db *DB) PrimaryFeedsForSources(ctx context.Context, userID int64, sourceIDs []int64) (map[int64]FeedRef, error) {
+	out := map[int64]FeedRef{}
+	if len(sourceIDs) == 0 {
+		return out, nil
+	}
+	q := `SELECT fs.source_id, f.name, f.slug, f.color, f.icon
+	      FROM feed_sources fs JOIN feeds f ON f.id = fs.feed_id
+	      WHERE f.user_id = ? AND fs.source_id IN (` + placeholders(len(sourceIDs)) + `)
+	      ORDER BY fs.source_id, f.sort, f.id`
+	args := []any{userID}
+	for _, id := range sourceIDs {
+		args = append(args, id)
+	}
+	rows, err := db.sql.QueryContext(ctx, q, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var sid int64
+		var f FeedRef
+		if err := rows.Scan(&sid, &f.Name, &f.Slug, &f.Color, &f.Icon); err != nil {
+			return nil, err
+		}
+		if _, seen := out[sid]; !seen { // first row per source is the primary (ordered)
+			out[sid] = f
+		}
+	}
+	return out, rows.Err()
 }
 
 // SetSourceFeeds replaces the set of feeds a source belongs to (source-centric

@@ -76,6 +76,30 @@ func (h *Handler) CreateFeed(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusCreated, f)
 }
 
+// UpdateFeed patches a feed's presentation fields (name, color, icon). Used by
+// the library's feed-icon picker. No engagement signal - pure curation.
+func (h *Handler) UpdateFeed(w http.ResponseWriter, r *http.Request) {
+	uid := userID(r)
+	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	if err != nil {
+		badRequest(w, "bad feed id")
+		return
+	}
+	var body struct {
+		Name  *string `json:"name"`
+		Color *string `json:"color"`
+		Icon  *string `json:"icon"`
+	}
+	if !decode(w, r, &body) {
+		return
+	}
+	if err := h.db.UpdateFeed(r.Context(), uid, id, body.Name, body.Color, body.Icon); err != nil {
+		serverError(w, h.log, "update feed", err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
+}
+
 func (h *Handler) SetFeedSources(w http.ResponseWriter, r *http.Request) {
 	uid := userID(r)
 	feedID, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)

@@ -2,6 +2,8 @@ import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { api, type Feed, type Source } from "@/api/client";
 import { BUCKETS, BLABEL, bucketOf, type Bucket } from "@/lib/weight";
+import { feedIcon } from "@/lib/feedIcons";
+import { FeedIconPicker } from "@/components/FeedIconPicker";
 
 export default function SourcesPage() {
   const nav = useNavigate();
@@ -19,13 +21,17 @@ export default function SourcesPage() {
   const [confirmA, setConfirmA] = useState<number | null>(null);
   const [confirmD, setConfirmD] = useState<number | null>(null);
   const [toast, setToast] = useState<{ msg: string; undo?: () => void } | null>(null);
+  const [iconsOpen, setIconsOpen] = useState(false);
 
   function reload() {
     api.sources().then(setSources).catch((e) => setErr(String(e.message ?? e)));
   }
+  function reloadFeeds() {
+    api.feeds().then(setFeeds).catch(() => {});
+  }
   useEffect(() => {
     reload();
-    api.feeds().then(setFeeds).catch(() => {});
+    reloadFeeds();
   }, []);
 
   const median = useMemo(() => {
@@ -133,6 +139,11 @@ export default function SourcesPage() {
         <button className="btn ghost" style={{ marginTop: 0 }} onClick={fetchNow} disabled={fetching}>
           {fetching ? "Refreshing…" : "Refresh"}
         </button>
+        {feeds.length > 0 && (
+          <button className="btn ghost" style={{ marginTop: 0 }} onClick={() => setIconsOpen(true)}>
+            Feed icons
+          </button>
+        )}
       </div>
 
       {adding && (
@@ -152,11 +163,15 @@ export default function SourcesPage() {
       {/* filter by feed */}
       <div className="lib-filter">
         <button className={`lib-fchip ${!ffeed ? "on" : ""}`} onClick={() => setFfeed(null)}>All feeds</button>
-        {feeds.map((f) => (
-          <button key={f.slug} className={`lib-fchip ${ffeed === f.slug ? "on" : ""}`} onClick={() => setFfeed(f.slug)}>
-            {f.name}
-          </button>
-        ))}
+        {feeds.map((f) => {
+          const Ic = feedIcon(f.icon);
+          return (
+            <button key={f.slug} className={`lib-fchip ${ffeed === f.slug ? "on" : ""}`} onClick={() => setFfeed(f.slug)}>
+              {Ic && <Ic size={13} strokeWidth={1.75} aria-hidden />}
+              {f.name}
+            </button>
+          );
+        })}
       </div>
       <div className="lib-sub">
         {(["followed", "archived", "all"] as const).map((st) => (
@@ -213,15 +228,19 @@ export default function SourcesPage() {
                   <>
                     <div className="ctl-label">Feeds</div>
                     <div className="feed-assign">
-                      {feeds.map((f) => (
-                        <button
-                          key={f.slug}
-                          className={`fa-chip ${(s.feed_slugs ?? []).includes(f.slug) ? "on" : ""}`}
-                          onClick={() => toggleFeed(s, f.slug)}
-                        >
-                          {f.name}
-                        </button>
-                      ))}
+                      {feeds.map((f) => {
+                        const Ic = feedIcon(f.icon);
+                        return (
+                          <button
+                            key={f.slug}
+                            className={`fa-chip ${(s.feed_slugs ?? []).includes(f.slug) ? "on" : ""}`}
+                            onClick={() => toggleFeed(s, f.slug)}
+                          >
+                            {Ic && <Ic size={13} strokeWidth={1.75} aria-hidden />}
+                            {f.name}
+                          </button>
+                        );
+                      })}
                     </div>
                   </>
                 )}
@@ -264,6 +283,13 @@ export default function SourcesPage() {
           {toast.undo && <button onClick={toast.undo}>Undo</button>}
         </div>
       )}
+
+      <FeedIconPicker
+        feeds={feeds}
+        open={iconsOpen}
+        onClose={() => setIconsOpen(false)}
+        onChanged={reloadFeeds}
+      />
     </div>
   );
 }

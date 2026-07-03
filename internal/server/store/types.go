@@ -45,9 +45,21 @@ type Feed struct {
 	Name        string    `json:"name"`
 	Slug        string    `json:"slug"`
 	Color       string    `json:"color"`
+	Icon        string    `json:"icon"` // flat glyph key; '' = unset (render color swatch)
 	Sort        int       `json:"sort"`
 	CreatedAt   time.Time `json:"created_at"`
 	SourceCount int       `json:"source_count,omitempty"`
+}
+
+// FeedRef is the compact feed identity attached to a session item so the card
+// can lead with "which feed is this". Populated only when the item's source
+// belongs to at least one feed; a feedless source (e.g. a YouTube channel) gets
+// a nil ref and the card renders source-only.
+type FeedRef struct {
+	Name  string `json:"name"`
+	Slug  string `json:"slug"`
+	Color string `json:"color"`
+	Icon  string `json:"icon"`
 }
 
 // Item is a normalized content event from a source.

@@ -665,6 +665,9 @@ h1.display {
 }
 .lib-fchip {
   flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
   padding: 7px 13px;
   border: 1.5px solid var(--rule-hard);
   background: var(--paper);
@@ -809,6 +812,9 @@ h1.display {
   gap: 6px;
 }
 .fa-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
   padding: 6px 11px;
   border: 1.5px solid var(--rule-hard);
   background: var(--paper);
@@ -818,6 +824,30 @@ h1.display {
 .fa-chip.on {
   background: var(--ink);
   color: var(--paper);
+}
+
+/* feed-icon picker grid (#45) */
+.icon-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(46px, 1fr));
+  gap: 8px;
+  margin: 10px 0 4px;
+}
+.icon-cell {
+  aspect-ratio: 1 / 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1.5px solid var(--rule-hard);
+  background: var(--paper);
+  color: var(--ink-soft);
+}
+.icon-cell.on {
+  background: var(--ink);
+  color: var(--paper);
+}
+.icon-cell:active {
+  background: var(--paper-3);
 }
 .insight {
   border-left: 2px solid var(--ink);

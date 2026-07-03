@@ -46,6 +46,7 @@ func NewRouter(h *handler.Handler, authMiddleware func(http.Handler) http.Handle
 
 			r.Get("/feeds", h.ListFeeds)
 			r.Post("/feeds", h.CreateFeed)
+			r.Patch("/feeds/{id}", h.UpdateFeed)
 			r.Put("/feeds/{id}/sources", h.SetFeedSources)
 
 			r.Get("/sources", h.ListSources)

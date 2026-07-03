@@ -14,8 +14,19 @@ export interface Feed {
   name: string;
   slug: string;
   color: string;
+  icon: string; // flat glyph key (see lib/feedIcons); "" = unset
   sort: number;
   source_count?: number;
+}
+
+// Compact feed identity attached to a session item (#44). Null/absent when the
+// item's source belongs to no feed (e.g. a YouTube channel) - the card then
+// renders source-only.
+export interface FeedRef {
+  name: string;
+  slug: string;
+  color: string;
+  icon: string;
 }
 
 export interface Source {
@@ -139,6 +150,8 @@ export const api = {
   feeds: () => req<Feed[]>("GET", "/feeds"),
   createFeed: (name: string, color?: string) =>
     req<Feed>("POST", "/feeds", { name, color: color ?? "" }),
+  updateFeed: (id: number, patch: { name?: string; color?: string; icon?: string }) =>
+    req<{ ok: boolean }>("PATCH", `/feeds/${id}`, patch),
   setFeedSources: (feedId: number, sourceIds: number[]) =>
     req<{ ok: boolean }>("PUT", `/feeds/${feedId}/sources`, { source_ids: sourceIds }),
 
