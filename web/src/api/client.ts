@@ -66,6 +66,7 @@ export interface Item {
 export interface Selected {
   item: Item;
   source_title: string;
+  feed?: FeedRef | null; // primary feed identity; absent for a feedless source
   score: number;
   est_duration_sec: number;
   reason: string;

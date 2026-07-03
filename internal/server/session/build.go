@@ -67,12 +67,15 @@ type Request struct {
 const defaultQueueSize = 30
 
 // Selected is one item chosen for the session, with the ranker's rationale.
+// Feed is the item's primary feed identity, filled by the handler after the
+// ranker runs (the ranker itself is feed-agnostic); nil for a feedless source.
 type Selected struct {
-	Item        store.Item `json:"item"`
-	SourceTitle string     `json:"source_title"`
-	Score       float64    `json:"score"`
-	EstDuration int        `json:"est_duration_sec"`
-	Reason      string     `json:"reason"`
+	Item        store.Item     `json:"item"`
+	SourceTitle string         `json:"source_title"`
+	Feed        *store.FeedRef `json:"feed,omitempty"`
+	Score       float64        `json:"score"`
+	EstDuration int            `json:"est_duration_sec"`
+	Reason      string         `json:"reason"`
 }
 
 // Result is a built session.

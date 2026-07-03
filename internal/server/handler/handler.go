@@ -324,6 +324,23 @@ func (h *Handler) BuildSession(w http.ResponseWriter, r *http.Request) {
 
 	result := session.Build(session.Request{MinLow: body.MinLow, MinHigh: body.MinHigh}, pool, time.Now().UTC(), stats)
 
+	// Attach each item's primary feed identity for the card's identity line.
+	// Feedless sources (e.g. YouTube) stay nil and render source-only.
+	selSourceIDs := make([]int64, 0, len(result.Items))
+	for _, it := range result.Items {
+		selSourceIDs = append(selSourceIDs, it.Item.SourceID)
+	}
+	if primaries, err := h.db.PrimaryFeedsForSources(r.Context(), uid, selSourceIDs); err != nil {
+		h.log.Warn("resolve primary feeds", "err", err)
+	} else {
+		for i := range result.Items {
+			if f, ok := primaries[result.Items[i].Item.SourceID]; ok {
+				fc := f
+				result.Items[i].Feed = &fc
+			}
+		}
+	}
+
 	// Persist the session and mark its items surfaced so the next build doesn't
 	// repeat them.
 	sid := randID()

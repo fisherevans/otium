@@ -487,6 +487,54 @@ h1.display {
   line-height: 0.8;
   padding: 4px 8px 0 0;
 }
+.snap {
+  cursor: pointer; /* card body is tap-to-open (#47) */
+}
+
+/* --- card identity line (#44/#48): feed emphasized, source + age secondary --- */
+.identity {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 7px;
+  margin: 8px 0 14px;
+}
+.identity > * + *::before {
+  content: "·";
+  margin-right: 7px;
+  color: var(--ink-mute);
+}
+.id-feed {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--grot);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink);
+}
+.id-feed svg {
+  display: block;
+  color: var(--ink);
+}
+.id-swatch {
+  width: 10px;
+  height: 10px;
+  border: 1px solid var(--rule-hard);
+  display: inline-block;
+}
+.id-source,
+.id-type,
+.id-age {
+  font-family: var(--mono);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--ink-mute);
+}
+.id-source.lead {
+  color: var(--ink-soft); /* source is the anchor when there's no feed */
+}
 
 /* --- media previews (dithered e-ink) --- */
 .media {

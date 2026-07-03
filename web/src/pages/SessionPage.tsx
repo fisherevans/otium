@@ -1,7 +1,9 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { api, type Item, type Selected } from "@/api/client";
 import { ItemActions } from "@/components/ItemActions";
+import { feedIcon } from "@/lib/feedIcons";
+import { relTime } from "@/lib/format";
 
 function clock(sec: number) {
   const m = Math.floor(sec / 60);
@@ -46,6 +48,35 @@ function Media({ item }: { item: Item }) {
     );
   }
   return null; // quote / plain text: no media
+}
+
+// The card's identity line (#44/#48): feed as the emphasized anchor (icon +
+// name), then the source, the media descriptor, and a relative age - so "who"
+// and "when" read together. A feedless source (e.g. YouTube) has no feed ref, so
+// the line degrades to source-only. Icons inherit ink via currentColor; when a
+// feed has no icon set we fall back to its color swatch.
+function Identity({ sel }: { sel: Selected }) {
+  const f = sel.feed;
+  const Ic = feedIcon(f?.icon);
+  const type = sel.item.media_type === "audio" ? mins(sel.item.duration_sec || sel.est_duration_sec) : sel.item.media_type;
+  const age = relTime(sel.item.published_at || sel.item.fetched_at);
+  return (
+    <div className="identity">
+      {f && (
+        <span className="id-feed">
+          {Ic ? (
+            <Ic size={15} strokeWidth={1.75} aria-hidden />
+          ) : (
+            <span className="id-swatch" style={{ background: f.color || "var(--ink-mute)" }} />
+          )}
+          <span className="id-feed-name">{f.name}</span>
+        </span>
+      )}
+      <span className={f ? "id-source" : "id-source lead"}>{sel.source_title}</span>
+      {type && <span className="id-type">{type}</span>}
+      {age && <span className="id-age">{age}</span>}
+    </div>
+  );
 }
 
 type Checkin = null | "low" | "high" | "fast";
