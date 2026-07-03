@@ -1815,3 +1815,29 @@ h1.display {
 .snap .media.sq {
   max-height: 34vh;
 }
+
+/* ============================================================
+   #64/#65 library simplification (branch: library-simplify)
+   Compact library top: title + one "Manage" affordance, list
+   starts high. The add-a-source form now lives in the Manage
+   sheet. Kept in a labeled block to ease merge with content-feed.
+   ============================================================ */
+.lib-topbar {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+.lib-topbar .display {
+  margin-bottom: 0;
+}
+.lib-add {
+  padding: 10px 0 4px;
+}
+.lib-add .field {
+  margin-top: 8px;
+}
+.lib-add .btn {
+  margin-top: 10px;
+}
+/* ===== end #64/#65 ===== */

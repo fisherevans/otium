@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { api, type Feed, type Source } from "@/api/client";
-import { BUCKETS, BLABEL, bucketOf, type Bucket } from "@/lib/weight";
+import { BLABEL, bucketOf } from "@/lib/weight";
 import { feedIcon } from "@/lib/feedIcons";
 import { FeedIconPicker } from "@/components/FeedIconPicker";
 import { BottomSheet } from "@/components/BottomSheet";
+import { SourceDetail } from "@/components/SourceDetail";
 
 // Behavioral signal a source exhibits, derived per-render relative to the
 // currently-visible set (not absolute) so "noisy"/"most-skipped" mean "loud
@@ -42,20 +43,22 @@ export default function SourcesPage() {
   const [fsignal, setFsignal] = useState<SigKey | null>(null);
   const [sort, setSort] = useState<SortKey>("weight");
   const [group, setGroup] = useState(false);
-  const [open, setOpen] = useState<number | null>(null);
+  // #65: rows drill into the SourceDetail sheet instead of expanding inline.
+  const [detailId, setDetailId] = useState<number | null>(null);
   const [adding, setAdding] = useState(false);
   const [url, setUrl] = useState("");
   const [title, setTitle] = useState("");
   const [kind, setKind] = useState("rss");
   const [err, setErr] = useState("");
   const [fetching, setFetching] = useState(false);
-  const [confirmA, setConfirmA] = useState<number | null>(null);
-  const [confirmD, setConfirmD] = useState<number | null>(null);
   const [toast, setToast] = useState<{ msg: string; undo?: () => void } | null>(null);
   const [iconsOpen, setIconsOpen] = useState(false);
   // #55: signal / sort / group collapse into a bottom sheet so the always-on
   // control stack is just feed chips + state and the list keeps the screen.
   const [ctrlOpen, setCtrlOpen] = useState(false);
+  // #64: the secondary actions (import / add / refresh / feed mix / feed
+  // settings) collapse behind one "Manage" affordance so the list starts high.
+  const [manageOpen, setManageOpen] = useState(false);
   const filtersActive = fsignal !== null || sort !== "weight" || group;
 
   function reload() {
@@ -186,48 +189,18 @@ export default function SourcesPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [group, sorted, feedBySlug]);
 
+  // The source powering the drill-in sheet, derived from the live list so it
+  // reflects reloads (weight/cap edits) rather than a stale snapshot.
+  const detailSrc = useMemo(
+    () => (detailId === null ? null : sources.find((s) => s.id === detailId) ?? null),
+    [detailId, sources],
+  );
+
   function showToast(msg: string, undo?: () => void) {
     setToast({ msg, undo });
     window.setTimeout(() => setToast((t) => (t && t.msg === msg ? null : t)), 4500);
   }
 
-  async function setWeight(s: Source, bucket: Bucket) {
-    const prev = bucketOf(s.weight);
-    await api.updateSource(s.id, { weight_bucket: bucket }).catch(() => {});
-    reload();
-    if (bucket !== prev) {
-      showToast(`${s.title} → ${BLABEL[bucket]}`, async () => {
-        await api.updateSource(s.id, { weight_bucket: prev }).catch(() => {});
-        reload();
-        setToast(null);
-      });
-    }
-  }
-  async function setCap(s: Source, cap: number) {
-    await api.updateSource(s.id, { per_session_cap: Math.max(1, cap) }).catch(() => {});
-    reload();
-  }
-  async function toggleFeed(s: Source, slug: string) {
-    const cur = new Set(s.feed_slugs ?? []);
-    cur.has(slug) ? cur.delete(slug) : cur.add(slug);
-    await api.setSourceFeeds(s.id, [...cur]).catch(() => {});
-    reload();
-  }
-  async function archive(s: Source) {
-    await api.updateSource(s.id, { state: "archived" }).catch(() => {});
-    setConfirmA(null);
-    reload();
-    showToast(`${s.title} archived`, async () => {
-      await api.updateSource(s.id, { state: "followed" }).catch(() => {});
-      reload();
-      setToast(null);
-    });
-  }
-  async function remove(s: Source) {
-    await api.deleteSource(s.id).catch(() => {});
-    setConfirmD(null);
-    reload();
-  }
   async function add() {
     if (!url.trim()) return;
     setErr("");
@@ -267,42 +240,15 @@ export default function SourcesPage() {
       <button className="lib-back" onClick={() => nav("/")}>
         <span aria-hidden>←</span> Start a session
       </button>
-      <h1 className="display">Your library</h1>
-      <p className="sub">The sources you follow. Weight = how often they surface; turn down instead of unfollowing.</p>
-
-      <button className="btn" style={{ marginTop: 0 }} onClick={() => nav("/import")}>
-        Import your follows
-      </button>
-      <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
-        <button className="btn ghost" style={{ marginTop: 0 }} onClick={() => setAdding((a) => !a)}>
-          {adding ? "Cancel" : "+ Add one"}
+      {/* #64: compact top - title + one "Manage" affordance. The secondary
+          actions live behind the Manage sheet so the list starts high. */}
+      <div className="lib-topbar">
+        <h1 className="display">Your library</h1>
+        <button className="lib-fsbtn" onClick={() => setManageOpen(true)}>
+          Manage
         </button>
-        <button className="btn ghost" style={{ marginTop: 0 }} onClick={fetchNow} disabled={fetching}>
-          {fetching ? "Refreshing…" : "Refresh"}
-        </button>
-        <button className="btn ghost" style={{ marginTop: 0 }} onClick={() => nav("/mix")}>
-          Feed mix
-        </button>
-        {feeds.length > 0 && (
-          <button className="btn ghost" style={{ marginTop: 0 }} onClick={() => setIconsOpen(true)}>
-            Feed settings
-          </button>
-        )}
       </div>
-
-      {adding && (
-        <div style={{ marginTop: 14 }}>
-          <input className="field" placeholder="Feed URL (RSS / Atom / YouTube)" value={url} onChange={(e) => setUrl(e.target.value)} />
-          <input className="field" placeholder="Title (optional)" value={title} onChange={(e) => setTitle(e.target.value)} />
-          <select className="field" value={kind} onChange={(e) => setKind(e.target.value)}>
-            <option value="rss">RSS / blog / news</option>
-            <option value="youtube">YouTube channel</option>
-            <option value="podcast">Podcast</option>
-          </select>
-          <button className="btn" onClick={add}>Add</button>
-        </div>
-      )}
-      {err && <p className="err">{err}</p>}
+      <p className="sub">The sources you follow. Weight = how often they surface; turn down instead of unfollowing.</p>
 
       {/* filter by feed */}
       <div className="lib-filter">
@@ -345,96 +291,19 @@ export default function SourcesPage() {
             </div>
           )}
           {g.items.map((s) => {
-        const isOpen = open === s.id;
         const b = bucketOf(s.weight);
-        const ppd = s.posts_per_day ?? 0;
-        const rel = median > 0 && ppd > 0 ? ppd / median : 0;
         return (
+          // #65: the whole row is one tap into the SourceDetail sheet - no
+          // inline expansion. Rows stay scannable: weight · name · signal · ▸.
           <div className="lib-row" key={s.id}>
-            <div className="lib-head" onClick={() => setOpen(isOpen ? null : s.id)}>
+            <div className="lib-head" onClick={() => setDetailId(s.id)}>
               <span className="wtag">{BLABEL[b]}</span>
               <div className="nm">
                 <b>{s.title}</b>
                 <span>{s.kind} · {signal(s)}{s.fetch_error ? " · fetch error" : ""}</span>
               </div>
-              <span className="chev">{isOpen ? "▾" : "▸"}</span>
+              <span className="chev">▸</span>
             </div>
-
-            {isOpen && (
-              <div className="lib-expand">
-                <div className="insight">
-                  <b>{s.unseen_count ?? 0}</b> unseen
-                  {rel >= 1.3 && <> · posts <b>{rel.toFixed(1)}×</b> your typical source</>}
-                  {ppd === 0 && (s.item_count ?? 0) > 0 && <> · <b>dormant</b> (no recent posts)</>}
-                  {(s.skip_pct ?? 0) > 0 && <> · you skip <b>{Math.round((s.skip_pct ?? 0) * 100)}%</b> of it</>}
-                </div>
-
-                <div className="ctl-label">Weight</div>
-                <div className="wbuckets">
-                  {BUCKETS.map((bk) => (
-                    <button key={bk} className={`wbucket ${b === bk ? "on" : ""}`} onClick={() => setWeight(s, bk)}>
-                      {BLABEL[bk]}
-                    </button>
-                  ))}
-                </div>
-
-                <div className="ctl-label">Per-session cap</div>
-                <div className="capstep">
-                  <button onClick={() => setCap(s, s.per_session_cap - 1)}>−</button>
-                  <span className="val">{s.per_session_cap}</span>
-                  <button onClick={() => setCap(s, s.per_session_cap + 1)}>+</button>
-                </div>
-                <p className="caphint">Keeps the freshest {s.per_session_cap} per session.</p>
-
-                {feeds.length > 0 && (
-                  <>
-                    <div className="ctl-label">Feeds</div>
-                    <div className="feed-assign">
-                      {feeds.map((f) => {
-                        const Ic = feedIcon(f.icon);
-                        return (
-                          <button
-                            key={f.slug}
-                            className={`fa-chip ${(s.feed_slugs ?? []).includes(f.slug) ? "on" : ""}`}
-                            onClick={() => toggleFeed(s, f.slug)}
-                          >
-                            {Ic && <Ic size={13} strokeWidth={1.75} aria-hidden />}
-                            {f.name}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </>
-                )}
-
-                {confirmA === s.id ? (
-                  <div className="confirm">
-                    Archive {s.title}? It stops surfacing but keeps its history and weight.
-                    <div className="lib-actions">
-                      <button onClick={() => setConfirmA(null)}>Cancel</button>
-                      <button onClick={() => archive(s)}>Archive</button>
-                    </div>
-                  </div>
-                ) : confirmD === s.id ? (
-                  <div className="confirm">
-                    Delete {s.title} for good? This can't be undone.
-                    <div className="lib-actions">
-                      <button onClick={() => setConfirmD(null)}>Cancel</button>
-                      <button onClick={() => remove(s)}>Delete</button>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="lib-actions">
-                    {s.state === "archived" ? (
-                      <button onClick={() => { api.updateSource(s.id, { state: "followed" }).then(reload); }}>Unarchive</button>
-                    ) : (
-                      <button onClick={() => setConfirmA(s.id)}>Archive</button>
-                    )}
-                    <button onClick={() => setConfirmD(s.id)}>Delete</button>
-                  </div>
-                )}
-              </div>
-            )}
           </div>
         );
       })}
@@ -448,6 +317,66 @@ export default function SourcesPage() {
           {toast.undo && <button onClick={toast.undo}>Undo</button>}
         </div>
       )}
+
+      {/* #65: tapping a row drills into the calm detail sheet. It carries every
+          capability the old inline form had - weight, cap, feed membership,
+          archive (undo via toast), and delete (with a confirm). */}
+      <SourceDetail
+        source={detailSrc}
+        open={detailId !== null}
+        onClose={() => setDetailId(null)}
+        onChanged={reload}
+        feeds={feeds}
+        onToast={showToast}
+        onDelete={() => {
+          setDetailId(null);
+          reload();
+        }}
+      />
+
+      {/* #64: the collapsed secondary actions - full behavior, just off-screen
+          until asked for. Add-a-source form lives inside the sheet too. */}
+      <BottomSheet open={manageOpen} onClose={() => setManageOpen(false)} kicker="Manage">
+        <div className="lib-sheet">
+          <div className="sheet-rows">
+            <button className="sheet-row" onClick={() => { setManageOpen(false); nav("/import"); }}>
+              <span>Import your follows</span>
+              <span className="sheet-chev">▸</span>
+            </button>
+            <button className="sheet-row" onClick={() => setAdding((a) => !a)}>
+              <span>{adding ? "Cancel add" : "Add a source"}</span>
+              <span className="sheet-chev">{adding ? "▾" : "▸"}</span>
+            </button>
+            {adding && (
+              <div className="lib-add">
+                <input className="field" placeholder="Feed URL (RSS / Atom / YouTube)" value={url} onChange={(e) => setUrl(e.target.value)} />
+                <input className="field" placeholder="Title (optional)" value={title} onChange={(e) => setTitle(e.target.value)} />
+                <select className="field" value={kind} onChange={(e) => setKind(e.target.value)}>
+                  <option value="rss">RSS / blog / news</option>
+                  <option value="youtube">YouTube channel</option>
+                  <option value="podcast">Podcast</option>
+                </select>
+                {err && <p className="err">{err}</p>}
+                <button className="btn" onClick={add}>Add</button>
+              </div>
+            )}
+            <button className="sheet-row" onClick={fetchNow} disabled={fetching}>
+              <span>{fetching ? "Refreshing…" : "Refresh now"}</span>
+              <span className="sheet-chev">↻</span>
+            </button>
+            <button className="sheet-row" onClick={() => { setManageOpen(false); nav("/mix"); }}>
+              <span>Feed mix</span>
+              <span className="sheet-chev">▸</span>
+            </button>
+            {feeds.length > 0 && (
+              <button className="sheet-row" onClick={() => { setManageOpen(false); setIconsOpen(true); }}>
+                <span>Feed settings</span>
+                <span className="sheet-chev">▸</span>
+              </button>
+            )}
+          </div>
+        </div>
+      </BottomSheet>
 
       {/* #55: the collapsed secondary controls - full behavior, just off-screen
           until asked for. */}
