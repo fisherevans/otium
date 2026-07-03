@@ -556,7 +556,23 @@ func (db *DB) SourcesToFetch(ctx context.Context, userID int64) ([]Source, error
 // --- items ---
 
 // UpsertItem inserts an item if its (source_id, external_id) is new. Returns
-// true if a new row was created.
+// true only when a genuinely new row was inserted, so the ingest "new_items"
+// count stays accurate.
+//
+// For an item that already exists, it backfills content when the stored content
+// is empty (#58): pre-#58 items - and items ingested before a feed started
+// shipping content:encoded - gain their full body on the next re-fetch, without
+// clobbering an already-populated body or touching any other column. Feeds
+// truncate to ~15 recent entries, so this reaches exactly the recent,
+// session-surfaced items; older ones age out still empty, which is fine.
+//
+// A backfill is deliberately a separate UPDATE rather than an ON CONFLICT DO
+// UPDATE: SQLite's RowsAffected reports 1 for both a fresh insert and a
+// WHERE-satisfied upsert-update, so folding the two into one statement would let
+// a backfill masquerade as a new insert. Keeping the insert on ON CONFLICT DO
+// NOTHING preserves the exact rows-affected isNew derivation. Interaction state
+// lives in item_state/events, never in items, so a backfill can't disturb
+// seen/skip history.
 func (db *DB) UpsertItem(ctx context.Context, it *Item) (bool, error) {
 	res, err := db.sql.ExecContext(ctx,
 		`INSERT INTO items (source_id, external_id, url, title, summary, content, author, thumbnail_url, media_type, duration_sec, published_at)
@@ -567,8 +583,19 @@ func (db *DB) UpsertItem(ctx context.Context, it *Item) (bool, error) {
 	if err != nil {
 		return false, err
 	}
-	n, _ := res.RowsAffected()
-	return n > 0, nil
+	if n, _ := res.RowsAffected(); n > 0 {
+		return true, nil // genuinely new insert
+	}
+	// Existing row: backfill content only when it's empty and we actually have a
+	// body to write. Once populated the WHERE guard makes this a no-op.
+	if it.Content != "" {
+		if _, err := db.sql.ExecContext(ctx,
+			`UPDATE items SET content = ? WHERE source_id = ? AND external_id = ? AND content = ''`,
+			it.Content, it.SourceID, it.ExternalID); err != nil {
+			return false, err
+		}
+	}
+	return false, nil
 }
 
 func (db *DB) MarkFetched(ctx context.Context, sourceID int64, fetchErr string) error {
