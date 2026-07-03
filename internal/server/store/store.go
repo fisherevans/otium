@@ -475,20 +475,93 @@ func (db *DB) ListRecentItemsBySource(ctx context.Context, userID, sourceID int6
 	return scanItems(rows)
 }
 
-// Candidates returns unseen items from the given sources (or all followed
-// sources if sourceIDs is empty), newest first, as ranker input. It computes
-// each source's recent cadence in the same pass.
-func (db *DB) Candidates(ctx context.Context, userID int64, sourceIDs []int64, sinceDays, limit int) ([]Candidate, error) {
-	q := `SELECT i.id, i.source_id, i.url, i.title, i.summary, i.author, i.thumbnail_url,
+// candidateCols is the shared projection for Candidates and MixItems: item +
+// source facts plus the accumulated-history cadence inputs (win_count/win_span).
+// Both queries must select these in this order so scanCandidates can read either
+// result set. The ? placeholders are the cadence-window bound, twice.
+const candidateCols = `i.id, i.source_id, i.url, i.title, i.summary, i.author, i.thumbnail_url,
 	             i.media_type, i.duration_sec, i.published_at, i.fetched_at,
 	             s.title, s.weight, s.per_session_cap,
 	             (SELECT COUNT(*) FROM items i2 WHERE i2.source_id = s.id
-	                AND i2.published_at >= datetime('now', ?)) / CAST(? AS REAL) AS cadence
+	                AND i2.published_at >= datetime('now', ?)) AS win_count,
+	             (SELECT COALESCE(julianday('now') - julianday(MIN(i2.published_at)), 0)
+	                FROM items i2 WHERE i2.source_id = s.id
+	                AND i2.published_at >= datetime('now', ?)) AS win_span`
+
+// cadence-estimation floors. See cadencePerDay.
+const (
+	// minCadenceItems is the number of stored publishes below which we won't
+	// estimate a source's cadence: with fewer than this in the window there isn't
+	// enough signal to call a source "rare", so it gets no boost.
+	minCadenceItems = 3
+	// cadenceRareFloor is the per-day rate returned for thin history. It sits at
+	// the ranker's rare threshold (session.rareThresholdPerDay = 1.0/day): a
+	// cadence >= that threshold makes rarityBoost() return 1, i.e. no boost. Kept
+	// in lockstep with that constant intentionally.
+	cadenceRareFloor = 1.0
+	// minObservationDays floors the divisor so a dense burst in a short window (a
+	// just-added high-volume source) reads as high-cadence, not rare, and we never
+	// divide by ~0.
+	minObservationDays = 1.0
+)
+
+// cadencePerDay estimates a source's posting rate from its ACCUMULATED stored
+// items: count within the window over the observed span (now - earliest item in
+// the window), not the fixed window. otium stores every item it ever fetches, so
+// this history accrues past a feed's ~10-15 entry truncation. Dividing by the
+// observed span rather than the full window keeps a high-volume source whose feed
+// only exposes a recent slice from reading as rare once even a little history has
+// accumulated (the NPR-labeled-rare bug). Thin history (< minCadenceItems)
+// returns cadenceRareFloor: too little signal to justify a rarity boost.
+func cadencePerDay(count int, spanDays float64, windowDays int) float64 {
+	if count < minCadenceItems {
+		return cadenceRareFloor
+	}
+	span := spanDays
+	if w := float64(windowDays); span > w {
+		span = w
+	}
+	if span < minObservationDays {
+		span = minObservationDays
+	}
+	return float64(count) / span
+}
+
+// scanCandidates reads the candidateCols projection into Candidates, computing
+// each source's cadence from its accumulated stored history (windowDays sets the
+// rarity window).
+func scanCandidates(rows *sql.Rows, windowDays int) ([]Candidate, error) {
+	var out []Candidate
+	for rows.Next() {
+		var c Candidate
+		var pub, fetched string
+		var winCount int
+		var winSpan float64
+		if err := rows.Scan(&c.ID, &c.SourceID, &c.URL, &c.Title, &c.Summary, &c.Author, &c.ThumbnailURL,
+			&c.MediaType, &c.DurationSec, &pub, &fetched,
+			&c.SourceTitle, &c.SourceWeight, &c.PerSessionCap,
+			&winCount, &winSpan); err != nil {
+			return nil, err
+		}
+		c.PublishedAt = parseTime(pub)
+		c.FetchedAt = parseTime(fetched)
+		c.SourceCadence = cadencePerDay(winCount, winSpan, windowDays)
+		out = append(out, c)
+	}
+	return out, rows.Err()
+}
+
+// Candidates returns unseen items from the given sources (or all followed
+// sources if sourceIDs is empty), newest first, as ranker input. It computes
+// each source's cadence from accumulated stored history in the same pass.
+func (db *DB) Candidates(ctx context.Context, userID int64, sourceIDs []int64, sinceDays, limit int) ([]Candidate, error) {
+	q := `SELECT ` + candidateCols + `
 	      FROM items i
 	      JOIN sources s ON s.id = i.source_id
 	      WHERE s.user_id = ? AND s.state IN ('followed','trial')
 	        AND NOT EXISTS (SELECT 1 FROM item_state st WHERE st.item_id = i.id AND st.user_id = ?)`
-	args := []any{fmt.Sprintf("-%d days", sinceDays), sinceDays, userID, userID}
+	win := fmt.Sprintf("-%d days", sinceDays)
+	args := []any{win, win, userID, userID}
 	if len(sourceIDs) > 0 {
 		q += ` AND s.id IN (` + placeholders(len(sourceIDs)) + `)`
 		for _, id := range sourceIDs {
@@ -503,20 +576,7 @@ func (db *DB) Candidates(ctx context.Context, userID int64, sourceIDs []int64, s
 		return nil, err
 	}
 	defer rows.Close()
-	var out []Candidate
-	for rows.Next() {
-		var c Candidate
-		var pub, fetched string
-		if err := rows.Scan(&c.ID, &c.SourceID, &c.URL, &c.Title, &c.Summary, &c.Author, &c.ThumbnailURL,
-			&c.MediaType, &c.DurationSec, &pub, &fetched,
-			&c.SourceTitle, &c.SourceWeight, &c.PerSessionCap, &c.SourceCadence); err != nil {
-			return nil, err
-		}
-		c.PublishedAt = parseTime(pub)
-		c.FetchedAt = parseTime(fetched)
-		out = append(out, c)
-	}
-	return out, rows.Err()
+	return scanCandidates(rows, sinceDays)
 }
 
 // MixItems returns every item belonging to the user's followed/trial sources
@@ -527,15 +587,12 @@ func (db *DB) Candidates(ctx context.Context, userID int64, sourceIDs []int64, s
 // decay, not a WHERE clause. cadenceDays sets the rarity-boost cadence window, to
 // match the session builder's rarity semantics. Rows are ordered deterministically.
 func (db *DB) MixItems(ctx context.Context, userID int64, sourceIDs []int64, cadenceDays int) ([]Candidate, error) {
-	q := `SELECT i.id, i.source_id, i.url, i.title, i.summary, i.author, i.thumbnail_url,
-	             i.media_type, i.duration_sec, i.published_at, i.fetched_at,
-	             s.title, s.weight, s.per_session_cap,
-	             (SELECT COUNT(*) FROM items i2 WHERE i2.source_id = s.id
-	                AND i2.published_at >= datetime('now', ?)) / CAST(? AS REAL) AS cadence
+	q := `SELECT ` + candidateCols + `
 	      FROM items i
 	      JOIN sources s ON s.id = i.source_id
 	      WHERE s.user_id = ? AND s.state IN ('followed','trial')`
-	args := []any{fmt.Sprintf("-%d days", cadenceDays), cadenceDays, userID}
+	win := fmt.Sprintf("-%d days", cadenceDays)
+	args := []any{win, win, userID}
 	if len(sourceIDs) > 0 {
 		q += ` AND s.id IN (` + placeholders(len(sourceIDs)) + `)`
 		for _, id := range sourceIDs {
@@ -549,20 +606,7 @@ func (db *DB) MixItems(ctx context.Context, userID int64, sourceIDs []int64, cad
 		return nil, err
 	}
 	defer rows.Close()
-	var out []Candidate
-	for rows.Next() {
-		var c Candidate
-		var pub, fetched string
-		if err := rows.Scan(&c.ID, &c.SourceID, &c.URL, &c.Title, &c.Summary, &c.Author, &c.ThumbnailURL,
-			&c.MediaType, &c.DurationSec, &pub, &fetched,
-			&c.SourceTitle, &c.SourceWeight, &c.PerSessionCap, &c.SourceCadence); err != nil {
-			return nil, err
-		}
-		c.PublishedAt = parseTime(pub)
-		c.FetchedAt = parseTime(fetched)
-		out = append(out, c)
-	}
-	return out, rows.Err()
+	return scanCandidates(rows, cadenceDays)
 }
 
 // SourceIDsForFeeds resolves feed slugs to the set of source ids in them.
