@@ -17,6 +17,26 @@ graduate into [decisions.md](decisions.md); this log is the process trail.
 - **v0.3.0** - card reorder title-above-media (#46), feed+source identity line
   (#44), flat feed icon pack (#45), tap-card-to-open (#47), relative item age
   (#48).
+- **v0.4.0** - feed mix view (#49): `GET /api/v1/mix` (JIT effective + intended
+  share per source, skip%), donut header + ranked share-bars with the "wants X%"
+  ghost gap, inefficiency sort, downweight/archive from the row.
+
+### Decisions made (my call) - v0.4.0
+- **Mix share = all known items, freshness-decayed** (#49), not just-unseen.
+  Reflects a source's content *production* decayed by recency, independent of
+  what you've consumed. "Only unseen" (what's left to pull) is a one-line
+  alternative if the current framing feels off in use.
+- **Mix entry = a Library link, not a 3rd nav tab** (#49). EXPERIENCE.md caps the
+  primary nav at Intent/Library and lists Insights as a secondary surface; kept
+  that. Easy to promote if you want it one tap closer.
+- **`effective == ranker scoreOf` locked by a unit test** so the mix can never
+  silently drift from what sessions actually surface.
+
+### Tooling friction (noted, not blocking)
+- This machine's `gofmt` is a shell function that shells to goimports/`go vet`
+  without `GOWORK=off` and chokes on the parent `~/dev/go.work`. Use the real
+  binary: `$(go env GOROOT)/bin/gofmt`. (Agents building otium should do the same
+  rather than trust `make fmt`.)
 
 ### Decisions made (my call)
 - **Reader HTML sanitizer → DOMPurify, not hand-rolled** (#41). Rendering
@@ -59,15 +79,14 @@ graduate into [decisions.md](decisions.md); this log is the process trail.
   e-ink. Steerable while the agent runs.
 
 ### Queue (planned batches, sequential to avoid same-repo merge conflicts)
-- **Batch 4 - ranker signal quality (no principle conflict):** #7 cadence from
-  accumulated publish timestamps (fixes rarity underestimate for truncated RSS +
-  the YouTube no-duration gap), #17 tunable freshness half-life + diversity per
-  feed, #11 smarter session fill. All use publish timestamps / config only - no
-  behavioral tracking, so safe to build without a principle decision.
-- **Batch 5 - score transparency + library:** #18 why-this-item breakdown, #40
-  per-item score cue + click-in, #16 library sort/group + per-source stats, #35
-  library filters, #37 undo on management changes. Mostly surfacing data that
-  already exists.
+- **Batch 4 (in flight) - ranker accuracy + per-feed tuning:** #7 cadence from
+  accumulated publish timestamps (fixes rarity underestimate for truncated RSS),
+  #17 tunable freshness half-life + diversity per feed. Both use publish
+  timestamps / config only - no behavioral tracking.
+- **Batch 5 - score transparency + session fill:** #18 why-this-item breakdown,
+  #40 per-item score cue + click-in, #11 smarter session fill.
+- **Batch 6 - library:** #16 sort/group + per-source stats, #35 library filters,
+  #37 undo on management changes. Mostly surfacing data that already exists.
 - **Later / bigger bets:** Discovery milestone (#20-23, finding *new* sources),
   Intelligence (#24 stats, #25 agent API, #26 LLM operator).
 
