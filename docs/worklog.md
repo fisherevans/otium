@@ -23,6 +23,26 @@ graduate into [decisions.md](decisions.md); this log is the process trail.
 - **v0.5.0** - ranker accuracy (#7 cadence from accumulated publish history,
   fixing the truncated-feed rarity bug) + per-feed tunable freshness half-life &
   diversity (#17, "Feed settings" in the library).
+- **v0.6.0** - score transparency (#18/#40): hairline score cue on the card →
+  tap → per-factor "why this item" breakdown, factors multiply back to the score
+  (test-locked).
+
+### Reconciled without building (v0.6.x)
+- **#37 (confirm + undo) closed** - already delivered by the List+Expand
+  management surface (archive/delete confirms + undo toast were live since
+  v0.1.0). Checked before dispatching, avoided rebuilding it.
+- **#35/#16 scoped down** - feed/state filters + inline stats already exist;
+  batch 6 only adds the *signal* filter (noisy/dormant/most-skipped) and
+  sort/group. Frontend only.
+
+### Deferred - needs Fisher's direction (won't guess)
+- **#11 (smarter session fill)** - its duration-knapsack framing conflicts with
+  the settled "paced stream, not duration-batch" model (decisions.md), and
+  YouTube has no durations. Reframe I proposed on the issue: flexibility widens
+  *selectivity + diversity*, not a duration fit. Awaiting confirmation.
+- **#6 (dwell logging)** + **#5 (behavioral pace)** - reverse the explicit-
+  signals-only principle. Fisher's call.
+- **#12 (long-end fan width)** - tuning better decided against real usage.
 
 ### Decisions made (my call) - v0.5.0, worth a glance
 - **Cadence thin-history floor** (#7): a source with <3 items in the window gets
@@ -95,12 +115,29 @@ graduate into [decisions.md](decisions.md); this log is the process trail.
   e-ink. Steerable while the agent runs.
 
 ### Queue (planned batches, sequential to avoid same-repo merge conflicts)
-- **Batch 5 (in flight) - score transparency:** #18 why-this-item breakdown,
-  #40 per-item score cue + click-in. Card cue → tap → per-factor breakdown
-  (weight/freshness/rarity/skip); needs the backend to expose the score factors.
-- **Batch 6 - smarter session fill:** #11 fill within the flexible window.
-- **Batch 7 - library:** #16 sort/group + per-source stats, #35 library filters,
-  #37 undo on management changes. Mostly surfacing data that already exists.
+- **Batch 6 (in flight) - library sort + signal filters:** #16 sort/group, #35
+  signal filter (noisy/dormant/most-skipped). Reduced scope - feed/state filters
+  + undo already exist. Frontend only.
+
+### Remaining, after batch 6
+
+**Safe to auto-ship (clear, no model/direction conflict) - will continue:**
+- #10 single-card swipe-to-advance gesture (session UX)
+- #34 store RSS item categories (enabling; unlocks #33 content rules)
+- #36 relative-to-average insight (Nx the average source)
+- #3 pad accessibility fallback, #4 desktop/e-ink mode (design system)
+
+**Needs Fisher's direction before building (product bets - won't guess):**
+- #11 session fill reframe · #6/#5 dwell · #12 fan width (above)
+- #33 intra-source content rules, #39 splittable sources, #19 adjust prompts -
+  each a real design choice about how curation should work
+- **Whole milestones:** Discovery & trials (#20-23 - how new sources get found
+  and trialed) and Intelligence & agent (#24 stats surface, #25 agent API, #26
+  the LLM "talk to your feed" operator). These are the big bets - direction
+  first.
+- #13 more source types (Reddit/Mastodon/Bluesky) - scope/priority call
+- #9 catch-up-on-a-creator, #38 raw-feed drill-in - partially delivered by the
+  ··· menu; remaining scope worth a look before more build
 - **Later / bigger bets:** Discovery milestone (#20-23, finding *new* sources),
   Intelligence (#24 stats, #25 agent API, #26 LLM operator).
 
