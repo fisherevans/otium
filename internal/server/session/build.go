@@ -78,6 +78,62 @@ type Selected struct {
 	Score       float64        `json:"score"`
 	EstDuration int            `json:"est_duration_sec"`
 	Reason      string         `json:"reason"`
+	Breakdown   ScoreBreakdown `json:"breakdown"`
+}
+
+// ScoreBreakdown is the per-factor decomposition of an item's score (#18): the
+// individual multiplicative contributions the ranker actually used, so the
+// one-line Reason becomes legible as math. EffectiveScore is the product of the
+// four factors and equals ItemEffectiveScore - the invariant test locks that, so
+// this is never an approximation of the ranking, it *is* the ranking.
+//
+// Selectivity is deliberately absent: it's a per-session budget adjustment (an
+// exponent on weight×rarity that sharpens scarce sessions), not a property of the
+// item. The breakdown reports the item's standalone effective score - the same
+// value the mix view shares out - so "why this item" reads the same regardless of
+// how big a session it landed in.
+type ScoreBreakdown struct {
+	Weight         float64 `json:"weight"`          // source weight multiplier (0.25..5, default 1)
+	Rarity         float64 `json:"rarity"`          // rarity boost for infrequent sources (1 = not rare, up to 1+rareBoostMax)
+	Freshness      float64 `json:"freshness"`       // age decay (1 = brand new, → 0 as it ages past the half-life)
+	SkipPenalty    float64 `json:"skip_penalty"`    // behavior downweight (1 = never skipped, down to 1-skipPenaltyMax)
+	EffectiveScore float64 `json:"effective_score"` // weight × rarity × freshness × skip_penalty
+	// Human-legible context for the plain-language lines - not factors, just the
+	// raw inputs behind them.
+	CadencePerDay float64 `json:"cadence_per_day"` // source's posts/day over the window (drives Rarity)
+	SkipPct       float64 `json:"skip_pct"`        // 0..1 raw skip rate; the penalty only bites past skipMinSample shows
+	AgeDays       float64 `json:"age_days"`        // item age in days at build time (drives Freshness)
+}
+
+// ScoreBreakdownFor decomposes an item's effective score into the exact factors
+// the ranker used. It reuses the same scorer helpers as scoreOf /
+// ItemEffectiveScore - it does not re-derive the formula - so EffectiveScore is
+// guaranteed to equal ItemEffectiveScore(c, now, stat). Keep it that way: the
+// value here is deterministic auditability, and an approximation would defeat the
+// point.
+func ScoreBreakdownFor(c store.Candidate, now time.Time, stat SourceStat) ScoreBreakdown {
+	w := sourceWeight(c)
+	rarity := rarityBoost(c.SourceCadence)
+	fresh := freshness(c.PublishedAt, now, c.FeedHalfLifeDays)
+	skip := skipPenalty(stat)
+	ageDays := now.Sub(c.PublishedAt).Hours() / 24
+	if ageDays < 0 {
+		ageDays = 0
+	}
+	skipPct := 0.0
+	if stat.Shown > 0 {
+		skipPct = float64(stat.Skipped) / float64(stat.Shown)
+	}
+	return ScoreBreakdown{
+		Weight:         w,
+		Rarity:         rarity,
+		Freshness:      fresh,
+		SkipPenalty:    skip,
+		EffectiveScore: w * rarity * fresh * skip,
+		CadencePerDay:  c.SourceCadence,
+		SkipPct:        skipPct,
+		AgeDays:        ageDays,
+	}
 }
 
 // Result is a built session.
@@ -171,6 +227,7 @@ func Build(req Request, pool []store.Candidate, now time.Time, stats map[int64]S
 				Score:       round2(r.score),
 				EstDuration: r.dur,
 				Reason:      r.reason,
+				Breakdown:   ScoreBreakdownFor(r.c, now, stats[r.sourceID]),
 			})
 			total += r.dur
 			perSourceUsed[r.sourceID]++
@@ -273,11 +330,17 @@ func scoreOf(c store.Candidate, now time.Time, stat SourceStat, sel float64) flo
 // behavior signal - just "how much does the user favor this source, adjusted so
 // a rare poster isn't buried." Shared by the session ranker and the mix view.
 func weightRarity(c store.Candidate) float64 {
-	weight := c.SourceWeight
-	if weight <= 0 {
-		weight = 1
+	return sourceWeight(c) * rarityBoost(c.SourceCadence)
+}
+
+// sourceWeight is the item's source weight with the "unset -> 1" default applied,
+// the single place that default lives so weightRarity and ScoreBreakdownFor
+// report the same Weight factor.
+func sourceWeight(c store.Candidate) float64 {
+	if c.SourceWeight <= 0 {
+		return 1
 	}
-	return weight * rarityBoost(c.SourceCadence)
+	return c.SourceWeight
 }
 
 // ItemIntendedScore is the session-agnostic "intended" contribution of a single

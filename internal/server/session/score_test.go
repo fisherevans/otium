@@ -115,6 +115,46 @@ func TestEffectiveMatchesScoreOfWithPerFeedHalfLife(t *testing.T) {
 	}
 }
 
+// TestScoreBreakdownMultipliesToEffective is the #18 guarantee: the per-factor
+// breakdown the card exposes is the *actual* ranking, not an approximation. Its
+// four factors must multiply back to its own EffectiveScore, and that score must
+// equal both ItemEffectiveScore and scoreOf at selectivity 1 - the same invariant
+// the mix relies on. If any scorer helper changes, this fails until the breakdown
+// tracks it.
+func TestScoreBreakdownMultipliesToEffective(t *testing.T) {
+	now := time.Date(2026, 7, 2, 12, 0, 0, 0, time.UTC)
+	cases := []struct {
+		name string
+		c    store.Candidate
+		stat SourceStat
+	}{
+		{"fresh-favorite-no-skip", cand(5, 3, 0, now), SourceStat{}},
+		{"rare-source-aged", cand(1, 0.1, 30, now), SourceStat{Shown: 3, Skipped: 2}},
+		{"heavy-skip-well-sampled", cand(2, 3, 5, now), SourceStat{Shown: 20, Skipped: 15}},
+		{"default-weight-under-sample", cand(0, 5, 2, now), SourceStat{Shown: skipMinSample - 1, Skipped: 4}},
+	}
+	for _, tt := range cases {
+		t.Run(tt.name, func(t *testing.T) {
+			b := ScoreBreakdownFor(tt.c, now, tt.stat)
+
+			// The four factors multiply to the reported effective score.
+			product := b.Weight * b.Rarity * b.Freshness * b.SkipPenalty
+			if math.Abs(product-b.EffectiveScore) > 1e-12 {
+				t.Fatalf("factors %v×%v×%v×%v=%v != EffectiveScore=%v",
+					b.Weight, b.Rarity, b.Freshness, b.SkipPenalty, product, b.EffectiveScore)
+			}
+			// And that effective score is the real ranker output at sel=1, which is
+			// also what the mix shares out. Never an approximation.
+			if want := ItemEffectiveScore(tt.c, now, tt.stat); math.Abs(b.EffectiveScore-want) > 1e-12 {
+				t.Fatalf("breakdown effective=%v != ItemEffectiveScore=%v", b.EffectiveScore, want)
+			}
+			if want := scoreOf(tt.c, now, tt.stat, 1); math.Abs(b.EffectiveScore-want) > 1e-12 {
+				t.Fatalf("breakdown effective=%v != scoreOf(sel=1)=%v", b.EffectiveScore, want)
+			}
+		})
+	}
+}
+
 func TestRarityLiftsInfrequentSources(t *testing.T) {
 	now := time.Date(2026, 7, 2, 12, 0, 0, 0, time.UTC)
 	// Same weight, same age: the rarely-posting source scores higher per item.
