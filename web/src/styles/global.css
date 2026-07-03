@@ -791,6 +791,24 @@ h1.display {
   font-size: 11px;
   color: var(--ink-mute);
 }
+/* stacked control rows: drop the divider on all but the last so the
+   feed / state / signal / sort stack reads as one calm block */
+.lib-sub.noline {
+  border-bottom: none;
+  padding-bottom: 2px;
+  margin-bottom: 0;
+}
+.lib-sub {
+  flex-wrap: wrap;
+}
+.lib-lbl {
+  font-family: var(--grot);
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ink-mute);
+  margin-right: 2px;
+}
 .lib-row {
   border-bottom: 1px solid var(--hair);
 }

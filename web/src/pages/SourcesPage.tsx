@@ -5,12 +5,31 @@ import { BUCKETS, BLABEL, bucketOf, type Bucket } from "@/lib/weight";
 import { feedIcon } from "@/lib/feedIcons";
 import { FeedIconPicker } from "@/components/FeedIconPicker";
 
+// Behavioral signal a source exhibits, derived per-render relative to the
+// currently-visible set (not absolute) so "noisy"/"most-skipped" mean "loud
+// compared to what else you follow right now". #35.
+type Sig = { skipped: boolean; noisy: boolean; dormant: boolean };
+type SigKey = "most-skipped" | "noisy" | "dormant";
+const SIG_LABEL: Record<SigKey, string> = {
+  "most-skipped": "most-skipped",
+  noisy: "noisy",
+  dormant: "dormant",
+};
+
+// p-th percentile of the positive values (skip zeros, which mean "no sample").
+function pctl(vals: number[], p: number): number {
+  const v = vals.filter((x) => x > 0).sort((a, b) => a - b);
+  if (!v.length) return 0;
+  return v[Math.min(v.length - 1, Math.floor(p * (v.length - 1)))];
+}
+
 export default function SourcesPage() {
   const nav = useNavigate();
   const [sources, setSources] = useState<Source[]>([]);
   const [feeds, setFeeds] = useState<Feed[]>([]);
   const [ffeed, setFfeed] = useState<string | null>(null);
   const [fstate, setFstate] = useState<"followed" | "archived" | "all">("followed");
+  const [fsignal, setFsignal] = useState<SigKey | null>(null);
   const [open, setOpen] = useState<number | null>(null);
   const [adding, setAdding] = useState(false);
   const [url, setUrl] = useState("");
@@ -42,7 +61,10 @@ export default function SourcesPage() {
     return v.length ? v[Math.floor(v.length / 2)] : 0;
   }, [sources]);
 
-  const shown = useMemo(
+  // Feed + state filtered set. Signal thresholds are computed over THIS set so
+  // they're relative to what you're currently looking at, then the signal
+  // filter (if any) narrows further - all three axes AND together.
+  const base = useMemo(
     () =>
       sources.filter((s) => {
         if (fstate === "followed" && s.state === "archived") return false;
@@ -51,6 +73,37 @@ export default function SourcesPage() {
         return true;
       }),
     [sources, ffeed, fstate],
+  );
+
+  const p75ppd = useMemo(() => pctl(base.map((s) => s.posts_per_day ?? 0), 0.75), [base]);
+  const p75skip = useMemo(() => pctl(base.map((s) => s.skip_pct ?? 0), 0.75), [base]);
+
+  function classify(s: Source): Sig {
+    const ppd = s.posts_per_day ?? 0;
+    const skip = s.skip_pct ?? 0;
+    // dormant: has history but nothing in the freshness window.
+    const dormant = ppd === 0 && (s.item_count ?? 0) > 0;
+    // noisy: top quartile of posts/day AND at least 1.5x the median, so the
+    // word stays honest in a set where everything posts at a similar rate.
+    const noisy = !dormant && ppd > 0 && p75ppd > 0 && ppd >= p75ppd && ppd >= median * 1.5;
+    // most-skipped: top quartile of skip rate, floored at 30% so it means "you
+    // genuinely pass on this a lot", not just "highest of a low-skip set".
+    const skipped = skip > 0 && skip >= Math.max(p75skip, 0.3);
+    return { skipped, noisy, dormant };
+  }
+
+  const shown = useMemo(
+    () =>
+      base.filter((s) => {
+        if (!fsignal) return true;
+        const c = classify(s);
+        if (fsignal === "most-skipped") return c.skipped;
+        if (fsignal === "noisy") return c.noisy;
+        return c.dormant;
+      }),
+    // classify closes over median + percentiles which derive from base.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [base, fsignal, p75ppd, p75skip, median],
   );
 
   function showToast(msg: string, undo?: () => void) {
@@ -176,10 +229,20 @@ export default function SourcesPage() {
           );
         })}
       </div>
-      <div className="lib-sub">
+      <div className="lib-sub noline">
         {(["followed", "archived", "all"] as const).map((st) => (
           <button key={st} className={`lib-seg ${fstate === st ? "on" : ""}`} onClick={() => setFstate(st)}>
             {st}
+          </button>
+        ))}
+      </div>
+      {/* filter by behavioral signal (relative to the feed/state set above) */}
+      <div className="lib-sub">
+        <span className="lib-lbl">signal</span>
+        <button className={`lib-seg ${!fsignal ? "on" : ""}`} onClick={() => setFsignal(null)}>any</button>
+        {(["most-skipped", "noisy", "dormant"] as const).map((sg) => (
+          <button key={sg} className={`lib-seg ${fsignal === sg ? "on" : ""}`} onClick={() => setFsignal((c) => (c === sg ? null : sg))}>
+            {SIG_LABEL[sg]}
           </button>
         ))}
         <span className="lib-count">{shown.length} of {sources.length}</span>
