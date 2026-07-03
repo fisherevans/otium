@@ -26,6 +26,29 @@ graduate into [decisions.md](decisions.md); this log is the process trail.
 - **v0.6.0** - score transparency (#18/#40): hairline score cue on the card →
   tap → per-factor "why this item" breakdown, factors multiply back to the score
   (test-locked).
+- **v0.7.0** - library sort/group (#16) + signal filters most-skipped/noisy/
+  dormant (#35). Reduced scope after finding feed/state filters + undo already
+  existed.
+
+### Reconciled without building (v0.7.x)
+- **#36 closed** - the v0.7.0 library "N× noisy" (posts/day vs set median) + the
+  mix view's share already give the "Nx the average source" read.
+- **#34 (store RSS categories) held** - genuine work, but it's enabling infra for
+  #33 content rules (which needs direction). Not churning the schema for an
+  unplanned feature; categories aren't privacy-sensitive so capturing early is an
+  option if #33 gets greenlit.
+
+### In flight
+- **Batch 7 - input robustness:** #10 swipe-to-advance (session), #3 pad
+  accessibility fallback (non-gesture path on HomePage). Frontend only.
+
+### After batch 7, the standalone safe queue is essentially empty
+Only **#4 (desktop / e-ink mode)** remains as clearly-safe standalone work.
+Everything else needs Fisher's direction (see the deferred + "needs direction"
+sections above): the big bets (Discovery #20-23, Intelligence #24-26), curation
+design calls (#33/#39/#19), the parked decisions (#6/#11/#12), and #13 more
+source types. Plan: ship #4, then stop auto-shipping and wait for direction on
+the bets.
 
 ### Reconciled without building (v0.6.x)
 - **#37 (confirm + undo) closed** - already delivered by the List+Expand
