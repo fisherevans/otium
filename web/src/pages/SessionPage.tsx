@@ -231,11 +231,31 @@ export default function SessionPage() {
   const cur = items[current];
   const atEnd = current >= items.length;
 
+  // Tap-to-open (#47): a click on the card body opens the item, but a scroll-snap
+  // drag must not count as a tap. Track the pointer from press to release and
+  // treat anything past a small move threshold as a scroll, not a tap.
+  const press = useRef<{ x: number; y: number; moved: boolean } | null>(null);
+  function cardPointerDown(e: ReactPointerEvent) {
+    press.current = { x: e.clientX, y: e.clientY, moved: false };
+  }
+  function cardPointerMove(e: ReactPointerEvent) {
+    const p = press.current;
+    if (p && (Math.abs(e.clientX - p.x) > 10 || Math.abs(e.clientY - p.y) > 10)) p.moved = true;
+  }
+  function cardClick(sel: Selected) {
+    const p = press.current;
+    press.current = null;
+    if (p?.moved) return; // it was a scroll, not a tap
+    openItem(sel);
+  }
+
+  function openItem(sel: Selected) {
+    engaged.current.add(sel.item.id);
+    api.itemEvent(sel.item.id, "open", sessionId).catch(() => {});
+    window.open(sel.item.url, "_blank", "noopener");
+  }
   function open() {
-    if (!cur) return;
-    engaged.current.add(cur.item.id);
-    api.itemEvent(cur.item.id, "open", sessionId).catch(() => {});
-    window.open(cur.item.url, "_blank", "noopener");
+    if (cur) openItem(cur);
   }
   function like() {
     if (!cur) return;
