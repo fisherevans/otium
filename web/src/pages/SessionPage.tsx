@@ -2,7 +2,17 @@ import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent as
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { api, type Item, type Selected } from "@/api/client";
 import { ItemActions } from "@/components/ItemActions";
+import { Reader } from "@/components/Reader";
+import { Player } from "@/components/Player";
 import { ScoreCue, ScoreBreakdownSheet } from "@/components/ScoreBreakdown";
+
+// Which in-app content surface an item opens into (#51). Video/audio play in
+// the Player; everything else (article/rss/quote/text) reads in the Reader.
+function contentKind(item: Item): "video" | "audio" | "read" {
+  if (item.media_type === "short" || item.media_type === "long" || item.media_type === "live") return "video";
+  if (item.media_type === "audio") return "audio";
+  return "read";
+}
 import { feedIcon } from "@/lib/feedIcons";
 import { relTime } from "@/lib/format";
 
@@ -102,6 +112,7 @@ export default function SessionPage() {
   const [saved, setSaved] = useState<Set<number>>(new Set());
   const [menuOpen, setMenuOpen] = useState(false);
   const [breakdown, setBreakdown] = useState<Selected | null>(null);
+  const [content, setContent] = useState<Selected | null>(null); // the in-app content surface (#51)
 
   // The strongest rank score in the loaded queue - the yardstick the on-card score
   // cue fills against, so each cue reads as "how strongly did this rank vs the best."
@@ -115,6 +126,8 @@ export default function SessionPage() {
   const advances = useRef<number[]>([]);
   const shownIds = useRef<Set<number>>(new Set());
   const engaged = useRef<Set<number>>(new Set()); // ids that got open/like/save
+  const opened = useRef<Set<number>>(new Set()); // ids that fired an `open` event (dedupe, #51)
+  const lastContent = useRef<Selected | null>(null); // retains the surface item through the sheet's exit anim
   const prevIdx = useRef(0);
   const stageRef = useRef<HTMLDivElement>(null);
   const itemEls = useRef<(HTMLDivElement | null)[]>([]);
@@ -154,6 +167,7 @@ export default function SessionPage() {
     advances.current = [];
     shownIds.current = new Set();
     engaged.current = new Set();
+    opened.current = new Set();
     prevIdx.current = 0;
     build(false).finally(() => setLoading(false));
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -237,6 +251,12 @@ export default function SessionPage() {
   const cur = items[current];
   const atEnd = current >= items.length;
 
+  // The in-app content surface (#51). Retain the item through the close
+  // animation so the sheet doesn't blank as it slides down.
+  if (content) lastContent.current = content;
+  const shown = content ?? lastContent.current;
+  const shownKind = shown ? contentKind(shown.item) : null;
+
   // Tap-to-open (#47): a click on the card body opens the item, but a scroll-snap
   // drag must not count as a tap. Track the pointer from press to release and
   // treat anything past a small move threshold as a scroll, not a tap.
@@ -276,16 +296,32 @@ export default function SessionPage() {
     const p = press.current;
     press.current = null;
     if (p?.moved) return; // it was a scroll or a swipe, not a tap
-    openItem(sel);
+    openContent(sel);
   }
 
-  function openItem(sel: Selected) {
+  // Opening content in-app (or handing off to the source) is genuine
+  // consumption: fire an `open` event exactly once per item so it counts as
+  // engagement, not a skip. `opened` dedupes the event; `engaged` (also fed by
+  // like/save) is what exempts the item from the next==skip rule (#51).
+  function recordOpen(sel: Selected) {
     engaged.current.add(sel.item.id);
-    api.itemEvent(sel.item.id, "open", sessionId).catch(() => {});
+    if (!opened.current.has(sel.item.id)) {
+      opened.current.add(sel.item.id);
+      api.itemEvent(sel.item.id, "open", sessionId).catch(() => {});
+    }
+  }
+  // Primary: tapping the card body reads/plays the item in-app (#51).
+  function openContent(sel: Selected) {
+    recordOpen(sel);
+    setContent(sel);
+  }
+  // Secondary: the original source in a browser tab (demoted from #47's default).
+  function openExternal(sel: Selected) {
+    recordOpen(sel);
     window.open(sel.item.url, "_blank", "noopener");
   }
   function open() {
-    if (cur) openItem(cur);
+    if (cur) openExternal(cur);
   }
   function like() {
     if (!cur) return;
@@ -418,7 +454,7 @@ export default function SessionPage() {
 
       <div className="actionbar">
         <button className="act-btn" onClick={open} disabled={atEnd}>
-          <span className="ic">↗</span>Open
+          <span className="ic">↗</span>Original
         </button>
         <button className={`act-btn ${cur && liked.has(cur.item.id) ? "on" : ""}`} onClick={like} disabled={atEnd}>
           <span className="ic">♥</span>Like
@@ -443,6 +479,23 @@ export default function SessionPage() {
       />
 
       <ScoreBreakdownSheet sel={breakdown} open={breakdown !== null} onClose={() => setBreakdown(null)} />
+
+      {/* In-app content surface (#51): text reads in the Reader, video/audio play
+          in the Player. Tapping the card body opens the kind that fits the item. */}
+      <Reader
+        item={shown && shownKind === "read" ? shown.item : null}
+        sourceTitle={shown?.source_title}
+        open={content !== null && shownKind === "read"}
+        onClose={() => setContent(null)}
+        onOpen={() => shown && openExternal(shown)}
+      />
+      <Player
+        item={shown && shownKind !== "read" ? shown.item : null}
+        sourceTitle={shown?.source_title}
+        open={content !== null && shownKind !== "read"}
+        onClose={() => setContent(null)}
+        onOpenOriginal={() => shown && openExternal(shown)}
+      />
     </div>
   );
 }
