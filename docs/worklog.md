@@ -42,13 +42,40 @@ graduate into [decisions.md](decisions.md); this log is the process trail.
 - **Batch 7 - input robustness:** #10 swipe-to-advance (session), #3 pad
   accessibility fallback (non-gesture path on HomePage). Frontend only.
 
-### After batch 7, the standalone safe queue is essentially empty
-Only **#4 (desktop / e-ink mode)** remains as clearly-safe standalone work.
-Everything else needs Fisher's direction (see the deferred + "needs direction"
-sections above): the big bets (Discovery #20-23, Intelligence #24-26), curation
-design calls (#33/#39/#19), the parked decisions (#6/#11/#12), and #13 more
-source types. Plan: ship #4, then stop auto-shipping and wait for direction on
-the bets.
+- **v0.8.0** - swipe-to-advance (#10) + non-gesture pad fallback / a11y (#3).
+
+## Autonomous runway complete (v0.8.0)
+
+18 issues closed across 8 verified releases (v0.1 → v0.8) in one push. **Every
+scoped, no-direction-needed issue is shipped.** #4 (desktop/e-ink) turned out to
+be a vague "someday" design-direction placeholder, not a scoped task - building a
+desktop redesign across all pages is a design bet, so it joins the needs-direction
+list rather than getting guessed at.
+
+### Everything remaining needs Fisher's direction (holding - won't guess)
+**Quick decisions that unblock work:**
+- **#6 dwell logging** - reverses the explicit-signals-only principle; gates #5
+  behavioral pace. The single highest-leverage unblock.
+- **#11 session fill** - confirm the reframe (flexibility widens selectivity +
+  diversity, not a duration knapsack).
+- **#12 long-end fan width** - a tuning number.
+
+**Design calls:**
+- **#4 desktop / e-ink mode** - what should desktop even look like; is a literal
+  e-ink device mode wanted.
+- **#33 content rules**, **#39 splittable sources**, **#19 adjust prompts** -
+  each a "how should curation work" choice. **#34** (store RSS categories) is
+  cheap enabling infra for #33, held until #33 is greenlit.
+- **#13 more source types** (Reddit/Mastodon/Bluesky) - scope/priority.
+
+**The big bets (whole milestones, pick a direction):**
+- **Discovery & trials (#20-23)** - how new sources get found, trialed, and
+  recommended.
+- **Intelligence & agent (#24-26)** - user stats surface, an agent/JSON API, and
+  the LLM "talk to your feed" operator.
+
+Plan: **stopped auto-shipping** - the queue of scoped work is empty. Resume when
+Fisher steers one of the above.
 
 ### Reconciled without building (v0.6.x)
 - **#37 (confirm + undo) closed** - already delivered by the List+Expand
