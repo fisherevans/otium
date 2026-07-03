@@ -262,6 +262,11 @@ export default function SourcesPage() {
 
   return (
     <div>
+      {/* #54: explicit way back to the intent page to start a session - the
+          bottom nav is easy to miss, so mirror the session's back affordance. */}
+      <button className="lib-back" onClick={() => nav("/")}>
+        <span aria-hidden>←</span> Start a session
+      </button>
       <h1 className="display">Your library</h1>
       <p className="sub">The sources you follow. Weight = how often they surface; turn down instead of unfollowing.</p>
 
