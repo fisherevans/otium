@@ -1772,3 +1772,46 @@ h1.display {
   flex: 1;
   margin-top: 0;
 }
+
+/* ============================================================
+   #50 - session card fits the viewport (clean fixed preview)
+   The card is a preview, not the full article: the body tap
+   opens the real content (#51). So clamp the title + excerpt,
+   cap the media, and clip anything residual so nothing spills
+   past the snap area and no internal scroll fights scroll-snap.
+   ============================================================ */
+.snap {
+  overflow: hidden;
+}
+.snap > h3 {
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.snap .excerpt {
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  margin-top: 10px;
+}
+.snap .excerpt::first-letter {
+  font-family: inherit;
+  font-size: inherit;
+  float: none;
+  padding: 0;
+}
+.snap .media,
+.snap .wave {
+  flex: 0 0 auto;
+}
+.snap .media.h {
+  max-height: 30vh;
+}
+.snap .media.v {
+  max-height: 40vh;
+}
+.snap .media.sq {
+  max-height: 34vh;
+}
