@@ -20,6 +20,22 @@ graduate into [decisions.md](decisions.md); this log is the process trail.
 - **v0.4.0** - feed mix view (#49): `GET /api/v1/mix` (JIT effective + intended
   share per source, skip%), donut header + ranked share-bars with the "wants X%"
   ghost gap, inefficiency sort, downweight/archive from the row.
+- **v0.5.0** - ranker accuracy (#7 cadence from accumulated publish history,
+  fixing the truncated-feed rarity bug) + per-feed tunable freshness half-life &
+  diversity (#17, "Feed settings" in the library).
+
+### Decisions made (my call) - v0.5.0, worth a glance
+- **Cadence thin-history floor** (#7): a source with <3 items in the window gets
+  no rarity boost (biased against false boosts on brand-new sources). Side effect:
+  a *genuinely* very-rare source also gets no boost until it accrues history.
+  Deliberate, matches the issue's priority - flag if it feels wrong once feeds
+  have more history.
+- **Diversity control is a per-source cap** (#17): "higher number = fewer items
+  per source = more spread," which inverts the intuitive "higher = more diverse."
+  Labeled with a caption; it's a UI-mapping change only if you'd rather the number
+  climb with diversity. Tell me if the inversion bugs you.
+- **Perf note:** per-candidate feed resolution adds correlated subqueries per row
+  - fine at single-user scale (indexed), flagged if the pool ever grows.
 
 ### Decisions made (my call) - v0.4.0
 - **Mix share = all known items, freshness-decayed** (#49), not just-unseen.
@@ -79,13 +95,11 @@ graduate into [decisions.md](decisions.md); this log is the process trail.
   e-ink. Steerable while the agent runs.
 
 ### Queue (planned batches, sequential to avoid same-repo merge conflicts)
-- **Batch 4 (in flight) - ranker accuracy + per-feed tuning:** #7 cadence from
-  accumulated publish timestamps (fixes rarity underestimate for truncated RSS),
-  #17 tunable freshness half-life + diversity per feed. Both use publish
-  timestamps / config only - no behavioral tracking.
-- **Batch 5 - score transparency + session fill:** #18 why-this-item breakdown,
-  #40 per-item score cue + click-in, #11 smarter session fill.
-- **Batch 6 - library:** #16 sort/group + per-source stats, #35 library filters,
+- **Batch 5 (in flight) - score transparency:** #18 why-this-item breakdown,
+  #40 per-item score cue + click-in. Card cue → tap → per-factor breakdown
+  (weight/freshness/rarity/skip); needs the backend to expose the score factors.
+- **Batch 6 - smarter session fill:** #11 fill within the flexible window.
+- **Batch 7 - library:** #16 sort/group + per-source stats, #35 library filters,
   #37 undo on management changes. Mostly surfacing data that already exists.
 - **Later / bigger bets:** Discovery milestone (#20-23, finding *new* sources),
   Intelligence (#24 stats, #25 agent API, #26 LLM operator).
