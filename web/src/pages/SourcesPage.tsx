@@ -1,22 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { api, type Feed, type Source } from "@/api/client";
-
-const BUCKETS = ["very_low", "low", "normal", "high", "favorite"] as const;
-const BLABEL: Record<string, string> = {
-  very_low: "v.low",
-  low: "low",
-  normal: "normal",
-  high: "high",
-  favorite: "fav",
-};
-function bucketOf(w: number): string {
-  if (w <= 0.25) return "very_low";
-  if (w <= 0.5) return "low";
-  if (w <= 1) return "normal";
-  if (w <= 2) return "high";
-  return "favorite";
-}
+import { BUCKETS, BLABEL, bucketOf, type Bucket } from "@/lib/weight";
 
 export default function SourcesPage() {
   const nav = useNavigate();
@@ -67,7 +52,7 @@ export default function SourcesPage() {
     window.setTimeout(() => setToast((t) => (t && t.msg === msg ? null : t)), 4500);
   }
 
-  async function setWeight(s: Source, bucket: string) {
+  async function setWeight(s: Source, bucket: Bucket) {
     const prev = bucketOf(s.weight);
     await api.updateSource(s.id, { weight_bucket: bucket }).catch(() => {});
     reload();
