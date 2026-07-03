@@ -65,6 +65,22 @@ export interface Item {
   fetched_at: string;
 }
 
+// ScoreBreakdown decomposes an item's effective score into the exact factors the
+// ranker used (#18). The four multipliers multiply to effective_score, which is
+// the real ranker output (matches ItemEffectiveScore server-side) - never an
+// approximation. cadence_per_day / skip_pct / age_days are the raw inputs behind
+// the factors, for the plain-language lines.
+export interface ScoreBreakdown {
+  weight: number; // source weight multiplier (0.25..5, default 1)
+  rarity: number; // rarity boost for infrequent sources (1 = not rare)
+  freshness: number; // age decay (1 = brand new → 0 as it ages)
+  skip_penalty: number; // behavior downweight (1 = never skipped, down to 0.5)
+  effective_score: number; // weight × rarity × freshness × skip_penalty
+  cadence_per_day: number; // source posts/day over the window
+  skip_pct: number; // 0..1 raw skip rate
+  age_days: number; // item age in days at build time
+}
+
 export interface Selected {
   item: Item;
   source_title: string;
@@ -72,6 +88,7 @@ export interface Selected {
   score: number;
   est_duration_sec: number;
   reason: string;
+  breakdown: ScoreBreakdown;
 }
 
 export interface SessionResult {

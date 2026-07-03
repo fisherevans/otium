@@ -1,7 +1,8 @@
-import { useCallback, useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { api, type Item, type Selected } from "@/api/client";
 import { ItemActions } from "@/components/ItemActions";
+import { ScoreCue, ScoreBreakdownSheet } from "@/components/ScoreBreakdown";
 import { feedIcon } from "@/lib/feedIcons";
 import { relTime } from "@/lib/format";
 
@@ -100,6 +101,11 @@ export default function SessionPage() {
   const [liked, setLiked] = useState<Set<number>>(new Set());
   const [saved, setSaved] = useState<Set<number>>(new Set());
   const [menuOpen, setMenuOpen] = useState(false);
+  const [breakdown, setBreakdown] = useState<Selected | null>(null);
+
+  // The strongest rank score in the loaded queue - the yardstick the on-card score
+  // cue fills against, so each cue reads as "how strongly did this rank vs the best."
+  const maxScore = useMemo(() => items.reduce((m, s) => Math.max(m, s.score), 0), [items]);
 
   const [elapsed, setElapsed] = useState(0);
   const [checkin, setCheckin] = useState<Checkin>(null);
@@ -344,9 +350,10 @@ export default function SessionPage() {
             onClick={() => cardClick(it)}
             role="link"
           >
-            <span className="reason" onClick={(e) => e.stopPropagation()}>
-              {it.reason}
-            </span>
+            <div className="reason-row" onClick={(e) => e.stopPropagation()}>
+              <span className="reason">{it.reason}</span>
+              <ScoreCue sel={it} maxScore={maxScore} onOpen={() => setBreakdown(it)} />
+            </div>
             {i === current && (
               <button
                 className="item-more"
@@ -404,7 +411,13 @@ export default function SessionPage() {
         open={menuOpen}
         onClose={() => setMenuOpen(false)}
         onOpen={open}
+        onWhy={() => {
+          setMenuOpen(false);
+          if (cur) setBreakdown(cur);
+        }}
       />
+
+      <ScoreBreakdownSheet sel={breakdown} open={breakdown !== null} onClose={() => setBreakdown(null)} />
     </div>
   );
 }

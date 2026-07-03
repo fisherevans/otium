@@ -447,6 +447,14 @@ h1.display {
 .snap.away {
   opacity: 0.35;
 }
+.reason-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  align-self: flex-start;
+  max-width: 100%;
+  margin-bottom: 12px;
+}
 .snap .reason {
   font-family: var(--mono);
   font-size: 10px;
@@ -455,8 +463,35 @@ h1.display {
   color: var(--ink-mute);
   border: 1px solid var(--rule);
   padding: 3px 7px;
-  align-self: flex-start;
-  margin-bottom: 12px;
+}
+
+/* --- score cue (#40): quiet hairline strength meter, tap for the breakdown --- */
+.score-cue {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  padding: 6px 2px; /* enlarge the tap target without enlarging the mark */
+  background: transparent;
+  border: none;
+  cursor: pointer;
+}
+.score-cue-track {
+  position: relative;
+  display: block;
+  width: 34px;
+  height: 4px;
+  background: var(--paper-3);
+  border: 1px solid var(--hair);
+}
+.score-cue-fill {
+  position: absolute;
+  top: 0;
+  left: 0;
+  height: 100%;
+  background: var(--ink-mute);
+}
+.score-cue:active .score-cue-fill {
+  background: var(--ink);
 }
 .snap h3 {
   font-family: var(--serif);
@@ -1471,4 +1506,85 @@ h1.display {
 }
 .mix-sheet {
   padding: 4px 2px 8px;
+}
+
+/* ============================================================
+   Score breakdown sheet (#18/#40) - the card's reason as math
+   ============================================================ */
+.bd-title {
+  font-family: var(--serif);
+  font-weight: 600;
+  font-size: 17px;
+  line-height: 1.3;
+  margin: 12px 0 14px;
+  color: var(--ink);
+}
+.bd-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.bd-row-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin-bottom: 6px;
+}
+.bd-name {
+  font-family: var(--grot);
+  font-size: 11px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+}
+.bd-mult {
+  font-family: var(--didot);
+  font-size: 18px;
+  color: var(--ink);
+}
+.bd-bar {
+  position: relative;
+  height: 8px;
+  background: var(--paper-3);
+  border: 1px solid var(--hair);
+}
+.bd-fill {
+  position: absolute;
+  top: 0;
+  left: 0;
+  height: 100%;
+  background: var(--ink);
+}
+.bd-line {
+  margin-top: 6px;
+  font-family: var(--mono);
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--ink-mute);
+}
+.bd-net {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin-top: 18px;
+  padding-top: 14px;
+  border-top: 1.5px solid var(--rule-hard);
+}
+.bd-net-label {
+  font-family: var(--grot);
+  font-size: 11px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+}
+.bd-net-val {
+  font-family: var(--didot);
+  font-size: 26px;
+  color: var(--ink);
+}
+.bd-summary {
+  margin: 10px 0 2px;
+  font-size: 14px;
+  line-height: 1.45;
+  color: var(--ink-soft);
 }

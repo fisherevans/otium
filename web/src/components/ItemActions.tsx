@@ -19,11 +19,13 @@ export function ItemActions({
   open,
   onClose,
   onOpen,
+  onWhy,
 }: {
   selected: Selected | null;
   open: boolean;
   onClose: () => void;
   onOpen: () => void;
+  onWhy: () => void;
 }) {
   const item = selected?.item ?? null;
   const sourceId = item?.source_id ?? 0;
@@ -71,6 +73,11 @@ export function ItemActions({
         <div className="sheet-title">{item.title}</div>
 
         <div className="sheet-rows">
+          <button className="sheet-row" onClick={onWhy}>
+            <span>Why this item?</span>
+            <span className="sheet-chev">▸</span>
+          </button>
+
           <button className="sheet-row" onClick={() => setSub("reader")}>
             <span>Read in app</span>
             <span className="sheet-chev">▸</span>
