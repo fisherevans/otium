@@ -48,7 +48,13 @@ func Open(path string) (*DB, error) {
 // SQLite has no ADD COLUMN IF NOT EXISTS, so each add is guarded on
 // pragma_table_info. Every migration here must be safe to run on every boot.
 func migrate(sdb *sql.DB) error {
-	return ensureColumn(sdb, "feeds", "icon", `ALTER TABLE feeds ADD COLUMN icon TEXT NOT NULL DEFAULT ''`)
+	if err := ensureColumn(sdb, "feeds", "icon", `ALTER TABLE feeds ADD COLUMN icon TEXT NOT NULL DEFAULT ''`); err != nil {
+		return err
+	}
+	if err := ensureColumn(sdb, "feeds", "half_life_days", `ALTER TABLE feeds ADD COLUMN half_life_days REAL NOT NULL DEFAULT 0`); err != nil {
+		return err
+	}
+	return ensureColumn(sdb, "feeds", "diversity", `ALTER TABLE feeds ADD COLUMN diversity INTEGER NOT NULL DEFAULT 0`)
 }
 
 // ensureColumn adds a column via ddl only if it isn't already present. This is
@@ -96,7 +102,7 @@ func (db *DB) UpsertUserByUsername(ctx context.Context, username, email string) 
 
 func (db *DB) ListFeeds(ctx context.Context, userID int64) ([]Feed, error) {
 	rows, err := db.sql.QueryContext(ctx,
-		`SELECT f.id, f.name, f.slug, f.color, f.icon, f.sort, f.created_at,
+		`SELECT f.id, f.name, f.slug, f.color, f.icon, f.half_life_days, f.diversity, f.sort, f.created_at,
 		        (SELECT COUNT(*) FROM feed_sources fs WHERE fs.feed_id = f.id) AS source_count
 		 FROM feeds f WHERE f.user_id = ? ORDER BY f.sort, f.name`, userID)
 	if err != nil {
@@ -107,7 +113,7 @@ func (db *DB) ListFeeds(ctx context.Context, userID int64) ([]Feed, error) {
 	for rows.Next() {
 		var f Feed
 		var created string
-		if err := rows.Scan(&f.ID, &f.Name, &f.Slug, &f.Color, &f.Icon, &f.Sort, &created, &f.SourceCount); err != nil {
+		if err := rows.Scan(&f.ID, &f.Name, &f.Slug, &f.Color, &f.Icon, &f.HalfLifeDays, &f.Diversity, &f.Sort, &created, &f.SourceCount); err != nil {
 			return nil, err
 		}
 		f.CreatedAt = parseTime(created)
@@ -143,9 +149,10 @@ func (db *DB) GetOrCreateFeed(ctx context.Context, userID int64, name, slug, col
 	return db.CreateFeed(ctx, userID, name, slug, color)
 }
 
-// UpdateFeed patches a feed's presentation fields (name, color, icon). Only
-// non-nil fields are applied. Scoped to the owning user.
-func (db *DB) UpdateFeed(ctx context.Context, userID, id int64, name, color, icon *string) error {
+// UpdateFeed patches a feed's presentation fields (name, color, icon) and the
+// per-feed ranker overrides (half-life, diversity). Only non-nil fields are
+// applied. Scoped to the owning user.
+func (db *DB) UpdateFeed(ctx context.Context, userID, id int64, name, color, icon *string, halfLifeDays *float64, diversity *int) error {
 	var sets []string
 	var args []any
 	if name != nil {
@@ -159,6 +166,14 @@ func (db *DB) UpdateFeed(ctx context.Context, userID, id int64, name, color, ico
 	if icon != nil {
 		sets = append(sets, "icon = ?")
 		args = append(args, *icon)
+	}
+	if halfLifeDays != nil {
+		sets = append(sets, "half_life_days = ?")
+		args = append(args, *halfLifeDays)
+	}
+	if diversity != nil {
+		sets = append(sets, "diversity = ?")
+		args = append(args, *diversity)
 	}
 	if len(sets) == 0 {
 		return nil
@@ -476,7 +491,10 @@ func (db *DB) ListRecentItemsBySource(ctx context.Context, userID, sourceID int6
 }
 
 // candidateCols is the shared projection for Candidates and MixItems: item +
-// source facts plus the accumulated-history cadence inputs (win_count/win_span).
+// source facts, the accumulated-history cadence inputs (win_count/win_span), and
+// the resolved primary-feed overrides (half-life + diversity). The primary feed
+// is the source's lowest-sort (then lowest-id) feed, matching
+// PrimaryFeedsForSources; a feedless source COALESCEs to 0 (global defaults).
 // Both queries must select these in this order so scanCandidates can read either
 // result set. The ? placeholders are the cadence-window bound, twice.
 const candidateCols = `i.id, i.source_id, i.url, i.title, i.summary, i.author, i.thumbnail_url,
@@ -486,7 +504,11 @@ const candidateCols = `i.id, i.source_id, i.url, i.title, i.summary, i.author, i
 	                AND i2.published_at >= datetime('now', ?)) AS win_count,
 	             (SELECT COALESCE(julianday('now') - julianday(MIN(i2.published_at)), 0)
 	                FROM items i2 WHERE i2.source_id = s.id
-	                AND i2.published_at >= datetime('now', ?)) AS win_span`
+	                AND i2.published_at >= datetime('now', ?)) AS win_span,
+	             COALESCE((SELECT f.half_life_days FROM feed_sources fs JOIN feeds f ON f.id = fs.feed_id
+	                WHERE fs.source_id = s.id ORDER BY f.sort, f.id LIMIT 1), 0) AS feed_half_life,
+	             COALESCE((SELECT f.diversity FROM feed_sources fs JOIN feeds f ON f.id = fs.feed_id
+	                WHERE fs.source_id = s.id ORDER BY f.sort, f.id LIMIT 1), 0) AS feed_diversity`
 
 // cadence-estimation floors. See cadencePerDay.
 const (
@@ -529,23 +551,26 @@ func cadencePerDay(count int, spanDays float64, windowDays int) float64 {
 
 // scanCandidates reads the candidateCols projection into Candidates, computing
 // each source's cadence from its accumulated stored history (windowDays sets the
-// rarity window).
+// rarity window) and carrying the resolved primary-feed overrides.
 func scanCandidates(rows *sql.Rows, windowDays int) ([]Candidate, error) {
 	var out []Candidate
 	for rows.Next() {
 		var c Candidate
 		var pub, fetched string
 		var winCount int
-		var winSpan float64
+		var winSpan, halfLife float64
+		var diversity int
 		if err := rows.Scan(&c.ID, &c.SourceID, &c.URL, &c.Title, &c.Summary, &c.Author, &c.ThumbnailURL,
 			&c.MediaType, &c.DurationSec, &pub, &fetched,
 			&c.SourceTitle, &c.SourceWeight, &c.PerSessionCap,
-			&winCount, &winSpan); err != nil {
+			&winCount, &winSpan, &halfLife, &diversity); err != nil {
 			return nil, err
 		}
 		c.PublishedAt = parseTime(pub)
 		c.FetchedAt = parseTime(fetched)
 		c.SourceCadence = cadencePerDay(winCount, winSpan, windowDays)
+		c.FeedHalfLifeDays = halfLife
+		c.FeedDiversity = diversity
 		out = append(out, c)
 	}
 	return out, rows.Err()

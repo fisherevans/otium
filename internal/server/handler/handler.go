@@ -76,8 +76,9 @@ func (h *Handler) CreateFeed(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusCreated, f)
 }
 
-// UpdateFeed patches a feed's presentation fields (name, color, icon). Used by
-// the library's feed-icon picker. No engagement signal - pure curation.
+// UpdateFeed patches a feed's presentation fields (name, color, icon) and its
+// per-feed ranker overrides (half-life, diversity - #17). Used by the library's
+// feed-settings sheet. No engagement signal - pure curation.
 func (h *Handler) UpdateFeed(w http.ResponseWriter, r *http.Request) {
 	uid := userID(r)
 	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
@@ -86,14 +87,35 @@ func (h *Handler) UpdateFeed(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var body struct {
-		Name  *string `json:"name"`
-		Color *string `json:"color"`
-		Icon  *string `json:"icon"`
+		Name         *string  `json:"name"`
+		Color        *string  `json:"color"`
+		Icon         *string  `json:"icon"`
+		HalfLifeDays *float64 `json:"half_life_days"`
+		Diversity    *int     `json:"diversity"`
 	}
 	if !decode(w, r, &body) {
 		return
 	}
-	if err := h.db.UpdateFeed(r.Context(), uid, id, body.Name, body.Color, body.Icon); err != nil {
+	// Clamp the ranker overrides to sane bounds; 0 stays "use the global default".
+	if body.HalfLifeDays != nil {
+		v := *body.HalfLifeDays
+		if v < 0 {
+			v = 0
+		} else if v > 365 {
+			v = 365
+		}
+		body.HalfLifeDays = &v
+	}
+	if body.Diversity != nil {
+		v := *body.Diversity
+		if v < 0 {
+			v = 0
+		} else if v > 10 {
+			v = 10
+		}
+		body.Diversity = &v
+	}
+	if err := h.db.UpdateFeed(r.Context(), uid, id, body.Name, body.Color, body.Icon, body.HalfLifeDays, body.Diversity); err != nil {
 		serverError(w, h.log, "update feed", err)
 		return
 	}

@@ -15,6 +15,8 @@ export interface Feed {
   slug: string;
   color: string;
   icon: string; // flat glyph key (see lib/feedIcons); "" = unset
+  half_life_days: number; // per-feed freshness half-life in days; 0 = global default (#17)
+  diversity: number; // per-session per-source cap for this feed's sources; 0 = use source cap (#17)
   sort: number;
   source_count?: number;
 }
@@ -182,8 +184,10 @@ export const api = {
   feeds: () => req<Feed[]>("GET", "/feeds"),
   createFeed: (name: string, color?: string) =>
     req<Feed>("POST", "/feeds", { name, color: color ?? "" }),
-  updateFeed: (id: number, patch: { name?: string; color?: string; icon?: string }) =>
-    req<{ ok: boolean }>("PATCH", `/feeds/${id}`, patch),
+  updateFeed: (
+    id: number,
+    patch: { name?: string; color?: string; icon?: string; half_life_days?: number; diversity?: number },
+  ) => req<{ ok: boolean }>("PATCH", `/feeds/${id}`, patch),
   setFeedSources: (feedId: number, sourceIds: number[]) =>
     req<{ ok: boolean }>("PUT", `/feeds/${feedId}/sources`, { source_ids: sourceIds }),
 

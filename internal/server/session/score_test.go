@@ -69,6 +69,52 @@ func TestIntendedDecaysWithAge(t *testing.T) {
 	}
 }
 
+// TestPerFeedHalfLifeOverridesGlobal verifies a feed's half-life override
+// changes the decay: a shorter half-life decays faster than the global default
+// for the same age, and 0 falls back to the global (#17).
+func TestPerFeedHalfLifeOverridesGlobal(t *testing.T) {
+	now := time.Date(2026, 7, 2, 12, 0, 0, 0, time.UTC)
+	ageDays := 7.0
+
+	c := cand(1, 3, ageDays, now) // FeedHalfLifeDays == 0 -> global
+	global := ItemIntendedScore(c, now)
+
+	fast := c
+	fast.FeedHalfLifeDays = 7 // three weeks -> one week: decays faster
+	if s := ItemIntendedScore(fast, now); !(s < global) {
+		t.Fatalf("shorter half-life should decay faster: fast=%v global=%v", s, global)
+	}
+
+	// At exactly the feed half-life, the score is ~half the fresh score.
+	freshFast := cand(1, 3, 0, now)
+	freshFast.FeedHalfLifeDays = 7
+	atHalf := cand(1, 3, 7, now)
+	atHalf.FeedHalfLifeDays = 7
+	if got, want := ItemIntendedScore(atHalf, now), ItemIntendedScore(freshFast, now)/2; math.Abs(got-want) > 1e-9 {
+		t.Fatalf("at feed half-life score=%v, want ~%v", got, want)
+	}
+
+	// Zero override matches the global half-life exactly.
+	explicitGlobal := c
+	explicitGlobal.FeedHalfLifeDays = freshnessHalfLifeDays
+	if got, want := ItemIntendedScore(c, now), ItemIntendedScore(explicitGlobal, now); math.Abs(got-want) > 1e-12 {
+		t.Fatalf("half-life 0 should equal explicit global: %v vs %v", got, want)
+	}
+}
+
+// TestEffectiveMatchesScoreOfWithPerFeedHalfLife keeps the mix-vs-session
+// invariant intact once per-feed half-life is in play: both paths must resolve
+// the half-life identically (#17).
+func TestEffectiveMatchesScoreOfWithPerFeedHalfLife(t *testing.T) {
+	now := time.Date(2026, 7, 2, 12, 0, 0, 0, time.UTC)
+	stat := SourceStat{Shown: 20, Skipped: 15}
+	c := cand(2, 3, 5, now)
+	c.FeedHalfLifeDays = 9 // a non-global feed override
+	if got, want := ItemEffectiveScore(c, now, stat), scoreOf(c, now, stat, 1); math.Abs(got-want) > 1e-12 {
+		t.Fatalf("per-feed half-life broke the invariant: effective=%v scoreOf(sel=1)=%v", got, want)
+	}
+}
+
 func TestRarityLiftsInfrequentSources(t *testing.T) {
 	now := time.Date(2026, 7, 2, 12, 0, 0, 0, time.UTC)
 	// Same weight, same age: the rarely-posting source scores higher per item.

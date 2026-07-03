@@ -56,7 +56,7 @@ func TestOpenAppliesSchemaAndMigration(t *testing.T) {
 		t.Fatal(err)
 	}
 	icon := "comedy"
-	if err := db.UpdateFeed(ctx, u.ID, f.ID, nil, nil, &icon); err != nil {
+	if err := db.UpdateFeed(ctx, u.ID, f.ID, nil, nil, &icon, nil, nil); err != nil {
 		t.Fatal(err)
 	}
 	feeds, err := db.ListFeeds(ctx, u.ID)

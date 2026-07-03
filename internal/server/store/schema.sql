@@ -34,6 +34,15 @@ CREATE TABLE IF NOT EXISTS feeds (
     -- render the color swatch instead. Added additively via migrate() for
     -- databases created before this column existed.
     icon        TEXT NOT NULL DEFAULT '',
+    -- per-feed ranker overrides (#17). Added additively via migrate() for
+    -- databases created before these columns existed.
+    -- freshness half-life for this feed's items, in days; 0 = use the global
+    -- default (session.freshnessHalfLifeDays).
+    half_life_days REAL NOT NULL DEFAULT 0,
+    -- per-session per-source cap for this feed's sources: 0 = use each source's
+    -- own per_session_cap; N >= 1 caps every source in this feed to N items per
+    -- session (lower N = more sources spread across the session).
+    diversity   INTEGER NOT NULL DEFAULT 0,
     sort        INTEGER NOT NULL DEFAULT 0,
     created_at  TEXT NOT NULL DEFAULT (datetime('now')),
     UNIQUE (user_id, slug)

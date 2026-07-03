@@ -17,9 +17,11 @@ import (
 	"github.com/fisherevans/otium/internal/server/store"
 )
 
-// Tunables. These are the levers that would eventually become per-feed config.
+// Tunables. freshnessHalfLifeDays and the per-source cap are the global
+// defaults; a feed can override both per-feed (Candidate.FeedHalfLifeDays /
+// FeedDiversity, #17).
 const (
-	freshnessHalfLifeDays = 21.0 // an item's freshness score halves every 3 weeks
+	freshnessHalfLifeDays = 21.0 // default: an item's freshness score halves every 3 weeks
 	rareThresholdPerDay   = 1.0  // sources below this cadence are "rare" and get boosted
 	rareBoostMax          = 1.0  // a ~never-posting source gets up to +100% score
 
@@ -143,9 +145,15 @@ func Build(req Request, pool []store.Candidate, now time.Time, stats map[int64]S
 			if r.taken {
 				continue
 			}
+			// Per-session cap: the item's feed diversity overrides the source's own
+			// cap when set (#17). Lower cap = each source contributes fewer items, so
+			// the session spreads across more of the feed's sources.
 			cap := r.c.PerSessionCap
 			if cap <= 0 {
 				cap = 2
+			}
+			if r.c.FeedDiversity > 0 {
+				cap = r.c.FeedDiversity
 			}
 			if pass == 0 {
 				if perSourceUsed[r.sourceID] >= cap {
@@ -257,7 +265,7 @@ func clampInt(v, lo, hi int) int {
 // budget-driven adjustments. sel > 1 sharpens the favor toward high-weight
 // sources when few items will be seen.
 func scoreOf(c store.Candidate, now time.Time, stat SourceStat, sel float64) float64 {
-	return math.Pow(weightRarity(c), sel) * freshness(c.PublishedAt, now) * skipPenalty(stat)
+	return math.Pow(weightRarity(c), sel) * freshness(c.PublishedAt, now, c.FeedHalfLifeDays) * skipPenalty(stat)
 }
 
 // weightRarity is the user-controlled term of the score: the source's weight
@@ -277,7 +285,7 @@ func weightRarity(c store.Candidate) float64 {
 // penalty. It answers "how much does this item want to be in the feed" before
 // behavior is folded in - the numerator of the mix view's intended share.
 func ItemIntendedScore(c store.Candidate, now time.Time) float64 {
-	return weightRarity(c) * freshness(c.PublishedAt, now)
+	return weightRarity(c) * freshness(c.PublishedAt, now, c.FeedHalfLifeDays)
 }
 
 // ItemEffectiveScore is the session-agnostic "effective" contribution: the
@@ -289,12 +297,18 @@ func ItemEffectiveScore(c store.Candidate, now time.Time, stat SourceStat) float
 	return ItemIntendedScore(c, now) * skipPenalty(stat)
 }
 
-func freshness(published, now time.Time) float64 {
+// freshness decays an item by age. halfLifeDays is the item's feed override when
+// > 0, else the global freshnessHalfLifeDays. Both scoring paths pass the
+// candidate's FeedHalfLifeDays so sessions and the mix decay identically.
+func freshness(published, now time.Time, halfLifeDays float64) float64 {
+	if halfLifeDays <= 0 {
+		halfLifeDays = freshnessHalfLifeDays
+	}
 	ageDays := now.Sub(published).Hours() / 24
 	if ageDays < 0 {
 		ageDays = 0
 	}
-	return math.Pow(0.5, ageDays/freshnessHalfLifeDays)
+	return math.Pow(0.5, ageDays/halfLifeDays)
 }
 
 // rarityBoost lifts items from sources that post rarely so a once-a-week creator

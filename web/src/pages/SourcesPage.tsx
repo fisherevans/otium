@@ -144,7 +144,7 @@ export default function SourcesPage() {
         </button>
         {feeds.length > 0 && (
           <button className="btn ghost" style={{ marginTop: 0 }} onClick={() => setIconsOpen(true)}>
-            Feed icons
+            Feed settings
           </button>
         )}
       </div>

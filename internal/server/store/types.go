@@ -40,15 +40,19 @@ type Source struct {
 // Feed is a theme/collection ("Comedy", "Local News") - a saved grouping of
 // sources the session builder can target.
 type Feed struct {
-	ID          int64     `json:"id"`
-	UserID      int64     `json:"-"`
-	Name        string    `json:"name"`
-	Slug        string    `json:"slug"`
-	Color       string    `json:"color"`
-	Icon        string    `json:"icon"` // flat glyph key; '' = unset (render color swatch)
-	Sort        int       `json:"sort"`
-	CreatedAt   time.Time `json:"created_at"`
-	SourceCount int       `json:"source_count,omitempty"`
+	ID     int64  `json:"id"`
+	UserID int64  `json:"-"`
+	Name   string `json:"name"`
+	Slug   string `json:"slug"`
+	Color  string `json:"color"`
+	Icon   string `json:"icon"` // flat glyph key; '' = unset (render color swatch)
+	// Per-feed ranker overrides (#17). HalfLifeDays 0 = use the global freshness
+	// half-life; Diversity 0 = use each source's own per-session cap.
+	HalfLifeDays float64   `json:"half_life_days"`
+	Diversity    int       `json:"diversity"`
+	Sort         int       `json:"sort"`
+	CreatedAt    time.Time `json:"created_at"`
+	SourceCount  int       `json:"source_count,omitempty"`
 }
 
 // FeedRef is the compact feed identity attached to a session item so the card
@@ -88,4 +92,9 @@ type Candidate struct {
 	// SourceCadence is the source's average items/day over the recent window;
 	// used to boost rare sources and cap noisy ones.
 	SourceCadence float64
+	// FeedHalfLifeDays / FeedDiversity are the item's primary-feed ranker
+	// overrides, resolved by the store (#17). 0 means "use the global default"
+	// (freshness half-life) / "use the source's own per-session cap".
+	FeedHalfLifeDays float64
+	FeedDiversity    int
 }
