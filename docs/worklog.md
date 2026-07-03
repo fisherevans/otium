@@ -77,6 +77,50 @@ list rather than getting guessed at.
 Plan: **stopped auto-shipping** - the queue of scoped work is empty. Resume when
 Fisher steers one of the above.
 
+## 2026-07-03 (later) · Live-use feedback round + audits
+
+Fisher used the app and reported real friction. Filed #50-#58, shipped the fixes.
+
+### Shipped
+- **v0.9.0** - #50 card fits the viewport (clamp title/excerpt, cap media), #51
+  tap opens content **in-app** (reader / inline YouTube player / audio), external
+  demoted to "Original"; #54 back-to-session on the library; #55 filter/sort
+  collapsed behind a sheet so controls fit. **Verified via Palma-2-res
+  screenshots** before deploy.
+
+### Process lesson (my mistake, corrected)
+Ran the #50/#51 and #54/#55 agents **in parallel in the same checkout** - they
+collided on the shared working tree / git HEAD (the exact hazard in the mainline
+memory note). Recovered by rebuilding clean branches (cherry-pick code commits,
+re-derive the one polluted CSS block) and verifying the build. **Rule going
+forward: parallel otium agents get isolated git worktrees, never a shared
+checkout.**
+
+### Screenshot harness (new capability)
+Established a Palma-2 (824x1648 @ 2x, 412px CSS) Playwright screenshot loop:
+copy prod db -> local dev server (OTIUM_DEV_USER) + vite -> `playwright` (no-save)
+drives the routes -> review PNGs. This is now the pre-deploy visual check for any
+frontend change. (`/tmp/shots.js`, local `npm i --no-save playwright`.)
+
+### Audits (Fisher asked)
+- **RSS full-text audit** (18 feeds): 7 already ship full text in content:encoded,
+  2 partial, 2 summary-only, 6 comics, 1 blocked (Politico). Root cause of "content
+  doesn't render right" found: ingest.go:103 stores a 500-char plain-text clip of
+  the *teaser* (`Description`) over the full `content:encoded`. -> **#58** (render
+  full body) is the cheap high-ROI fix; **#52** reframed to just the ~3 partial
+  feeds.
+- **Competitive UX audit** (docs/ux-audit.html): the two real P0 gaps (#58/#52
+  full-text, #57 saved view) just *complete promises the UI already makes*.
+  Net-new bets filed #59-63 (offline cache, e-ink mode + volume advance, reader
+  typography, session TTS, scoped search). Refuse-list recorded in decisions.md.
+
+### Reprioritized queue (audit-informed)
+1. **#58** render content:encoded (fixes 7 feeds + formatting) - highest ROI.
+2. **#57** collections / saved view - needs a small model nod from Fisher first.
+3. **#53** Videos feed for the untagged YouTube sources.
+4. **#56** share/copy · **#52** extract the 3 partial feeds · then the e-ink/Palma
+   bets (#59/#60/#61/#62).
+
 ### Reconciled without building (v0.6.x)
 - **#37 (confirm + undo) closed** - already delivered by the List+Expand
   management surface (archive/delete confirms + undo toast were live since

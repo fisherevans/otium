@@ -56,3 +56,28 @@ append-only and captures explicit actions (open/like/skip/save) plus
 session_build. It's the raw material for user-owned stats and the future
 LLM/agent surface - so it's generous with what it records, but never implicit
 behavioral surveillance.
+
+## Deliberate non-goals (what otium refuses)
+
+From the 2026-07 competitive UX audit (docs/ux-audit.html). These are "table
+stakes" in mainstream readers that otium *proudly* omits - naming them is part of
+the product's identity, not a backlog:
+
+- **Unread counts / badges / "mark all read."** The thesis. The new Reeder (2024)
+  independently killed read/unread state too - otium is on the leading edge, not
+  out on a limb. The absence is a feature.
+- **Infinite / algorithmic "For You" feed.** Artifact (Instagram's founders) died
+  in this space after bolting on social/link-posting to chase growth. The finite,
+  explainable session is the whole point.
+- **AI auto-summaries, dedupe, gamified catch-up triage.** All optimize throughput;
+  otium optimizes intention. Summaries specifically undermine "you actually read
+  the thing you chose."
+- **Rules/automation engines and per-item tags.** Librarian tooling. Source-weight
+  buckets + collections (#57) are the right altitude.
+- **In-app social / commentary / link-posting.** Share-out is a link (#56), not a
+  network. This is the exact scope creep that killed Artifact.
+- **Engagement surveillance** (dwell time, implicit interest scoring). Signals stay
+  explicit: Open/Like/Save/Skip. This is why #6/#5 (dwell) are gated on Fisher.
+
+The risk for otium isn't under-featuring - it's getting talked into the features
+that killed the incumbents.

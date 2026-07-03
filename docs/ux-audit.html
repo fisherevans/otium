@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>otium · competitive UX audit</title>
+<style>
+  :root { --ink:#1a1712; --mute:#6b6157; --line:#d8d0c4; --paper:#f4f0e8; --hl:#efe9dd; }
+  * { box-sizing:border-box; }
+  body { background:var(--paper); color:var(--ink); font-family:"Charter","Georgia",serif;
+    line-height:1.55; margin:0; padding:48px 20px 120px; }
+  main { max-width:760px; margin:0 auto; }
+  h1 { font-family:"Didot","Georgia",serif; font-weight:400; font-size:40px; letter-spacing:.01em; margin:0 0 6px; }
+  .sub { color:var(--mute); font-size:15px; margin:0 0 40px; }
+  h2 { font-family:"Didot","Georgia",serif; font-weight:400; font-size:26px; margin:44px 0 12px;
+    padding-bottom:8px; border-bottom:1px solid var(--line); }
+  h3 { font-size:17px; margin:26px 0 6px; }
+  p, li { font-size:16px; }
+  code { font-family:"SF Mono",ui-monospace,monospace; font-size:13px; background:var(--hl); padding:1px 5px; border-radius:3px; }
+  table { border-collapse:collapse; width:100%; margin:14px 0; font-size:14px; }
+  th, td { text-align:left; vertical-align:top; padding:9px 10px; border-bottom:1px solid var(--line); }
+  th { font-size:12px; text-transform:uppercase; letter-spacing:.08em; color:var(--mute); font-weight:600; }
+  .tag { font-family:"SF Mono",ui-monospace,monospace; font-size:11px; letter-spacing:.04em; white-space:nowrap; }
+  .gap { color:#7a1f14; } .omit { color:var(--mute); } .keep { color:#2c4a2c; }
+  .lead { font-size:18px; border-left:3px solid var(--ink); padding-left:16px; margin:20px 0; }
+  ol.pri { padding-left:20px; } ol.pri li { margin:7px 0; }
+  .p0::before{content:"P0 ";color:#7a1f14;font-weight:700;font-family:monospace;font-size:12px;}
+  .p1::before{content:"P1 ";color:var(--ink);font-weight:700;font-family:monospace;font-size:12px;}
+  .p2::before{content:"P2 ";color:var(--mute);font-weight:700;font-family:monospace;font-size:12px;}
+  .refuse li { margin:8px 0; }
+  footer { margin-top:56px; padding-top:16px; border-top:1px solid var(--line); color:var(--mute); font-size:13px; }
+  a { color:var(--ink); }
+</style>
+</head>
+<body>
+<main>
+  <h1>otium — competitive UX audit</h1>
+  <p class="sub">Readers surveyed: NetNewsWire · new Reeder · Feedbin · Feedly · Inoreader · Readwise Reader · Matter · Unread · Artifact (RIP). Filtered for otium's intentional-consumption thesis, the e-ink / Boox Palma 2 constraint, and the explicit-signals-only stance. July 2026.</p>
+
+  <p class="lead">otium isn't missing much that fits its thesis. The two things it <em>is</em> missing — full-text in the reader (#58/#52) and a saved view (#57) — are really about <strong>finishing affordances the UI already shows the user</strong>. Rank those first. The genuinely net-new, high-leverage bets are all e-ink/Palma-specific. And a surprising amount of what the big engagement readers do, otium should keep <em>refusing out loud</em>.</p>
+
+  <h2>Two external proof points</h2>
+  <p><strong>The new Reeder killed unread counts</strong> — a respected mainstream RSS developer independently concluded unread-count anxiety is the thing to remove, and shipped a reader with "no concept of read/unread." otium is on the leading edge of a real movement, not out on a limb — and it goes further, with finite <em>sessions</em> and an explainable ranker rather than a still-infinite (if guilt-free) timeline. Corollary warning: Reeder's most-requested missing feature is swipe-to-advance <em>inside</em> the reader — otium already solved that with scroll-snap. Don't regress it.</p>
+  <p><strong>Artifact died of scope creep.</strong> Instagram's founders built an algorithmic engagement feed, bolted on a social/link-posting layer to chase growth, and shut it down. The engagement-feed space is a graveyard, and adding social surface area is what pulled Artifact off its own thesis. otium's edge is the opposite stance.</p>
+
+  <h2>Table-stakes gap analysis</h2>
+  <table>
+    <tr><th>Feature</th><th>Verdict</th><th>Why</th></tr>
+    <tr><td>Full-text in reader</td><td class="tag gap">GAP · P0</td><td>Deepest table stake in the category. A truncated feed forces the browser bounce otium exists to prevent. Scoped as #58 (render content:encoded) + #52 (extract the ~3 partial feeds).</td></tr>
+    <tr><td>Saved view / read-later</td><td class="tag gap">GAP · P0</td><td>A Save button with no saved view is a broken promise. #57 completes an affordance already shipped.</td></tr>
+    <tr><td>Offline / caching</td><td class="tag gap">GAP · P1</td><td>Unusually important <em>for the Palma specifically</em>: a WiFi-only e-ink device is used offline. Queue-on-WiFi / read-offline is table stakes on e-ink. (#59)</td></tr>
+    <tr><td>Reader typography</td><td class="tag gap">GAP · P1</td><td>On e-ink, typography <em>is</em> the product (Unread's whole cult). Size/line-height/margins + images-off. (#61)</td></tr>
+    <tr><td>Share / copy link</td><td class="tag gap">GAP · P1</td><td>Baseline courtesy. Native share-sheet + copy link only — no in-app social (the Artifact trap). #56.</td></tr>
+    <tr><td>Search</td><td class="tag gap">GAP · P1 (narrow)</td><td>Not global-archive search — only "find that thing from yesterday" + search-within-saved. (#63)</td></tr>
+    <tr><td>Keyboard nav</td><td class="tag omit">OMIT</td><td>Target is a touch-first Palma. Cheap to add later; costs nothing thesis-wise. Park it.</td></tr>
+    <tr><td>Cross-device sync</td><td class="tag omit">OMIT→gap</td><td>Server already holds skip-state; read-position following you across devices may be closer to free than it looks. Low priority.</td></tr>
+    <tr><td>Unread counts / badges / mark-all-read</td><td class="tag keep">REFUSE</td><td>The thesis. Reeder validated killing it. The <em>absence</em> is a feature.</td></tr>
+    <tr><td>Infinite / algorithmic "For You"</td><td class="tag keep">REFUSE</td><td>Artifact's grave. The finite session is the whole point.</td></tr>
+    <tr><td>AI summaries / dedupe / triage games</td><td class="tag keep">REFUSE</td><td>All optimize throughput. otium optimizes intention. Summaries specifically undermine "you actually read the thing."</td></tr>
+    <tr><td>Rules/filters engine · per-item tags</td><td class="tag keep">REFUSE</td><td>Librarian tooling. Source-weight buckets + collections are the right altitude.</td></tr>
+  </table>
+
+  <h2>Ideas worth stealing (thesis-fit order)</h2>
+  <ol class="pri">
+    <li><strong>Session TTS with read↔listen handoff</strong> (Matter). The single most on-thesis steal: a paced, finite session is exactly what you'd want to listen to on a walk. Eyes-free intentional consumption, zero engagement mechanics. (#62)</li>
+    <li><strong>e-ink mode + volume-key advance</strong> (Readwise Reader). Physical-button page turns are the most-loved e-ink affordance; touch on an e-ink digitizer is laggy. (#60)</li>
+    <li><strong>Pinch-to-collapse + save-without-open gestures</strong> (Unread). Gesture grammar in service of <em>less</em> reading — explicit-signal triage.</li>
+    <li><strong>Intent presets</strong> (NetNewsWire smart feeds). "Morning 10-min," "Sunday long-read" as one-tap saved intents — reinforces ritual.</li>
+    <li><strong>"Since you last sat down" freshness boundary</strong> (Reeder's position model). Answers "am I caught up?" without ever showing a count.</li>
+    <li><strong>Inline Lookup</strong> (Readwise). Select text → inline explanation; deepens the chosen item instead of pulling toward the next. Gate behind an LLM call.</li>
+  </ol>
+  <p class="sub">Deliberately not stealing: AI auto-summaries, dedupe, gamified inbox-zero triage, rules engines. All optimize throughput — the opposite of the thesis.</p>
+
+  <h2>Prioritized roadmap</h2>
+  <ol class="pri">
+    <li class="p0">Full-text in reader — <code>#58</code> render content:encoded (fixes 7 feeds instantly) then <code>#52</code> extract the ~3 partial ones.</li>
+    <li class="p0">Saved / collections view — <code>#57</code> (completes the Save button).</li>
+    <li class="p0">Offline caching of session content — <code>#59</code> (Palma-specific; depends on full text).</li>
+    <li class="p1">e-ink mode + volume-key advance — <code>#60</code>.</li>
+    <li class="p1">Reader typography controls — <code>#61</code>.</li>
+    <li class="p1">Session TTS / listen-mode — <code>#62</code>.</li>
+    <li class="p1">Share + copy link — <code>#56</code>. · Scoped search — <code>#63</code>.</li>
+    <li class="p2">Intent presets · collapse/save gestures · inline lookup · cross-device sync · desktop keyboard nav.</li>
+  </ol>
+
+  <h2>What to refuse — out loud</h2>
+  <p>The most useful output of this audit is the list of "table stakes" otium should <em>proudly not have</em>. Naming them is part of the product's identity:</p>
+  <ul class="refuse">
+    <li>Unread counts, badges, "mark all read."</li>
+    <li>Infinite / algorithmic "For You" feed.</li>
+    <li>AI auto-summaries, dedupe, gamified catch-up triage.</li>
+    <li>Rules/automation engines and per-item tags.</li>
+    <li>In-app social / commentary / link-posting (share-out is a link, not a network).</li>
+    <li>Engagement surveillance — dwell time, implicit interest scoring. Signals stay explicit (Open/Like/Save/Skip).</li>
+  </ul>
+
+  <h2>e-ink, stated plainly</h2>
+  <ul>
+    <li><strong>Motion is the enemy.</strong> Scroll-snap (one discrete transition) is fine; no continuous animation, fades, spinners, skeleton shimmers. Loading = instant swaps or static text.</li>
+    <li><strong>Use the hardware buttons.</strong> Volume-key session advance beats touch on a laggy digitizer.</li>
+    <li><strong>Contrast over color.</strong> The "why this" breakdown, feed icons, and weight buckets must read in pure grayscale at high contrast — test at ~1-bit, not just desaturated.</li>
+  </ul>
+
+  <footer>
+    Bottom line: the risk isn't under-featuring — it's getting talked into the features that killed the incumbents. Rank the two "finish the promise" gaps first (#58, #57); the differentiated bets are all e-ink/Palma-specific plus session TTS. Sources: Reeder (TechCrunch, MacStories), Artifact shutdown (TechCrunch), Readwise Reader e-ink docs, Matter, Unread, NetNewsWire FAQ, Inoreader.
+  </footer>
+</main>
+</body>
+</html>
