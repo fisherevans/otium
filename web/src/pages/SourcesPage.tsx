@@ -4,6 +4,7 @@ import { api, type Feed, type Source } from "@/api/client";
 import { BUCKETS, BLABEL, bucketOf, type Bucket } from "@/lib/weight";
 import { feedIcon } from "@/lib/feedIcons";
 import { FeedIconPicker } from "@/components/FeedIconPicker";
+import { BottomSheet } from "@/components/BottomSheet";
 
 // Behavioral signal a source exhibits, derived per-render relative to the
 // currently-visible set (not absolute) so "noisy"/"most-skipped" mean "loud
@@ -52,6 +53,10 @@ export default function SourcesPage() {
   const [confirmD, setConfirmD] = useState<number | null>(null);
   const [toast, setToast] = useState<{ msg: string; undo?: () => void } | null>(null);
   const [iconsOpen, setIconsOpen] = useState(false);
+  // #55: signal / sort / group collapse into a bottom sheet so the always-on
+  // control stack is just feed chips + state and the list keeps the screen.
+  const [ctrlOpen, setCtrlOpen] = useState(false);
+  const filtersActive = fsignal !== null || sort !== "weight" || group;
 
   function reload() {
     api.sources().then(setSources).catch((e) => setErr(String(e.message ?? e)));
@@ -307,33 +312,18 @@ export default function SourcesPage() {
           );
         })}
       </div>
-      <div className="lib-sub noline">
-        {(["followed", "archived", "all"] as const).map((st) => (
-          <button key={st} className={`lib-seg ${fstate === st ? "on" : ""}`} onClick={() => setFstate(st)}>
-            {st}
-          </button>
-        ))}
-      </div>
-      {/* filter by behavioral signal (relative to the feed/state set above) */}
-      <div className="lib-sub noline">
-        <span className="lib-lbl">signal</span>
-        <button className={`lib-seg ${!fsignal ? "on" : ""}`} onClick={() => setFsignal(null)}>any</button>
-        {(["most-skipped", "noisy", "dormant"] as const).map((sg) => (
-          <button key={sg} className={`lib-seg ${fsignal === sg ? "on" : ""}`} onClick={() => setFsignal((c) => (c === sg ? null : sg))}>
-            {SIG_LABEL[sg]}
-          </button>
-        ))}
-      </div>
-      {/* sort + optional group-by-feed */}
-      <div className="lib-sub">
-        <span className="lib-lbl">sort</span>
-        {SORTS.map((o) => (
-          <button key={o.k} className={`lib-seg ${sort === o.k ? "on" : ""}`} onClick={() => setSort(o.k)}>
-            {o.label}
-          </button>
-        ))}
-        <button className={`lib-seg ${group ? "on" : ""}`} onClick={() => setGroup((g) => !g)} style={{ marginLeft: 8 }}>
-          group
+      {/* #55: state (primary axis) stays visible; signal / sort / group collapse
+          behind the "Filter & sort" sheet trigger so the stack fits a phone. */}
+      <div className="lib-controls">
+        <div className="lib-segs">
+          {(["followed", "archived", "all"] as const).map((st) => (
+            <button key={st} className={`lib-seg ${fstate === st ? "on" : ""}`} onClick={() => setFstate(st)}>
+              {st}
+            </button>
+          ))}
+        </div>
+        <button className={`lib-fsbtn ${filtersActive ? "on" : ""}`} onClick={() => setCtrlOpen(true)}>
+          Filter &amp; sort{filtersActive && <span className="dot" aria-hidden />}
         </button>
         <span className="lib-count">{shown.length} of {sources.length}</span>
       </div>
@@ -453,6 +443,49 @@ export default function SourcesPage() {
           {toast.undo && <button onClick={toast.undo}>Undo</button>}
         </div>
       )}
+
+      {/* #55: the collapsed secondary controls - full behavior, just off-screen
+          until asked for. */}
+      <BottomSheet open={ctrlOpen} onClose={() => setCtrlOpen(false)} kicker="Filter & sort">
+        <div className="lib-sheet">
+          <div className="ctl-label" style={{ marginTop: 4 }}>Signal</div>
+          <div className="lib-sheet-row">
+            <button className={`lib-seg ${!fsignal ? "on" : ""}`} onClick={() => setFsignal(null)}>any</button>
+            {(["most-skipped", "noisy", "dormant"] as const).map((sg) => (
+              <button key={sg} className={`lib-seg ${fsignal === sg ? "on" : ""}`} onClick={() => setFsignal((c) => (c === sg ? null : sg))}>
+                {SIG_LABEL[sg]}
+              </button>
+            ))}
+          </div>
+
+          <div className="ctl-label">Sort</div>
+          <div className="lib-sheet-row">
+            {SORTS.map((o) => (
+              <button key={o.k} className={`lib-seg ${sort === o.k ? "on" : ""}`} onClick={() => setSort(o.k)}>
+                {o.label}
+              </button>
+            ))}
+          </div>
+
+          <div className="ctl-label">Grouping</div>
+          <div className="lib-sheet-row">
+            <button className={`lib-seg ${group ? "on" : ""}`} onClick={() => setGroup((g) => !g)}>
+              group by feed
+            </button>
+          </div>
+
+          <div className="lib-sheet-foot">
+            <button
+              className="btn ghost"
+              disabled={!filtersActive}
+              onClick={() => { setFsignal(null); setSort("weight"); setGroup(false); }}
+            >
+              Reset
+            </button>
+            <button className="btn" onClick={() => setCtrlOpen(false)}>Done</button>
+          </div>
+        </div>
+      </BottomSheet>
 
       <FeedIconPicker
         feeds={feeds}

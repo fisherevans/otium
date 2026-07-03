@@ -1670,3 +1670,105 @@ h1.display {
   line-height: 1.45;
   color: var(--ink-soft);
 }
+
+
+/* ============================================================
+   #54/#55 - Library nav + compact control layout
+   (back-to-intent affordance; collapsed filter/sort sheet)
+   ============================================================ */
+
+/* #54: quiet back-to-intent link at the top of the library, mirroring the
+   session's back affordance so "start a session" is always one tap away. */
+.lib-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin: 2px 0 8px;
+  padding: 6px 0;
+  background: none;
+  border: none;
+  font-family: var(--grot);
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ink-mute);
+}
+.lib-back:active {
+  color: var(--ink);
+}
+
+/* #55: one compact row - state segments (primary) scroll horizontally if
+   needed; the sheet trigger and count pin to the right. No wrapping stack. */
+.lib-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 4px 0 6px;
+  padding-bottom: 8px;
+  border-bottom: 1.5px solid var(--rule-hard);
+}
+.lib-segs {
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  flex: 0 1 auto;
+  min-width: 0;
+}
+.lib-segs .lib-seg {
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+.lib-fsbtn {
+  flex: 0 0 auto;
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border: 1.5px solid var(--rule-hard);
+  background: var(--paper);
+  font-family: var(--grot);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--ink);
+  white-space: nowrap;
+}
+.lib-fsbtn.on {
+  background: var(--ink);
+  color: var(--paper);
+  border-color: var(--ink);
+}
+.lib-fsbtn .dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+}
+.lib-controls .lib-count {
+  flex: 0 0 auto;
+  margin-left: 0;
+}
+
+/* #55: the collapsed controls live in a bottom sheet; reuse the .lib-seg /
+   .ctl-label language so it reads as the same surface, just relocated. */
+.lib-sheet {
+  padding: 4px 20px calc(20px + env(safe-area-inset-bottom));
+}
+.lib-sheet-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 4px;
+}
+.lib-sheet-foot {
+  display: flex;
+  gap: 10px;
+  margin-top: 22px;
+}
+.lib-sheet-foot .btn {
+  width: auto;
+  flex: 1;
+  margin-top: 0;
+}
