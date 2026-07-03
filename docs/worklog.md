@@ -57,3 +57,23 @@ graduate into [decisions.md](decisions.md); this log is the process trail.
   share×skip "inefficiency", PLUS a compact donut header (top-N + "other") to
   honor the "pie chart" instinct - a grayscale 15-slice pie alone is illegible on
   e-ink. Steerable while the agent runs.
+
+### Queue (planned batches, sequential to avoid same-repo merge conflicts)
+- **Batch 4 - ranker signal quality (no principle conflict):** #7 cadence from
+  accumulated publish timestamps (fixes rarity underestimate for truncated RSS +
+  the YouTube no-duration gap), #17 tunable freshness half-life + diversity per
+  feed, #11 smarter session fill. All use publish timestamps / config only - no
+  behavioral tracking, so safe to build without a principle decision.
+- **Batch 5 - score transparency + library:** #18 why-this-item breakdown, #40
+  per-item score cue + click-in, #16 library sort/group + per-source stats, #35
+  library filters, #37 undo on management changes. Mostly surfacing data that
+  already exists.
+- **Later / bigger bets:** Discovery milestone (#20-23, finding *new* sources),
+  Intelligence (#24 stats, #25 agent API, #26 LLM operator).
+
+### Gated on the dwell decision (#6)
+Both **#5 (behavioral per-feed pace)** and **#6** depend on measuring per-item
+dwell, which the "explicit signals only" principle forbids. Neither can proceed
+until Fisher decides whether to relax that principle. Everything else in the
+ranker batch (#7/#17/#11) is independent of it, so the ranker work isn't blocked
+overall - only the behavioral-pace half is.
