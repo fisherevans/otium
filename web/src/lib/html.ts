@@ -1,40 +1,35 @@
 // Sanitize an RSS `summary`/description for the in-app reader (#41).
 //
 // Feeds ship arbitrary HTML in <description>/<content:encoded>. We render it
-// inline, so it is untrusted markup from the open internet - a hostile feed
-// could inject scripts or tracking pixels. Rather than pull in a sanitizer dep,
-// parse with the browser's DOMParser and keep only inert formatting: drop the
-// whole class of active/embedding elements, strip every attribute except a
-// vetted href, and force safe link rels. `textContent` never executes, so the
-// emptiness probe is also safe.
+// via dangerouslySetInnerHTML, so it is untrusted markup from the open internet
+// - a hostile feed Fisher follows could try to inject script or tracking into
+// otium's authenticated origin. otium-web sets no CSP, so this is the only guard.
+// Use DOMPurify (the vetted standard) rather than a hand-rolled cleaner: it
+// closes the whole mXSS class (foreign-content / namespace confusion) that an
+// ad-hoc DOM walk misses. We keep only inert formatting tags, allow just `href`,
+// and force every surviving link to open safely in a new tab.
 
-const DANGER = new Set([
-  "SCRIPT", "STYLE", "IFRAME", "OBJECT", "EMBED", "IMG", "SVG", "VIDEO", "AUDIO",
-  "SOURCE", "TRACK", "LINK", "META", "FORM", "INPUT", "BUTTON", "TEXTAREA",
-  "SELECT", "OPTION", "CANVAS", "NOSCRIPT", "BASE", "APPLET",
-]);
+import DOMPurify from "dompurify";
 
-function cleanNode(node: Element): void {
-  for (const child of Array.from(node.children)) {
-    if (DANGER.has(child.tagName)) {
-      child.remove();
-      continue;
-    }
-    for (const attr of Array.from(child.attributes)) {
-      const name = attr.name.toLowerCase();
-      if (child.tagName === "A" && name === "href") {
-        if (!/^(https?:|mailto:)/i.test(attr.value.trim())) child.removeAttribute(attr.name);
-        continue;
-      }
-      child.removeAttribute(attr.name);
-    }
-    if (child.tagName === "A" && child.hasAttribute("href")) {
-      child.setAttribute("target", "_blank");
-      child.setAttribute("rel", "noopener noreferrer");
-    }
-    cleanNode(child);
+// Inert formatting only - no img/svg/media/object/form/style. The reader is text.
+const ALLOWED_TAGS = [
+  "p", "br", "hr", "span", "div",
+  "a", "b", "strong", "i", "em", "u", "s", "small", "mark", "sub", "sup", "abbr",
+  "blockquote", "q", "cite", "pre", "code", "kbd", "samp",
+  "ul", "ol", "li", "dl", "dt", "dd",
+  "h1", "h2", "h3", "h4", "h5", "h6",
+  "table", "thead", "tbody", "tfoot", "tr", "td", "th", "caption",
+  "figure", "figcaption",
+];
+
+// Force links to open in a new tab with a hardened rel. Registered once at
+// module load; DOMPurify hooks are global but this module is the only caller.
+DOMPurify.addHook("afterSanitizeAttributes", (node) => {
+  if (node.nodeName === "A" && node.getAttribute("href")) {
+    node.setAttribute("target", "_blank");
+    node.setAttribute("rel", "noopener noreferrer nofollow");
   }
-}
+});
 
 export interface RenderedSummary {
   html: string;
@@ -43,8 +38,14 @@ export interface RenderedSummary {
 
 export function renderSummary(raw: string | undefined): RenderedSummary {
   if (!raw || !raw.trim()) return { html: "", empty: true };
-  const doc = new DOMParser().parseFromString(raw, "text/html");
-  cleanNode(doc.body);
-  const text = (doc.body.textContent ?? "").trim();
-  return { html: doc.body.innerHTML, empty: text.length === 0 };
+  const html = DOMPurify.sanitize(raw, {
+    ALLOWED_TAGS,
+    ALLOWED_ATTR: ["href"],
+    ADD_ATTR: ["target", "rel"], // keep the rel/target the hook adds
+    ALLOW_DATA_ATTR: false,
+    // javascript:/data: URIs on links are blocked by DOMPurify's default URI
+    // policy; only http(s)/mailto survive.
+  });
+  const text = new DOMParser().parseFromString(html, "text/html").body.textContent?.trim() ?? "";
+  return { html, empty: text.length === 0 };
 }
