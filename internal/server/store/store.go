@@ -519,6 +519,52 @@ func (db *DB) Candidates(ctx context.Context, userID int64, sourceIDs []int64, s
 	return out, rows.Err()
 }
 
+// MixItems returns every item belonging to the user's followed/trial sources
+// (optionally restricted to sourceIDs), each carrying the source facts the
+// scorer needs (title, weight, recent cadence). Unlike Candidates it does NOT
+// filter to unseen items and applies no row limit: the mix view sums the current
+// freshness-decayed score of ALL known items, so stale items fall out through
+// decay, not a WHERE clause. cadenceDays sets the rarity-boost cadence window, to
+// match the session builder's rarity semantics. Rows are ordered deterministically.
+func (db *DB) MixItems(ctx context.Context, userID int64, sourceIDs []int64, cadenceDays int) ([]Candidate, error) {
+	q := `SELECT i.id, i.source_id, i.url, i.title, i.summary, i.author, i.thumbnail_url,
+	             i.media_type, i.duration_sec, i.published_at, i.fetched_at,
+	             s.title, s.weight, s.per_session_cap,
+	             (SELECT COUNT(*) FROM items i2 WHERE i2.source_id = s.id
+	                AND i2.published_at >= datetime('now', ?)) / CAST(? AS REAL) AS cadence
+	      FROM items i
+	      JOIN sources s ON s.id = i.source_id
+	      WHERE s.user_id = ? AND s.state IN ('followed','trial')`
+	args := []any{fmt.Sprintf("-%d days", cadenceDays), cadenceDays, userID}
+	if len(sourceIDs) > 0 {
+		q += ` AND s.id IN (` + placeholders(len(sourceIDs)) + `)`
+		for _, id := range sourceIDs {
+			args = append(args, id)
+		}
+	}
+	q += ` ORDER BY i.source_id, i.id`
+
+	rows, err := db.sql.QueryContext(ctx, q, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []Candidate
+	for rows.Next() {
+		var c Candidate
+		var pub, fetched string
+		if err := rows.Scan(&c.ID, &c.SourceID, &c.URL, &c.Title, &c.Summary, &c.Author, &c.ThumbnailURL,
+			&c.MediaType, &c.DurationSec, &pub, &fetched,
+			&c.SourceTitle, &c.SourceWeight, &c.PerSessionCap, &c.SourceCadence); err != nil {
+			return nil, err
+		}
+		c.PublishedAt = parseTime(pub)
+		c.FetchedAt = parseTime(fetched)
+		out = append(out, c)
+	}
+	return out, rows.Err()
+}
+
 // SourceIDsForFeeds resolves feed slugs to the set of source ids in them.
 func (db *DB) SourceIDsForFeeds(ctx context.Context, userID int64, slugs []string) ([]int64, error) {
 	if len(slugs) == 0 {

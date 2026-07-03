@@ -257,12 +257,36 @@ func clampInt(v, lo, hi int) int {
 // budget-driven adjustments. sel > 1 sharpens the favor toward high-weight
 // sources when few items will be seen.
 func scoreOf(c store.Candidate, now time.Time, stat SourceStat, sel float64) float64 {
+	return math.Pow(weightRarity(c), sel) * freshness(c.PublishedAt, now) * skipPenalty(stat)
+}
+
+// weightRarity is the user-controlled term of the score: the source's weight
+// lifted by the rarity boost for infrequent posters. It carries no time or
+// behavior signal - just "how much does the user favor this source, adjusted so
+// a rare poster isn't buried." Shared by the session ranker and the mix view.
+func weightRarity(c store.Candidate) float64 {
 	weight := c.SourceWeight
 	if weight <= 0 {
 		weight = 1
 	}
-	base := weight * rarityBoost(c.SourceCadence)
-	return math.Pow(base, sel) * freshness(c.PublishedAt, now) * skipPenalty(stat)
+	return weight * rarityBoost(c.SourceCadence)
+}
+
+// ItemIntendedScore is the session-agnostic "intended" contribution of a single
+// item: weight × rarity × freshness, with selectivity fixed at 1 and NO skip
+// penalty. It answers "how much does this item want to be in the feed" before
+// behavior is folded in - the numerator of the mix view's intended share.
+func ItemIntendedScore(c store.Candidate, now time.Time) float64 {
+	return weightRarity(c) * freshness(c.PublishedAt, now)
+}
+
+// ItemEffectiveScore is the session-agnostic "effective" contribution: the
+// intended score times the source's skip penalty. This is what the item is
+// actually worth to the ranker once chronic skipping is accounted for, with
+// selectivity fixed at 1 so it reflects "if you browsed everything," not one
+// session's budget-driven selectivity. Equivalent to scoreOf(c, now, stat, 1).
+func ItemEffectiveScore(c store.Candidate, now time.Time, stat SourceStat) float64 {
+	return ItemIntendedScore(c, now) * skipPenalty(stat)
 }
 
 func freshness(published, now time.Time) float64 {
