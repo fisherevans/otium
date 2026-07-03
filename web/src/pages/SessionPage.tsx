@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { api, type Item, type Selected } from "@/api/client";
+import { ItemActions } from "@/components/ItemActions";
 
 function clock(sec: number) {
   const m = Math.floor(sec / 60);
@@ -67,6 +68,7 @@ export default function SessionPage() {
   const [err, setErr] = useState("");
   const [liked, setLiked] = useState<Set<number>>(new Set());
   const [saved, setSaved] = useState<Set<number>>(new Set());
+  const [menuOpen, setMenuOpen] = useState(false);
 
   const [elapsed, setElapsed] = useState(0);
   const [checkin, setCheckin] = useState<Checkin>(null);
@@ -288,6 +290,11 @@ export default function SessionPage() {
             }}
           >
             <span className="reason">{it.reason}</span>
+            {i === current && (
+              <button className="item-more" onClick={() => setMenuOpen(true)} aria-label="More actions">
+                ···
+              </button>
+            )}
             <Media item={it.item} />
             <h3>{it.item.title}</h3>
             <div className="meta">
@@ -331,6 +338,13 @@ export default function SessionPage() {
           <span className="ic">↓</span>{isLastReal && !exhausted ? "More" : atEnd ? "Done" : "Next"}
         </button>
       </div>
+
+      <ItemActions
+        selected={atEnd ? null : cur}
+        open={menuOpen}
+        onClose={() => setMenuOpen(false)}
+        onOpen={open}
+      />
     </div>
   );
 }
