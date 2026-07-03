@@ -1,4 +1,4 @@
-import { NavLink, Route, Routes, useLocation } from "react-router-dom";
+import { NavLink, Route, Routes, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "@/context/AuthContext";
 import HomePage from "@/pages/HomePage";
 import SessionPage from "@/pages/SessionPage";
@@ -8,6 +8,7 @@ import ImportPage from "@/pages/ImportPage";
 export default function App() {
   const { loading, unauthenticated } = useAuth();
   const { pathname } = useLocation();
+  const nav = useNavigate();
   const focused = pathname === "/session"; // session is a full-screen focused mode
 
   if (loading) return <div className="spinner">otium…</div>;
@@ -24,9 +25,23 @@ export default function App() {
 
   return (
     <div className="app">
-      <header className="topbar">
-        <span className="wordmark">otium</span>
-        <span className="tagline">attention, on purpose</span>
+      <header className={`topbar ${focused ? "session" : ""}`}>
+        {focused ? (
+          <>
+            <button className="chrome-btn left" onClick={() => nav("/")} aria-label="Back to intent">
+              <span className="chrome-ic">←</span> intent
+            </button>
+            <span className="wordmark">otium</span>
+            <button className="chrome-btn right" onClick={() => nav("/sources")} aria-label="Go to library">
+              library
+            </button>
+          </>
+        ) : (
+          <>
+            <span className="wordmark">otium</span>
+            <span className="tagline">attention, on purpose</span>
+          </>
+        )}
       </header>
 
       <main className={focused ? "content-session" : "content"}>
