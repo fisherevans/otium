@@ -80,7 +80,12 @@ func (h *Handler) Mix(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	items, err := h.db.MixItems(r.Context(), uid, sourceIDs, mixCadenceDays)
+	rule, err := h.db.MultiFeedRule(r.Context(), uid)
+	if err != nil {
+		serverError(w, h.log, "mix multi-feed rule", err)
+		return
+	}
+	items, err := h.db.MixItems(r.Context(), uid, sourceIDs, mixCadenceDays, rule)
 	if err != nil {
 		serverError(w, h.log, "mix items", err)
 		return

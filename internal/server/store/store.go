@@ -58,6 +58,10 @@ func migrate(sdb *sql.DB) error {
 	if err := ensureColumn(sdb, "feeds", "diversity", `ALTER TABLE feeds ADD COLUMN diversity INTEGER NOT NULL DEFAULT 0`); err != nil {
 		return err
 	}
+	// Per-source freshness half-life override (#76): source override > feed > global.
+	if err := ensureColumn(sdb, "sources", "half_life_days", `ALTER TABLE sources ADD COLUMN half_life_days REAL NOT NULL DEFAULT 0`); err != nil {
+		return err
+	}
 	// items.content (#58): full article body as raw HTML, rendered in the reader.
 	if err := ensureColumn(sdb, "items", "content", `ALTER TABLE items ADD COLUMN content TEXT NOT NULL DEFAULT ''`); err != nil {
 		return err
@@ -285,19 +289,25 @@ func (db *DB) kvSet(ctx context.Context, userID int64, key, value string) error 
 // hard-coded default applied when the key is absent, so a fresh user gets the
 // intended defaults without a seed step.
 
-const settingFastScrollCheckin = "fast_scroll_checkin"
+const (
+	settingFastScrollCheckin = "fast_scroll_checkin"
+	settingMultiFeedRule     = "multi_feed_rule"
+)
 
 // Settings is the user's toggleable preferences. FastScrollCheckin gates the
 // dwell/engagement measurement + the fast-scroll check-in nudge (#68). Default
 // on; off = the old explicit-signals-only behavior (no dwell measured, no nudge).
+// MultiFeedRule (#76) is the resolution rule for a source that belongs to several
+// feeds - which feed supplies its freshness half-life. Default primary.
 type Settings struct {
-	FastScrollCheckin bool `json:"fast_scroll_checkin"`
+	FastScrollCheckin bool          `json:"fast_scroll_checkin"`
+	MultiFeedRule     MultiFeedRule `json:"multi_feed_rule"`
 }
 
 // GetSettings returns the user's settings with defaults filled in for any key
 // that has never been written.
 func (db *DB) GetSettings(ctx context.Context, userID int64) (Settings, error) {
-	s := Settings{FastScrollCheckin: true} // default: on
+	s := Settings{FastScrollCheckin: true, MultiFeedRule: RulePrimaryFeed} // defaults
 	v, ok, err := db.kvGet(ctx, userID, settingFastScrollCheckin)
 	if err != nil {
 		return s, err
@@ -305,7 +315,27 @@ func (db *DB) GetSettings(ctx context.Context, userID int64) (Settings, error) {
 	if ok {
 		s.FastScrollCheckin = v == "1"
 	}
+	rv, ok, err := db.kvGet(ctx, userID, settingMultiFeedRule)
+	if err != nil {
+		return s, err
+	}
+	if ok {
+		s.MultiFeedRule = NormalizeMultiFeedRule(rv)
+	}
 	return s, nil
+}
+
+// MultiFeedRule returns just the user's multi-feed resolution rule, for the hot
+// paths that resolve candidates and only need the rule (not the full settings).
+func (db *DB) MultiFeedRule(ctx context.Context, userID int64) (MultiFeedRule, error) {
+	v, ok, err := db.kvGet(ctx, userID, settingMultiFeedRule)
+	if err != nil {
+		return RulePrimaryFeed, err
+	}
+	if !ok {
+		return RulePrimaryFeed, nil
+	}
+	return NormalizeMultiFeedRule(v), nil
 }
 
 // SetFastScrollCheckin persists the fast-scroll check-in toggle.
@@ -315,6 +345,12 @@ func (db *DB) SetFastScrollCheckin(ctx context.Context, userID int64, on bool) e
 		v = "1"
 	}
 	return db.kvSet(ctx, userID, settingFastScrollCheckin, v)
+}
+
+// SetMultiFeedRule persists the multi-feed half-life resolution rule. The value
+// is normalized so an unknown string can never land in the store.
+func (db *DB) SetMultiFeedRule(ctx context.Context, userID int64, rule MultiFeedRule) error {
+	return db.kvSet(ctx, userID, settingMultiFeedRule, string(NormalizeMultiFeedRule(string(rule))))
 }
 
 // UpdateFeed patches a feed's presentation fields (name, color, icon) and the
@@ -473,7 +509,7 @@ func (db *DB) SetFeedSources(ctx context.Context, userID, feedID int64, sourceID
 func (db *DB) ListSources(ctx context.Context, userID int64) ([]Source, error) {
 	rows, err := db.sql.QueryContext(ctx,
 		`SELECT s.id, s.kind, s.title, s.feed_url, s.homepage_url, s.icon_url, s.weight,
-		        s.state, s.trial_until, s.per_session_cap, s.added_at, s.last_fetch_at, s.fetch_error,
+		        s.state, s.trial_until, s.per_session_cap, s.half_life_days, s.added_at, s.last_fetch_at, s.fetch_error,
 		        (SELECT COUNT(*) FROM items i WHERE i.source_id = s.id) AS item_count,
 		        (SELECT COUNT(*) FROM items i WHERE i.source_id = s.id
 		           AND NOT EXISTS (SELECT 1 FROM item_state st WHERE st.item_id = i.id AND st.user_id = ?)) AS unseen_count,
@@ -533,7 +569,7 @@ func scanSource(r rowScanner) (*Source, error) {
 	var added string
 	var trialUntil, lastFetch sql.NullString
 	if err := r.Scan(&s.ID, &s.Kind, &s.Title, &s.FeedURL, &s.HomepageURL, &s.IconURL, &s.Weight,
-		&s.State, &trialUntil, &s.PerSessionCap, &added, &lastFetch, &s.FetchError,
+		&s.State, &trialUntil, &s.PerSessionCap, &s.HalfLifeDays, &added, &lastFetch, &s.FetchError,
 		&s.ItemCount, &s.UnseenCount, &s.SkipPct, &s.PostsPerDay); err != nil {
 		return nil, err
 	}
@@ -563,9 +599,9 @@ func (db *DB) CreateSource(ctx context.Context, s *Source) (*Source, error) {
 	return s, nil
 }
 
-// UpdateSource patches weight, state, per_session_cap, title. Only non-nil
-// fields are applied.
-func (db *DB) UpdateSource(ctx context.Context, userID, id int64, weight *float64, state *string, cap *int, title *string) error {
+// UpdateSource patches weight, state, per_session_cap, half_life_days, title.
+// Only non-nil fields are applied.
+func (db *DB) UpdateSource(ctx context.Context, userID, id int64, weight *float64, state *string, cap *int, halfLifeDays *float64, title *string) error {
 	var sets []string
 	var args []any
 	if weight != nil {
@@ -579,6 +615,10 @@ func (db *DB) UpdateSource(ctx context.Context, userID, id int64, weight *float6
 	if cap != nil {
 		sets = append(sets, "per_session_cap = ?")
 		args = append(args, *cap)
+	}
+	if halfLifeDays != nil {
+		sets = append(sets, "half_life_days = ?")
+		args = append(args, *halfLifeDays)
 	}
 	if title != nil {
 		sets = append(sets, "title = ?")
@@ -707,25 +747,53 @@ func (db *DB) ListRecentItemsByFeed(ctx context.Context, userID, feedID int64, l
 	return scanItems(rows)
 }
 
-// candidateCols is the shared projection for Candidates and MixItems: item +
-// source facts, the accumulated-history cadence inputs (win_count/win_span), and
-// the resolved primary-feed overrides (half-life + diversity). The primary feed
-// is the source's lowest-sort (then lowest-id) feed, matching
-// PrimaryFeedsForSources; a feedless source COALESCEs to 0 (global defaults).
-// Both queries must select these in this order so scanCandidates can read either
-// result set. The ? placeholders are the cadence-window bound, twice.
-const candidateCols = `i.id, i.source_id, i.url, i.title, i.summary, i.content, i.author, i.thumbnail_url,
+// defaultHalfLifeDays is the global freshness half-life used when neither a
+// source nor a feed sets an override. Kept in lockstep with
+// session.freshnessHalfLifeDays (same value, 21) - the store needs it to compute
+// a feed's EFFECTIVE half-life for the shortest/longest multi-feed rule, where a
+// feed inheriting the global default must compare as 21 days, not 0. Same
+// deliberate duplication as cadenceRareFloor vs session.rareThresholdPerDay.
+const defaultHalfLifeDays = 21.0
+
+// candidateCols builds the shared projection for Candidates, MixItems, and
+// CandidatesByIDs: item + source facts, the source's own half-life override
+// (s.half_life_days, #76), the accumulated-history cadence inputs
+// (win_count/win_span), and the resolved feed overrides (half-life + diversity).
+//
+// The feed half-life honors the multi-feed rule (#76): by default the source's
+// primary feed (lowest sort, then id, matching PrimaryFeedsForSources), or - when
+// the user picks a rule - the shortest/longest EFFECTIVE half-life among the
+// source's feeds (a feed inheriting the global default counts as defaultHalfLifeDays
+// in that comparison, so an inheriting feed reads as 21 days, not 0; ties break on
+// sort then id for determinism). Diversity always follows the primary feed (#17) -
+// the rule governs half-life only. A feedless source COALESCEs to 0 (global
+// defaults). All callers must select these in this order so scanCandidates can read
+// any result set. The two ? placeholders are the cadence-window bound, twice; the
+// rule is inlined (never user text), so arg alignment is identical across callers.
+func candidateCols(rule MultiFeedRule) string {
+	feedHalfLife := `COALESCE((SELECT f.half_life_days FROM feed_sources fs JOIN feeds f ON f.id = fs.feed_id
+	                WHERE fs.source_id = s.id ORDER BY f.sort, f.id LIMIT 1), 0)`
+	if rule == RuleShortestHalfLife || rule == RuleLongestHalfLife {
+		dir := "ASC"
+		if rule == RuleLongestHalfLife {
+			dir = "DESC"
+		}
+		eff := fmt.Sprintf(`CASE WHEN f.half_life_days > 0 THEN f.half_life_days ELSE %g END`, defaultHalfLifeDays)
+		feedHalfLife = fmt.Sprintf(`COALESCE((SELECT %[1]s FROM feed_sources fs JOIN feeds f ON f.id = fs.feed_id
+	                WHERE fs.source_id = s.id ORDER BY (%[1]s) %[2]s, f.sort, f.id LIMIT 1), 0)`, eff, dir)
+	}
+	return `i.id, i.source_id, i.url, i.title, i.summary, i.content, i.author, i.thumbnail_url,
 	             i.media_type, i.duration_sec, i.published_at, i.fetched_at,
-	             s.title, s.weight, s.per_session_cap,
+	             s.title, s.weight, s.per_session_cap, s.half_life_days,
 	             (SELECT COUNT(*) FROM items i2 WHERE i2.source_id = s.id
 	                AND i2.published_at >= datetime('now', ?)) AS win_count,
 	             (SELECT COALESCE(julianday('now') - julianday(MIN(i2.published_at)), 0)
 	                FROM items i2 WHERE i2.source_id = s.id
 	                AND i2.published_at >= datetime('now', ?)) AS win_span,
-	             COALESCE((SELECT f.half_life_days FROM feed_sources fs JOIN feeds f ON f.id = fs.feed_id
-	                WHERE fs.source_id = s.id ORDER BY f.sort, f.id LIMIT 1), 0) AS feed_half_life,
+	             ` + feedHalfLife + ` AS feed_half_life,
 	             COALESCE((SELECT f.diversity FROM feed_sources fs JOIN feeds f ON f.id = fs.feed_id
 	                WHERE fs.source_id = s.id ORDER BY f.sort, f.id LIMIT 1), 0) AS feed_diversity`
+}
 
 // cadence-estimation floors. See cadencePerDay.
 const (
@@ -779,7 +847,7 @@ func scanCandidates(rows *sql.Rows, windowDays int) ([]Candidate, error) {
 		var diversity int
 		if err := rows.Scan(&c.ID, &c.SourceID, &c.URL, &c.Title, &c.Summary, &c.Content, &c.Author, &c.ThumbnailURL,
 			&c.MediaType, &c.DurationSec, &pub, &fetched,
-			&c.SourceTitle, &c.SourceWeight, &c.PerSessionCap,
+			&c.SourceTitle, &c.SourceWeight, &c.PerSessionCap, &c.SourceHalfLifeDays,
 			&winCount, &winSpan, &halfLife, &diversity); err != nil {
 			return nil, err
 		}
@@ -796,8 +864,8 @@ func scanCandidates(rows *sql.Rows, windowDays int) ([]Candidate, error) {
 // Candidates returns unseen items from the given sources (or all followed
 // sources if sourceIDs is empty), newest first, as ranker input. It computes
 // each source's cadence from accumulated stored history in the same pass.
-func (db *DB) Candidates(ctx context.Context, userID int64, sourceIDs []int64, sinceDays, limit int) ([]Candidate, error) {
-	q := `SELECT ` + candidateCols + `
+func (db *DB) Candidates(ctx context.Context, userID int64, sourceIDs []int64, sinceDays, limit int, rule MultiFeedRule) ([]Candidate, error) {
+	q := `SELECT ` + candidateCols(rule) + `
 	      FROM items i
 	      JOIN sources s ON s.id = i.source_id
 	      WHERE s.user_id = ? AND s.state IN ('followed','trial')
@@ -828,8 +896,8 @@ func (db *DB) Candidates(ctx context.Context, userID int64, sourceIDs []int64, s
 // freshness-decayed score of ALL known items, so stale items fall out through
 // decay, not a WHERE clause. cadenceDays sets the rarity-boost cadence window, to
 // match the session builder's rarity semantics. Rows are ordered deterministically.
-func (db *DB) MixItems(ctx context.Context, userID int64, sourceIDs []int64, cadenceDays int) ([]Candidate, error) {
-	q := `SELECT ` + candidateCols + `
+func (db *DB) MixItems(ctx context.Context, userID int64, sourceIDs []int64, cadenceDays int, rule MultiFeedRule) ([]Candidate, error) {
+	q := `SELECT ` + candidateCols(rule) + `
 	      FROM items i
 	      JOIN sources s ON s.id = i.source_id
 	      WHERE s.user_id = ? AND s.state IN ('followed','trial')`
@@ -1101,11 +1169,11 @@ func (db *DB) EndSession(ctx context.Context, userID int64, id string) error {
 // their surfaced/seen state, so a stored session queue can be rebuilt on resume.
 // The cadence window matches Candidates' session-build default (45 days) so the
 // rehydrated scores line up with what the build produced.
-func (db *DB) CandidatesByIDs(ctx context.Context, userID int64, ids []int64) ([]Candidate, error) {
+func (db *DB) CandidatesByIDs(ctx context.Context, userID int64, ids []int64, rule MultiFeedRule) ([]Candidate, error) {
 	if len(ids) == 0 {
 		return nil, nil
 	}
-	q := `SELECT ` + candidateCols + `
+	q := `SELECT ` + candidateCols(rule) + `
 	      FROM items i
 	      JOIN sources s ON s.id = i.source_id
 	      WHERE s.user_id = ? AND i.id IN (` + placeholders(len(ids)) + `)`

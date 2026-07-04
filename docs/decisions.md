@@ -31,6 +31,32 @@ from the same factors. No ML, no embeddings in the core loop. An LLM shows up
 later only as an *operator* (a tool you converse with to retune), never as the
 ranking black box.
 
+## Freshness half-life resolves source > feed > global (#76)
+
+The freshness-decay half-life is tunable at three levels, resolved in strict
+precedence: a per-source override wins, else the item's resolved feed half-life,
+else the global default (21 days). Feed-level came first (#17); the per-source
+override (#76) sits on top so you can single out one noisy or one evergreen
+source without reshaping its whole feed. 0 means "inherit" at both the source and
+feed level, so the neutral setting reads as the middle, not as zero days.
+
+A source can belong to several feeds, so "which feed's half-life?" is ambiguous.
+The rule is a user preference (Settings > Preferences), with three options:
+
+- **primary feed** (default) - the source's lowest-sorted feed, matching how feed
+  *identity* already resolves elsewhere. Consistent and predictable.
+- **shortest / longest half-life** - the min/max *effective* half-life among the
+  source's feeds. "Effective" is load-bearing: a feed that inherits the global
+  default counts as 21 in the comparison, not 0, so "shortest" doesn't collapse to
+  always-picking an inheriting feed.
+
+The resolution runs in SQL (in `candidateCols`, shared by the session pool, the
+mix view, and resume-rehydration) so all three surfaces decay identically, which
+is what keeps the `ItemEffectiveScore == scoreOf(sel=1)` invariant intact. The
+one shared Go chokepoint is `session.halfLifeOf` - every scoring path funnels the
+source/feed pick through it, so the breakdown the card shows is still the *actual*
+ranking, never an approximation.
+
 ## Auth reuses bloom's OIDC client verbatim
 
 otium is a confidential OIDC client of auth.fisher.sh (Ory Hydra), copied from

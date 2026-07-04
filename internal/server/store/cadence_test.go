@@ -81,7 +81,7 @@ func TestCandidatesCadenceFromAccumulatedHistory(t *testing.T) {
 	mkItem(thin, "t-0", 5*24)
 	mkItem(thin, "t-1", 20*24)
 
-	pool, err := db.Candidates(ctx, u.ID, nil, 45, 500)
+	pool, err := db.Candidates(ctx, u.ID, nil, 45, 500, RulePrimaryFeed)
 	if err != nil {
 		t.Fatal(err)
 	}

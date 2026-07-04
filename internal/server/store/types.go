@@ -26,9 +26,12 @@ type Source struct {
 	State         string     `json:"state"` // suggested | trial | followed | archived
 	TrialUntil    *time.Time `json:"trial_until,omitempty"`
 	PerSessionCap int        `json:"per_session_cap"`
-	AddedAt       time.Time  `json:"added_at"`
-	LastFetchAt   *time.Time `json:"last_fetch_at,omitempty"`
-	FetchError    string     `json:"fetch_error,omitempty"`
+	// Per-source freshness half-life override (#76). 0 = inherit; the resolver
+	// applies source override > feed (resolved) > global default.
+	HalfLifeDays float64    `json:"half_life_days"`
+	AddedAt      time.Time  `json:"added_at"`
+	LastFetchAt  *time.Time `json:"last_fetch_at,omitempty"`
+	FetchError   string     `json:"fetch_error,omitempty"`
 	// Denormalized, populated by list queries for the UI.
 	FeedSlugs   []string `json:"feed_slugs,omitempty"`
 	ItemCount   int      `json:"item_count,omitempty"`
@@ -126,9 +129,48 @@ type Candidate struct {
 	// SourceCadence is the source's average items/day over the recent window;
 	// used to boost rare sources and cap noisy ones.
 	SourceCadence float64
-	// FeedHalfLifeDays / FeedDiversity are the item's primary-feed ranker
-	// overrides, resolved by the store (#17). 0 means "use the global default"
-	// (freshness half-life) / "use the source's own per-session cap".
+	// SourceHalfLifeDays is the source's own freshness half-life override (#76),
+	// resolved by the store. 0 = inherit; it takes precedence over the feed
+	// half-life in the ranker (source override > feed > global).
+	SourceHalfLifeDays float64
+	// FeedHalfLifeDays / FeedDiversity are the item's resolved feed ranker
+	// overrides (#17). FeedHalfLifeDays honors the multi-feed rule (#76): the
+	// primary feed by default, or the shortest/longest among the source's feeds.
+	// 0 means "use the global default" (freshness half-life) / "use the source's
+	// own per-session cap".
 	FeedHalfLifeDays float64
 	FeedDiversity    int
+}
+
+// MultiFeedRule decides which feed supplies a source's freshness half-life when
+// the source belongs to more than one feed (#76). It's a user preference; the
+// store applies it while resolving a candidate's FeedHalfLifeDays. The full
+// hierarchy is source override > feed (resolved by this rule) > global default.
+type MultiFeedRule string
+
+const (
+	// RulePrimaryFeed uses the source's primary feed (lowest sort, then id),
+	// matching how feed identity already resolves elsewhere. The default.
+	RulePrimaryFeed MultiFeedRule = "primary"
+	// RuleShortestHalfLife uses the feed with the shortest EFFECTIVE half-life
+	// among the source's feeds - a feed inheriting the global default counts as
+	// that default (not 0) in the comparison. Freshness-biased: items fade fastest.
+	RuleShortestHalfLife MultiFeedRule = "shortest"
+	// RuleLongestHalfLife uses the feed with the longest effective half-life.
+	// Evergreen-biased: items linger longest.
+	RuleLongestHalfLife MultiFeedRule = "longest"
+)
+
+// NormalizeMultiFeedRule coerces an arbitrary string to a known rule, defaulting
+// to RulePrimaryFeed for empty/unknown input so a missing or malformed setting is
+// always safe.
+func NormalizeMultiFeedRule(s string) MultiFeedRule {
+	switch MultiFeedRule(s) {
+	case RuleShortestHalfLife:
+		return RuleShortestHalfLife
+	case RuleLongestHalfLife:
+		return RuleLongestHalfLife
+	default:
+		return RulePrimaryFeed
+	}
 }

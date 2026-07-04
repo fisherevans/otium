@@ -5,6 +5,18 @@ import { BUCKETS, BLABEL, bucketOf, type Bucket } from "@/lib/weight";
 import { feedIcon } from "@/lib/feedIcons";
 import { PostsList } from "@/components/PostsList";
 
+// Per-source freshness half-life presets (days). 0 = inherit (the source falls
+// back to its feed's half-life, then the global 21d). Mirrors the feed control's
+// row so the two read the same; the source override wins over the feed (#76).
+const HALF_LIVES: { days: number; label: string }[] = [
+  { days: 0, label: "Default" },
+  { days: 7, label: "7d" },
+  { days: 14, label: "14d" },
+  { days: 21, label: "21d" },
+  { days: 45, label: "45d" },
+  { days: 90, label: "90d" },
+];
+
 // Dedicated source page (#66, supersedes the SourceDetail modal in the library).
 // One page carries every management control the old sheet had - weight, per-
 // session cap, feed membership, archive, visit, delete - AND the source's actual
@@ -26,6 +38,7 @@ export default function SourcePage() {
   // Local control state, seeded from the source and updated optimistically.
   const [bucket, setBucket] = useState<Bucket>("normal");
   const [cap, setCap] = useState(3);
+  const [halfLife, setHalfLife] = useState(0);
   const [state, setState] = useState("followed");
   const [feedSlugs, setFeedSlugs] = useState<string[]>([]);
   const [confirmDel, setConfirmDel] = useState(false);
@@ -58,6 +71,7 @@ export default function SourcePage() {
     if (!source) return;
     setBucket(bucketOf(source.weight));
     setCap(source.per_session_cap);
+    setHalfLife(source.half_life_days ?? 0);
     setState(source.state);
     setFeedSlugs(source.feed_slugs ?? []);
     setConfirmDel(false);
@@ -86,6 +100,11 @@ export default function SourcePage() {
     const v = Math.max(1, n);
     setCap(v);
     await api.updateSource(sourceId, { per_session_cap: v }).catch(() => {});
+    reload();
+  }
+  async function setHalfLifeV(days: number) {
+    setHalfLife(days);
+    await api.updateSource(sourceId, { half_life_days: days }).catch(() => {});
     reload();
   }
   async function setArchived(archived: boolean) {
@@ -198,6 +217,23 @@ export default function SourcePage() {
         <button onClick={() => setCapV(cap + 1)} aria-label="More">+</button>
       </div>
       <p className="caphint">Keeps the freshest {cap} per session.</p>
+
+      <div className="ctl-label">Freshness half-life</div>
+      <div className="wbuckets">
+        {HALF_LIVES.map((h) => (
+          <button
+            key={h.days}
+            className={`wbucket ${halfLife === h.days ? "on" : ""}`}
+            onClick={() => setHalfLifeV(h.days)}
+          >
+            {h.label}
+          </button>
+        ))}
+      </div>
+      <p className="caphint">
+        How fast this source's items fade. Overrides the feed's half-life. Default inherits the feed, then the global 21
+        days.
+      </p>
 
       {feeds.length > 0 && (
         <>

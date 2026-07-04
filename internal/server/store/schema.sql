@@ -69,6 +69,11 @@ CREATE TABLE IF NOT EXISTS sources (
     -- The point: a 30-a-day source never floods a session; the once-a-week
     -- source is never crowded out.
     per_session_cap INTEGER NOT NULL DEFAULT 2,
+    -- per-source freshness half-life override (#76), in days; 0 = inherit. The
+    -- resolution hierarchy is source override > feed (resolved) > global default
+    -- (session.freshnessHalfLifeDays). Added additively via migrate() for
+    -- databases created before this column existed.
+    half_life_days REAL NOT NULL DEFAULT 0,
     added_at      TEXT NOT NULL DEFAULT (datetime('now')),
     last_fetch_at TEXT,
     fetch_error   TEXT NOT NULL DEFAULT '',

@@ -76,7 +76,7 @@ func TestCandidatesResolvePrimaryFeedOverrides(t *testing.T) {
 	loner := mkSource("Loner", "http://loner") // no feed membership
 	mkItem(loner, "l-1")
 
-	pool, err := db.Candidates(ctx, u.ID, nil, 45, 500)
+	pool, err := db.Candidates(ctx, u.ID, nil, 45, 500, RulePrimaryFeed)
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -114,7 +114,7 @@ type ScoreBreakdown struct {
 func ScoreBreakdownFor(c store.Candidate, now time.Time, stat SourceStat) ScoreBreakdown {
 	w := sourceWeight(c)
 	rarity := rarityBoost(c.SourceCadence)
-	fresh := freshness(c.PublishedAt, now, c.FeedHalfLifeDays)
+	fresh := freshness(c.PublishedAt, now, halfLifeOf(c))
 	skip := skipPenalty(stat)
 	ageDays := now.Sub(c.PublishedAt).Hours() / 24
 	if ageDays < 0 {
@@ -339,7 +339,7 @@ func clampInt(v, lo, hi int) int {
 // budget-driven adjustments. sel > 1 sharpens the favor toward high-weight
 // sources when few items will be seen.
 func scoreOf(c store.Candidate, now time.Time, stat SourceStat, sel float64) float64 {
-	return math.Pow(weightRarity(c), sel) * freshness(c.PublishedAt, now, c.FeedHalfLifeDays) * skipPenalty(stat)
+	return math.Pow(weightRarity(c), sel) * freshness(c.PublishedAt, now, halfLifeOf(c)) * skipPenalty(stat)
 }
 
 // weightRarity is the user-controlled term of the score: the source's weight
@@ -365,7 +365,7 @@ func sourceWeight(c store.Candidate) float64 {
 // penalty. It answers "how much does this item want to be in the feed" before
 // behavior is folded in - the numerator of the mix view's intended share.
 func ItemIntendedScore(c store.Candidate, now time.Time) float64 {
-	return weightRarity(c) * freshness(c.PublishedAt, now, c.FeedHalfLifeDays)
+	return weightRarity(c) * freshness(c.PublishedAt, now, halfLifeOf(c))
 }
 
 // ItemEffectiveScore is the session-agnostic "effective" contribution: the
@@ -377,9 +377,24 @@ func ItemEffectiveScore(c store.Candidate, now time.Time, stat SourceStat) float
 	return ItemIntendedScore(c, now) * skipPenalty(stat)
 }
 
-// freshness decays an item by age. halfLifeDays is the item's feed override when
-// > 0, else the global freshnessHalfLifeDays. Both scoring paths pass the
-// candidate's FeedHalfLifeDays so sessions and the mix decay identically.
+// halfLifeOf resolves the freshness half-life for a candidate per the hierarchy
+// source override > feed (resolved) > global (#76). It returns the source's own
+// override when set, else the resolved feed half-life; a 0 result falls through to
+// the global default in freshness(). The store already applied the multi-feed rule
+// to FeedHalfLifeDays, so the "which feed" ambiguity is settled before this. Every
+// scoring path (ScoreBreakdownFor, scoreOf, ItemIntendedScore) funnels through
+// here so sessions, the mix, and the breakdown resolve identically - that shared
+// resolution is what keeps ItemEffectiveScore == scoreOf(sel=1) intact.
+func halfLifeOf(c store.Candidate) float64 {
+	if c.SourceHalfLifeDays > 0 {
+		return c.SourceHalfLifeDays
+	}
+	return c.FeedHalfLifeDays
+}
+
+// freshness decays an item by age. halfLifeDays is the resolved per-item override
+// when > 0, else the global freshnessHalfLifeDays. Both scoring paths pass
+// halfLifeOf(c) so sessions and the mix decay identically.
 func freshness(published, now time.Time, halfLifeDays float64) float64 {
 	if halfLifeDays <= 0 {
 		halfLifeDays = freshnessHalfLifeDays
