@@ -308,7 +308,11 @@ column; verified boot against a prod DB copy, then confirmed clean on prod.
 `cat`-ing a live prod SQLite mid-WAL-write yields a malformed copy. Copy
 `otium.db` + `otium.db-wal` + `otium.db-shm` together so SQLite replays the WAL.
 
-### In flight
-- **#68 dwell check-in + settings toggle** - the 4th shore-up ask, building now
-  (worktree). After it, the shore-up round is done and the "next big bet" question
-  (reader-depth / TTS / Discovery / LLM operator) is Fisher's to pick.
+### Shore-up round COMPLETE (v0.15.0)
+- **v0.15.0** - dwell engagement check-in + Settings page toggle (#68), on the
+  refined intentionality policy (measure to serve intention, never re-rank;
+  toggleable). Fixed a latent test-red (guarded the sessions status-index in
+  migrate against a partial DB).
+All four shore-ups (#69 intent one-pager, #67 durable sessions, #66 feed-mgmt
+pages, #68 dwell) + collections (#57) shipped. **The "next big bet" (reader-depth
+for Palma / session TTS / Discovery / LLM operator) is Fisher's to pick.**
