@@ -1,51 +1,31 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { api, type Feed, type Source } from "@/api/client";
 
-const round5 = (v: number) => Math.max(0, Math.round(v / 5) * 5);
-const clamp01 = (v: number) => Math.min(1, Math.max(0, v));
-
-// The pad encodes an intent in one gesture:
-//   X (left->right) = session length, ~5 min to ~60 min.
-//   Y (bottom->top) = how flexible that length is. Bottom = an exact target;
-//     drag up and the range fans out around the center (e.g. center 15 min at
-//     full flex -> 5-25 min). A wider range gives the session builder slack to
-//     optimize *which* items it stages instead of being forced to hit a number.
-function padToRange(x: number, y: number): { low: number; high: number; center: number; h: number } {
-  const center = Math.max(5, round5(5 + x * 55)); // 5..60
-  const hmax = Math.min(center - 5, 20); // how far the range can fan at this length
-  const h = round5(y * hmax);
-  const low = Math.max(2, center - h);
-  const high = center + h;
-  return { low, high, center, h };
-}
-
-function describe(low: number, high: number, center: number, h: number): string {
-  if (h === 0) return `Exactly ${center} minutes`;
-  if (h <= 10) return `About ${center} minutes, give or take`;
-  return `Anywhere from ${low} to ${high} minutes`;
-}
+// #69: the intent page is one dead-simple, no-scroll screen. A single native
+// slider picks how much time you want (5-60 min); a session is that one chosen
+// duration - no range, no flexibility axis. Topic chips fit below it, and one
+// calm button starts. The old 2-axis pad + a11y sliders are gone: a native range
+// input is inherently accessible.
+const MIN_MINUTES = 5;
+const MAX_MINUTES = 60;
+const STEP = 5;
 
 export default function HomePage() {
   const nav = useNavigate();
-  const padRef = useRef<HTMLDivElement>(null);
-  const [pos, setPos] = useState({ x: 0.5, y: 0.5 }); // analog stick: rests centered
-  const [dragging, setDragging] = useState(false);
+  const [minutes, setMinutes] = useState(15);
   const [feeds, setFeeds] = useState<Feed[]>([]);
   const [sources, setSources] = useState<Source[]>([]);
   const [picked, setPicked] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState("");
 
   useEffect(() => {
     api.feeds().then(setFeeds).catch(() => setFeeds([]));
     api.sources().then(setSources).catch(() => setSources([]));
   }, []);
 
-  const { low, high, center, h } = padToRange(pos.x, pos.y);
-  const xRight = pos.x >= 0.5;
-  const yUp = pos.y >= 0.5;
-
-  // Unseen supply for the current theme selection - used only to disable Build
+  // Unseen supply for the current theme selection - used only to disable Start
   // (and say so) when there's genuinely nothing new. Not shown as a count.
   const unseenForSelection = useMemo(() => {
     const match = picked.length
@@ -55,151 +35,56 @@ export default function HomePage() {
   }, [sources, picked]);
   const nothingNew = sources.length > 0 && unseenForSelection === 0;
 
-  function moveFrom(e: React.PointerEvent) {
-    const el = padRef.current;
-    if (!el) return;
-    const r = el.getBoundingClientRect();
-    const x = Math.min(1, Math.max(0, (e.clientX - r.left) / r.width));
-    const y = Math.min(1, Math.max(0, 1 - (e.clientY - r.top) / r.height));
-    setPos({ x, y });
-  }
-
-  function onDown(e: React.PointerEvent) {
-    padRef.current?.setPointerCapture(e.pointerId);
-    setDragging(true);
-    moveFrom(e);
-  }
-  function onMove(e: React.PointerEvent) {
-    if (dragging) moveFrom(e);
-  }
-  function onUp(e: React.PointerEvent) {
-    setDragging(false);
-    padRef.current?.releasePointerCapture(e.pointerId);
-  }
-  function recenter() {
-    setPos({ x: 0.5, y: 0.5 });
-  }
-
-  // #3: keyboard control for the pad itself. Arrows nudge the knob in 0.1 steps
-  // (one 5-min notch on X, one flexibility notch on Y) so the pad is operable
-  // without a pointer, mirroring the drag.
-  function onPadKey(e: React.KeyboardEvent) {
-    const step = 0.1;
-    let { x, y } = pos;
-    if (e.key === "ArrowLeft") x -= step;
-    else if (e.key === "ArrowRight") x += step;
-    else if (e.key === "ArrowUp") y += step;
-    else if (e.key === "ArrowDown") y -= step;
-    else if (e.key === "Home") { x = 0.5; y = 0.5; }
-    else return;
-    e.preventDefault();
-    setPos({ x: clamp01(x), y: clamp01(y) });
-  }
-  // #3: non-gesture path. The sliders write the same pos the pad does, so pad
-  // and sliders stay in sync automatically (both derive from `pos`). Length maps
-  // to the X axis via the center minute value; flexibility maps straight to Y.
-  function setLengthMin(centerMin: number) {
-    setPos((p) => ({ ...p, x: clamp01((centerMin - 5) / 55) }));
-  }
-  function setFlexPct(pct: number) {
-    setPos((p) => ({ ...p, y: clamp01(pct / 100) }));
-  }
-
   function toggle(slug: string) {
     setPicked((p) => (p.includes(slug) ? p.filter((s) => s !== slug) : [...p, slug]));
   }
 
-  async function build() {
+  async function start() {
     setBusy(true);
-    const qs = new URLSearchParams({ low: String(low), high: String(high) });
-    if (picked.length) qs.set("themes", picked.join(","));
-    nav(`/session?${qs.toString()}`);
+    setErr("");
+    try {
+      const resp = await api.createSession(minutes, picked);
+      if (resp && resp.session_id) nav(`/session/${resp.session_id}`);
+      else setErr("Nothing new to gather right now.");
+    } catch (e: any) {
+      setErr(String(e.message ?? e));
+    } finally {
+      setBusy(false);
+    }
   }
 
   return (
-    <div>
-      <h1 className="display">How much time?</h1>
-      <p className="sub">Left to right: how long. Up: how flexible the range.</p>
+    <div className="intent">
+      <div className="intent-head">
+        <h1 className="display">How much time?</h1>
+        <p className="sub">Pick a length. Otium builds a session to fit it.</p>
+      </div>
 
-      <div className="pad-wrap">
-        <div
-          className={`pad ${dragging ? "dragging" : ""}`}
-          ref={padRef}
-          onPointerDown={onDown}
-          onPointerMove={onMove}
-          onPointerUp={onUp}
-          onPointerCancel={onUp}
-          role="group"
-          tabIndex={0}
-          onKeyDown={onPadKey}
-          aria-label={`Intent pad. Drag the knob, or use arrow keys, or the length and flexibility sliders below. Currently ${describe(low, high, center, h).toLowerCase()}.`}
-        >
-          <div className="pad-grid" />
-          {/* axis labels: X = length, Y = flexibility */}
-          <span className={`pad-edge left ${!xRight ? "on" : ""}`}>5 min</span>
-          <span className={`pad-edge right ${xRight ? "on" : ""}`}>1 hr</span>
-          <span className={`pad-edge bottom ${!yUp ? "on" : ""}`}>exact</span>
-          <span className={`pad-edge top ${yUp ? "on" : ""}`}>flexible</span>
-          <svg className="pad-tether" viewBox="0 0 100 100" preserveAspectRatio="none">
-            <circle className="pad-origin" cx="50" cy="50" r="1.4" />
-            <line x1="50" y1="50" x2={pos.x * 100} y2={(1 - pos.y) * 100} />
-          </svg>
-          <div
-            className="pad-knob"
-            style={{ left: `${pos.x * 100}%`, top: `${(1 - pos.y) * 100}%` }}
-          />
+      <div className="time-pick">
+        <div className="time-readout">
+          <span className="big">{minutes}</span>
+          <span className="unit">minutes</span>
         </div>
-        <p className="pad-descriptor" onClick={recenter} title="tap to recenter" aria-live="polite">
-          {describe(low, high, center, h)}
-        </p>
-        <div className="pad-readout">
-          <span className="big">{h === 0 ? center : `${low}–${high}`}</span>
-          <span className="small">min</span>
-          {h > 0 && (
-            <>
-              <span className="dot">·</span>
-              <span className="small">flexible</span>
-            </>
-          )}
-        </div>
-
-        {/* #3: non-gesture path - two labeled sliders that drive the same pos as
-            the pad, for keyboard/AT users and anyone who can't drag. */}
-        <div className="pad-fallback">
-          <label className="pad-slider">
-            <span className="pad-slider-label">Length</span>
-            <input
-              type="range"
-              min={5}
-              max={60}
-              step={5}
-              value={center}
-              onChange={(e) => setLengthMin(Number(e.target.value))}
-              aria-label="Session length in minutes"
-              aria-valuetext={`${center} minutes`}
-            />
-            <span className="pad-slider-val">{center}m</span>
-          </label>
-          <label className="pad-slider">
-            <span className="pad-slider-label">Flexibility</span>
-            <input
-              type="range"
-              min={0}
-              max={100}
-              step={10}
-              value={Math.round(pos.y * 100)}
-              onChange={(e) => setFlexPct(Number(e.target.value))}
-              aria-label="Range flexibility"
-              aria-valuetext={h === 0 ? "exact target" : `plus or minus ${h} minutes`}
-            />
-            <span className="pad-slider-val">{h === 0 ? "exact" : `±${h}m`}</span>
-          </label>
+        <input
+          className="time-slider"
+          type="range"
+          min={MIN_MINUTES}
+          max={MAX_MINUTES}
+          step={STEP}
+          value={minutes}
+          onChange={(e) => setMinutes(Number(e.target.value))}
+          aria-label="How much time"
+          aria-valuetext={`${minutes} minutes`}
+        />
+        <div className="time-scale">
+          <span>{MIN_MINUTES} min</span>
+          <span>{MAX_MINUTES} min</span>
         </div>
       </div>
 
       {feeds.length > 0 && (
-        <>
-          <div className="section-label">What are you in the mood for?</div>
+        <div className="intent-topics">
+          <div className="section-label">Topics</div>
           <div className="chips">
             {feeds.map((f) => (
               <button
@@ -211,14 +96,16 @@ export default function HomePage() {
               </button>
             ))}
           </div>
-          <p className="sub" style={{ marginTop: 10, fontSize: 13 }}>
+          <p className="intent-hint">
             {picked.length === 0 ? "Nothing picked = everything you follow." : `${picked.length} selected.`}
           </p>
-        </>
+        </div>
       )}
 
-      <button className="btn" onClick={build} disabled={busy || nothingNew}>
-        {nothingNew ? "Nothing new right now" : "Build my session"}
+      {err && <p className="intent-hint" role="alert">{err}</p>}
+
+      <button className="btn" onClick={start} disabled={busy || nothingNew}>
+        {nothingNew ? "Nothing new right now" : "Start reading"}
       </button>
     </div>
   );

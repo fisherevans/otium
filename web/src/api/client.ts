@@ -105,6 +105,19 @@ export interface BuildResponse {
   result: SessionResult;
 }
 
+// --- durable sessions (#67 + #69) ---
+// A session is a stored queue + a read cursor built from a single duration.
+// createSession returns it; currentSession resumes the active one (undefined =
+// none); updateSession advances the cursor / ends it. session_id is "" when the
+// selection had nothing to build (client stays home).
+export interface SessionResponse {
+  session_id: string;
+  duration_min: number;
+  cursor: number;
+  themes: string[];
+  items: Selected[];
+}
+
 export interface ImportCandidate {
   title: string;
   feed_url: string;
@@ -243,8 +256,14 @@ export const api = {
   mix: (feedSlug?: string) =>
     req<MixResponse>("GET", `/mix${feedSlug ? `?feed=${encodeURIComponent(feedSlug)}` : ""}`),
 
-  buildSession: (minLow: number, minHigh: number, themes: string[]) =>
-    req<BuildResponse>("POST", "/session", { min_low: minLow, min_high: minHigh, themes }),
+  // Durable sessions (#67 + #69). createSession builds + stores the queue for a
+  // single duration; currentSession resumes the active one (204 -> undefined);
+  // updateSession advances the cursor or ends it.
+  createSession: (durationMin: number, themes: string[]) =>
+    req<SessionResponse>("POST", "/sessions", { duration_min: durationMin, themes }),
+  currentSession: () => req<SessionResponse | undefined>("GET", "/sessions/current"),
+  updateSession: (id: string, patch: { cursor?: number; status?: "ended" }) =>
+    req<{ ok: boolean }>("PATCH", `/sessions/${id}`, patch),
   itemEvent: (id: number, type: string, sessionId?: string) =>
     req<{ ok: boolean }>("POST", `/items/${id}/event`, { type, session_id: sessionId ?? "" }),
   fetchNow: () => req<{ new_items: number }>("POST", "/fetch"),

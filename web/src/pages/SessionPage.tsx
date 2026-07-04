@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
-import { useNavigate, useSearchParams } from "react-router-dom";
+import { useNavigate, useParams } from "react-router-dom";
 import { api, type Item, type Selected } from "@/api/client";
 import { ItemActions } from "@/components/ItemActions";
 import { Reader } from "@/components/Reader";
@@ -91,23 +91,23 @@ function Identity({ sel }: { sel: Selected }) {
   );
 }
 
-type Checkin = null | "low" | "high" | "fast";
+// #67: the session is durable. This page drives entirely off the backend session
+// identified by the URL id - it does NOT rebuild a feed. On load it resumes the
+// active session (its stored queue + cursor); as the user advances it persists
+// the cursor; when the session is over (elapsed >= the single duration, or the
+// queue is exhausted) it marks the session ended and returns home. A refresh
+// mid-session lands back on the same items at the same place.
+type Checkin = null | "fast";
 
 export default function SessionPage() {
-  const [params] = useSearchParams();
+  const { id = "" } = useParams();
   const nav = useNavigate();
-  const low = Number(params.get("low") ?? 10);
-  const high = Number(params.get("high") ?? 20);
-  const themes = (params.get("themes") ?? "").split(",").filter(Boolean);
-  const lowSec = low * 60;
-  const highSec = high * 60;
 
   const [items, setItems] = useState<Selected[]>([]);
   const [current, setCurrent] = useState(0);
-  const [sessionId, setSessionId] = useState("");
+  const [duration, setDuration] = useState(15); // minutes; the single chosen length (#69)
+  const [themes, setThemes] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
-  const [loadingMore, setLoadingMore] = useState(false);
-  const [exhausted, setExhausted] = useState(false);
   const [err, setErr] = useState("");
   const [liked, setLiked] = useState<Set<number>>(new Set());
   const [saveItem, setSaveItem] = useState<Item | null>(null); // Save picker target (#57)
@@ -115,87 +115,128 @@ export default function SessionPage() {
   const [breakdown, setBreakdown] = useState<Selected | null>(null);
   const [content, setContent] = useState<Selected | null>(null); // the in-app content surface (#51)
 
-  // The strongest rank score in the loaded queue - the yardstick the on-card score
-  // cue fills against, so each cue reads as "how strongly did this rank vs the best."
+  const durationSec = duration * 60;
+
+  // The strongest rank score in the queue - the yardstick the on-card score cue
+  // fills against, so each cue reads as "how strongly did this rank vs the best."
   const maxScore = useMemo(() => items.reduce((m, s) => Math.max(m, s.score), 0), [items]);
 
   const [elapsed, setElapsed] = useState(0);
   const [checkin, setCheckin] = useState<Checkin>(null);
   const [flash, setFlash] = useState(0);
-  const ackLow = useRef(false);
-  const ackHigh = useRef(false);
   const advances = useRef<number[]>([]);
   const shownIds = useRef<Set<number>>(new Set());
   const engaged = useRef<Set<number>>(new Set()); // ids that got open/like/save
   const opened = useRef<Set<number>>(new Set()); // ids that fired an `open` event (dedupe, #51)
   const lastContent = useRef<Selected | null>(null); // retains the surface item through the sheet's exit anim
   const prevIdx = useRef(0);
+  const finished = useRef(false);
+  const didInitialScroll = useRef(false);
   const stageRef = useRef<HTMLDivElement>(null);
   const itemEls = useRef<(HTMLDivElement | null)[]>([]);
 
-  const build = useCallback(
-    async (append: boolean): Promise<number> => {
-      try {
-        const resp = await api.buildSession(low, high, themes);
-        setSessionId(resp.session_id);
-        const fresh = resp.result.items.filter((s) => !shownIds.current.has(s.item.id));
-        if (append) {
-          if (fresh.length === 0) setExhausted(true);
-          else setItems((prev) => [...prev, ...fresh]);
-        } else {
-          setItems(fresh);
-          setExhausted(fresh.length === 0);
-        }
-        return fresh.length;
-      } catch (e: any) {
-        setErr(String(e.message ?? e));
-        return 0;
-      }
-    },
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [params.toString()],
-  );
+  // finish ends the session server-side (idempotent) and returns home. The single
+  // exit for both "time's up" and "queue exhausted" (#67).
+  const finish = useCallback(() => {
+    if (finished.current) return;
+    finished.current = true;
+    if (id) api.updateSession(id, { status: "ended" }).catch(() => {});
+    nav("/", { replace: true });
+  }, [id, nav]);
 
+  // Load / resume the active session by id. If there is no active session, or the
+  // URL points at a session that's no longer current (superseded / ended), this
+  // URL is stale - go home ("this session's over").
   useEffect(() => {
-    setItems([]);
-    setCurrent(0);
-    setExhausted(false);
-    setErr("");
+    let cancelled = false;
+    finished.current = false;
+    didInitialScroll.current = false;
     setLoading(true);
+    setErr("");
     setElapsed(0);
-    ackLow.current = false;
-    ackHigh.current = false;
+    setCheckin(null);
     advances.current = [];
     shownIds.current = new Set();
     engaged.current = new Set();
     opened.current = new Set();
-    prevIdx.current = 0;
-    build(false).finally(() => setLoading(false));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [params.toString()]);
+    api
+      .currentSession()
+      .then((s) => {
+        if (cancelled) return;
+        if (!s || !s.session_id || s.session_id !== id) {
+          nav("/", { replace: true });
+          return;
+        }
+        setItems(s.items);
+        setDuration(s.duration_min > 0 ? s.duration_min : 15);
+        setThemes(s.themes ?? []);
+        const start = Math.min(Math.max(0, s.cursor), Math.max(0, s.items.length - 1));
+        setCurrent(start);
+        prevIdx.current = start;
+        // Items already passed were seen on a prior visit; seed shownIds so we
+        // don't re-fire `seen` for them on resume.
+        s.items.slice(0, start).forEach((it) => shownIds.current.add(it.item.id));
+        setLoading(false);
+      })
+      .catch((e: any) => {
+        if (!cancelled) {
+          setErr(String(e.message ?? e));
+          setLoading(false);
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [id, nav]);
+
+  // Resume scroll: after the queue renders, jump (no animation) to the stored
+  // cursor so a refresh lands where the user left off.
+  useEffect(() => {
+    if (loading || didInitialScroll.current || items.length === 0) return;
+    didInitialScroll.current = true;
+    const el = itemEls.current[current];
+    if (el) el.scrollIntoView({ block: "center" });
+  }, [loading, items, current]);
 
   // Active-time ticker (pauses while hidden).
   useEffect(() => {
-    const id = window.setInterval(() => {
+    const t = window.setInterval(() => {
       if (document.visibilityState === "visible") setElapsed((e) => e + 1);
     }, 1000);
-    return () => window.clearInterval(id);
+    return () => window.clearInterval(t);
   }, []);
 
-  // Pacing check-ins.
+  // Persist the cursor as the user advances (debounced). The backend only accepts
+  // a cursor write on an active session, so a late write is a harmless no-op.
   useEffect(() => {
-    if (checkin) return;
-    if (elapsed >= highSec && !ackHigh.current) {
-      ackHigh.current = true;
-      setCheckin("high");
-    } else if (elapsed >= lowSec && !ackLow.current && low !== high) {
-      ackLow.current = true;
-      setCheckin("low");
+    if (loading || !id) return;
+    const t = window.setTimeout(() => {
+      api.updateSession(id, { cursor: current }).catch(() => {});
+    }, 500);
+    return () => window.clearTimeout(t);
+  }, [current, id, loading]);
+
+  // Time budget reached (#67): the single duration is up. End + home - but not
+  // while the user is mid-read in the content surface (defer until they close it,
+  // so we never yank them out of an article).
+  useEffect(() => {
+    if (loading || finished.current) return;
+    if (elapsed >= durationSec && !content) finish();
+  }, [elapsed, durationSec, content, loading, finish]);
+
+  // Queue exhausted: the end panel is centered. Let the affirming end-state show
+  // for a calm beat, then return home.
+  useEffect(() => {
+    if (loading || items.length === 0) return;
+    if (current >= items.length) {
+      const t = window.setTimeout(finish, 2200);
+      return () => window.clearTimeout(t);
     }
-  }, [elapsed, lowSec, highSec, low, high, checkin]);
+  }, [current, items.length, loading, finish]);
 
   // Scroll-snap: an IntersectionObserver marks the centered item as current,
-  // marks it seen, tracks advance pace (fast-flicking check-in), and refills.
+  // marks it seen, and tracks advance pace (fast-flicking check-in). No refill -
+  // the queue is fixed and durable.
   useEffect(() => {
     const stage = stageRef.current;
     if (!stage) return;
@@ -211,7 +252,7 @@ export default function SessionPage() {
           if (idx > prevIdx.current) {
             const left = items[prevIdx.current];
             if (left && !engaged.current.has(left.item.id)) {
-              api.itemEvent(left.item.id, "skip", sessionId).catch(() => {});
+              api.itemEvent(left.item.id, "skip", id).catch(() => {});
               const now = Date.now();
               advances.current = [...advances.current, now].slice(-4);
               if (advances.current.filter((t) => now - t < 8000).length >= 3 && !checkin) setCheckin("fast");
@@ -221,9 +262,8 @@ export default function SessionPage() {
           const it = items[idx];
           if (it && !shownIds.current.has(it.item.id)) {
             shownIds.current.add(it.item.id);
-            api.itemEvent(it.item.id, "seen", sessionId).catch(() => {});
+            api.itemEvent(it.item.id, "seen", id).catch(() => {});
           }
-          if (idx >= items.length - 1 && elapsed < highSec && !exhausted && !loadingMore) void loadMore();
         }
       },
       { root: stage, threshold: 0.6 },
@@ -231,15 +271,7 @@ export default function SessionPage() {
     itemEls.current.forEach((el) => el && obs.observe(el));
     return () => obs.disconnect();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [items, sessionId, elapsed, exhausted, loadingMore]);
-
-  async function loadMore(): Promise<number> {
-    if (loadingMore || exhausted) return 0;
-    setLoadingMore(true);
-    const n = await build(true);
-    setLoadingMore(false);
-    return n;
-  }
+  }, [items, id, checkin]);
 
   function scrollTo(idx: number) {
     const el = itemEls.current[idx];
@@ -258,18 +290,9 @@ export default function SessionPage() {
   const shown = content ?? lastContent.current;
   const shownKind = shown ? contentKind(shown.item) : null;
 
-  // Tap-to-open (#47): a click on the card body opens the item, but a scroll-snap
-  // drag must not count as a tap. Track the pointer from press to release and
-  // treat anything past a small move threshold as a scroll, not a tap.
-  //
-  // Swipe-to-advance (#10): a deliberate horizontal drag on the focused card
-  // advances it - the same path as the Next button (next == skip). The gesture
-  // is fenced off from the two neighbours it could collide with:
-  //   - vertical scroll-snap: the card carries `touch-action: pan-y`, so the
-  //     browser keeps vertical panning and hands horizontal motion to us; we also
-  //     require the horizontal delta to dominate the vertical one.
-  //   - tap-to-open: any qualifying swipe is >> the 10px move threshold, so it
-  //     already trips `moved` and cardClick bails before openItem.
+  // Tap-to-open (#47) vs scroll-snap drag vs swipe-to-advance (#10). Track the
+  // pointer from press to release: past a small move threshold it's a scroll, a
+  // dominant leftward drag on the focused card advances it.
   const SWIPE_DIST = 60; // px of horizontal travel to count as a swipe
   const SWIPE_DOMINANCE = 1.3; // horizontal must beat vertical by this factor
   const press = useRef<{ x: number; y: number; moved: boolean } | null>(null);
@@ -285,9 +308,6 @@ export default function SessionPage() {
     if (!p) return;
     const dx = e.clientX - p.x;
     const dy = e.clientY - p.y;
-    // Left swipe on the still-focused card = advance. Left only: there's no
-    // "back", so a right drag intentionally does nothing (it falls through to a
-    // no-op tap since `moved` is set).
     if (i === current && dx <= -SWIPE_DIST && Math.abs(dx) >= Math.abs(dy) * SWIPE_DOMINANCE) {
       p.moved = true; // keep cardClick from treating the follow-up click as a tap
       next();
@@ -302,21 +322,18 @@ export default function SessionPage() {
 
   // Opening content in-app (or handing off to the source) is genuine
   // consumption: fire an `open` event exactly once per item so it counts as
-  // engagement, not a skip. `opened` dedupes the event; `engaged` (also fed by
-  // like/save) is what exempts the item from the next==skip rule (#51).
+  // engagement, not a skip.
   function recordOpen(sel: Selected) {
     engaged.current.add(sel.item.id);
     if (!opened.current.has(sel.item.id)) {
       opened.current.add(sel.item.id);
-      api.itemEvent(sel.item.id, "open", sessionId).catch(() => {});
+      api.itemEvent(sel.item.id, "open", id).catch(() => {});
     }
   }
-  // Primary: tapping the card body reads/plays the item in-app (#51).
   function openContent(sel: Selected) {
     recordOpen(sel);
     setContent(sel);
   }
-  // Secondary: the original source in a browser tab (demoted from #47's default).
   function openExternal(sel: Selected) {
     recordOpen(sel);
     window.open(sel.item.url, "_blank", "noopener");
@@ -327,20 +344,14 @@ export default function SessionPage() {
   function like() {
     if (!cur) return;
     engaged.current.add(cur.item.id);
-    // Toggle: liking fires `like` (state + engagement signal, unchanged) and adds
-    // to the auto Liked collection server-side; un-liking fires `unlike`, which
-    // only removes that membership and never touches the ranker signal (#57).
     const willLike = !liked.has(cur.item.id);
     setLiked((s) => {
       const n = new Set(s);
       willLike ? n.add(cur.item.id) : n.delete(cur.item.id);
       return n;
     });
-    api.itemEvent(cur.item.id, willLike ? "like" : "unlike", sessionId).catch(() => {});
+    api.itemEvent(cur.item.id, willLike ? "like" : "unlike", id).catch(() => {});
   }
-  // Save is the deliberate path (#57): open the collection picker rather than a
-  // one-tap toggle. The picker writes membership with no engagement event; the
-  // act of saving still counts as engagement for the next==skip exemption.
   function save() {
     if (!cur) return;
     engaged.current.add(cur.item.id);
@@ -348,27 +359,27 @@ export default function SessionPage() {
   }
   function next() {
     if (current < items.length - 1) scrollTo(current + 1);
-    else if (!exhausted && elapsed < highSec) loadMore().then(() => scrollTo(current + 1));
-    else scrollTo(items.length); // end panel
+    else if (current === items.length - 1) scrollTo(items.length); // to end panel
+    else finish();
   }
   function dismissCheckin() {
     setCheckin(null);
     advances.current = [];
   }
 
-  if (err) return <div className="err">Couldn't build a session: {err}</div>;
-  if (loading) return <div className="spinner">composing…</div>;
+  if (err) return <div className="err">Couldn't resume your session: {err}</div>;
+  if (loading) return <div className="spinner">resuming…</div>;
   if (items.length === 0) {
     return (
       <div className="center">
-        <p className="display">Nothing new to surface.</p>
+        <p className="display">Nothing left to surface.</p>
         <p>You're caught up on {themes.length ? themes.join(", ") : "everything you follow"}.</p>
-        <button className="btn ghost" onClick={() => nav("/")}>Back to intent</button>
+        <button className="btn ghost" onClick={finish}>Back to intent</button>
       </div>
     );
   }
 
-  const progress = Math.min(1, elapsed / highSec);
+  const progress = Math.min(1, elapsed / durationSec);
   const isLastReal = current === items.length - 1;
 
   return (
@@ -379,22 +390,16 @@ export default function SessionPage() {
           <div className="timebar-fill" style={{ width: `${progress * 100}%` }} />
         </div>
         <span className="clock">
-          {mins(elapsed)} / {low === high ? `${low}m` : `${low}–${high}m`}
+          {mins(elapsed)} / {duration}m
         </span>
       </div>
 
-      {checkin && (
+      {checkin === "fast" && (
         <div className="checkin">
-          {checkin === "low" && <p>You've spent about {low} min. Keep going, or wrap up?</p>}
-          {checkin === "high" && <p>That's about {high} min — your session's worth.</p>}
-          {checkin === "fast" && <p>Flicking past these? Want a different mix?</p>}
+          <p>Flicking past these? Want a different mix?</p>
           <div className="checkin-actions">
-            <button className="mini" onClick={dismissCheckin}>
-              {checkin === "fast" ? "Keep going" : "Keep going"}
-            </button>
-            <button className="mini solid" onClick={() => nav("/")}>
-              {checkin === "fast" ? "Change mix" : checkin === "high" ? "Done" : "Wrap up"}
-            </button>
+            <button className="mini" onClick={dismissCheckin}>Keep going</button>
+            <button className="mini solid" onClick={() => nav("/")}>Change mix</button>
           </div>
         </div>
       )}
@@ -436,7 +441,7 @@ export default function SessionPage() {
             {it.item.summary && <p className="excerpt">{it.item.summary}</p>}
           </div>
         ))}
-        {/* end panel */}
+        {/* end panel - reaching it ends the session and returns home */}
         <div
           className="snap"
           data-idx={items.length}
@@ -445,12 +450,9 @@ export default function SessionPage() {
           }}
         >
           <div className="center" style={{ padding: "20px 0" }}>
-            <p className="display">{exhausted ? "That's everything new." : "That's your session."}</p>
-            <p>{exhausted ? `Caught up on ${themes.length ? themes.join(", ") : "everything"}.` : `About ${mins(elapsed)} spent.`}</p>
-            {!exhausted && (
-              <button className="btn ghost" onClick={() => loadMore().then(() => scrollTo(current))}>A few more</button>
-            )}
-            <button className="btn" onClick={() => nav("/")}>Done</button>
+            <p className="display">That's your session.</p>
+            <p>About {mins(elapsed)} spent. Returning home…</p>
+            <button className="btn" onClick={finish}>Done</button>
           </div>
         </div>
       </div>
@@ -466,7 +468,7 @@ export default function SessionPage() {
           <span className="ic">▣</span>Save
         </button>
         <button className="act-btn" onClick={next}>
-          <span className="ic">↓</span>{isLastReal && !exhausted ? "More" : atEnd ? "Done" : "Next"}
+          <span className="ic">↓</span>{atEnd ? "Done" : isLastReal ? "Finish" : "Next"}
         </button>
       </div>
 

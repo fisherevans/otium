@@ -11,7 +11,7 @@ export default function App() {
   const { loading, unauthenticated } = useAuth();
   const { pathname } = useLocation();
   const nav = useNavigate();
-  const focused = pathname === "/session"; // session is a full-screen focused mode
+  const focused = pathname.startsWith("/session"); // #67: session is /session/:id, full-screen focused mode
 
   if (loading) return <div className="spinner">otium…</div>;
   if (unauthenticated) {
@@ -49,7 +49,7 @@ export default function App() {
       <main className={focused ? "content-session" : "content"}>
         <Routes>
           <Route path="/" element={<HomePage />} />
-          <Route path="/session" element={<SessionPage />} />
+          <Route path="/session/:id" element={<SessionPage />} /> {/* #67: durable session by id */}
           <Route path="/sources" element={<SourcesPage />} />
           <Route path="/collections" element={<CollectionsPage />} />
           <Route path="/mix" element={<MixPage />} />
