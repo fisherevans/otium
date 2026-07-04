@@ -7,11 +7,13 @@ export function fmtDate(iso?: string): string {
   return d.toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" });
 }
 
-// relTime is a finer-grained relative stamp for the session card's identity
-// line (#48): minutes/hours for fresh items, then "yesterday" / "Nd ago" /
-// "last week", then an absolute "Mon D" (with year only when it's not the
-// current year). Returns "" for a missing/unparseable timestamp so the caller
-// can omit the cue rather than fabricate one.
+// relTime is the prominent relative age shown above the card's hero (#73). It
+// stays human and readable at a glance: minutes/hours while fresh, then
+// "yesterday" / "X days ago", then "X weeks ago" past a week, and once it's past
+// a month it drops to an absolute date ("Mar 4", with the year only when it's
+// not the current year - a stamp that old reads better as a real date than as an
+// ever-growing "N weeks ago"). Returns "" for a missing/unparseable timestamp so
+// the caller can omit the cue rather than fabricate one.
 export function relTime(iso?: string): string {
   if (!iso) return "";
   const d = new Date(iso);
@@ -24,8 +26,11 @@ export function relTime(iso?: string): string {
   if (hrs < 24) return `${hrs}h ago`;
   const days = Math.floor(hrs / 24);
   if (days === 1) return "yesterday";
-  if (days < 7) return `${days}d ago`;
-  if (days < 14) return "last week";
+  if (days < 7) return `${days} days ago`;
+  if (days < 30) {
+    const w = Math.floor(days / 7);
+    return `${w} week${w === 1 ? "" : "s"} ago`;
+  }
   const sameYear = d.getFullYear() === new Date().getFullYear();
   return d.toLocaleDateString(
     undefined,

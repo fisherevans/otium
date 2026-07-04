@@ -6,6 +6,8 @@ import { Reader } from "@/components/Reader";
 import { Player } from "@/components/Player";
 import { SavePicker } from "@/components/SavePicker";
 import { ScoreCue, ScoreBreakdownSheet } from "@/components/ScoreBreakdown";
+import { SourceSheet } from "@/components/SourceSheet";
+import { ExternalLink, Heart, Bookmark, ChevronDown } from "lucide-react";
 
 // Which in-app content surface an item opens into (#51). Video/audio play in
 // the Player; everything else (article/rss/quote/text) reads in the Reader.
@@ -62,16 +64,27 @@ function Media({ item }: { item: Item }) {
   return null; // quote / plain text: no media
 }
 
+// The prominent date above the hero (#73). The item's relative age reads first,
+// larger and clearer than the mono identity line, so "when" lands at a glance
+// before the media. relTime returns "" for a missing stamp, in which case we
+// omit the cue rather than fabricate one.
+function CardDate({ item }: { item: Item }) {
+  const age = relTime(item.published_at || item.fetched_at);
+  if (!age) return null;
+  return <div className="card-date">{age}</div>;
+}
+
 // The card's identity line (#44/#48): feed as the emphasized anchor (icon +
-// name), then the source, the media descriptor, and a relative age - so "who"
-// and "when" read together. A feedless source (e.g. YouTube) has no feed ref, so
-// the line degrades to source-only. Icons inherit ink via currentColor; when a
-// feed has no icon set we fall back to its color swatch.
-function Identity({ sel }: { sel: Selected }) {
+// name), then the source and the media descriptor. The relative age moved above
+// the hero (#73), so it's no longer on this line. The source name is tappable
+// (#75): it opens the source context menu, and stops propagation so it doesn't
+// also trigger the card-body tap-to-open. A feedless source (e.g. YouTube) has
+// no feed ref, so the line degrades to source-only. Icons inherit ink via
+// currentColor; when a feed has no icon set we fall back to its color swatch.
+function Identity({ sel, onSource }: { sel: Selected; onSource: () => void }) {
   const f = sel.feed;
   const Ic = feedIcon(f?.icon);
   const type = sel.item.media_type === "audio" ? mins(sel.item.duration_sec || sel.est_duration_sec) : sel.item.media_type;
-  const age = relTime(sel.item.published_at || sel.item.fetched_at);
   return (
     <div className="identity">
       {f && (
@@ -84,9 +97,18 @@ function Identity({ sel }: { sel: Selected }) {
           <span className="id-feed-name">{f.name}</span>
         </span>
       )}
-      <span className={f ? "id-source" : "id-source lead"}>{sel.source_title}</span>
+      <button
+        type="button"
+        className={f ? "id-source" : "id-source lead"}
+        onPointerDown={(e) => e.stopPropagation()}
+        onClick={(e) => {
+          e.stopPropagation();
+          onSource();
+        }}
+      >
+        {sel.source_title}
+      </button>
       {type && <span className="id-type">{type}</span>}
-      {age && <span className="id-age">{age}</span>}
     </div>
   );
 }
@@ -120,6 +142,7 @@ export default function SessionPage() {
   const [menuOpen, setMenuOpen] = useState(false);
   const [breakdown, setBreakdown] = useState<Selected | null>(null);
   const [content, setContent] = useState<Selected | null>(null); // the in-app content surface (#51)
+  const [sourceSel, setSourceSel] = useState<Selected | null>(null); // source context menu target (#75)
 
   const durationSec = duration * 60;
 
@@ -486,8 +509,9 @@ export default function SessionPage() {
               </button>
             )}
             <h3>{it.item.title}</h3>
+            <CardDate item={it.item} />
             <Media item={it.item} />
-            <Identity sel={it} />
+            <Identity sel={it} onSource={() => setSourceSel(it)} />
             {it.item.summary && <p className="excerpt">{it.item.summary}</p>}
           </div>
         ))}
@@ -509,16 +533,20 @@ export default function SessionPage() {
 
       <div className="actionbar">
         <button className="act-btn" onClick={open} disabled={atEnd}>
-          <span className="ic">↗</span>Original
+          <ExternalLink className="ic" size={18} strokeWidth={1.75} aria-hidden />
+          Original
         </button>
         <button className={`act-btn ${cur && liked.has(cur.item.id) ? "on" : ""}`} onClick={like} disabled={atEnd}>
-          <span className="ic">♥</span>Like
+          <Heart className="ic" size={18} strokeWidth={1.75} fill={cur && liked.has(cur.item.id) ? "currentColor" : "none"} aria-hidden />
+          Like
         </button>
         <button className="act-btn" onClick={save} disabled={atEnd}>
-          <span className="ic">▣</span>Save
+          <Bookmark className="ic" size={18} strokeWidth={1.75} aria-hidden />
+          Save
         </button>
         <button className="act-btn" onClick={next}>
-          <span className="ic">↓</span>{atEnd ? "Done" : isLastReal ? "Finish" : "Next"}
+          <ChevronDown className="ic" size={18} strokeWidth={1.75} aria-hidden />
+          {atEnd ? "Done" : isLastReal ? "Finish" : "Next"}
         </button>
       </div>
 
@@ -556,6 +584,17 @@ export default function SessionPage() {
         onClose={() => setContent(null)}
         onOpenOriginal={() => shown && openExternal(shown)}
         onSave={() => shown && setSaveItem(shown.item)}
+      />
+
+      {/* Source context menu (#75): tapping the source name on a card opens this -
+          quick weight, source history, and a path to full settings - without
+          leaving the session. */}
+      <SourceSheet
+        sourceId={sourceSel?.item.source_id ?? 0}
+        sourceTitle={sourceSel?.source_title}
+        currentItemId={sourceSel?.item.id ?? 0}
+        open={sourceSel !== null}
+        onClose={() => setSourceSel(null)}
       />
 
       {/* Save picker (#57): the deliberate save destination for the bottom-bar

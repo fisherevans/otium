@@ -203,7 +203,7 @@ export function SourceDetail({
               <button onClick={() => setArchived(true)}>Archive</button>
             )}
             {source.homepage_url && (
-              <button onClick={() => window.open(source.homepage_url, "_blank", "noopener")}>Visit site ↗</button>
+              <button onClick={() => window.open(source.homepage_url, "_blank", "noopener")}>Visit site</button>
             )}
             {onDelete && <button onClick={() => setConfirmDel(true)}>Delete</button>}
           </div>

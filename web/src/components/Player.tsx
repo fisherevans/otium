@@ -1,4 +1,5 @@
 import { useMemo, type CSSProperties } from "react";
+import { ExternalLink, Bookmark } from "lucide-react";
 import type { Item } from "@/api/client";
 import { BottomSheet } from "./BottomSheet";
 import { fmtDate } from "@/lib/format";
@@ -64,7 +65,7 @@ export function Player({
   const ytId = useMemo(() => (isVideo ? parseYouTubeId(item?.url) : null), [isVideo, item?.url]);
 
   return (
-    <BottomSheet open={open} onClose={onClose} variant="tall" kicker={item?.media_type ?? ""}>
+    <BottomSheet open={open} onClose={onClose} variant="tall" swipeClose kicker={item?.media_type ?? ""}>
       {item && (
         <div className="reader">
           {isVideo && ytId ? (
@@ -85,7 +86,7 @@ export function Player({
               <p className="reader-empty-lead">Can't play this one in place.</p>
               <p>It lives somewhere that won't embed - open it at the source.</p>
               <button className="btn" onClick={onOpenOriginal}>
-                Open original ↗
+                Open original
               </button>
             </div>
           )}
@@ -100,17 +101,16 @@ export function Player({
           </div>
 
           <div className="reader-foot">
-            <span>otium · playing in place</span>
-            <span className="reader-foot-actions">
-              {onSave && (
-                <button className="reader-open" onClick={onSave}>
-                  Save
-                </button>
-              )}
-              <button className="reader-open" onClick={onOpenOriginal}>
-                Open original ↗
+            {onSave && (
+              <button className="reader-open" onClick={onSave}>
+                <Bookmark size={15} strokeWidth={1.75} aria-hidden />
+                Save
               </button>
-            </span>
+            )}
+            <button className="reader-open" onClick={onOpenOriginal}>
+              <ExternalLink size={15} strokeWidth={1.75} aria-hidden />
+              Open original
+            </button>
           </div>
         </div>
       )}
