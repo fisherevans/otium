@@ -278,3 +278,37 @@ dwell, which the "explicit signals only" principle forbids. Neither can proceed
 until Fisher decides whether to relax that principle. Everything else in the
 ranker batch (#7/#17/#11) is independent of it, so the ranker work isn't blocked
 overall - only the behavioral-pace half is.
+
+## 2026-07-04 · Philosophy refine + core-loop reshaping
+
+### Philosophy (Fisher, recorded in decisions.md)
+otium is **not anti-data** - it's intentionality + transparency + privacy. Dwell
+IS measured, but only to power a check-in ("scrolling fast - keep going or do
+something else?") that never re-ranks the feed; toggleable. Refusal = engagement
+*optimization*, not measurement. Unblocked #6/#5.
+
+### Shipped
+- **v0.12.0** collections (#57) - named lists + Saved/Watch Later/Liked, Save
+  picker, Collections view. (Interview: named collections, Watch Later browse-only,
+  Like stays separate.)
+- **v0.13.0** feed/source management as **dedicated pages** (#66) - /sources/:id
+  (settings + posts) + /feeds/:slug (its sources + settings + posts). Reverses the
+  #65 modal; subsumes #38. Verified at Palma res.
+- **v0.14.0** intent **one-pager** (#69, single duration slider + topics + "Start
+  reading", no scroll) + **durable backend sessions** (#67, cursor/resume/
+  expire-to-home). Verified at Palma res + session flow.
+
+### Caught a prod-down bug before shipping
+The session migration created an index on `sessions(status)` in schema.sql, which
+runs BEFORE migrate() adds the column - fatal on the pre-existing sessions table
+(prod has one). Would've crashed boot. Moved the index into migrate() after the
+column; verified boot against a prod DB copy, then confirmed clean on prod.
+
+### DB-copy gotcha (screenshot harness)
+`cat`-ing a live prod SQLite mid-WAL-write yields a malformed copy. Copy
+`otium.db` + `otium.db-wal` + `otium.db-shm` together so SQLite replays the WAL.
+
+### In flight
+- **#68 dwell check-in + settings toggle** - the 4th shore-up ask, building now
+  (worktree). After it, the shore-up round is done and the "next big bet" question
+  (reader-depth / TTS / Discovery / LLM operator) is Fisher's to pick.
