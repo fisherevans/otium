@@ -2091,3 +2091,71 @@ h1.display {
   color: var(--ink);
 }
 /* ===== end #66 ===== */
+
+/* ===== #71 flat-icons: action-bar + footer lucide glyphs ===== */
+/* Bottom-bar action icons are inline lucide SVGs now (were emoji-rendering
+   unicode: ↗ ♥ ▣ ↓). Single-ink, sized by the SVG's own attrs; the .on pill
+   inverts via currentColor so a filled heart reads on the dark background. */
+.act-btn .ic {
+  display: block;
+  color: currentColor;
+}
+/* ===== end #71 ===== */
+
+/* ===== #73 card-date: prominent age above the hero ===== */
+.card-date {
+  font-family: var(--grot);
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--ink-soft);
+  margin: 2px 0 8px;
+}
+/* ===== end #73 ===== */
+
+/* ===== #74 reader-swipe + footer: directional dismiss, clean footer ===== */
+/* Swiping up from the bottom edge dismisses the sheet upward: exit-up flips the
+   closed transform so it leaves the top instead of the bottom. `up` still wins
+   while the sheet is open (it enters and holds at translateY(0)). */
+.sheet.exit-up:not(.up) {
+  transform: translateY(-101%);
+}
+/* Footer is just the flat-icon actions now (no branding line): right-align, and
+   lay each button out as icon + label. */
+.reader-foot {
+  justify-content: flex-end;
+}
+.reader-open {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.reader-open svg {
+  display: block;
+}
+/* ===== end #74 ===== */
+
+/* ===== #75 source-tap: tappable source name on the card ===== */
+/* The source name is a button now; strip the UA chrome so it still reads as the
+   mono identity text, with a quiet dotted underline as the tap affordance. */
+button.id-source {
+  background: none;
+  border: none;
+  padding: 0;
+  margin: 0;
+  cursor: pointer;
+  font-family: var(--mono);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--ink-mute);
+  text-decoration: underline dotted;
+  text-underline-offset: 3px;
+}
+button.id-source.lead {
+  color: var(--ink-soft);
+}
+button.id-source:active {
+  color: var(--ink);
+}
+/* ===== end #75 ===== */
