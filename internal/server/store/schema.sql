@@ -154,3 +154,32 @@ CREATE TABLE IF NOT EXISTS kv (
     value   TEXT NOT NULL DEFAULT '',
     PRIMARY KEY (user_id, key)
 );
+
+-- A named list of saved items (#57). Distinct from feeds: feeds group SOURCES
+-- for session-building; collections group ITEMS the user deliberately set aside.
+-- Three builtins are seeded per user (Saved, Watch Later, Liked); the rest are
+-- user-created. `kind` gates which are renamable/deletable. There are no
+-- per-item tags - this is a handful of named sets, not a taxonomy.
+CREATE TABLE IF NOT EXISTS collections (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    name       TEXT NOT NULL,
+    slug       TEXT NOT NULL,
+    -- builtin (Saved / Watch Later / Liked, seeded, protected) | user
+    kind       TEXT NOT NULL DEFAULT 'user',
+    sort       INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    UNIQUE (user_id, slug)
+);
+
+-- Membership: which items belong to a collection. Newest-added first when
+-- browsed. The UNIQUE (collection_id, item_id) is the PK, so re-adding an item
+-- is an idempotent no-op.
+CREATE TABLE IF NOT EXISTS collection_items (
+    collection_id INTEGER NOT NULL REFERENCES collections(id) ON DELETE CASCADE,
+    item_id       INTEGER NOT NULL REFERENCES items(id) ON DELETE CASCADE,
+    added_at      TEXT NOT NULL DEFAULT (datetime('now')),
+    PRIMARY KEY (collection_id, item_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_collection_items_item ON collection_items(item_id);

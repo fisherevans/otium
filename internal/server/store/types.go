@@ -66,6 +66,24 @@ type FeedRef struct {
 	Icon  string `json:"icon"`
 }
 
+// Collection is a named list of saved items (#57). Builtins (Saved, Watch
+// Later, Liked) are seeded per user and protected from rename/delete; the rest
+// are user-created. Unlike a feed (a grouping of sources), a collection groups
+// items the user deliberately set aside.
+type Collection struct {
+	ID        int64     `json:"id"`
+	UserID    int64     `json:"-"`
+	Name      string    `json:"name"`
+	Slug      string    `json:"slug"`
+	Kind      string    `json:"kind"` // builtin | user
+	Sort      int       `json:"sort"`
+	CreatedAt time.Time `json:"created_at"`
+	ItemCount int       `json:"item_count"`
+	// Contains is populated only when the list is fetched for a specific item
+	// (the Save picker's membership checkmarks). nil otherwise.
+	Contains *bool `json:"contains,omitempty"`
+}
+
 // Item is a normalized content event from a source.
 type Item struct {
 	ID           int64     `json:"id"`

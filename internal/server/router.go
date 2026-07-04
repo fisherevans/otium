@@ -58,6 +58,15 @@ func NewRouter(h *handler.Handler, authMiddleware func(http.Handler) http.Handle
 
 			r.Get("/mix", h.Mix)
 
+			// Collections (#57): named lists of saved items + builtins.
+			r.Get("/collections", h.ListCollections)
+			r.Post("/collections", h.CreateCollection)
+			r.Patch("/collections/{id}", h.RenameCollection)
+			r.Delete("/collections/{id}", h.DeleteCollection)
+			r.Get("/collections/{id}/items", h.CollectionItems)
+			r.Post("/collections/{id}/items", h.AddCollectionItem)
+			r.Delete("/collections/{id}/items/{itemId}", h.RemoveCollectionItem)
+
 			r.Post("/session", h.BuildSession)
 			r.Post("/items/{id}/event", h.ItemEvent)
 			r.Post("/fetch", h.FetchNow)
