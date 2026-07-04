@@ -119,16 +119,33 @@ CREATE TABLE IF NOT EXISTS item_state (
     PRIMARY KEY (user_id, item_id)
 );
 
--- Built sessions - one row per "give me 20 minutes of comedy" request.
+-- Built sessions - one row per "give me 20 minutes of comedy" request. A session
+-- is durable: the built queue (item_ids) and the read position (cursor) live
+-- here, so a refresh or a return resumes the SAME items at the SAME place rather
+-- than rebuilding a fresh feed (#67). One session per user is 'active' at a time;
+-- starting a new one ends the previous. When it's over (time budget reached or
+-- the queue is exhausted) it flips to 'ended' and the client returns home.
 CREATE TABLE IF NOT EXISTS sessions (
-    id         TEXT PRIMARY KEY,                     -- random token
-    user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    min_low    INTEGER NOT NULL,                     -- requested range, minutes
-    min_high   INTEGER NOT NULL,
-    themes     TEXT NOT NULL DEFAULT '',             -- csv of feed slugs, '' = all
-    item_ids   TEXT NOT NULL DEFAULT '',             -- csv of selected item ids, in order
-    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    id           TEXT PRIMARY KEY,                     -- random token
+    user_id      INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    -- min_low/min_high predate the single-duration model (#69); both now equal
+    -- duration_min. Kept for back-compat with rows written before duration_min.
+    min_low      INTEGER NOT NULL,
+    min_high     INTEGER NOT NULL,
+    -- the single chosen session length, minutes (#69). Added additively via
+    -- migrate() for databases created before this column existed.
+    duration_min INTEGER NOT NULL DEFAULT 0,
+    themes       TEXT NOT NULL DEFAULT '',             -- csv of feed slugs, '' = all
+    item_ids     TEXT NOT NULL DEFAULT '',             -- csv of selected item ids, in order (the built queue)
+    -- read position into item_ids: how far the user has advanced. Persisted as
+    -- they scroll so a resume lands on the same item. Added additively.
+    cursor       INTEGER NOT NULL DEFAULT 0,
+    -- 'active' | 'ended'. Exactly one 'active' row per user. Added additively.
+    status       TEXT NOT NULL DEFAULT 'active',
+    created_at   TEXT NOT NULL DEFAULT (datetime('now'))
 );
+
+CREATE INDEX IF NOT EXISTS idx_sessions_user_status ON sessions(user_id, status);
 
 -- Append-only event log - the raw material for user-owned stats and the
 -- JSON/agent surface. Never mutated.

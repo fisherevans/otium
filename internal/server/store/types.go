@@ -101,6 +101,21 @@ type Item struct {
 	FetchedAt    time.Time `json:"fetched_at"`
 }
 
+// Session is a durable, stateful consumption session (#67): the built queue
+// (ItemIDs, in order) plus the read Cursor into it, so a refresh or a return
+// resumes the same items at the same place. Exactly one session per user is
+// 'active'. DurationMin is the single chosen length (#69) the client paces
+// against.
+type Session struct {
+	ID          string    `json:"id"`
+	DurationMin int       `json:"duration_min"`
+	Themes      []string  `json:"themes"`
+	ItemIDs     []int64   `json:"-"`
+	Cursor      int       `json:"cursor"`
+	Status      string    `json:"status"` // active | ended
+	CreatedAt   time.Time `json:"created_at"`
+}
+
 // Candidate is an item plus the source facts the ranker needs. It is the input
 // to the session builder.
 type Candidate struct {

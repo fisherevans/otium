@@ -9,6 +9,7 @@ import (
 	"database/sql"
 	_ "embed"
 	"fmt"
+	"strconv"
 	"strings"
 	"time"
 
@@ -58,7 +59,17 @@ func migrate(sdb *sql.DB) error {
 		return err
 	}
 	// items.content (#58): full article body as raw HTML, rendered in the reader.
-	return ensureColumn(sdb, "items", "content", `ALTER TABLE items ADD COLUMN content TEXT NOT NULL DEFAULT ''`)
+	if err := ensureColumn(sdb, "items", "content", `ALTER TABLE items ADD COLUMN content TEXT NOT NULL DEFAULT ''`); err != nil {
+		return err
+	}
+	// Durable sessions (#67): single duration, read cursor, lifecycle status.
+	if err := ensureColumn(sdb, "sessions", "duration_min", `ALTER TABLE sessions ADD COLUMN duration_min INTEGER NOT NULL DEFAULT 0`); err != nil {
+		return err
+	}
+	if err := ensureColumn(sdb, "sessions", "cursor", `ALTER TABLE sessions ADD COLUMN cursor INTEGER NOT NULL DEFAULT 0`); err != nil {
+		return err
+	}
+	return ensureColumn(sdb, "sessions", "status", `ALTER TABLE sessions ADD COLUMN status TEXT NOT NULL DEFAULT 'active'`)
 }
 
 // ensureColumn adds a column via ddl only if it isn't already present. This is
@@ -952,12 +963,107 @@ func (db *DB) LogEvent(ctx context.Context, userID int64, typ string, itemID, so
 }
 
 // --- sessions ---
+//
+// A session is durable and stateful (#67): the built queue (item_ids) and the
+// read position (cursor) persist, so resuming continues the same items at the
+// same place. Exactly one session per user is 'active' at a time; CreateSession
+// ends the prior active one in the same transaction.
 
-func (db *DB) SaveSession(ctx context.Context, id string, userID int64, low, high int, themes string, itemIDs []int64) error {
+// CreateSession ends the user's current active session (if any) and inserts a new
+// active one carrying the built queue. Single duration: min_low/min_high both
+// equal durationMin for back-compat with the pre-#69 columns.
+func (db *DB) CreateSession(ctx context.Context, id string, userID int64, durationMin int, themes []string, itemIDs []int64) error {
+	tx, err := db.sql.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	if _, err := tx.ExecContext(ctx,
+		`UPDATE sessions SET status='ended' WHERE user_id=? AND status='active'`, userID); err != nil {
+		return err
+	}
+	if _, err := tx.ExecContext(ctx,
+		`INSERT INTO sessions (id, user_id, min_low, min_high, duration_min, themes, item_ids, cursor, status)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, 0, 'active')`,
+		id, userID, durationMin, durationMin, durationMin, strings.Join(themes, ","), joinInts(itemIDs)); err != nil {
+		return err
+	}
+	return tx.Commit()
+}
+
+// CurrentSession returns the user's active session, or (nil, nil) if none.
+func (db *DB) CurrentSession(ctx context.Context, userID int64) (*Session, error) {
+	row := db.sql.QueryRowContext(ctx,
+		`SELECT id, duration_min, themes, item_ids, cursor, status, created_at
+		 FROM sessions WHERE user_id=? AND status='active' ORDER BY created_at DESC LIMIT 1`, userID)
+	return scanSession(row)
+}
+
+// GetSession returns a specific session owned by the user, or (nil, nil).
+func (db *DB) GetSession(ctx context.Context, userID int64, id string) (*Session, error) {
+	row := db.sql.QueryRowContext(ctx,
+		`SELECT id, duration_min, themes, item_ids, cursor, status, created_at
+		 FROM sessions WHERE id=? AND user_id=?`, id, userID)
+	return scanSession(row)
+}
+
+func scanSession(row *sql.Row) (*Session, error) {
+	var s Session
+	var themes, itemIDs, created string
+	if err := row.Scan(&s.ID, &s.DurationMin, &themes, &itemIDs, &s.Cursor, &s.Status, &created); err != nil {
+		if err == sql.ErrNoRows {
+			return nil, nil
+		}
+		return nil, err
+	}
+	for _, t := range strings.Split(themes, ",") {
+		if t = strings.TrimSpace(t); t != "" {
+			s.Themes = append(s.Themes, t)
+		}
+	}
+	s.ItemIDs = splitInts(itemIDs)
+	s.CreatedAt = parseTime(created)
+	return &s, nil
+}
+
+// UpdateSessionCursor advances the read position. It only touches an active
+// session, so a cursor write after the session ended is a harmless no-op.
+func (db *DB) UpdateSessionCursor(ctx context.Context, userID int64, id string, cursor int) error {
 	_, err := db.sql.ExecContext(ctx,
-		`INSERT INTO sessions (id, user_id, min_low, min_high, themes, item_ids) VALUES (?, ?, ?, ?, ?, ?)`,
-		id, userID, low, high, themes, joinInts(itemIDs))
+		`UPDATE sessions SET cursor=? WHERE id=? AND user_id=? AND status='active'`, cursor, id, userID)
 	return err
+}
+
+// EndSession marks a session 'ended' (idempotent).
+func (db *DB) EndSession(ctx context.Context, userID int64, id string) error {
+	_, err := db.sql.ExecContext(ctx,
+		`UPDATE sessions SET status='ended' WHERE id=? AND user_id=?`, id, userID)
+	return err
+}
+
+// CandidatesByIDs rehydrates specific items as ranker Candidates regardless of
+// their surfaced/seen state, so a stored session queue can be rebuilt on resume.
+// The cadence window matches Candidates' session-build default (45 days) so the
+// rehydrated scores line up with what the build produced.
+func (db *DB) CandidatesByIDs(ctx context.Context, userID int64, ids []int64) ([]Candidate, error) {
+	if len(ids) == 0 {
+		return nil, nil
+	}
+	q := `SELECT ` + candidateCols + `
+	      FROM items i
+	      JOIN sources s ON s.id = i.source_id
+	      WHERE s.user_id = ? AND i.id IN (` + placeholders(len(ids)) + `)`
+	win := "-45 days"
+	args := []any{win, win, userID}
+	for _, id := range ids {
+		args = append(args, id)
+	}
+	rows, err := db.sql.QueryContext(ctx, q, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	return scanCandidates(rows, 45)
 }
 
 // --- helpers ---
@@ -1014,4 +1120,18 @@ func joinInts(ids []int64) string {
 		parts[i] = fmt.Sprintf("%d", id)
 	}
 	return strings.Join(parts, ",")
+}
+
+func splitInts(s string) []int64 {
+	if s == "" {
+		return nil
+	}
+	parts := strings.Split(s, ",")
+	out := make([]int64, 0, len(parts))
+	for _, p := range parts {
+		if n, err := strconv.ParseInt(strings.TrimSpace(p), 10, 64); err == nil {
+			out = append(out, n)
+		}
+	}
+	return out
 }

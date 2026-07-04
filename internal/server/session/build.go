@@ -246,6 +246,23 @@ func Build(req Request, pool []store.Candidate, now time.Time, stats map[int64]S
 	}
 }
 
+// SelectFor builds the Selected view for a single candidate at selectivity 1 -
+// the session-agnostic effective score. It's used to rehydrate a stored session
+// queue on resume (#67): the queue order is fixed at build time, so resume only
+// needs each item's current score/reason/breakdown, not a re-rank. Score equals
+// round2(ItemEffectiveScore), so the on-card cue, the breakdown, and the mix all
+// agree and the ItemEffectiveScore == scoreOf(sel=1) invariant is preserved.
+func SelectFor(c store.Candidate, now time.Time, stat SourceStat) Selected {
+	return Selected{
+		Item:        c.Item,
+		SourceTitle: c.SourceTitle,
+		Score:       round2(ItemEffectiveScore(c, now, stat)),
+		EstDuration: estDuration(c),
+		Reason:      reasonOf(c, now),
+		Breakdown:   ScoreBreakdownFor(c, now, stat),
+	}
+}
+
 // predictItems estimates how many items fit the time budget: budget divided by
 // the mix's effective time-per-item. Effective time blends the feed's empirical
 // content length (SourceStat.AvgContentSec) with the skim factor - because a

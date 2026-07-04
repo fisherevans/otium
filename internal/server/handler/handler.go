@@ -4,6 +4,7 @@
 package handler
 
 import (
+	"context"
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
@@ -295,60 +296,183 @@ func (h *Handler) SourceItems(w http.ResponseWriter, r *http.Request) {
 }
 
 // --- sessions ---
+//
+// Sessions are durable and stateful (#67). CreateSession builds a finite queue
+// from a single duration + themes (#69), stores it, and returns it; the queue
+// and the read cursor live in the backend so a refresh or a return resumes the
+// same items at the same place (CurrentSession) rather than rebuilding a fresh
+// feed. One session per user is active at a time - creating a new one ends the
+// previous. When the client decides the session is over (time budget reached or
+// the queue exhausted) it PATCHes status='ended' and returns home.
 
-// BuildSession is the core endpoint: turn a duration range + themes into a
-// finite, ordered, explainable set of items.
-func (h *Handler) BuildSession(w http.ResponseWriter, r *http.Request) {
+// CreateSession builds the ranked queue for {duration_min, themes}, ends any
+// prior active session, persists the new one, and returns its id + items +
+// cursor. An empty selection (no sources / nothing new) returns session_id="" and
+// no session row, so the client stays home instead of holding an empty session.
+func (h *Handler) CreateSession(w http.ResponseWriter, r *http.Request) {
 	uid := userID(r)
 	var body struct {
-		MinLow  int      `json:"min_low"`
-		MinHigh int      `json:"min_high"`
-		Themes  []string `json:"themes"` // feed slugs; empty = all followed sources
+		DurationMin int      `json:"duration_min"`
+		Themes      []string `json:"themes"` // feed slugs; empty = all followed sources
 	}
 	if !decode(w, r, &body) {
 		return
 	}
-	if body.MinLow <= 0 {
-		body.MinLow = 5
-	}
-	if body.MinHigh < body.MinLow {
-		body.MinHigh = body.MinLow
+	if body.DurationMin <= 0 {
+		body.DurationMin = 15
 	}
 
+	items, err := h.buildSessionQueue(r.Context(), uid, body.DurationMin, body.Themes)
+	if err != nil {
+		serverError(w, h.log, "build session", err)
+		return
+	}
+	if len(items) == 0 {
+		writeJSON(w, http.StatusOK, sessionPayload("", body.DurationMin, 0, body.Themes, items))
+		return
+	}
+
+	sid := randID()
+	ids := make([]int64, len(items))
+	for i, it := range items {
+		ids[i] = it.Item.ID
+	}
+	// Items are NOT marked surfaced here - the queue is paced client-side, so an
+	// item is only "seen" once it actually reaches the user (a `seen` event).
+	if err := h.db.CreateSession(r.Context(), sid, uid, body.DurationMin, body.Themes, ids); err != nil {
+		serverError(w, h.log, "create session", err)
+		return
+	}
+	_ = h.db.LogEvent(r.Context(), uid, "session_build", nil, nil, sid,
+		`{"count":`+strconv.Itoa(len(ids))+`,"duration":`+strconv.Itoa(body.DurationMin)+`,"themes":"`+strings.Join(body.Themes, ",")+`"}`)
+
+	writeJSON(w, http.StatusCreated, sessionPayload(sid, body.DurationMin, 0, body.Themes, items))
+}
+
+// CurrentSession returns the user's active session rehydrated to its stored
+// queue + cursor, so the SessionPage can resume it. 204 when there is none.
+func (h *Handler) CurrentSession(w http.ResponseWriter, r *http.Request) {
+	uid := userID(r)
+	s, err := h.db.CurrentSession(r.Context(), uid)
+	if err != nil {
+		serverError(w, h.log, "current session", err)
+		return
+	}
+	if s == nil {
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
+	items, err := h.rehydrateSession(r.Context(), uid, s.ItemIDs)
+	if err != nil {
+		serverError(w, h.log, "rehydrate session", err)
+		return
+	}
+	writeJSON(w, http.StatusOK, sessionPayload(s.ID, s.DurationMin, s.Cursor, s.Themes, items))
+}
+
+// UpdateSession advances the cursor and/or ends the session (#67). Both fields
+// are optional; a cursor write after the session ended is a harmless no-op.
+func (h *Handler) UpdateSession(w http.ResponseWriter, r *http.Request) {
+	uid := userID(r)
+	id := chi.URLParam(r, "id")
+	var body struct {
+		Cursor *int    `json:"cursor"`
+		Status *string `json:"status"` // "ended"
+	}
+	if !decode(w, r, &body) {
+		return
+	}
+	if body.Cursor != nil {
+		if err := h.db.UpdateSessionCursor(r.Context(), uid, id, *body.Cursor); err != nil {
+			serverError(w, h.log, "advance cursor", err)
+			return
+		}
+	}
+	if body.Status != nil && *body.Status == "ended" {
+		if err := h.db.EndSession(r.Context(), uid, id); err != nil {
+			serverError(w, h.log, "end session", err)
+			return
+		}
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
+}
+
+// buildSessionQueue resolves themes, pulls the candidate pool + behavioral
+// stats, runs the ranker for the single duration (fed as both bounds so the
+// existing predict/selectivity path is unchanged), and attaches each item's
+// primary feed. Returns an empty slice when the theme selection has no sources.
+func (h *Handler) buildSessionQueue(ctx context.Context, uid int64, durationMin int, themes []string) ([]session.Selected, error) {
 	var sourceIDs []int64
-	if len(body.Themes) > 0 {
-		ids, err := h.db.SourceIDsForFeeds(r.Context(), uid, body.Themes)
+	if len(themes) > 0 {
+		ids, err := h.db.SourceIDsForFeeds(ctx, uid, themes)
 		if err != nil {
-			serverError(w, h.log, "resolve themes", err)
-			return
+			return nil, err
 		}
-		// A theme with no sources should yield an empty session, not "all".
+		// A theme with no sources yields an empty session, not "all".
+		if len(ids) == 0 {
+			return nil, nil
+		}
 		sourceIDs = ids
-		if len(sourceIDs) == 0 {
-			writeJSON(w, http.StatusOK, session.Result{TargetLow: body.MinLow, TargetHigh: body.MinHigh})
-			return
+	}
+
+	pool, err := h.db.Candidates(ctx, uid, sourceIDs, 45, 500)
+	if err != nil {
+		return nil, err
+	}
+	stats, err := h.sourceStats(ctx, uid)
+	if err != nil {
+		return nil, err
+	}
+	// Single duration (#69): pass it as both bounds. predictItems averages the two,
+	// so low==high just means "exactly this many minutes" - no range/variability.
+	result := session.Build(session.Request{MinLow: durationMin, MinHigh: durationMin}, pool, time.Now().UTC(), stats)
+	h.attachFeeds(ctx, uid, result.Items)
+	return result.Items, nil
+}
+
+// rehydrateSession rebuilds the Selected view for a stored queue, preserving the
+// queue's fixed order (no re-rank) and recomputing each item's current
+// score/reason/breakdown. Items deleted since the build are dropped.
+func (h *Handler) rehydrateSession(ctx context.Context, uid int64, itemIDs []int64) ([]session.Selected, error) {
+	out := make([]session.Selected, 0, len(itemIDs)) // never nil: serialize as [] not null
+	if len(itemIDs) == 0 {
+		return out, nil
+	}
+	cands, err := h.db.CandidatesByIDs(ctx, uid, itemIDs)
+	if err != nil {
+		return nil, err
+	}
+	stats, err := h.sourceStats(ctx, uid)
+	if err != nil {
+		return nil, err
+	}
+	byID := make(map[int64]store.Candidate, len(cands))
+	for _, c := range cands {
+		byID[c.ID] = c
+	}
+	now := time.Now().UTC()
+	for _, id := range itemIDs {
+		c, ok := byID[id]
+		if !ok {
+			continue
 		}
+		out = append(out, session.SelectFor(c, now, stats[c.SourceID]))
 	}
+	h.attachFeeds(ctx, uid, out)
+	return out, nil
+}
 
-	// Pull a generous candidate pool (recent unseen), rank, and fill.
-	pool, err := h.db.Candidates(r.Context(), uid, sourceIDs, 45, 500)
+// sourceStats assembles the per-source behavioral + content signals the ranker
+// folds in: empirical time-per-item (predicts how many items fit the budget) and
+// skip history (downweights sources the user keeps passing on).
+func (h *Handler) sourceStats(ctx context.Context, uid int64) (map[int64]session.SourceStat, error) {
+	avgDur, err := h.db.SourceAvgDuration(ctx, uid, 100)
 	if err != nil {
-		serverError(w, h.log, "candidates", err)
-		return
+		return nil, err
 	}
-
-	// Behavioral + content signals: empirical time-per-item (predicts how many
-	// items fit the budget -> selectivity) and skip history (downweights sources
-	// the user keeps passing on).
-	avgDur, err := h.db.SourceAvgDuration(r.Context(), uid, 100)
+	skips, err := h.db.SourceSkipStats(ctx, uid)
 	if err != nil {
-		serverError(w, h.log, "avg duration", err)
-		return
-	}
-	skips, err := h.db.SourceSkipStats(r.Context(), uid)
-	if err != nil {
-		serverError(w, h.log, "skip stats", err)
-		return
+		return nil, err
 	}
 	stats := map[int64]session.SourceStat{}
 	for sid, avg := range avgDur {
@@ -361,43 +485,48 @@ func (h *Handler) BuildSession(w http.ResponseWriter, r *http.Request) {
 		s.Shown, s.Skipped = sk.Shown, sk.Skipped
 		stats[sid] = s
 	}
+	return stats, nil
+}
 
-	result := session.Build(session.Request{MinLow: body.MinLow, MinHigh: body.MinHigh}, pool, time.Now().UTC(), stats)
-
-	// Attach each item's primary feed identity for the card's identity line.
-	// Feedless sources (e.g. YouTube) stay nil and render source-only.
-	selSourceIDs := make([]int64, 0, len(result.Items))
-	for _, it := range result.Items {
-		selSourceIDs = append(selSourceIDs, it.Item.SourceID)
+// attachFeeds fills each item's primary feed identity for the card's identity
+// line. Feedless sources (e.g. a YouTube channel) stay nil and render source-only.
+func (h *Handler) attachFeeds(ctx context.Context, uid int64, items []session.Selected) {
+	if len(items) == 0 {
+		return
 	}
-	if primaries, err := h.db.PrimaryFeedsForSources(r.Context(), uid, selSourceIDs); err != nil {
+	ids := make([]int64, 0, len(items))
+	for _, it := range items {
+		ids = append(ids, it.Item.SourceID)
+	}
+	primaries, err := h.db.PrimaryFeedsForSources(ctx, uid, ids)
+	if err != nil {
 		h.log.Warn("resolve primary feeds", "err", err)
-	} else {
-		for i := range result.Items {
-			if f, ok := primaries[result.Items[i].Item.SourceID]; ok {
-				fc := f
-				result.Items[i].Feed = &fc
-			}
+		return
+	}
+	for i := range items {
+		if f, ok := primaries[items[i].Item.SourceID]; ok {
+			fc := f
+			items[i].Feed = &fc
 		}
 	}
+}
 
-	// Persist the session and mark its items surfaced so the next build doesn't
-	// repeat them.
-	sid := randID()
-	ids := make([]int64, len(result.Items))
-	for i, it := range result.Items {
-		ids[i] = it.Item.ID
+// sessionPayload is the shared shape for POST /sessions and GET
+// /sessions/current: the session identity + its queue + the read cursor.
+func sessionPayload(id string, durationMin, cursor int, themes []string, items []session.Selected) map[string]any {
+	if themes == nil {
+		themes = []string{}
 	}
-	if err := h.db.SaveSession(r.Context(), sid, uid, body.MinLow, body.MinHigh, strings.Join(body.Themes, ","), ids); err != nil {
-		h.log.Warn("save session failed", "err", err)
+	if items == nil {
+		items = []session.Selected{}
 	}
-	// Items are NOT marked surfaced here - the queue is paced client-side, so an
-	// item is only "seen" once it actually reaches the user (a `seen` event).
-	// Otherwise a staged-but-unconsumed item would be burned.
-	_ = h.db.LogEvent(r.Context(), uid, "session_build", nil, nil, sid,
-		`{"count":`+strconv.Itoa(len(ids))+`,"themes":"`+strings.Join(body.Themes, ",")+`"}`)
-
-	writeJSON(w, http.StatusOK, map[string]any{"session_id": sid, "result": result})
+	return map[string]any{
+		"session_id":   id,
+		"duration_min": durationMin,
+		"cursor":       cursor,
+		"themes":       themes,
+		"items":        items,
+	}
 }
 
 // ItemEvent records an interaction (open/like/skip/save/dismiss) and updates the

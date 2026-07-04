@@ -68,7 +68,12 @@ func NewRouter(h *handler.Handler, authMiddleware func(http.Handler) http.Handle
 			r.Post("/collections/{id}/items", h.AddCollectionItem)
 			r.Delete("/collections/{id}/items/{itemId}", h.RemoveCollectionItem)
 
-			r.Post("/session", h.BuildSession)
+			// Durable, stateful sessions (#67): create builds + stores a queue,
+			// current resumes the active one at its cursor, patch advances the
+			// cursor / ends it.
+			r.Post("/sessions", h.CreateSession)
+			r.Get("/sessions/current", h.CurrentSession)
+			r.Patch("/sessions/{id}", h.UpdateSession)
 			r.Post("/items/{id}/event", h.ItemEvent)
 			r.Post("/fetch", h.FetchNow)
 
