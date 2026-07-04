@@ -99,6 +99,12 @@ function Identity({ sel }: { sel: Selected }) {
 // mid-session lands back on the same items at the same place.
 type Checkin = null | "fast";
 
+// Fast-scroll check-in tuning (#68). An advance counts as a "fast pass" when the
+// item was on screen under FAST_DWELL_MS and was never engaged (opened/clicked/
+// liked/saved). FAST_STREAK consecutive fast passes trips the calm check-in.
+const FAST_DWELL_MS = 4000;
+const FAST_STREAK = 3;
+
 export default function SessionPage() {
   const { id = "" } = useParams();
   const nav = useNavigate();
@@ -124,7 +130,15 @@ export default function SessionPage() {
   const [elapsed, setElapsed] = useState(0);
   const [checkin, setCheckin] = useState<Checkin>(null);
   const [flash, setFlash] = useState(0);
-  const advances = useRef<number[]>([]);
+  // Dwell + fast-scroll check-in (#68). fastCheckin gates BOTH the dwell
+  // measurement and the nudge; off = old explicit-only behavior. Read via a ref
+  // inside the IntersectionObserver so toggling it never re-subscribes the
+  // observer. shownAt marks when the current item became engaged (wall-clock),
+  // so dwell = advance time - shownAt. fastStreak counts consecutive fast +
+  // unengaged advances - the "scrolling fast without engaging" signal.
+  const fastCheckin = useRef(true);
+  const shownAt = useRef(Date.now());
+  const fastStreak = useRef(0);
   const shownIds = useRef<Set<number>>(new Set());
   const engaged = useRef<Set<number>>(new Set()); // ids that got open/like/save
   const opened = useRef<Set<number>>(new Set()); // ids that fired an `open` event (dedupe, #51)
@@ -155,7 +169,8 @@ export default function SessionPage() {
     setErr("");
     setElapsed(0);
     setCheckin(null);
-    advances.current = [];
+    fastStreak.current = 0;
+    shownAt.current = Date.now();
     shownIds.current = new Set();
     engaged.current = new Set();
     opened.current = new Set();
@@ -197,6 +212,17 @@ export default function SessionPage() {
     const el = itemEls.current[current];
     if (el) el.scrollIntoView({ block: "center" });
   }, [loading, items, current]);
+
+  // Load the fast-scroll check-in setting once. When off, no dwell is measured
+  // and no nudge fires (the observer reads fastCheckin.current at advance time).
+  useEffect(() => {
+    api
+      .getSettings()
+      .then((s) => {
+        fastCheckin.current = s.fast_scroll_checkin;
+      })
+      .catch(() => {});
+  }, []);
 
   // Active-time ticker (pauses while hidden).
   useEffect(() => {
@@ -247,18 +273,39 @@ export default function SessionPage() {
           const idx = Number((en.target as HTMLElement).dataset.idx);
           if (Number.isNaN(idx)) continue;
           setCurrent(idx);
-          // Finalize the item we just moved past: advancing forward without
-          // having opened/liked/saved it is a skip (next == skip).
+          // Finalize the item we just moved past.
           if (idx > prevIdx.current) {
             const left = items[prevIdx.current];
-            if (left && !engaged.current.has(left.item.id)) {
-              api.itemEvent(left.item.id, "skip", id).catch(() => {});
+            if (left) {
               const now = Date.now();
-              advances.current = [...advances.current, now].slice(-4);
-              if (advances.current.filter((t) => now - t < 8000).length >= 3 && !checkin) setCheckin("fast");
+              const dwellMs = now - shownAt.current;
+              // Engagement (#68): opened the reader/player, clicked through, liked,
+              // or saved - all land in engaged.current. That's the "genuinely
+              // consuming it" read.
+              const wasEngaged = engaged.current.has(left.item.id);
+              // Advancing forward without engaging is a skip (next == skip). This
+              // is an EXPLICIT curation signal - always fired, independent of the
+              // dwell setting.
+              if (!wasEngaged) api.itemEvent(left.item.id, "skip", id).catch(() => {});
+              // Dwell measurement + the fast-scroll nudge are gated by the setting.
+              // Dwell is append-only raw material (never re-ranks); the nudge is a
+              // check-in, not a feed change.
+              if (fastCheckin.current) {
+                api.recordDwell(left.item.id, id, dwellMs, wasEngaged).catch(() => {});
+                // A fast, unengaged pass = scrolling past without consuming.
+                // Consecutive such passes are the drift signal; engaging or
+                // dwelling on anything resets the streak.
+                if (!wasEngaged && dwellMs < FAST_DWELL_MS) {
+                  fastStreak.current += 1;
+                  if (fastStreak.current >= FAST_STREAK && !checkin) setCheckin("fast");
+                } else {
+                  fastStreak.current = 0;
+                }
+              }
             }
           }
           prevIdx.current = idx;
+          shownAt.current = Date.now(); // the newly-centered item starts its dwell now
           const it = items[idx];
           if (it && !shownIds.current.has(it.item.id)) {
             shownIds.current.add(it.item.id);
@@ -364,7 +411,7 @@ export default function SessionPage() {
   }
   function dismissCheckin() {
     setCheckin(null);
-    advances.current = [];
+    fastStreak.current = 0;
   }
 
   if (err) return <div className="err">Couldn't resume your session: {err}</div>;
@@ -394,12 +441,15 @@ export default function SessionPage() {
         </span>
       </div>
 
+      {/* #68: the fast-scroll check-in. A nudge toward self-honesty, never a feed
+          change - "Keep going" just dismisses; "Something else" ends the session
+          and returns home. Neither re-ranks or re-fetches. */}
       {checkin === "fast" && (
         <div className="checkin">
-          <p>Flicking past these? Want a different mix?</p>
+          <p>You're scrolling fast - want to keep going, or do something else?</p>
           <div className="checkin-actions">
             <button className="mini" onClick={dismissCheckin}>Keep going</button>
-            <button className="mini solid" onClick={() => nav("/")}>Change mix</button>
+            <button className="mini solid" onClick={finish}>Something else</button>
           </div>
         </div>
       )}

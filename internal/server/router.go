@@ -75,7 +75,13 @@ func NewRouter(h *handler.Handler, authMiddleware func(http.Handler) http.Handle
 			r.Get("/sessions/current", h.CurrentSession)
 			r.Patch("/sessions/{id}", h.UpdateSession)
 			r.Post("/items/{id}/event", h.ItemEvent)
+			// Dwell (#68): append-only engagement measurement, never into the ranker.
+			r.Post("/items/{id}/dwell", h.ItemDwell)
 			r.Post("/fetch", h.FetchNow)
+
+			// User settings (#68): the fast-scroll check-in toggle.
+			r.Get("/settings", h.GetSettings)
+			r.Patch("/settings", h.UpdateSettings)
 
 			r.Post("/import/parse", h.ParseImport)
 			r.Post("/import/commit", h.CommitImport)

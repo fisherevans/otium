@@ -359,6 +359,11 @@ export default function SourcesPage() {
                 <span className="sheet-chev">▸</span>
               </button>
             )}
+            {/* #68: app preferences (fast-scroll check-in). */}
+            <button className="sheet-row" onClick={() => { setManageOpen(false); nav("/settings"); }}>
+              <span>Settings</span>
+              <span className="sheet-chev">▸</span>
+            </button>
           </div>
         </div>
       </BottomSheet>
