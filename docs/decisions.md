@@ -49,13 +49,31 @@ deviates from the one-image contract exactly the way bloom does, and for the sam
 reason: a Go API and a static SPA have different runtimes. nginx proxies `/api/`,
 `/healthz`, and `/auth/` to `otium-server`; everything else is the SPA.
 
-## Signals are explicit only
+## Intentionality & transparency, not anti-data (refined 2026-07-04, Fisher)
 
-No dwell-time or scroll tracking, by design (principle 2). The `events` table is
-append-only and captures explicit actions (open/like/skip/save) plus
-session_build. It's the raw material for user-owned stats and the future
-LLM/agent surface - so it's generous with what it records, but never implicit
-behavioral surveillance.
+otium is **not** anti-data or anti-tracking. It's about **intentionality,
+transparency, and privacy**. The earlier "no dwell tracking at all" framing was
+too rigid. The real line is *what the data is used for*:
+
+- **Dwell IS measured** - time genuinely engaging with an item: reading the
+  description, opening the in-app reader/browser, clicking through and being away
+  for a while. That's a signal you're actually consuming what you *intended* to.
+- It is **never** used to optimize/maximize engagement, and **never** silently
+  re-ranks the feed. It powers one thing: a **check-in**. Fast-swiping without
+  engaging → "you're scrolling fast - want to keep going, or do something else?"
+  A nudge toward self-honesty, not a feed change.
+- **User-toggleable** in settings (off = the old explicit-only behavior).
+- Data stays **local and transparent** (single SQLite file, the user's own),
+  surfaced back to the user (stats/insights), never sold or used to grow time-on-app.
+
+The refusal is **engagement optimization**, not measurement: don't use behavior
+to maximize consumption or covertly re-rank. Measuring to help the user notice
+when they've drifted from their own intention is on-thesis. This supersedes #6/#5
+being "gated" - dwell-for-check-in is a go, with the settings toggle.
+
+The `events` table stays append-only (open/like/skip/save/session_build, + dwell
+under this policy) - raw material for user-owned stats and the future LLM/agent
+surface.
 
 ## Deliberate non-goals (what otium refuses)
 
@@ -76,8 +94,10 @@ the product's identity, not a backlog:
   buckets + collections (#57) are the right altitude.
 - **In-app social / commentary / link-posting.** Share-out is a link (#56), not a
   network. This is the exact scope creep that killed Artifact.
-- **Engagement surveillance** (dwell time, implicit interest scoring). Signals stay
-  explicit: Open/Like/Save/Skip. This is why #6/#5 (dwell) are gated on Fisher.
+- **Engagement *optimization*.** Measuring dwell to help you notice you've drifted
+  (a check-in) is fine and wanted; using behavior to *maximize* consumption or
+  covertly re-rank the feed is the refusal. See "Intentionality & transparency"
+  above - the app measures to serve your intention, never to grow time-on-app.
 
 The risk for otium isn't under-featuring - it's getting talked into the features
 that killed the incumbents.
