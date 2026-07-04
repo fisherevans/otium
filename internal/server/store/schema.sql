@@ -144,8 +144,10 @@ CREATE TABLE IF NOT EXISTS sessions (
     status       TEXT NOT NULL DEFAULT 'active',
     created_at   TEXT NOT NULL DEFAULT (datetime('now'))
 );
-
-CREATE INDEX IF NOT EXISTS idx_sessions_user_status ON sessions(user_id, status);
+-- NOTE: the idx_sessions_user_status index is created in migrate() (store.go),
+-- NOT here. A pre-existing `sessions` table (from before status/cursor/duration_min)
+-- is skipped by CREATE TABLE IF NOT EXISTS, so `status` doesn't exist until
+-- migrate()'s ensureColumn adds it - an index on status here would fail on apply.
 
 -- Append-only event log - the raw material for user-owned stats and the
 -- JSON/agent surface. Never mutated.

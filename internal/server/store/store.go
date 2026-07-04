@@ -69,7 +69,13 @@ func migrate(sdb *sql.DB) error {
 	if err := ensureColumn(sdb, "sessions", "cursor", `ALTER TABLE sessions ADD COLUMN cursor INTEGER NOT NULL DEFAULT 0`); err != nil {
 		return err
 	}
-	return ensureColumn(sdb, "sessions", "status", `ALTER TABLE sessions ADD COLUMN status TEXT NOT NULL DEFAULT 'active'`)
+	if err := ensureColumn(sdb, "sessions", "status", `ALTER TABLE sessions ADD COLUMN status TEXT NOT NULL DEFAULT 'active'`); err != nil {
+		return err
+	}
+	// Index created here (not schema.sql) so it runs AFTER the status column is
+	// ensured on a pre-existing sessions table. See schema.sql note.
+	_, err := sdb.Exec(`CREATE INDEX IF NOT EXISTS idx_sessions_user_status ON sessions(user_id, status)`)
+	return err
 }
 
 // ensureColumn adds a column via ddl only if it isn't already present. This is
