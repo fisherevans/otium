@@ -5,7 +5,6 @@ import { BLABEL, bucketOf } from "@/lib/weight";
 import { feedIcon } from "@/lib/feedIcons";
 import { FeedIconPicker } from "@/components/FeedIconPicker";
 import { BottomSheet } from "@/components/BottomSheet";
-import { SourceDetail } from "@/components/SourceDetail";
 
 // Behavioral signal a source exhibits, derived per-render relative to the
 // currently-visible set (not absolute) so "noisy"/"most-skipped" mean "loud
@@ -43,15 +42,13 @@ export default function SourcesPage() {
   const [fsignal, setFsignal] = useState<SigKey | null>(null);
   const [sort, setSort] = useState<SortKey>("weight");
   const [group, setGroup] = useState(false);
-  // #65: rows drill into the SourceDetail sheet instead of expanding inline.
-  const [detailId, setDetailId] = useState<number | null>(null);
+  // #66: rows navigate to a dedicated source page instead of a drill-in sheet.
   const [adding, setAdding] = useState(false);
   const [url, setUrl] = useState("");
   const [title, setTitle] = useState("");
   const [kind, setKind] = useState("rss");
   const [err, setErr] = useState("");
   const [fetching, setFetching] = useState(false);
-  const [toast, setToast] = useState<{ msg: string; undo?: () => void } | null>(null);
   const [iconsOpen, setIconsOpen] = useState(false);
   // #55: signal / sort / group collapse into a bottom sheet so the always-on
   // control stack is just feed chips + state and the list keeps the screen.
@@ -189,18 +186,6 @@ export default function SourcesPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [group, sorted, feedBySlug]);
 
-  // The source powering the drill-in sheet, derived from the live list so it
-  // reflects reloads (weight/cap edits) rather than a stale snapshot.
-  const detailSrc = useMemo(
-    () => (detailId === null ? null : sources.find((s) => s.id === detailId) ?? null),
-    [detailId, sources],
-  );
-
-  function showToast(msg: string, undo?: () => void) {
-    setToast({ msg, undo });
-    window.setTimeout(() => setToast((t) => (t && t.msg === msg ? null : t)), 4500);
-  }
-
   async function add() {
     if (!url.trim()) return;
     setErr("");
@@ -270,6 +255,14 @@ export default function SourcesPage() {
           );
         })}
       </div>
+      {/* #66: with a single feed in focus, offer an explicit, visible path to its
+          dedicated page (settings + its sources + its posts). The chip still
+          filters this list; this line is the browse-into affordance. */}
+      {ffeed && feedBySlug.get(ffeed) && (
+        <button className="lib-feedlink" onClick={() => nav(`/feeds/${ffeed}`)}>
+          Open {feedBySlug.get(ffeed)!.name} page <span aria-hidden>▸</span>
+        </button>
+      )}
       {/* #55: state (primary axis) stays visible; signal / sort / group collapse
           behind the "Filter & sort" sheet trigger so the stack fits a phone. */}
       <div className="lib-controls">
@@ -290,20 +283,28 @@ export default function SourcesPage() {
         const GIc = g.feed ? feedIcon(g.feed.icon) : null;
         return (
         <div key={g.feed ? g.feed.slug : "__flat"}>
-          {group && (
-            <div className="lib-group">
-              {GIc && <GIc size={14} strokeWidth={1.75} aria-hidden />}
-              <span>{g.feed ? g.feed.name : "No feed"}</span>
-              <span className="cnt">{g.items.length}</span>
-            </div>
-          )}
+          {group &&
+            (g.feed ? (
+              // #66: grouped headers browse into the feed's dedicated page.
+              <button className="lib-group as-link" onClick={() => nav(`/feeds/${g.feed!.slug}`)}>
+                {GIc && <GIc size={14} strokeWidth={1.75} aria-hidden />}
+                <span>{g.feed.name}</span>
+                <span className="cnt">{g.items.length}</span>
+                <span className="chev" aria-hidden>▸</span>
+              </button>
+            ) : (
+              <div className="lib-group">
+                <span>No feed</span>
+                <span className="cnt">{g.items.length}</span>
+              </div>
+            ))}
           {g.items.map((s) => {
         const b = bucketOf(s.weight);
         return (
-          // #65: the whole row is one tap into the SourceDetail sheet - no
-          // inline expansion. Rows stay scannable: weight · name · signal · ▸.
+          // #66: the whole row navigates to the source's dedicated page - no
+          // inline expansion, no sheet. Rows stay scannable: weight · name · signal · ▸.
           <div className="lib-row" key={s.id}>
-            <div className="lib-head" onClick={() => setDetailId(s.id)}>
+            <div className="lib-head" onClick={() => nav(`/sources/${s.id}`)}>
               <span className="wtag">{BLABEL[b]}</span>
               <div className="nm">
                 <b>{s.title}</b>
@@ -317,29 +318,6 @@ export default function SourcesPage() {
         </div>
         );
       })}
-
-      {toast && (
-        <div className="toast">
-          <span>{toast.msg}</span>
-          {toast.undo && <button onClick={toast.undo}>Undo</button>}
-        </div>
-      )}
-
-      {/* #65: tapping a row drills into the calm detail sheet. It carries every
-          capability the old inline form had - weight, cap, feed membership,
-          archive (undo via toast), and delete (with a confirm). */}
-      <SourceDetail
-        source={detailSrc}
-        open={detailId !== null}
-        onClose={() => setDetailId(null)}
-        onChanged={reload}
-        feeds={feeds}
-        onToast={showToast}
-        onDelete={() => {
-          setDetailId(null);
-          reload();
-        }}
-      />
 
       {/* #64: the collapsed secondary actions - full behavior, just off-screen
           until asked for. Add-a-source form lives inside the sheet too. */}

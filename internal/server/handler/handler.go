@@ -142,6 +142,24 @@ func (h *Handler) SetFeedSources(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
 }
 
+// FeedItems returns recent items across a feed's sources (by feed id), backing
+// the feed page's posts section (#66).
+func (h *Handler) FeedItems(w http.ResponseWriter, r *http.Request) {
+	uid := userID(r)
+	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	if err != nil {
+		badRequest(w, "bad feed id")
+		return
+	}
+	limit := intParam(r, "limit", 50)
+	items, err := h.db.ListRecentItemsByFeed(r.Context(), uid, id, limit)
+	if err != nil {
+		serverError(w, h.log, "feed items", err)
+		return
+	}
+	writeJSON(w, http.StatusOK, items)
+}
+
 // --- sources ---
 
 func (h *Handler) ListSources(w http.ResponseWriter, r *http.Request) {

@@ -1909,3 +1909,47 @@ h1.display {
   color: var(--ink);
 }
 /* ===== end #57 ===== */
+
+/* ===== #66 feed-mgmt-pages: dedicated source/feed pages ===== */
+/* Spacing between the stacked settings/sources/posts sections on a source or
+   feed page. Keeps them as distinct rooms without heavy dividers. */
+.page-section {
+  margin-top: 26px;
+}
+/* The explicit "browse into this feed's page" affordance under the filter chips
+   when a single feed is in focus. Quiet, text-forward, thumb-height. */
+.lib-feedlink {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin: 2px 0 10px;
+  padding: 7px 0;
+  background: none;
+  border: none;
+  font-family: var(--grot);
+  font-size: 12px;
+  letter-spacing: 0.04em;
+  color: var(--ink-soft);
+}
+.lib-feedlink:active {
+  color: var(--ink);
+}
+/* A grouped-by-feed header rendered as a link to the feed page. Inherits the
+   .lib-group look; resets the button chrome and adds a trailing chevron. */
+.lib-group.as-link {
+  width: 100%;
+  border: none;
+  border-bottom: 1.5px solid var(--rule-hard);
+  background: none;
+  text-align: left;
+  cursor: pointer;
+}
+.lib-group.as-link .chev {
+  margin-left: 8px;
+  font-size: 11px;
+  color: var(--ink-mute);
+}
+.lib-group.as-link:active {
+  color: var(--ink);
+}
+/* ===== end #66 ===== */
