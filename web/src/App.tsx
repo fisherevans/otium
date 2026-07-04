@@ -3,6 +3,7 @@ import { useAuth } from "@/context/AuthContext";
 import HomePage from "@/pages/HomePage";
 import SessionPage from "@/pages/SessionPage";
 import SourcesPage from "@/pages/SourcesPage";
+import CollectionsPage from "@/pages/CollectionsPage";
 import ImportPage from "@/pages/ImportPage";
 import MixPage from "@/pages/MixPage";
 
@@ -50,6 +51,7 @@ export default function App() {
           <Route path="/" element={<HomePage />} />
           <Route path="/session" element={<SessionPage />} />
           <Route path="/sources" element={<SourcesPage />} />
+          <Route path="/collections" element={<CollectionsPage />} />
           <Route path="/mix" element={<MixPage />} />
           <Route path="/import" element={<ImportPage />} />
         </Routes>

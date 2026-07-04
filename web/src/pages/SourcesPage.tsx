@@ -244,9 +244,16 @@ export default function SourcesPage() {
           actions live behind the Manage sheet so the list starts high. */}
       <div className="lib-topbar">
         <h1 className="display">Your library</h1>
-        <button className="lib-fsbtn" onClick={() => setManageOpen(true)}>
-          Manage
-        </button>
+        <div className="lib-topbar-actions">
+          {/* #57: saved content is a primary surface - promote it to the top
+              bar, not the Manage sheet. */}
+          <button className="lib-fsbtn" onClick={() => nav("/collections")}>
+            Collections
+          </button>
+          <button className="lib-fsbtn" onClick={() => setManageOpen(true)}>
+            Manage
+          </button>
+        </div>
       </div>
       <p className="sub">The sources you follow. Weight = how often they surface; turn down instead of unfollowing.</p>
 

@@ -1841,3 +1841,71 @@ h1.display {
   margin-top: 10px;
 }
 /* ===== end #64/#65 ===== */
+
+/* ============================================================
+   #57 collections - saved lists (Save picker + Collections view)
+   Reuses the sheet / lib-row language; only the bits those
+   don't cover live here. Kept in a labeled block for clean merges.
+   ============================================================ */
+.lib-topbar-actions {
+  display: flex;
+  gap: 8px;
+  flex: 0 0 auto;
+}
+
+/* Save picker rows: a membership marker, the name, then a quiet count. */
+.save-check {
+  flex: 0 0 auto;
+  width: 20px;
+  font-size: 15px;
+  color: var(--ink);
+  text-align: center;
+}
+.save-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  text-align: left;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.save-kind {
+  font-family: var(--mono);
+  font-size: 10.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--ink-mute);
+}
+.save-newrow {
+  display: flex;
+  gap: 10px;
+  margin-top: 10px;
+}
+.save-newrow .btn {
+  flex: 1;
+  width: auto;
+  margin-top: 0;
+}
+
+/* Reader/Player foot can carry Save alongside Open. */
+.reader-foot-actions {
+  flex: 0 0 auto;
+  display: inline-flex;
+  gap: 16px;
+  align-items: center;
+}
+
+/* Remove-from-collection affordance on an item row. */
+.coll-x {
+  flex: 0 0 auto;
+  background: none;
+  border: none;
+  font-size: 22px;
+  line-height: 1;
+  color: var(--ink-mute);
+  padding: 0 4px;
+}
+.coll-x:active {
+  color: var(--ink);
+}
+/* ===== end #57 ===== */

@@ -157,6 +157,25 @@ export interface MixResponse {
   totals: { source_count: number; item_count: number };
 }
 
+// A named list of saved items (#57). Builtins (Saved / Watch Later / Liked) are
+// seeded per user and can't be renamed/deleted (kind === "builtin"). `contains`
+// is present only when the list was fetched for a specific item (the Save
+// picker's membership checkmark).
+export interface Collection {
+  id: number;
+  name: string;
+  slug: string;
+  kind: "builtin" | "user";
+  sort: number;
+  created_at: string;
+  item_count: number;
+  contains?: boolean;
+}
+
+// The Liked collection is driven exclusively by the Like button, so the Save
+// picker hides it - saving is the deliberate path, liking is the one-tap path.
+export const LIKED_SLUG = "liked";
+
 export class Unauthorized extends Error {}
 
 function handleAuth(status: number) {
@@ -229,6 +248,20 @@ export const api = {
   itemEvent: (id: number, type: string, sessionId?: string) =>
     req<{ ok: boolean }>("POST", `/items/${id}/event`, { type, session_id: sessionId ?? "" }),
   fetchNow: () => req<{ new_items: number }>("POST", "/fetch"),
+
+  // Collections (#57). Pass an itemId to get per-collection membership flags for
+  // the Save picker; omit it for the plain list-with-counts.
+  collections: (itemId?: number) =>
+    req<Collection[]>("GET", `/collections${itemId ? `?item_id=${itemId}` : ""}`),
+  createCollection: (name: string) => req<Collection>("POST", "/collections", { name }),
+  renameCollection: (id: number, name: string) =>
+    req<{ ok: boolean }>("PATCH", `/collections/${id}`, { name }),
+  deleteCollection: (id: number) => req<{ ok: boolean }>("DELETE", `/collections/${id}`),
+  collectionItems: (id: number) => req<Item[]>("GET", `/collections/${id}/items`),
+  addToCollection: (id: number, itemId: number) =>
+    req<{ ok: boolean }>("POST", `/collections/${id}/items`, { item_id: itemId }),
+  removeFromCollection: (id: number, itemId: number) =>
+    req<{ ok: boolean }>("DELETE", `/collections/${id}/items/${itemId}`),
 
   // Import: parse sends the raw upload (text OR a file Blob - a zip must go as
   // bytes, not text) so the server can unzip / parse it directly.

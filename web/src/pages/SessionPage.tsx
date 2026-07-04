@@ -4,6 +4,7 @@ import { api, type Item, type Selected } from "@/api/client";
 import { ItemActions } from "@/components/ItemActions";
 import { Reader } from "@/components/Reader";
 import { Player } from "@/components/Player";
+import { SavePicker } from "@/components/SavePicker";
 import { ScoreCue, ScoreBreakdownSheet } from "@/components/ScoreBreakdown";
 
 // Which in-app content surface an item opens into (#51). Video/audio play in
@@ -109,7 +110,7 @@ export default function SessionPage() {
   const [exhausted, setExhausted] = useState(false);
   const [err, setErr] = useState("");
   const [liked, setLiked] = useState<Set<number>>(new Set());
-  const [saved, setSaved] = useState<Set<number>>(new Set());
+  const [saveItem, setSaveItem] = useState<Item | null>(null); // Save picker target (#57)
   const [menuOpen, setMenuOpen] = useState(false);
   const [breakdown, setBreakdown] = useState<Selected | null>(null);
   const [content, setContent] = useState<Selected | null>(null); // the in-app content surface (#51)
@@ -326,22 +327,24 @@ export default function SessionPage() {
   function like() {
     if (!cur) return;
     engaged.current.add(cur.item.id);
+    // Toggle: liking fires `like` (state + engagement signal, unchanged) and adds
+    // to the auto Liked collection server-side; un-liking fires `unlike`, which
+    // only removes that membership and never touches the ranker signal (#57).
+    const willLike = !liked.has(cur.item.id);
     setLiked((s) => {
       const n = new Set(s);
-      n.has(cur.item.id) ? n.delete(cur.item.id) : n.add(cur.item.id);
+      willLike ? n.add(cur.item.id) : n.delete(cur.item.id);
       return n;
     });
-    api.itemEvent(cur.item.id, "like", sessionId).catch(() => {});
+    api.itemEvent(cur.item.id, willLike ? "like" : "unlike", sessionId).catch(() => {});
   }
+  // Save is the deliberate path (#57): open the collection picker rather than a
+  // one-tap toggle. The picker writes membership with no engagement event; the
+  // act of saving still counts as engagement for the next==skip exemption.
   function save() {
     if (!cur) return;
     engaged.current.add(cur.item.id);
-    setSaved((s) => {
-      const n = new Set(s);
-      n.has(cur.item.id) ? n.delete(cur.item.id) : n.add(cur.item.id);
-      return n;
-    });
-    api.itemEvent(cur.item.id, "save", sessionId).catch(() => {});
+    setSaveItem(cur.item);
   }
   function next() {
     if (current < items.length - 1) scrollTo(current + 1);
@@ -459,7 +462,7 @@ export default function SessionPage() {
         <button className={`act-btn ${cur && liked.has(cur.item.id) ? "on" : ""}`} onClick={like} disabled={atEnd}>
           <span className="ic">♥</span>Like
         </button>
-        <button className={`act-btn ${cur && saved.has(cur.item.id) ? "on" : ""}`} onClick={save} disabled={atEnd}>
+        <button className="act-btn" onClick={save} disabled={atEnd}>
           <span className="ic">▣</span>Save
         </button>
         <button className="act-btn" onClick={next}>
@@ -472,6 +475,10 @@ export default function SessionPage() {
         open={menuOpen}
         onClose={() => setMenuOpen(false)}
         onOpen={open}
+        onSave={(it) => {
+          setMenuOpen(false);
+          setSaveItem(it);
+        }}
         onWhy={() => {
           setMenuOpen(false);
           if (cur) setBreakdown(cur);
@@ -488,6 +495,7 @@ export default function SessionPage() {
         open={content !== null && shownKind === "read"}
         onClose={() => setContent(null)}
         onOpen={() => shown && openExternal(shown)}
+        onSave={() => shown && setSaveItem(shown.item)}
       />
       <Player
         item={shown && shownKind !== "read" ? shown.item : null}
@@ -495,7 +503,12 @@ export default function SessionPage() {
         open={content !== null && shownKind !== "read"}
         onClose={() => setContent(null)}
         onOpenOriginal={() => shown && openExternal(shown)}
+        onSave={() => shown && setSaveItem(shown.item)}
       />
+
+      {/* Save picker (#57): the deliberate save destination for the bottom-bar
+          Save, the ··· menu, and the reader/player. */}
+      <SavePicker item={saveItem} open={saveItem !== null} onClose={() => setSaveItem(null)} />
     </div>
   );
 }
