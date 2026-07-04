@@ -618,6 +618,28 @@ func (db *DB) ListRecentItemsBySource(ctx context.Context, userID, sourceID int6
 	return scanItems(rows)
 }
 
+// ListRecentItemsByFeed returns recent items across every source in a feed
+// (by id), newest first. Backs the feed page's "recent posts" section (#66):
+// one query instead of fanning sourceItems per source. Read-only orientation -
+// no seen/skip events, like ListRecentItemsBySource. Feed id (not slug) so the
+// route param name stays consistent with the sibling /feeds/{id}/sources route
+// (chi conflicts on mismatched wildcard names).
+func (db *DB) ListRecentItemsByFeed(ctx context.Context, userID, feedID int64, limit int) ([]Item, error) {
+	rows, err := db.sql.QueryContext(ctx,
+		`SELECT i.id, i.source_id, i.url, i.title, i.summary, i.content, i.author, i.thumbnail_url,
+		        i.media_type, i.duration_sec, i.published_at, i.fetched_at
+		 FROM items i
+		 JOIN feed_sources fs ON fs.source_id = i.source_id
+		 JOIN feeds f ON f.id = fs.feed_id
+		 WHERE f.user_id = ? AND f.id = ?
+		 ORDER BY i.published_at DESC LIMIT ?`, userID, feedID, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	return scanItems(rows)
+}
+
 // candidateCols is the shared projection for Candidates and MixItems: item +
 // source facts, the accumulated-history cadence inputs (win_count/win_span), and
 // the resolved primary-feed overrides (half-life + diversity). The primary feed

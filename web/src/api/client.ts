@@ -239,6 +239,9 @@ export const api = {
   setSourceFeeds: (id: number, feedSlugs: string[]) =>
     req<{ ok: boolean }>("PUT", `/sources/${id}/feeds`, { feed_slugs: feedSlugs }),
   sourceItems: (id: number) => req<Item[]>("GET", `/sources/${id}/items`),
+  // --- #66 feed-mgmt-pages block (feed page recent posts) ---
+  feedItems: (feedId: number) => req<Item[]>("GET", `/feeds/${feedId}/items`),
+  // --- end #66 block ---
 
   mix: (feedSlug?: string) =>
     req<MixResponse>("GET", `/mix${feedSlug ? `?feed=${encodeURIComponent(feedSlug)}` : ""}`),

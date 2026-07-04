@@ -6,6 +6,10 @@ import SourcesPage from "@/pages/SourcesPage";
 import CollectionsPage from "@/pages/CollectionsPage";
 import ImportPage from "@/pages/ImportPage";
 import MixPage from "@/pages/MixPage";
+// --- #66 feed-mgmt-pages: dedicated source/feed pages ---
+import SourcePage from "@/pages/SourcePage";
+import FeedPage from "@/pages/FeedPage";
+// --- end #66 ---
 
 export default function App() {
   const { loading, unauthenticated } = useAuth();
@@ -51,6 +55,10 @@ export default function App() {
           <Route path="/" element={<HomePage />} />
           <Route path="/session" element={<SessionPage />} />
           <Route path="/sources" element={<SourcesPage />} />
+          {/* --- #66 feed-mgmt-pages: dedicated source/feed pages --- */}
+          <Route path="/sources/:id" element={<SourcePage />} />
+          <Route path="/feeds/:slug" element={<FeedPage />} />
+          {/* --- end #66 --- */}
           <Route path="/collections" element={<CollectionsPage />} />
           <Route path="/mix" element={<MixPage />} />
           <Route path="/import" element={<ImportPage />} />
