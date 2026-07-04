@@ -2091,3 +2091,118 @@ h1.display {
   color: var(--ink);
 }
 /* ===== end #66 ===== */
+
+/* ===== #70: preset entry chips + slider nudge buttons =======================
+   Refines the #69 intent page into two calm states. Blank state shows four
+   preset-length chips (5 / 15 / 30 / 1 hr) centered in the content area; tapping
+   one reveals the slider state (pre-set to that value) with -5 / +5 nudge
+   buttons flanking the slider. Purely additive - modifies no existing rule.
+   Both states share `.intent`'s flex column (intent-head is fixed; the state
+   wrapper takes flex:1 so the page never scrolls at 412px Palma width). */
+
+/* --- blank state: preset chips, vertically centered --- */
+.preset-pick {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 18px;
+  animation: intent-reveal 200ms ease-out;
+}
+.preset-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12px;
+}
+.preset-chip {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 22px 10px;
+  border: 1.5px solid var(--rule-hard);
+  background: var(--paper);
+  color: var(--ink);
+}
+.preset-chip:active {
+  background: var(--paper-3);
+}
+.preset-num {
+  font-family: var(--didot);
+  font-size: 40px;
+  line-height: 1;
+}
+.preset-unit {
+  font-family: var(--grot);
+  font-size: 10px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--ink-mute);
+}
+
+/* --- slider state: fills the column like the pre-#70 markup did --- */
+.slider-state {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  animation: intent-reveal 200ms ease-out;
+}
+.reset-link {
+  align-self: flex-start;
+  margin-bottom: 8px;
+  padding: 4px 0;
+  background: transparent;
+  border: 0;
+  font-family: var(--grot);
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--ink-mute);
+}
+.reset-link:active {
+  color: var(--ink);
+}
+
+/* --- -5 / slider / +5 row --- */
+.time-adjust {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.time-adjust .time-slider {
+  width: auto;
+  flex: 1 1 auto;
+}
+.nudge {
+  flex: 0 0 auto;
+  width: 48px;
+  height: 44px;
+  border: 1.5px solid var(--rule-hard);
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--grot);
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+.nudge:active {
+  background: var(--paper-3);
+}
+.nudge:disabled {
+  opacity: 0.35;
+}
+
+@keyframes intent-reveal {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .preset-pick,
+  .slider-state {
+    animation: none;
+  }
+}
+/* ===== end #70 ===== */
