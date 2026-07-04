@@ -21,12 +21,14 @@ intent, it's wrong here by definition.
 2. **Explainable, always.** If something is on screen, the app can say why in one
    human phrase. The "reason" is a first-class UI element, not a debug detail.
 3. **Explicit signals drive curation.** Like / skip / open / weight are
-   deliberate taps, and only these shape ranking. The one allowed *implicit*
-   read is pace: if you're clearly flicking past items, otium may surface a
-   **visible check-in** ("want a different mix?"). The boundary is strict - pace
-   can trigger a question that serves your intent, but it never silently
-   re-ranks or feeds you more. No dwell-time-for-engagement, no behavioral
-   surveillance.
+   deliberate taps, and only these shape **ranking**. Dwell/pace IS measured
+   (refined 2026-07-04; see decisions.md "Intentionality & transparency") but
+   only to surface a **visible check-in** when you're clearly flicking past
+   items without engaging ("want to keep going, or do something else?"), and it
+   is user-toggleable. The boundary is strict: dwell can trigger a question that
+   serves your intent, but it **never** enters the ranker, silently re-ranks, or
+   feeds you more. Measurement to serve intention: yes. Engagement optimization
+   or behavioral surveillance: never.
 4. **Calm, not urgent.** No badges, no unread counts, no red dots, no streaks, no
    "you're missing out." End-states are restful, not nagging.
 5. **The user is the editor.** Weight, caps, trials, and (later) the LLM operator
