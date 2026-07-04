@@ -189,6 +189,13 @@ export interface Collection {
 // picker hides it - saving is the deliberate path, liking is the one-tap path.
 export const LIKED_SLUG = "liked";
 
+// User settings (#68). fast_scroll_checkin gates the dwell/engagement
+// measurement + the fast-scroll check-in nudge. Off = the old explicit-only
+// behavior: no dwell measured, no nudge.
+export interface Settings {
+  fast_scroll_checkin: boolean;
+}
+
 export class Unauthorized extends Error {}
 
 function handleAuth(status: number) {
@@ -269,7 +276,17 @@ export const api = {
     req<{ ok: boolean }>("PATCH", `/sessions/${id}`, patch),
   itemEvent: (id: number, type: string, sessionId?: string) =>
     req<{ ok: boolean }>("POST", `/items/${id}/event`, { type, session_id: sessionId ?? "" }),
+  // Per-item dwell (#68): how long the item was engaged + whether it was engaged
+  // at all, on advance. Append-only raw material - never re-ranks. Only sent when
+  // the fast-scroll check-in setting is on.
+  recordDwell: (id: number, sessionId: string, dwellMs: number, engaged: boolean) =>
+    req<{ ok: boolean }>("POST", `/items/${id}/dwell`, { session_id: sessionId, dwell_ms: dwellMs, engaged }),
   fetchNow: () => req<{ new_items: number }>("POST", "/fetch"),
+
+  // Settings (#68): the fast-scroll check-in toggle. updateSettings returns the
+  // full current settings.
+  getSettings: () => req<Settings>("GET", "/settings"),
+  updateSettings: (patch: Partial<Settings>) => req<Settings>("PATCH", "/settings", patch),
 
   // Collections (#57). Pass an itemId to get per-collection membership flags for
   // the Save picker; omit it for the plain list-with-counts.

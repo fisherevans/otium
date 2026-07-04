@@ -6,6 +6,7 @@ import SourcesPage from "@/pages/SourcesPage";
 import CollectionsPage from "@/pages/CollectionsPage";
 import ImportPage from "@/pages/ImportPage";
 import MixPage from "@/pages/MixPage";
+import SettingsPage from "@/pages/SettingsPage";
 // --- #66 feed-mgmt-pages: dedicated source/feed pages ---
 import SourcePage from "@/pages/SourcePage";
 import FeedPage from "@/pages/FeedPage";
@@ -61,6 +62,7 @@ export default function App() {
           {/* --- end #66 --- */}
           <Route path="/collections" element={<CollectionsPage />} />
           <Route path="/mix" element={<MixPage />} />
+          <Route path="/settings" element={<SettingsPage />} /> {/* #68: preferences (fast-scroll check-in) */}
           <Route path="/import" element={<ImportPage />} />
         </Routes>
       </main>

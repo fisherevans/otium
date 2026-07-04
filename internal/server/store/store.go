@@ -73,7 +73,17 @@ func migrate(sdb *sql.DB) error {
 		return err
 	}
 	// Index created here (not schema.sql) so it runs AFTER the status column is
-	// ensured on a pre-existing sessions table. See schema.sql note.
+	// ensured on a pre-existing sessions table. See schema.sql note. Guarded on
+	// the table existing so migrate() stays safe against a partial DB (e.g. a
+	// test that sets up only the feeds table), matching ensureColumn's contract.
+	var sessionsExists int
+	if err := sdb.QueryRowContext(context.Background(),
+		`SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='sessions'`).Scan(&sessionsExists); err != nil {
+		return err
+	}
+	if sessionsExists == 0 {
+		return nil
+	}
 	_, err := sdb.Exec(`CREATE INDEX IF NOT EXISTS idx_sessions_user_status ON sessions(user_id, status)`)
 	return err
 }
@@ -265,6 +275,46 @@ func (db *DB) kvSet(ctx context.Context, userID int64, key, value string) error 
 		 ON CONFLICT(user_id, key) DO UPDATE SET value = excluded.value`,
 		userID, key, value)
 	return err
+}
+
+// --- user settings (#68) ---
+//
+// Settings are persisted in the existing kv table (one row per user+key), so
+// there is no schema migration to run - `CREATE TABLE IF NOT EXISTS kv` in
+// schema.sql runs on every boot and covers old databases. Each setting has a
+// hard-coded default applied when the key is absent, so a fresh user gets the
+// intended defaults without a seed step.
+
+const settingFastScrollCheckin = "fast_scroll_checkin"
+
+// Settings is the user's toggleable preferences. FastScrollCheckin gates the
+// dwell/engagement measurement + the fast-scroll check-in nudge (#68). Default
+// on; off = the old explicit-signals-only behavior (no dwell measured, no nudge).
+type Settings struct {
+	FastScrollCheckin bool `json:"fast_scroll_checkin"`
+}
+
+// GetSettings returns the user's settings with defaults filled in for any key
+// that has never been written.
+func (db *DB) GetSettings(ctx context.Context, userID int64) (Settings, error) {
+	s := Settings{FastScrollCheckin: true} // default: on
+	v, ok, err := db.kvGet(ctx, userID, settingFastScrollCheckin)
+	if err != nil {
+		return s, err
+	}
+	if ok {
+		s.FastScrollCheckin = v == "1"
+	}
+	return s, nil
+}
+
+// SetFastScrollCheckin persists the fast-scroll check-in toggle.
+func (db *DB) SetFastScrollCheckin(ctx context.Context, userID int64, on bool) error {
+	v := "0"
+	if on {
+		v = "1"
+	}
+	return db.kvSet(ctx, userID, settingFastScrollCheckin, v)
 }
 
 // UpdateFeed patches a feed's presentation fields (name, color, icon) and the

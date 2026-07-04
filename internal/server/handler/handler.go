@@ -529,8 +529,11 @@ func sessionPayload(id string, durationMin, cursor int, themes []string, items [
 	}
 }
 
-// ItemEvent records an interaction (open/like/skip/save/dismiss) and updates the
-// item's state. Explicit signals only - no dwell/scroll tracking.
+// ItemEvent records an *explicit* interaction (open/like/skip/save/dismiss) and
+// updates the item's state. These are the deliberate signals the ranker reads.
+// Dwell is deliberately NOT handled here - it never touches item_state - it goes
+// through ItemDwell into the append-only events log only (see the #68 policy on
+// ItemDwell).
 func (h *Handler) ItemEvent(w http.ResponseWriter, r *http.Request) {
 	uid := userID(r)
 	itemID, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
@@ -595,6 +598,79 @@ func (h *Handler) ItemEvent(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
+}
+
+// ItemDwell records per-item dwell (#68) - how long the item was engaged before
+// the user advanced, and whether they engaged at all (opened the reader/player,
+// clicked through, liked, or saved). Policy, load-bearing:
+//
+//   - Dwell is written ONLY to the append-only `events` log (type "dwell"), never
+//     to item_state. The ranker reads item_state (SourceSkipStats) and content
+//     duration (SourceAvgDuration); it never reads the events log, so dwell can
+//     never enter ranking or re-rank the feed. It is raw material for user-owned
+//     stats (#24) and the future pacing signal (#5).
+//   - The client only sends dwell when the fast-scroll check-in setting is on;
+//     off = no measurement. There is no other consumer.
+func (h *Handler) ItemDwell(w http.ResponseWriter, r *http.Request) {
+	uid := userID(r)
+	itemID, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	if err != nil {
+		badRequest(w, "bad item id")
+		return
+	}
+	var body struct {
+		SessionID string `json:"session_id"`
+		DwellMs   int64  `json:"dwell_ms"`
+		Engaged   bool   `json:"engaged"`
+	}
+	if !decode(w, r, &body) {
+		return
+	}
+	detail, _ := json.Marshal(map[string]any{"ms": body.DwellMs, "engaged": body.Engaged})
+	iid := itemID
+	if err := h.db.LogEvent(r.Context(), uid, "dwell", &iid, nil, body.SessionID, string(detail)); err != nil {
+		serverError(w, h.log, "log dwell", err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
+}
+
+// --- settings (#68) ---
+
+// GetSettings returns the user's toggleable preferences (defaults applied for
+// keys never written).
+func (h *Handler) GetSettings(w http.ResponseWriter, r *http.Request) {
+	uid := userID(r)
+	s, err := h.db.GetSettings(r.Context(), uid)
+	if err != nil {
+		serverError(w, h.log, "get settings", err)
+		return
+	}
+	writeJSON(w, http.StatusOK, s)
+}
+
+// UpdateSettings patches settings. Only non-nil fields are applied; the response
+// is the full, current settings so the client can reconcile.
+func (h *Handler) UpdateSettings(w http.ResponseWriter, r *http.Request) {
+	uid := userID(r)
+	var body struct {
+		FastScrollCheckin *bool `json:"fast_scroll_checkin"`
+	}
+	if !decode(w, r, &body) {
+		return
+	}
+	if body.FastScrollCheckin != nil {
+		if err := h.db.SetFastScrollCheckin(r.Context(), uid, *body.FastScrollCheckin); err != nil {
+			serverError(w, h.log, "set fast-scroll check-in", err)
+			return
+		}
+	}
+	s, err := h.db.GetSettings(r.Context(), uid)
+	if err != nil {
+		serverError(w, h.log, "get settings", err)
+		return
+	}
+	writeJSON(w, http.StatusOK, s)
 }
 
 // FetchNow triggers an on-demand ingest of all the user's sources.
