@@ -18,12 +18,15 @@ export function Reader({
   open,
   onClose,
   onOpen,
+  onSave,
 }: {
   item: Item | null;
   sourceTitle?: string;
   open: boolean;
   onClose: () => void;
   onOpen: () => void;
+  // When present, a "Save" affordance opens the collection picker (#57).
+  onSave?: () => void;
 }) {
   // Prefer the full body; fall back to the short summary when content is empty
   // (old items pre-#58, or feeds that ship no full body).
@@ -58,9 +61,16 @@ export function Reader({
               <div className="reader-body" dangerouslySetInnerHTML={{ __html: rendered.html }} />
               <div className="reader-foot">
                 <span>otium · reading in place · no tracking</span>
-                <button className="reader-open" onClick={onOpen}>
-                  Open source ↗
-                </button>
+                <span className="reader-foot-actions">
+                  {onSave && (
+                    <button className="reader-open" onClick={onSave}>
+                      Save
+                    </button>
+                  )}
+                  <button className="reader-open" onClick={onOpen}>
+                    Open source ↗
+                  </button>
+                </span>
               </div>
             </>
           )}

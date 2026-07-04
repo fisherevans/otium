@@ -19,12 +19,15 @@ export function ItemActions({
   open,
   onClose,
   onOpen,
+  onSave,
   onWhy,
 }: {
   selected: Selected | null;
   open: boolean;
   onClose: () => void;
   onOpen: () => void;
+  // Opens the collection Save picker for this item (#57).
+  onSave?: (item: Item) => void;
   onWhy: () => void;
 }) {
   const item = selected?.item ?? null;
@@ -83,6 +86,13 @@ export function ItemActions({
             <span className="sheet-chev">▸</span>
           </button>
 
+          {onSave && (
+            <button className="sheet-row" onClick={() => onSave(item)}>
+              <span>Save to collection</span>
+              <span className="sheet-chev">▸</span>
+            </button>
+          )}
+
           <div className="sheet-weight">
             <div className="ctl-label" style={{ margin: "0 0 6px" }}>
               Source weighting
@@ -114,6 +124,7 @@ export function ItemActions({
         open={open && sub === "reader"}
         onClose={() => setSub(null)}
         onOpen={onOpen}
+        onSave={onSave ? () => onSave(item) : undefined}
       />
 
       <SourceDetail

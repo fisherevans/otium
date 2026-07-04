@@ -48,12 +48,15 @@ export function Player({
   open,
   onClose,
   onOpenOriginal,
+  onSave,
 }: {
   item: Item | null;
   sourceTitle?: string;
   open: boolean;
   onClose: () => void;
   onOpenOriginal: () => void;
+  // When present, a "Save" affordance opens the collection picker (#57).
+  onSave?: () => void;
 }) {
   const isVideo = item ? ["short", "long", "live"].includes(item.media_type) : false;
   const isAudio = item?.media_type === "audio";
@@ -98,9 +101,16 @@ export function Player({
 
           <div className="reader-foot">
             <span>otium · playing in place</span>
-            <button className="reader-open" onClick={onOpenOriginal}>
-              Open original ↗
-            </button>
+            <span className="reader-foot-actions">
+              {onSave && (
+                <button className="reader-open" onClick={onSave}>
+                  Save
+                </button>
+              )}
+              <button className="reader-open" onClick={onOpenOriginal}>
+                Open original ↗
+              </button>
+            </span>
           </div>
         </div>
       )}

@@ -408,6 +408,21 @@ func (h *Handler) ItemEvent(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusOK, map[string]any{"ok": true})
 		return
 	}
+	// `unlike` toggles OFF the Like: it removes the item from the auto Liked
+	// collection (#57) and nothing else. It deliberately does NOT touch item_state
+	// or fire a skip - un-liking is organization, not an engagement signal, so the
+	// ranker's like/skip semantics are unchanged. Logged to the append-only event
+	// stream (which the ranker doesn't read) for completeness.
+	if body.Type == "unlike" {
+		if err := h.db.RemoveItemFromBuiltinCollection(r.Context(), uid, store.SlugLiked, itemID); err != nil {
+			serverError(w, h.log, "unlike", err)
+			return
+		}
+		iid := itemID
+		_ = h.db.LogEvent(r.Context(), uid, "unlike", &iid, nil, body.SessionID, "")
+		writeJSON(w, http.StatusOK, map[string]any{"ok": true})
+		return
+	}
 	stateFor := map[string]string{
 		"open": "opened", "like": "liked", "skip": "skipped",
 		"save": "saved", "dismiss": "dismissed",
@@ -423,6 +438,15 @@ func (h *Handler) ItemEvent(w http.ResponseWriter, r *http.Request) {
 	}
 	iid := itemID
 	_ = h.db.LogEvent(r.Context(), uid, body.Type, &iid, nil, body.SessionID, "")
+	// Wire Like -> the auto Liked collection (#57). Additive membership only: the
+	// `like` state + event above are the untouched engagement signal; adding to
+	// Liked is organization and never feeds the ranker. A membership hiccup must
+	// not fail the like, so it's a warn, not a hard error.
+	if body.Type == "like" {
+		if err := h.db.AddItemToBuiltinCollection(r.Context(), uid, store.SlugLiked, itemID); err != nil {
+			h.log.Warn("add to liked collection", "err", err)
+		}
+	}
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
 }
 
