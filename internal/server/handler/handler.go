@@ -219,11 +219,12 @@ func (h *Handler) UpdateSource(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var body struct {
-		Weight *float64 `json:"weight"`
-		Bucket *string  `json:"weight_bucket"`
-		State  *string  `json:"state"`
-		Cap    *int     `json:"per_session_cap"`
-		Title  *string  `json:"title"`
+		Weight       *float64 `json:"weight"`
+		Bucket       *string  `json:"weight_bucket"`
+		State        *string  `json:"state"`
+		Cap          *int     `json:"per_session_cap"`
+		HalfLifeDays *float64 `json:"half_life_days"`
+		Title        *string  `json:"title"`
 	}
 	if !decode(w, r, &body) {
 		return
@@ -237,7 +238,17 @@ func (h *Handler) UpdateSource(w http.ResponseWriter, r *http.Request) {
 		}
 		weight = &wf
 	}
-	if err := h.db.UpdateSource(r.Context(), uid, id, weight, body.State, body.Cap, body.Title); err != nil {
+	// Clamp the half-life override to sane bounds; 0 stays "inherit" (feed/global).
+	if body.HalfLifeDays != nil {
+		v := *body.HalfLifeDays
+		if v < 0 {
+			v = 0
+		} else if v > 365 {
+			v = 365
+		}
+		body.HalfLifeDays = &v
+	}
+	if err := h.db.UpdateSource(r.Context(), uid, id, weight, body.State, body.Cap, body.HalfLifeDays, body.Title); err != nil {
 		serverError(w, h.log, "update source", err)
 		return
 	}
@@ -415,7 +426,11 @@ func (h *Handler) buildSessionQueue(ctx context.Context, uid int64, durationMin 
 		sourceIDs = ids
 	}
 
-	pool, err := h.db.Candidates(ctx, uid, sourceIDs, 45, 500)
+	rule, err := h.db.MultiFeedRule(ctx, uid)
+	if err != nil {
+		return nil, err
+	}
+	pool, err := h.db.Candidates(ctx, uid, sourceIDs, 45, 500, rule)
 	if err != nil {
 		return nil, err
 	}
@@ -438,7 +453,11 @@ func (h *Handler) rehydrateSession(ctx context.Context, uid int64, itemIDs []int
 	if len(itemIDs) == 0 {
 		return out, nil
 	}
-	cands, err := h.db.CandidatesByIDs(ctx, uid, itemIDs)
+	rule, err := h.db.MultiFeedRule(ctx, uid)
+	if err != nil {
+		return nil, err
+	}
+	cands, err := h.db.CandidatesByIDs(ctx, uid, itemIDs, rule)
 	if err != nil {
 		return nil, err
 	}
@@ -654,7 +673,8 @@ func (h *Handler) GetSettings(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) UpdateSettings(w http.ResponseWriter, r *http.Request) {
 	uid := userID(r)
 	var body struct {
-		FastScrollCheckin *bool `json:"fast_scroll_checkin"`
+		FastScrollCheckin *bool   `json:"fast_scroll_checkin"`
+		MultiFeedRule     *string `json:"multi_feed_rule"`
 	}
 	if !decode(w, r, &body) {
 		return
@@ -662,6 +682,14 @@ func (h *Handler) UpdateSettings(w http.ResponseWriter, r *http.Request) {
 	if body.FastScrollCheckin != nil {
 		if err := h.db.SetFastScrollCheckin(r.Context(), uid, *body.FastScrollCheckin); err != nil {
 			serverError(w, h.log, "set fast-scroll check-in", err)
+			return
+		}
+	}
+	if body.MultiFeedRule != nil {
+		// NormalizeMultiFeedRule coerces unknown values to the primary-feed
+		// default, so a bad string can't land in the store.
+		if err := h.db.SetMultiFeedRule(r.Context(), uid, store.NormalizeMultiFeedRule(*body.MultiFeedRule)); err != nil {
+			serverError(w, h.log, "set multi-feed rule", err)
 			return
 		}
 	}

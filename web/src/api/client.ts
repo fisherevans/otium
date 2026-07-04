@@ -41,6 +41,7 @@ export interface Source {
   weight: number;
   state: string;
   per_session_cap: number;
+  half_life_days: number; // per-source freshness half-life override; 0 = inherit feed/global (#76)
   added_at: string;
   last_fetch_at?: string;
   fetch_error?: string;
@@ -189,11 +190,16 @@ export interface Collection {
 // picker hides it - saving is the deliberate path, liking is the one-tap path.
 export const LIKED_SLUG = "liked";
 
+// The multi-feed half-life resolution rule (#76): which feed supplies a source's
+// freshness half-life when the source is in several feeds.
+export type MultiFeedRule = "primary" | "shortest" | "longest";
+
 // User settings (#68). fast_scroll_checkin gates the dwell/engagement
 // measurement + the fast-scroll check-in nudge. Off = the old explicit-only
-// behavior: no dwell measured, no nudge.
+// behavior: no dwell measured, no nudge. multi_feed_rule (#76) is a preference.
 export interface Settings {
   fast_scroll_checkin: boolean;
+  multi_feed_rule: MultiFeedRule;
 }
 
 export class Unauthorized extends Error {}
@@ -253,7 +259,7 @@ export const api = {
     req<Source>("POST", "/sources", s),
   updateSource: (
     id: number,
-    patch: { weight_bucket?: string; state?: string; per_session_cap?: number; title?: string },
+    patch: { weight_bucket?: string; state?: string; per_session_cap?: number; half_life_days?: number; title?: string },
   ) => req<{ ok: boolean }>("PATCH", `/sources/${id}`, patch),
   deleteSource: (id: number) => req<{ ok: boolean }>("DELETE", `/sources/${id}`),
   setSourceFeeds: (id: number, feedSlugs: string[]) =>
