@@ -1,4 +1,5 @@
 import { useMemo } from "react";
+import { ExternalLink, Bookmark } from "lucide-react";
 import type { Item } from "@/api/client";
 import { BottomSheet } from "./BottomSheet";
 import { renderSummary } from "@/lib/html";
@@ -36,7 +37,7 @@ export function Reader({
   );
 
   return (
-    <BottomSheet open={open} onClose={onClose} variant="tall" kicker={item?.media_type ?? ""}>
+    <BottomSheet open={open} onClose={onClose} variant="tall" swipeClose kicker={item?.media_type ?? ""}>
       {item && (
         <div className="reader">
           <h3 className="reader-title">{item.title}</h3>
@@ -60,17 +61,16 @@ export function Reader({
             <>
               <div className="reader-body" dangerouslySetInnerHTML={{ __html: rendered.html }} />
               <div className="reader-foot">
-                <span>otium · reading in place · no tracking</span>
-                <span className="reader-foot-actions">
-                  {onSave && (
-                    <button className="reader-open" onClick={onSave}>
-                      Save
-                    </button>
-                  )}
-                  <button className="reader-open" onClick={onOpen}>
-                    Open source ↗
+                {onSave && (
+                  <button className="reader-open" onClick={onSave}>
+                    <Bookmark size={15} strokeWidth={1.75} aria-hidden />
+                    Save
                   </button>
-                </span>
+                )}
+                <button className="reader-open" onClick={onOpen}>
+                  <ExternalLink size={15} strokeWidth={1.75} aria-hidden />
+                  Open source
+                </button>
               </div>
             </>
           )}
