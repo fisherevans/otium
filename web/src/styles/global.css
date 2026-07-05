@@ -333,23 +333,53 @@ h1.display {
 .intent-head {
   flex: 0 0 auto;
 }
+/* #95: time = big Didot numeral flanked by de-bordered -/+ steppers, with a
+   thin fine-tune slider under it. The steppers are the primary control; the
+   slider is optional polish. A single bottom hairline separates it from the
+   topics checklist below. */
 .time-pick {
   flex: 0 0 auto;
-  margin: 8px 0 4px;
-  padding: 16px 0 10px;
-  border-top: 1px solid var(--hair);
+  margin: 6px 0 4px;
+  padding: 4px 0 16px;
   border-bottom: 1px solid var(--hair);
+}
+.time-set {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+}
+.step {
+  flex: 0 0 auto;
+  width: 44px;
+  height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  background: transparent;
+  border: 0;
+  font-family: var(--didot);
+  font-size: 32px;
+  line-height: 1;
+  color: var(--ink);
+}
+.step:active {
+  color: var(--ink-mute);
+}
+.step:disabled {
+  opacity: 0.22;
 }
 .time-readout {
   display: flex;
   align-items: baseline;
   justify-content: center;
-  gap: 10px;
-  margin-bottom: 12px;
+  gap: 8px;
+  min-width: 132px;
 }
 .time-readout .big {
   font-family: var(--didot);
-  font-size: 54px;
+  font-size: 64px;
   line-height: 1;
 }
 .time-readout .unit {
@@ -362,7 +392,8 @@ h1.display {
 .time-slider {
   display: block;
   width: 100%;
-  height: 34px;
+  height: 30px;
+  margin-top: 10px;
   accent-color: var(--ink);
   background: transparent;
   touch-action: pan-y;
@@ -371,18 +402,83 @@ h1.display {
   outline: 2px solid var(--ink);
   outline-offset: 4px;
 }
-.time-scale {
-  display: flex;
-  justify-content: space-between;
-  margin-top: 2px;
-  font-family: var(--mono);
-  font-size: 11px;
-  color: var(--ink-mute);
-}
+
+/* #95: topics = quiet multi-select checklist. Fills the remaining column and
+   scrolls internally so the page itself never scrolls at 412px. */
 .intent-topics {
   flex: 1 1 auto;
   min-height: 0;
   overflow-y: auto;
+  padding-top: 10px;
+}
+.topics-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin: 0 0 4px;
+}
+.topics-label {
+  font-family: var(--grot);
+  font-size: 10px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--ink-mute);
+}
+.topics-all {
+  background: transparent;
+  border: 0;
+  padding: 4px 0;
+  font-family: var(--grot);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-mute);
+}
+.topics-all:active {
+  color: var(--ink);
+}
+.topic-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.topic-row {
+  display: flex;
+  align-items: center;
+  gap: 13px;
+  width: 100%;
+  padding: 10px 0;
+  background: transparent;
+  border: 0;
+  text-align: left;
+}
+.topic-check {
+  flex: 0 0 auto;
+  position: relative;
+  width: 17px;
+  height: 17px;
+  border: 1.5px solid var(--ink-mute);
+  border-radius: 3px;
+}
+.topic-check.on {
+  background: var(--ink);
+  border-color: var(--ink);
+}
+.topic-check.on::after {
+  content: "";
+  position: absolute;
+  left: 5px;
+  top: 1.5px;
+  width: 4px;
+  height: 8.5px;
+  border: solid var(--paper);
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
+}
+.topic-name {
+  font-family: var(--serif);
+  font-size: 16px;
+  color: var(--ink);
 }
 .intent-hint {
   font-family: var(--grot);
@@ -392,7 +488,9 @@ h1.display {
 }
 .intent .btn {
   flex: 0 0 auto;
-  margin-top: 12px;
+  /* auto keeps the CTA pinned to the bottom even when there are no feeds (no
+     flex:1 topics list to consume the free space). */
+  margin-top: auto;
 }
 
 /* --- theme chips --- */
@@ -2132,120 +2230,12 @@ h1.display {
 }
 /* ===== end #66 ===== */
 
-/* ===== #70: preset entry chips + slider nudge buttons =======================
-   Refines the #69 intent page into two calm states. Blank state shows four
-   preset-length chips (5 / 15 / 30 / 1 hr) centered in the content area; tapping
-   one reveals the slider state (pre-set to that value) with -5 / +5 nudge
-   buttons flanking the slider. Purely additive - modifies no existing rule.
-   Both states share `.intent`'s flex column (intent-head is fixed; the state
-   wrapper takes flex:1 so the page never scrolls at 412px Palma width). */
-
-/* --- blank state: preset chips, vertically centered --- */
-.preset-pick {
-  flex: 1 1 auto;
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  gap: 18px;
-  animation: intent-reveal 200ms ease-out;
-}
-.preset-grid {
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 12px;
-}
-.preset-chip {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 4px;
-  padding: 22px 10px;
-  border: 1.5px solid var(--rule-hard);
-  background: var(--paper);
-  color: var(--ink);
-}
-.preset-chip:active {
-  background: var(--paper-3);
-}
-.preset-num {
-  font-family: var(--didot);
-  font-size: 40px;
-  line-height: 1;
-}
-.preset-unit {
-  font-family: var(--grot);
-  font-size: 10px;
-  letter-spacing: 0.16em;
-  text-transform: uppercase;
-  color: var(--ink-mute);
-}
-
-/* --- slider state: fills the column like the pre-#70 markup did --- */
-.slider-state {
-  flex: 1 1 auto;
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
-  animation: intent-reveal 200ms ease-out;
-}
-.reset-link {
-  align-self: flex-start;
-  margin-bottom: 8px;
-  padding: 4px 0;
-  background: transparent;
-  border: 0;
-  font-family: var(--grot);
-  font-size: 11px;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  color: var(--ink-mute);
-}
-.reset-link:active {
-  color: var(--ink);
-}
-
-/* --- -5 / slider / +5 row --- */
-.time-adjust {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-.time-adjust .time-slider {
-  width: auto;
-  flex: 1 1 auto;
-}
-.nudge {
-  flex: 0 0 auto;
-  width: 48px;
-  height: 44px;
-  border: 1.5px solid var(--rule-hard);
-  background: var(--paper);
-  color: var(--ink);
-  font-family: var(--grot);
-  font-size: 14px;
-  font-weight: 700;
-  letter-spacing: 0.04em;
-}
-.nudge:active {
-  background: var(--paper-3);
-}
-.nudge:disabled {
-  opacity: 0.35;
-}
-
-@keyframes intent-reveal {
-  from { opacity: 0; transform: translateY(6px); }
-  to   { opacity: 1; transform: translateY(0); }
-}
-@media (prefers-reduced-motion: reduce) {
-  .preset-pick,
-  .slider-state {
-    animation: none;
-  }
-}
-/* ===== end #70 ===== */
+/* ===== #70 preset-chips/slider intent removed by #95 ========================
+   The two-state intent page (preset chips -> slider) was replaced by the single
+   big-number +/- time control + topics checklist (see `.time-pick` / `.step` /
+   `.topic-*` above). Its HomePage-only rules (.preset-pick/-grid/-chip/-num/
+   -unit, .slider-state, .reset-link, .time-adjust, .nudge, intent-reveal) are
+   gone. The #82 preset editor keeps its own `.preset-edit-*` rules below. */
 /* ===== #71 flat-icons: action-bar + footer lucide glyphs ===== */
 /* Bottom-bar action icons are inline lucide SVGs now (were emoji-rendering
    unicode: ↗ ♥ ▣ ↓). Single-ink, sized by the SVG's own attrs; the .on pill
