@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { api, type Collection, type Item } from "@/api/client";
+import { api, collectionDisplayName, type Collection, type CollectionItem, type CollectionSort, type Item } from "@/api/client";
 import { BottomSheet } from "@/components/BottomSheet";
 import { Reader } from "@/components/Reader";
 import { Player } from "@/components/Player";
@@ -14,10 +14,29 @@ function contentKind(item: Item): "video" | "audio" | "read" {
   return "read";
 }
 
-// Collections view (#57): the deliberate saved-content surface, reached from the
-// library. Lists collections + counts; tap one to browse its items newest-first.
-// Each item opens the in-app reader/player and can be removed. User lists can be
-// created, renamed, and deleted; builtins (Saved / Watch Later / Liked) can't.
+// The two review orders (#89). Saved date = when you set the item aside;
+// Published date = when it ran. Default saved-newest-first.
+const SORTS: { key: CollectionSort; label: string }[] = [
+  { key: "saved", label: "Saved date" },
+  { key: "published", label: "Published date" },
+];
+
+// The meta stamp on each row (#89): show whichever timestamp the list is
+// ordered by, so the sort is legible on the item itself. Saved order reads
+// "saved 2 days ago"; published order reads the publish age directly. Empty
+// when the relevant timestamp is missing.
+function itemStamp(it: CollectionItem, sort: CollectionSort): string {
+  if (sort === "published") return it.published_at ? ` · ${relTime(it.published_at)}` : "";
+  return it.added_at ? ` · saved ${relTime(it.added_at)}` : "";
+}
+
+// Collections view (#57, review UX #89): the deliberate saved-content surface,
+// reached from the library. Lists collections + counts; tap one to browse its
+// items with a Saved-date / Published-date sort toggle (#89). Each item opens
+// the in-app reader/player and can be removed. User lists can be created,
+// renamed, and deleted; builtins can't. The builtins keep backend slugs
+// (saved / watch-later / liked) but display as Saved / Read Later / Favorites
+// via collectionDisplayName (#89).
 //
 // This is organization, not consumption: opening an item here doesn't build a
 // session or emit engagement events. Calm by default - a quiet count, no badges.
@@ -29,8 +48,9 @@ export default function CollectionsPage({ embedded = false }: { embedded?: boole
   const [cols, setCols] = useState<Collection[]>([]);
   const [err, setErr] = useState("");
   const [selected, setSelected] = useState<Collection | null>(null);
-  const [items, setItems] = useState<Item[]>([]);
+  const [items, setItems] = useState<CollectionItem[]>([]);
   const [loadingItems, setLoadingItems] = useState(false);
+  const [sort, setSort] = useState<CollectionSort>("saved"); // #89 review order
 
   const [creating, setCreating] = useState(false);
   const [newName, setNewName] = useState("");
@@ -51,14 +71,25 @@ export default function CollectionsPage({ embedded = false }: { embedded?: boole
     [selected, cols],
   );
 
-  function openCollection(c: Collection) {
-    setSelected(c);
+  function loadItems(id: number, s: CollectionSort) {
     setLoadingItems(true);
     api
-      .collectionItems(c.id)
+      .collectionItems(id, s)
       .then(setItems)
       .catch((e) => setErr(String(e.message ?? e)))
       .finally(() => setLoadingItems(false));
+  }
+
+  function openCollection(c: Collection) {
+    setSelected(c);
+    setSort("saved"); // reset to the default order on each open
+    loadItems(c.id, "saved");
+  }
+
+  function changeSort(s: CollectionSort) {
+    if (s === sort) return;
+    setSort(s);
+    if (selectedLive) loadItems(selectedLive.id, s);
   }
 
   async function createCollection() {
@@ -120,14 +151,30 @@ export default function CollectionsPage({ embedded = false }: { embedded?: boole
           <span aria-hidden>←</span> All collections
         </button>
         <div className="lib-topbar">
-          <h1 className="display">{selectedLive.name}</h1>
+          <h1 className="display">{collectionDisplayName(selectedLive)}</h1>
           {selectedLive.kind === "user" && (
             <button className="lib-fsbtn" onClick={() => { setManage(selectedLive); setRenameVal(selectedLive.name); }}>
               Edit
             </button>
           )}
         </div>
-        <p className="sub">{selectedLive.item_count} {selectedLive.item_count === 1 ? "item" : "items"} · newest first</p>
+        <p className="sub">{selectedLive.item_count} {selectedLive.item_count === 1 ? "item" : "items"}</p>
+
+        {/* Sort toggle (#89): review chronologically by when you saved it or when
+            it was published. Reuses the segmented-control look from the Saved tab. */}
+        <div className="lib-filter" role="tablist" aria-label="Sort collection">
+          {SORTS.map((s) => (
+            <button
+              key={s.key}
+              role="tab"
+              aria-selected={sort === s.key}
+              className={`lib-fchip ${sort === s.key ? "on" : ""}`}
+              onClick={() => changeSort(s.key)}
+            >
+              {s.label}
+            </button>
+          ))}
+        </div>
 
         {err && <p className="err">{err}</p>}
         {loadingItems ? (
@@ -140,7 +187,7 @@ export default function CollectionsPage({ embedded = false }: { embedded?: boole
               <div className="lib-head">
                 <div className="nm" onClick={() => setContent(it)} style={{ cursor: "pointer" }}>
                   <b>{it.title}</b>
-                  <span>{it.media_type}{it.published_at ? ` · ${relTime(it.published_at)}` : ""}</span>
+                  <span>{it.media_type}{itemStamp(it, sort)}</span>
                 </div>
                 <button className="coll-x" onClick={() => removeItem(it)} aria-label="Remove from collection">×</button>
               </div>
@@ -173,7 +220,7 @@ export default function CollectionsPage({ embedded = false }: { embedded?: boole
         {embedded ? <span /> : <h1 className="display">Collections</h1>}
         <button className="lib-fsbtn" onClick={() => setCreating((c) => !c)}>{creating ? "Cancel" : "New"}</button>
       </div>
-      <p className="sub">Lists you've set items aside into. Saved and Watch Later are always here; Liked fills as you like.</p>
+      <p className="sub">Lists you've set items aside into. Saved and Read Later are always here; Favorites fills as you like.</p>
 
       {err && <p className="err">{err}</p>}
 
@@ -195,7 +242,7 @@ export default function CollectionsPage({ embedded = false }: { embedded?: boole
         <div className="lib-row" key={c.id}>
           <div className="lib-head" onClick={() => openCollection(c)}>
             <div className="nm">
-              <b>{c.name}</b>
+              <b>{collectionDisplayName(c)}</b>
               <span>{c.item_count} {c.item_count === 1 ? "item" : "items"}{c.kind === "builtin" ? " · built-in" : ""}</span>
             </div>
             <span className="chev">▸</span>
