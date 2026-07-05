@@ -1,8 +1,10 @@
 import { useEffect, useState } from "react";
 import { api, type Source, type Feed } from "@/api/client";
 import { BottomSheet } from "./BottomSheet";
-import { BUCKETS, BLABEL, bucketOf, type Bucket } from "@/lib/weight";
+import { BLABEL, bucketOf, type Bucket } from "@/lib/weight";
 import { feedIcon } from "@/lib/feedIcons";
+import { WeightControl } from "./WeightControl";
+import { WeightIndicator } from "./WeightIndicator";
 
 // Source details drill-in (#43.3 / related #9). Surfaces the current item's
 // source at a glance - kind, weight, cap, and whatever stats the API returned
@@ -113,7 +115,7 @@ export function SourceDetail({
         <div className="reader-meta">
           <span>{source.kind}</span>
           <span>·</span>
-          <span>weight {BLABEL[bucket]}</span>
+          <WeightIndicator bucket={bucket} label />
           {state === "archived" && (
             <>
               <span>·</span>
@@ -144,13 +146,7 @@ export function SourceDetail({
         )}
 
         <div className="ctl-label">Weight</div>
-        <div className="wbuckets">
-          {BUCKETS.map((b) => (
-            <button key={b} className={`wbucket ${bucket === b ? "on" : ""}`} onClick={() => setWeight(b)}>
-              {BLABEL[b]}
-            </button>
-          ))}
-        </div>
+        <WeightControl value={bucket} onChange={setWeight} />
 
         <div className="ctl-label">Per-session cap</div>
         <div className="capstep">

@@ -1047,26 +1047,30 @@ h1.display {
    ============================================================ */
 .lib-filter {
   display: flex;
-  gap: 6px;
+  gap: 14px;
   overflow-x: auto;
   padding: 14px 0 10px;
   -webkit-overflow-scrolling: touch;
 }
+/* #93 de-noise: feed filter chips lose the box - quiet muted words, active =
+   ink + underline (rule 2: mark only the chosen one, don't cage every option). */
 .lib-fchip {
   flex: 0 0 auto;
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  padding: 7px 13px;
-  border: 1.5px solid var(--rule-hard);
-  background: var(--paper);
+  padding: 6px 1px 5px;
+  border: none;
+  border-bottom: 2px solid transparent;
+  background: none;
   font-family: var(--grot);
   font-size: 12px;
+  color: var(--ink-mute);
   white-space: nowrap;
 }
 .lib-fchip.on {
-  background: var(--ink);
-  color: var(--paper);
+  color: var(--ink);
+  border-bottom-color: var(--ink);
 }
 .lib-sub {
   display: flex;
@@ -1076,20 +1080,23 @@ h1.display {
   border-bottom: 1.5px solid var(--rule-hard);
   padding-bottom: 8px;
 }
+/* #93 de-noise: segmented controls (Followed/Archived/all, and the signal /
+   sort / group rows in the Filter & sort sheet) lose the caged bar - active =
+   underline, not a filled/bordered cell. */
 .lib-seg {
-  padding: 5px 11px;
-  border: 1px solid var(--rule);
-  background: var(--paper);
+  padding: 6px 1px 5px;
+  border: none;
+  border-bottom: 2px solid transparent;
+  background: none;
   font-family: var(--grot);
   font-size: 11px;
   text-transform: uppercase;
   letter-spacing: 0.06em;
-  color: var(--ink-soft);
+  color: var(--ink-mute);
 }
 .lib-seg.on {
-  background: var(--ink);
-  color: var(--paper);
-  border-color: var(--ink);
+  color: var(--ink);
+  border-bottom-color: var(--ink);
 }
 .lib-count {
   margin-left: auto;
@@ -1121,7 +1128,9 @@ h1.display {
   gap: 8px;
   margin: 18px 0 2px;
   padding-bottom: 7px;
-  border-bottom: 1.5px solid var(--rule-hard);
+  /* #93 de-noise: group header keeps a rule (it's a real section break) but
+     softened off near-black. */
+  border-bottom: 1px solid var(--rule);
   font-family: var(--grot);
   font-size: 12px;
   letter-spacing: 0.06em;
@@ -1143,17 +1152,11 @@ h1.display {
   gap: 10px;
   padding: 13px 2px;
 }
+/* #93: the library row's weight cell now holds the gauge+dots indicator, not a
+   boxed word. Keep a stable min-width so names still line up column-clean. */
 .wtag {
   flex: 0 0 auto;
-  min-width: 48px;
-  text-align: center;
-  font-family: var(--mono);
-  font-size: 10px;
-  text-transform: uppercase;
-  letter-spacing: 0.03em;
-  padding: 4px 6px;
-  border: 1.5px solid var(--rule-hard);
-  background: var(--paper);
+  min-width: 62px;
 }
 .lib-head .nm {
   flex: 1;
@@ -1206,6 +1209,98 @@ h1.display {
   background: var(--ink);
   color: var(--paper);
 }
+
+/* #93: weight visual language ---------------------------------------------
+   Compact indicator = gauge glyph + a 1-5 density scale. Used in library rows,
+   source-page meta, and the quick-weight sheet. The gauge signals "how often
+   this surfaces"; the dots quantify it at a glance where a bare word wouldn't. */
+.windi {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.windi-ic {
+  flex: 0 0 auto;
+  color: var(--ink-mute);
+}
+.wdots {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+.wdot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  box-shadow: inset 0 0 0 1px var(--rule);
+}
+.wdot.on {
+  background: var(--ink);
+  box-shadow: inset 0 0 0 1px var(--ink);
+}
+.windi-word {
+  font-family: var(--grot);
+  font-size: 12px;
+  letter-spacing: 0.01em;
+  color: var(--ink-mute);
+}
+
+/* #93: the source-config weight control - roomy vertical word list. Replaces
+   the cramped horizontal wbuckets (which truncated) for editing weight; the
+   frequency word gets a full row, a hint, and its matching dot density. The
+   half-life picker still uses .wbuckets, so that class is unchanged. */
+.wctl {
+  display: flex;
+  flex-direction: column;
+  margin-top: 2px;
+}
+.wchoice {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  width: 100%;
+  padding: 11px 10px 11px 12px;
+  background: none;
+  border: none;
+  border-left: 2px solid transparent;
+  border-bottom: 1px solid var(--hair);
+  text-align: left;
+  cursor: pointer;
+}
+.wchoice:last-child {
+  border-bottom: none;
+}
+.wchoice.on {
+  background: var(--paper-2);
+  border-left-color: var(--ink);
+}
+.wchoice-main {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.wchoice-word {
+  font-family: var(--grot);
+  font-size: 15px;
+  color: var(--ink-soft);
+}
+.wchoice-hint {
+  font-family: var(--serif);
+  font-style: italic;
+  font-size: 12px;
+  color: var(--ink-mute);
+}
+.wchoice.on .wchoice-word {
+  color: var(--ink);
+  font-weight: 600;
+}
+.wchoice .wdot {
+  width: 6px;
+  height: 6px;
+}
+
 .capstep {
   display: flex;
   align-items: center;
@@ -1235,21 +1330,25 @@ h1.display {
 .feed-assign {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
+  gap: 14px;
 }
+/* #93 de-noise: feed-assign chips lose the box - muted words, active = ink +
+   underline, matching the library's filter chips. */
 .fa-chip {
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  padding: 6px 11px;
-  border: 1.5px solid var(--rule-hard);
-  background: var(--paper);
+  padding: 6px 2px 5px;
+  border: none;
+  border-bottom: 2px solid transparent;
+  background: none;
   font-family: var(--grot);
   font-size: 12px;
+  color: var(--ink-mute);
 }
 .fa-chip.on {
-  background: var(--ink);
-  color: var(--paper);
+  color: var(--ink);
+  border-bottom-color: var(--ink);
 }
 
 /* feed-icon picker grid (#45) */
@@ -1975,17 +2074,19 @@ h1.display {
 
 /* #55: one compact row - state segments (primary) scroll horizontally if
    needed; the sheet trigger and count pin to the right. No wrapping stack. */
+/* #93 de-noise: lighten the heavy near-black rule under the controls to a
+   faint hairline so it separates without chopping the page into slabs. */
 .lib-controls {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 14px;
   margin: 4px 0 6px;
   padding-bottom: 8px;
-  border-bottom: 1.5px solid var(--rule-hard);
+  border-bottom: 1px solid var(--hair);
 }
 .lib-segs {
   display: flex;
-  gap: 6px;
+  gap: 14px;
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
   flex: 0 1 auto;
@@ -1995,26 +2096,26 @@ h1.display {
   flex: 0 0 auto;
   white-space: nowrap;
 }
+/* #93 de-noise: the Filter & sort trigger sheds its box too - quiet label,
+   active = ink (with the existing state dot). It's a trigger, not a primary. */
 .lib-fsbtn {
   flex: 0 0 auto;
   margin-left: auto;
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  padding: 6px 12px;
-  border: 1.5px solid var(--rule-hard);
-  background: var(--paper);
+  padding: 6px 1px 5px;
+  border: none;
+  background: none;
   font-family: var(--grot);
   font-size: 11px;
   text-transform: uppercase;
   letter-spacing: 0.06em;
-  color: var(--ink);
+  color: var(--ink-mute);
   white-space: nowrap;
 }
 .lib-fsbtn.on {
-  background: var(--ink);
-  color: var(--paper);
-  border-color: var(--ink);
+  color: var(--ink);
 }
 .lib-fsbtn .dot {
   width: 6px;
@@ -2035,7 +2136,7 @@ h1.display {
 .lib-sheet-row {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
+  gap: 14px;
   margin-bottom: 4px;
 }
 .lib-sheet-foot {

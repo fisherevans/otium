@@ -3,7 +3,8 @@ import { useNavigate } from "react-router-dom";
 import { api, type Source } from "@/api/client";
 import { BottomSheet } from "./BottomSheet";
 import { SourceItems } from "./SourceItems";
-import { BUCKETS, BLABEL, bucketOf, type Bucket } from "@/lib/weight";
+import { bucketOf, type Bucket } from "@/lib/weight";
+import { WeightControl } from "./WeightControl";
 
 // #75: the source context menu, reached by tapping the source name on a session
 // card. A calm bottom sheet that keeps you in the session while you dig into or
@@ -70,13 +71,7 @@ export function SourceSheet({
           <div className="ctl-label" style={{ margin: "0 0 6px" }}>
             Quick weight
           </div>
-          <div className="wbuckets">
-            {BUCKETS.map((b) => (
-              <button key={b} className={`wbucket ${bucket === b ? "on" : ""}`} onClick={() => setWeight(b)}>
-                {BLABEL[b]}
-              </button>
-            ))}
-          </div>
+          <WeightControl value={bucket} onChange={setWeight} />
         </div>
 
         <div className="sheet-rows">
