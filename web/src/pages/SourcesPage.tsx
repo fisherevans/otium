@@ -227,18 +227,13 @@ export default function SourcesPage() {
       </button>
       {/* #64: compact top - title + one "Manage" affordance. The secondary
           actions live behind the Manage sheet so the list starts high. */}
+      {/* #84 Model-A: the Library is just the library now. Collections + History
+          moved to the Saved tab; Import / Feed mix / Settings to the You tab. The
+          header keeps only the source-level "Manage" affordance, so it no longer
+          overflows at phone width. */}
       <div className="lib-topbar">
         <h1 className="display">Your library</h1>
         <div className="lib-topbar-actions">
-          {/* #57: saved content is a primary surface - promote it to the top
-              bar, not the Manage sheet. */}
-          <button className="lib-fsbtn" onClick={() => nav("/collections")}>
-            Collections
-          </button>
-          {/* #83: personal history - shown vs engaged */}
-          <button className="lib-fsbtn" onClick={() => nav("/history")}>
-            History
-          </button>
           <button className="lib-fsbtn" onClick={() => setManageOpen(true)}>
             Manage
           </button>
@@ -323,15 +318,13 @@ export default function SourcesPage() {
         );
       })}
 
-      {/* #64: the collapsed secondary actions - full behavior, just off-screen
-          until asked for. Add-a-source form lives inside the sheet too. */}
+      {/* #64/#84: the collapsed source-level actions - full behavior, just
+          off-screen until asked for. Add-a-source form lives inside the sheet
+          too. Import / Feed mix / Settings moved to their own tabs (You), so
+          this sheet is now just add / refresh / feed settings. */}
       <BottomSheet open={manageOpen} onClose={() => setManageOpen(false)} kicker="Manage">
         <div className="lib-sheet">
           <div className="sheet-rows">
-            <button className="sheet-row" onClick={() => { setManageOpen(false); nav("/import"); }}>
-              <span>Import your follows</span>
-              <span className="sheet-chev">▸</span>
-            </button>
             <button className="sheet-row" onClick={() => setAdding((a) => !a)}>
               <span>{adding ? "Cancel add" : "Add a source"}</span>
               <span className="sheet-chev">{adding ? "▾" : "▸"}</span>
@@ -353,21 +346,12 @@ export default function SourcesPage() {
               <span>{fetching ? "Refreshing…" : "Refresh now"}</span>
               <span className="sheet-chev">↻</span>
             </button>
-            <button className="sheet-row" onClick={() => { setManageOpen(false); nav("/mix"); }}>
-              <span>Feed mix</span>
-              <span className="sheet-chev">▸</span>
-            </button>
             {feeds.length > 0 && (
               <button className="sheet-row" onClick={() => { setManageOpen(false); setIconsOpen(true); }}>
                 <span>Feed settings</span>
                 <span className="sheet-chev">▸</span>
               </button>
             )}
-            {/* #68: app preferences (fast-scroll check-in). */}
-            <button className="sheet-row" onClick={() => { setManageOpen(false); nav("/settings"); }}>
-              <span>Settings</span>
-              <span className="sheet-chev">▸</span>
-            </button>
           </div>
         </div>
       </BottomSheet>

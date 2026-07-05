@@ -21,7 +21,10 @@ function contentKind(item: Item): "video" | "audio" | "read" {
 //
 // This is organization, not consumption: opening an item here doesn't build a
 // session or emit engagement events. Calm by default - a quiet count, no badges.
-export default function CollectionsPage() {
+// `embedded` renders the body without its own back link / page title, so the
+// Saved tab can host it under a shared header + segmented control (#84). The
+// standalone /collections route renders it non-embedded for deep links.
+export default function CollectionsPage({ embedded = false }: { embedded?: boolean }) {
   const nav = useNavigate();
   const [cols, setCols] = useState<Collection[]>([]);
   const [err, setErr] = useState("");
@@ -161,11 +164,13 @@ export default function CollectionsPage() {
   // ---- collections list view ----
   return (
     <div>
-      <button className="lib-back" onClick={() => nav("/sources")}>
-        <span aria-hidden>←</span> Library
-      </button>
+      {!embedded && (
+        <button className="lib-back" onClick={() => nav("/sources")}>
+          <span aria-hidden>←</span> Library
+        </button>
+      )}
       <div className="lib-topbar">
-        <h1 className="display">Collections</h1>
+        {embedded ? <span /> : <h1 className="display">Collections</h1>}
         <button className="lib-fsbtn" onClick={() => setCreating((c) => !c)}>{creating ? "Cancel" : "New"}</button>
       </div>
       <p className="sub">Lists you've set items aside into. Saved and Watch Later are always here; Liked fills as you like.</p>

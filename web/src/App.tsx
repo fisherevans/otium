@@ -1,4 +1,5 @@
 import { NavLink, Route, Routes, useLocation, useNavigate } from "react-router-dom";
+import { BookOpen, Library, Bookmark, User } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import HomePage from "@/pages/HomePage";
 import SessionPage from "@/pages/SessionPage";
@@ -10,6 +11,10 @@ import SettingsPage from "@/pages/SettingsPage";
 // --- #83 personal-history page ---
 import HistoryPage from "@/pages/HistoryPage";
 // --- end #83 ---
+// --- #84 Model-A nav shell: Saved + You tab homes ---
+import SavedPage from "@/pages/SavedPage";
+import YouPage from "@/pages/YouPage";
+// --- end #84 ---
 import AppearancePage from "@/pages/AppearancePage";
 // --- #66 feed-mgmt-pages: dedicated source/feed pages ---
 import SourcePage from "@/pages/SourcePage";
@@ -64,6 +69,11 @@ export default function App() {
           <Route path="/sources/:id" element={<SourcePage />} />
           <Route path="/feeds/:slug" element={<FeedPage />} />
           {/* --- end #66 --- */}
+          {/* #84: Saved (Collections + History) and You (secondary destinations)
+              are the two new tab homes. Collections/History keep their own
+              routes for deep links; Saved embeds their bodies. */}
+          <Route path="/saved" element={<SavedPage />} />
+          <Route path="/you" element={<YouPage />} />
           <Route path="/collections" element={<CollectionsPage />} />
           <Route path="/history" element={<HistoryPage />} /> {/* #83: personal shown-vs-engaged history */}
           <Route path="/mix" element={<MixPage />} />
@@ -73,13 +83,25 @@ export default function App() {
         </Routes>
       </main>
 
+      {/* #84: four-tab Model-A shell. Session (/session/:id) is `focused`, so the
+          nav is hidden there and it stays full-screen, exactly as before. */}
       {!focused && (
         <nav className="nav">
           <NavLink to="/" end className={({ isActive }) => (isActive ? "active" : "")}>
-            intent
+            <BookOpen size={19} strokeWidth={1.75} aria-hidden />
+            <span>read</span>
           </NavLink>
           <NavLink to="/sources" className={({ isActive }) => (isActive ? "active" : "")}>
-            library
+            <Library size={19} strokeWidth={1.75} aria-hidden />
+            <span>library</span>
+          </NavLink>
+          <NavLink to="/saved" className={({ isActive }) => (isActive ? "active" : "")}>
+            <Bookmark size={19} strokeWidth={1.75} aria-hidden />
+            <span>saved</span>
+          </NavLink>
+          <NavLink to="/you" className={({ isActive }) => (isActive ? "active" : "")}>
+            <User size={19} strokeWidth={1.75} aria-hidden />
+            <span>you</span>
           </NavLink>
         </nav>
       )}

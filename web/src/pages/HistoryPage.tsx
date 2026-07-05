@@ -45,7 +45,10 @@ const SUB: Record<HistoryFilter, string> = {
   saved: "Items you set aside to save.",
 };
 
-export default function HistoryPage() {
+// `embedded` drops the back link + page title so the Saved tab can host this
+// body under its shared header + segmented control (#84). The standalone
+// /history route renders it non-embedded for deep links.
+export default function HistoryPage({ embedded = false }: { embedded?: boolean }) {
   const nav = useNavigate();
   const [filter, setFilter] = useState<HistoryFilter>("shown");
   const [items, setItems] = useState<HistoryItem[]>([]);
@@ -103,12 +106,16 @@ export default function HistoryPage() {
 
   return (
     <div>
-      <button className="lib-back" onClick={() => nav("/sources")}>
-        <span aria-hidden>←</span> Library
-      </button>
-      <div className="lib-topbar">
-        <h1 className="display">History</h1>
-      </div>
+      {!embedded && (
+        <>
+          <button className="lib-back" onClick={() => nav("/sources")}>
+            <span aria-hidden>←</span> Library
+          </button>
+          <div className="lib-topbar">
+            <h1 className="display">History</h1>
+          </div>
+        </>
+      )}
       <p className="sub">{SUB[filter]}</p>
 
       {/* filter chips - reuse the library's chip row (#83) */}
