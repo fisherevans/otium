@@ -20,7 +20,7 @@ const HALF_LIVES: { days: number; label: string }[] = [
 // (freshness half-life / diversity / icon), and its recent posts together, so
 // "here are your feeds, see the sources in it and the settings for it" happens
 // in one place with no hopping. Sources tap through to their own source pages
-// (a source can be in several feeds - that's why feed→sources is the grouping).
+// (a source belongs to exactly one feed - #86 - so feed→sources is a clean tree).
 export default function FeedPage() {
   const nav = useNavigate();
   const { slug } = useParams();
@@ -60,7 +60,7 @@ export default function FeedPage() {
   const feedSources = useMemo(() => {
     if (!slug) return [];
     return sources
-      .filter((s) => (s.feed_slugs ?? []).includes(slug))
+      .filter((s) => s.feed_slug === slug)
       .sort((a, b) => {
         const aa = a.state === "archived" ? 1 : 0;
         const ba = b.state === "archived" ? 1 : 0;
@@ -134,7 +134,7 @@ export default function FeedPage() {
         <div className="ctl-label">Sources</div>
         {feedSources.length === 0 ? (
           <p className="sub" style={{ padding: "12px 0" }}>
-            No sources here yet. Add one from a source page's Feeds control.
+            No sources here yet. Set a source's feed from its page's Feed control.
           </p>
         ) : (
           feedSources.map((s) => (

@@ -57,7 +57,7 @@ func TestMixItemsScopeAndSeenState(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	items, err := db.MixItems(ctx, u.ID, nil, 45, RulePrimaryFeed)
+	items, err := db.MixItems(ctx, u.ID, nil, 45)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -80,7 +80,7 @@ func TestMixItemsScopeAndSeenState(t *testing.T) {
 	}
 
 	// Scoping to a subset restricts the rows.
-	scoped, err := db.MixItems(ctx, u.ID, []int64{trial}, 45, RulePrimaryFeed)
+	scoped, err := db.MixItems(ctx, u.ID, []int64{trial}, 45)
 	if err != nil {
 		t.Fatal(err)
 	}

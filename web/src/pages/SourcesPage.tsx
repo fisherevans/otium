@@ -85,7 +85,7 @@ export default function SourcesPage() {
       sources.filter((s) => {
         if (fstate === "followed" && s.state === "archived") return false;
         if (fstate === "archived" && s.state !== "archived") return false;
-        if (ffeed && !(s.feed_slugs ?? []).includes(ffeed)) return false;
+        if (ffeed && s.feed_slug !== ffeed) return false;
         return true;
       }),
     [sources, ffeed, fstate],
@@ -128,16 +128,10 @@ export default function SourcesPage() {
     return m;
   }, [feeds]);
 
-  // A source can belong to several feeds; its "primary" feed (for feed-sort and
-  // for grouping) is the one that sorts first in the feed order.
+  // A source belongs to exactly one feed (#86); this resolves it for feed-sort
+  // and grouping. Feedless sources return null (the trailing "No feed" bucket).
   function primaryFeed(s: Source): Feed | null {
-    let best: Feed | null = null;
-    for (const sl of s.feed_slugs ?? []) {
-      const f = feedBySlug.get(sl);
-      if (!f) continue;
-      if (!best || f.sort < best.sort || (f.sort === best.sort && f.name < best.name)) best = f;
-    }
-    return best;
+    return s.feed_slug ? feedBySlug.get(s.feed_slug) ?? null : null;
   }
 
   const sorted = useMemo(() => {
@@ -352,6 +346,12 @@ export default function SourcesPage() {
                 <span className="sheet-chev">▸</span>
               </button>
             )}
+            {/* #86: groups gather feeds under one name. Managed on their own page
+                so the library header stays uncluttered. */}
+            <button className="sheet-row" onClick={() => { setManageOpen(false); nav("/groups"); }}>
+              <span>Groups</span>
+              <span className="sheet-chev">▸</span>
+            </button>
           </div>
         </div>
       </BottomSheet>

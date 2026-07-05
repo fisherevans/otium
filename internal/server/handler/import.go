@@ -87,7 +87,7 @@ func (h *Handler) CommitImport(w http.ResponseWriter, r *http.Request) {
 				fid = f.ID
 				feedIDs[c.Category] = fid
 			}
-			_ = h.db.AddFeedSource(r.Context(), fid, id)
+			_ = h.db.AssignSourceFeed(r.Context(), id, fid)
 			continue
 		}
 		// Auto-tag untagged YouTube sources into the Videos feed (#53) so future
@@ -99,7 +99,7 @@ func (h *Handler) CommitImport(w http.ResponseWriter, r *http.Request) {
 				h.log.Warn("import: videos feed create failed", "err", err)
 				continue
 			}
-			_ = h.db.AddFeedSource(r.Context(), f.ID, id)
+			_ = h.db.AssignSourceFeed(r.Context(), id, f.ID)
 		}
 	}
 

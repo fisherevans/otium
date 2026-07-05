@@ -268,8 +268,9 @@ func (h *Handler) DeleteSource(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
 }
 
-// SetSourceFeeds replaces the set of feeds (themes) a source belongs to.
-func (h *Handler) SetSourceFeeds(w http.ResponseWriter, r *http.Request) {
+// SetSourceFeed sets the one feed a source belongs to (#86). An empty feed_slug
+// clears the feed (feedless). Replaces the old multi-feed membership.
+func (h *Handler) SetSourceFeed(w http.ResponseWriter, r *http.Request) {
 	uid := userID(r)
 	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	if err != nil {
@@ -277,13 +278,13 @@ func (h *Handler) SetSourceFeeds(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var body struct {
-		FeedSlugs []string `json:"feed_slugs"`
+		FeedSlug string `json:"feed_slug"`
 	}
 	if !decode(w, r, &body) {
 		return
 	}
-	if err := h.db.SetSourceFeeds(r.Context(), uid, id, body.FeedSlugs); err != nil {
-		serverError(w, h.log, "set source feeds", err)
+	if err := h.db.SetSourceFeed(r.Context(), uid, id, body.FeedSlug); err != nil {
+		serverError(w, h.log, "set source feed", err)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
@@ -324,6 +325,7 @@ func (h *Handler) CreateSession(w http.ResponseWriter, r *http.Request) {
 	var body struct {
 		DurationMin int      `json:"duration_min"`
 		Themes      []string `json:"themes"` // feed slugs; empty = all followed sources
+		Groups      []string `json:"groups"` // group slugs; each expands to its member feeds (#86)
 	}
 	if !decode(w, r, &body) {
 		return
@@ -332,7 +334,7 @@ func (h *Handler) CreateSession(w http.ResponseWriter, r *http.Request) {
 		body.DurationMin = 15
 	}
 
-	items, err := h.buildSessionQueue(r.Context(), uid, body.DurationMin, body.Themes)
+	items, err := h.buildSessionQueue(r.Context(), uid, body.DurationMin, body.Themes, body.Groups)
 	if err != nil {
 		serverError(w, h.log, "build session", err)
 		return
@@ -407,29 +409,44 @@ func (h *Handler) UpdateSession(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
 }
 
-// buildSessionQueue resolves themes, pulls the candidate pool + behavioral
-// stats, runs the ranker for the single duration (fed as both bounds so the
-// existing predict/selectivity path is unchanged), and attaches each item's
-// primary feed. Returns an empty slice when the theme selection has no sources.
-func (h *Handler) buildSessionQueue(ctx context.Context, uid int64, durationMin int, themes []string) ([]session.Selected, error) {
+// buildSessionQueue resolves themes (feed slugs) and groups (group slugs, each
+// expanding to its member feeds' sources, #86), pulls the candidate pool +
+// behavioral stats, runs the ranker for the single duration (fed as both bounds
+// so the existing predict/selectivity path is unchanged), and attaches each
+// item's feed. Returns an empty slice when the selection resolves to no sources.
+func (h *Handler) buildSessionQueue(ctx context.Context, uid int64, durationMin int, themes, groups []string) ([]session.Selected, error) {
 	var sourceIDs []int64
-	if len(themes) > 0 {
-		ids, err := h.db.SourceIDsForFeeds(ctx, uid, themes)
-		if err != nil {
-			return nil, err
+	if len(themes) > 0 || len(groups) > 0 {
+		set := map[int64]struct{}{}
+		if len(themes) > 0 {
+			ids, err := h.db.SourceIDsForFeeds(ctx, uid, themes)
+			if err != nil {
+				return nil, err
+			}
+			for _, id := range ids {
+				set[id] = struct{}{}
+			}
 		}
-		// A theme with no sources yields an empty session, not "all".
-		if len(ids) == 0 {
+		if len(groups) > 0 {
+			ids, err := h.db.SourceIDsForGroups(ctx, uid, groups)
+			if err != nil {
+				return nil, err
+			}
+			for _, id := range ids {
+				set[id] = struct{}{}
+			}
+		}
+		// A selection that resolves to no sources yields an empty session, not "all".
+		if len(set) == 0 {
 			return nil, nil
 		}
-		sourceIDs = ids
+		sourceIDs = make([]int64, 0, len(set))
+		for id := range set {
+			sourceIDs = append(sourceIDs, id)
+		}
 	}
 
-	rule, err := h.db.MultiFeedRule(ctx, uid)
-	if err != nil {
-		return nil, err
-	}
-	pool, err := h.db.Candidates(ctx, uid, sourceIDs, 45, 500, rule)
+	pool, err := h.db.Candidates(ctx, uid, sourceIDs, 45, 500)
 	if err != nil {
 		return nil, err
 	}
@@ -452,11 +469,7 @@ func (h *Handler) rehydrateSession(ctx context.Context, uid int64, itemIDs []int
 	if len(itemIDs) == 0 {
 		return out, nil
 	}
-	rule, err := h.db.MultiFeedRule(ctx, uid)
-	if err != nil {
-		return nil, err
-	}
-	cands, err := h.db.CandidatesByIDs(ctx, uid, itemIDs, rule)
+	cands, err := h.db.CandidatesByIDs(ctx, uid, itemIDs)
 	if err != nil {
 		return nil, err
 	}
@@ -506,8 +519,9 @@ func (h *Handler) sourceStats(ctx context.Context, uid int64) (map[int64]session
 	return stats, nil
 }
 
-// attachFeeds fills each item's primary feed identity for the card's identity
-// line. Feedless sources (e.g. a YouTube channel) stay nil and render source-only.
+// attachFeeds fills each item's feed identity for the card's identity line (#86:
+// a source's one feed). Feedless sources (feed_id NULL) stay nil and render
+// source-only.
 func (h *Handler) attachFeeds(ctx context.Context, uid int64, items []session.Selected) {
 	if len(items) == 0 {
 		return
@@ -516,13 +530,13 @@ func (h *Handler) attachFeeds(ctx context.Context, uid int64, items []session.Se
 	for _, it := range items {
 		ids = append(ids, it.Item.SourceID)
 	}
-	primaries, err := h.db.PrimaryFeedsForSources(ctx, uid, ids)
+	feedOf, err := h.db.FeedsForSources(ctx, uid, ids)
 	if err != nil {
-		h.log.Warn("resolve primary feeds", "err", err)
+		h.log.Warn("resolve feeds", "err", err)
 		return
 	}
 	for i := range items {
-		if f, ok := primaries[items[i].Item.SourceID]; ok {
+		if f, ok := feedOf[items[i].Item.SourceID]; ok {
 			fc := f
 			items[i].Feed = &fc
 		}
@@ -714,8 +728,7 @@ func (h *Handler) GetSettings(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) UpdateSettings(w http.ResponseWriter, r *http.Request) {
 	uid := userID(r)
 	var body struct {
-		FastScrollCheckin *bool   `json:"fast_scroll_checkin"`
-		MultiFeedRule     *string `json:"multi_feed_rule"`
+		FastScrollCheckin *bool `json:"fast_scroll_checkin"`
 	}
 	if !decode(w, r, &body) {
 		return
@@ -723,14 +736,6 @@ func (h *Handler) UpdateSettings(w http.ResponseWriter, r *http.Request) {
 	if body.FastScrollCheckin != nil {
 		if err := h.db.SetFastScrollCheckin(r.Context(), uid, *body.FastScrollCheckin); err != nil {
 			serverError(w, h.log, "set fast-scroll check-in", err)
-			return
-		}
-	}
-	if body.MultiFeedRule != nil {
-		// NormalizeMultiFeedRule coerces unknown values to the primary-feed
-		// default, so a bad string can't land in the store.
-		if err := h.db.SetMultiFeedRule(r.Context(), uid, store.NormalizeMultiFeedRule(*body.MultiFeedRule)); err != nil {
-			serverError(w, h.log, "set multi-feed rule", err)
 			return
 		}
 	}

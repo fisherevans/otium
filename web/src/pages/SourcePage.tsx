@@ -40,7 +40,7 @@ export default function SourcePage() {
   const [cap, setCap] = useState(3);
   const [halfLife, setHalfLife] = useState(0);
   const [state, setState] = useState("followed");
-  const [feedSlugs, setFeedSlugs] = useState<string[]>([]);
+  const [feedSlug, setFeedSlug] = useState<string>(""); // #86: a source has one feed
   const [confirmDel, setConfirmDel] = useState(false);
 
   const source = useMemo(
@@ -73,7 +73,7 @@ export default function SourcePage() {
     setCap(source.per_session_cap);
     setHalfLife(source.half_life_days ?? 0);
     setState(source.state);
-    setFeedSlugs(source.feed_slugs ?? []);
+    setFeedSlug(source.feed_slug ?? "");
     setConfirmDel(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [source?.id]);
@@ -120,12 +120,12 @@ export default function SourcePage() {
       });
     }
   }
-  async function toggleFeed(slug: string) {
-    const cur = new Set(feedSlugs);
-    cur.has(slug) ? cur.delete(slug) : cur.add(slug);
-    const next = [...cur];
-    setFeedSlugs(next);
-    await api.setSourceFeeds(sourceId, next).catch(() => {});
+  async function chooseFeed(slug: string) {
+    // Single-feed pick (#86): tapping a feed makes it the source's one feed;
+    // re-tapping the current one clears it (feedless).
+    const next = feedSlug === slug ? "" : slug;
+    setFeedSlug(next);
+    await api.setSourceFeed(sourceId, next).catch(() => {});
     reload();
   }
   async function del() {
@@ -237,15 +237,15 @@ export default function SourcePage() {
 
       {feeds.length > 0 && (
         <>
-          <div className="ctl-label">Feeds</div>
+          <div className="ctl-label">Feed</div>
           <div className="feed-assign">
             {feeds.map((f) => {
               const Ic = feedIcon(f.icon);
               return (
                 <button
                   key={f.slug}
-                  className={`fa-chip ${feedSlugs.includes(f.slug) ? "on" : ""}`}
-                  onClick={() => toggleFeed(f.slug)}
+                  className={`fa-chip ${feedSlug === f.slug ? "on" : ""}`}
+                  onClick={() => chooseFeed(f.slug)}
                 >
                   {Ic && <Ic size={13} strokeWidth={1.75} aria-hidden />}
                   {f.name}
@@ -253,7 +253,9 @@ export default function SourcePage() {
               );
             })}
           </div>
-          <p className="caphint">Tap to add or remove this source from a feed.</p>
+          <p className="caphint">
+            A source belongs to one feed. Tap a feed to move it here{feedSlug ? "; tap the current feed to clear it" : ""}.
+          </p>
         </>
       )}
 

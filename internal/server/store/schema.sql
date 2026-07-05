@@ -59,6 +59,12 @@ CREATE TABLE IF NOT EXISTS sources (
     feed_url      TEXT NOT NULL,
     homepage_url  TEXT NOT NULL DEFAULT '',
     icon_url      TEXT NOT NULL DEFAULT '',
+    -- The one feed this source belongs to (#86). A source belongs to exactly one
+    -- feed (or none - NULL - for a feedless source that renders source-only). This
+    -- replaced the source<->feed many-to-many (feed_sources, kept legacy below).
+    -- Nullable so a feedless source is representable; the UI's picker requires one.
+    -- Added additively via migrate() and back-populated from feed_sources.
+    feed_id       INTEGER REFERENCES feeds(id) ON DELETE SET NULL,
     -- weight buckets map to multipliers in code: very_low .25, low .5,
     -- normal 1, high 2, favorite 5.
     weight        REAL NOT NULL DEFAULT 1.0,
@@ -79,11 +85,45 @@ CREATE TABLE IF NOT EXISTS sources (
     fetch_error   TEXT NOT NULL DEFAULT '',
     UNIQUE (user_id, feed_url)
 );
+-- NOTE: the idx_sources_feed index is created in migrate() (store.go), NOT here.
+-- A pre-existing `sources` table (from before feed_id) is skipped by CREATE TABLE
+-- IF NOT EXISTS, so feed_id doesn't exist until migrate()'s ensureColumn adds it -
+-- an index on feed_id here would fail on apply against a legacy DB. Same reason as
+-- the sessions status index below.
 
+-- LEGACY (pre-#86): the source<->feed many-to-many. Superseded by sources.feed_id
+-- (a source now belongs to exactly one feed). Left in place, unused by the app, as
+-- a rollback safety net - migrate() reads it once to populate sources.feed_id and
+-- never writes it again. Do NOT drop it; do NOT read it in new code.
 CREATE TABLE IF NOT EXISTS feed_sources (
     feed_id   INTEGER NOT NULL REFERENCES feeds(id) ON DELETE CASCADE,
     source_id INTEGER NOT NULL REFERENCES sources(id) ON DELETE CASCADE,
     PRIMARY KEY (feed_id, source_id)
+);
+
+-- A group is a user-created overlay that gathers several FEEDS under one name
+-- ("News" = Local + International). Many-to-many: a feed can be in several groups
+-- (#86). Distinct from a feed (which groups sources) and a collection (which
+-- groups items). Groups are purely organizational - the session builder can
+-- target a group by expanding it to its member feeds.
+CREATE TABLE IF NOT EXISTS groups (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    name       TEXT NOT NULL,
+    slug       TEXT NOT NULL,
+    -- flat identity glyph key (see web/src/lib/feedIcons.ts); '' = unset.
+    icon       TEXT NOT NULL DEFAULT '',
+    sort       INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+    UNIQUE (user_id, slug)
+);
+
+-- Membership: which feeds belong to a group. The UNIQUE (group_id, feed_id) PK
+-- makes re-adding a feed an idempotent no-op.
+CREATE TABLE IF NOT EXISTS group_feeds (
+    group_id INTEGER NOT NULL REFERENCES groups(id) ON DELETE CASCADE,
+    feed_id  INTEGER NOT NULL REFERENCES feeds(id) ON DELETE CASCADE,
+    PRIMARY KEY (group_id, feed_id)
 );
 
 -- A normalized content event from a source.
