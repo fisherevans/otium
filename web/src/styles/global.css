@@ -107,15 +107,25 @@ button {
   border-top: 1.5px solid var(--rule-hard);
   padding: 0 0 env(safe-area-inset-bottom);
 }
+/* #84: four tabs (read / library / saved / you) with a flat lucide glyph over a
+   quiet label. Column layout keeps each tab a comfortable thumb target while the
+   labels stay legible at quarter-width on a 412px phone. */
 .nav a {
   flex: 1;
-  text-align: center;
-  padding: 13px 4px;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  padding: 9px 4px;
   font-family: var(--grot);
-  font-size: 11px;
-  letter-spacing: 0.14em;
+  font-size: 9.5px;
+  letter-spacing: 0.1em;
   text-transform: uppercase;
   color: var(--ink-mute);
+}
+.nav a svg {
+  display: block;
 }
 .nav a + a {
   border-left: 1px solid var(--hair);
@@ -2395,6 +2405,33 @@ button.id-source:active {
   font-family: var(--grot);
   font-size: 18px;
   color: var(--ink-mute);
+  display: inline-flex;
+  align-items: center;
+}
+
+/* #84: the You tab launcher. Reuses the settings-link row shape but collapses
+   the per-row margins/borders into one clean hairline-separated list. */
+.you-list {
+  margin: 14px 0 0;
+}
+.you-list .settings-link {
+  margin: 0;
+  border-top: none;
+}
+.you-list .settings-link:first-child {
+  border-top: 1px solid var(--hair);
+}
+.you-list .settings-link svg {
+  flex: 0 0 auto;
+  color: var(--ink-soft);
+}
+.you-about {
+  margin: 22px 0 0;
+  font-family: var(--grot);
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  color: var(--ink-mute);
+  text-align: center;
 }
 
 /* --- the live preview pane --- */
