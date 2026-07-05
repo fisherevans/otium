@@ -141,6 +141,14 @@ CREATE TABLE IF NOT EXISTS items (
     -- insert-only, so old rows stay empty until they age out; new items get it.
     -- Added additively via migrate() for databases created before this column.
     content       TEXT NOT NULL DEFAULT '',
+    -- provenance of the reader body (#98): '' / pending = not yet attempted,
+    -- 'rss' = the feed shipped the body, 'fetched' = the backend readability-
+    -- extracted it from the article URL on demand, 'external' = not extractable
+    -- (video/paywall/JS-only) so the client offers "open original" instead. The
+    -- on-demand /items/{id}/content endpoint owns the pending -> fetched|external
+    -- transition; once it leaves '' we never re-fetch (persisted cache). Added
+    -- additively via migrate() with a one-time 'rss' backfill for existing bodies.
+    content_source TEXT NOT NULL DEFAULT '',
     author        TEXT NOT NULL DEFAULT '',
     thumbnail_url TEXT NOT NULL DEFAULT '',
     -- short | long | article | audio | live | unknown

@@ -62,12 +62,25 @@ export interface Item {
   title: string;
   summary: string; // short plain-text card preview
   content: string; // full body, raw HTML; sanitized client-side before render (#58)
+  // provenance of the reader body (#98): "" (pending) | rss | fetched | external.
+  // #96 renders content-aware actions off this (read in-app vs open original vs watch).
+  content_source: string;
   author: string;
   thumbnail_url: string;
   media_type: string;
   duration_sec: number;
   published_at: string;
   fetched_at: string;
+}
+
+// On-demand full-text (#98): the /items/{id}/content response. content is the
+// best reader body ("" when external); content_source is the resolved provenance
+// (rss | fetched | external); has_full_text is the convenience flag #96 branches
+// on (true -> render in-app, false -> offer "open original" / "watch").
+export interface ItemContent {
+  content_source: string;
+  content: string;
+  has_full_text: boolean;
 }
 
 // --- #83 personal-history block ---
@@ -387,6 +400,10 @@ export const api = {
   currentSession: () => req<SessionResponse | undefined>("GET", "/sessions/current"),
   updateSession: (id: string, patch: { cursor?: number; status?: "ended" }) =>
     req<{ ok: boolean }>("PATCH", `/sessions/${id}`, patch),
+  // On-demand full-text (#98): the best reader body for an item, fetched +
+  // readability-extracted server-side for teaser-only feeds and cached. Returns
+  // content_source=external (content "") when the item isn't extractable.
+  itemContent: (id: number) => req<ItemContent>("GET", `/items/${id}/content`),
   itemEvent: (id: number, type: string, sessionId?: string) =>
     req<{ ok: boolean }>("POST", `/items/${id}/event`, { type, session_id: sessionId ?? "" }),
   // Per-item dwell (#68): how long the item was engaged + whether it was engaged

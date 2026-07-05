@@ -103,21 +103,36 @@ type Collection struct {
 	Contains *bool `json:"contains,omitempty"`
 }
 
+// Content-source provenance for an item's reader body (#98). Empty string is
+// "pending" - not yet attempted. The on-demand content endpoint transitions a
+// pending item to Fetched (readability extracted the article) or External (not
+// extractable: video, paywall, JS-only). RSS is set at ingest / backfill.
+const (
+	ContentSourceRSS      = "rss"
+	ContentSourceFetched  = "fetched"
+	ContentSourceExternal = "external"
+	ContentSourcePending  = "" // not yet attempted
+)
+
 // Item is a normalized content event from a source.
 type Item struct {
-	ID           int64     `json:"id"`
-	SourceID     int64     `json:"source_id"`
-	ExternalID   string    `json:"-"`
-	URL          string    `json:"url"`
-	Title        string    `json:"title"`
-	Summary      string    `json:"summary"` // short plain-text card preview
-	Content      string    `json:"content"` // full body, raw HTML; sanitized client-side (#58)
-	Author       string    `json:"author"`
-	ThumbnailURL string    `json:"thumbnail_url"`
-	MediaType    string    `json:"media_type"` // short | long | article | audio | live | unknown
-	DurationSec  int       `json:"duration_sec"`
-	PublishedAt  time.Time `json:"published_at"`
-	FetchedAt    time.Time `json:"fetched_at"`
+	ID         int64  `json:"id"`
+	SourceID   int64  `json:"source_id"`
+	ExternalID string `json:"-"`
+	URL        string `json:"url"`
+	Title      string `json:"title"`
+	Summary    string `json:"summary"` // short plain-text card preview
+	Content    string `json:"content"` // full body, raw HTML; sanitized client-side (#58)
+	// ContentSource is the reader body's provenance (#98): '' (pending) | rss |
+	// fetched | external. Lets the card/reader pick content-aware actions (read
+	// in-app vs open original vs watch) without inspecting the HTML.
+	ContentSource string    `json:"content_source"`
+	Author        string    `json:"author"`
+	ThumbnailURL  string    `json:"thumbnail_url"`
+	MediaType     string    `json:"media_type"` // short | long | article | audio | live | unknown
+	DurationSec   int       `json:"duration_sec"`
+	PublishedAt   time.Time `json:"published_at"`
+	FetchedAt     time.Time `json:"fetched_at"`
 }
 
 // CollectionItem is an item paired with the timestamp it was added to a

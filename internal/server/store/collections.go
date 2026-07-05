@@ -165,7 +165,7 @@ func (db *DB) CollectionItems(ctx context.Context, userID, collectionID int64, s
 		order = `i.published_at DESC, ci.item_id DESC`
 	}
 	rows, err := db.sql.QueryContext(ctx,
-		`SELECT i.id, i.source_id, i.url, i.title, i.summary, i.content, i.author, i.thumbnail_url,
+		`SELECT i.id, i.source_id, i.url, i.title, i.summary, i.content, i.content_source, i.author, i.thumbnail_url,
 		        i.media_type, i.duration_sec, i.published_at, i.fetched_at, ci.added_at
 		 FROM collection_items ci
 		 JOIN items i ON i.id = ci.item_id
@@ -180,7 +180,7 @@ func (db *DB) CollectionItems(ctx context.Context, userID, collectionID int64, s
 	for rows.Next() {
 		var ci CollectionItem
 		var pub, fetched, added string
-		if err := rows.Scan(&ci.ID, &ci.SourceID, &ci.URL, &ci.Title, &ci.Summary, &ci.Content, &ci.Author,
+		if err := rows.Scan(&ci.ID, &ci.SourceID, &ci.URL, &ci.Title, &ci.Summary, &ci.Content, &ci.ContentSource, &ci.Author,
 			&ci.ThumbnailURL, &ci.MediaType, &ci.DurationSec, &pub, &fetched, &added); err != nil {
 			return nil, err
 		}

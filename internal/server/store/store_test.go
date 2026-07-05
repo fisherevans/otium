@@ -142,6 +142,149 @@ func TestUpsertItemBackfillsContent(t *testing.T) {
 	}
 }
 
+// TestMigrateContentSourceBackfill locks the #98 migration: on a pre-column
+// items table it adds content_source, backfills existing bodies to 'rss', leaves
+// empty-body rows pending (”), and is idempotent across boots (never clobbering
+// a value already set to fetched/external).
+func TestMigrateContentSourceBackfill(t *testing.T) {
+	sdb, err := sql.Open("sqlite", ":memory:")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer sdb.Close()
+
+	// Legacy items table: has content (needed by the backfill) but no content_source.
+	if _, err := sdb.Exec(`CREATE TABLE items (id INTEGER PRIMARY KEY, content TEXT NOT NULL DEFAULT '')`); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := sdb.Exec(`INSERT INTO items (id, content) VALUES (1, '<p>full</p>'), (2, '')`); err != nil {
+		t.Fatal(err)
+	}
+	if hasColumn(t, sdb, "items", "content_source") {
+		t.Fatal("precondition: items should not have content_source yet")
+	}
+
+	// Two passes: the on-every-boot contract.
+	for i := 0; i < 2; i++ {
+		if err := migrate(sdb); err != nil {
+			t.Fatalf("migrate pass %d: %v", i, err)
+		}
+	}
+	if !hasColumn(t, sdb, "items", "content_source") {
+		t.Fatal("content_source column missing after migrate")
+	}
+
+	src := func(id int) string {
+		var s string
+		if err := sdb.QueryRow(`SELECT content_source FROM items WHERE id = ?`, id).Scan(&s); err != nil {
+			t.Fatal(err)
+		}
+		return s
+	}
+	if got := src(1); got != "rss" {
+		t.Fatalf("populated body content_source = %q, want rss", got)
+	}
+	if got := src(2); got != "" {
+		t.Fatalf("empty body content_source = %q, want '' (pending)", got)
+	}
+
+	// A value already set (e.g. an item resolved to external with no body) must
+	// survive a later migrate pass - the backfill only touches rows still at ''.
+	if _, err := sdb.Exec(`UPDATE items SET content_source = 'external' WHERE id = 2`); err != nil {
+		t.Fatal(err)
+	}
+	if err := migrate(sdb); err != nil {
+		t.Fatal(err)
+	}
+	if got := src(2); got != "external" {
+		t.Fatalf("external marking clobbered by backfill: got %q", got)
+	}
+}
+
+// TestContentSourceRoundTrip covers the #98 store surface end to end: ingest sets
+// 'rss' for a body / pending for none, GetItem reads it back scoped to the user,
+// and the two setters transition a pending item to fetched / external.
+func TestContentSourceRoundTrip(t *testing.T) {
+	db, err := Open(":memory:")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	ctx := context.Background()
+
+	u, err := db.UpsertUserByUsername(ctx, "tester", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	s, err := db.CreateSource(ctx, &Source{UserID: u.ID, Title: "S", FeedURL: "http://s", State: "followed", Weight: 1})
+	if err != nil {
+		t.Fatal(err)
+	}
+	pub := time.Now().UTC()
+
+	// Ingest one item with a body (rss) and one without (pending).
+	if _, err := db.UpsertItem(ctx, &Item{SourceID: s.ID, ExternalID: "withbody", URL: "u1", Title: "a",
+		Content: "<p>hi</p>", ContentSource: ContentSourceRSS, MediaType: "article", PublishedAt: pub}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.UpsertItem(ctx, &Item{SourceID: s.ID, ExternalID: "nobody", URL: "u2", Title: "b",
+		MediaType: "article", PublishedAt: pub}); err != nil {
+		t.Fatal(err)
+	}
+
+	get := func(ext string) *Item {
+		var id int64
+		if err := db.sql.QueryRowContext(ctx,
+			`SELECT id FROM items WHERE source_id = ? AND external_id = ?`, s.ID, ext).Scan(&id); err != nil {
+			t.Fatal(err)
+		}
+		it, err := db.GetItem(ctx, u.ID, id)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if it == nil {
+			t.Fatalf("GetItem(%s) = nil", ext)
+		}
+		return it
+	}
+
+	if got := get("withbody").ContentSource; got != ContentSourceRSS {
+		t.Fatalf("rss item content_source = %q, want rss", got)
+	}
+	pending := get("nobody")
+	if pending.ContentSource != ContentSourcePending {
+		t.Fatalf("no-body item content_source = %q, want pending", pending.ContentSource)
+	}
+
+	// pending -> fetched (with a body).
+	if err := db.SetItemContent(ctx, pending.ID, "<p>extracted</p>", ContentSourceFetched); err != nil {
+		t.Fatal(err)
+	}
+	got := get("nobody")
+	if got.ContentSource != ContentSourceFetched || got.Content != "<p>extracted</p>" {
+		t.Fatalf("after SetItemContent: source=%q content=%q", got.ContentSource, got.Content)
+	}
+
+	// Marking external persists the once-only decision (no body).
+	if err := db.SetItemContentSource(ctx, pending.ID, ContentSourceExternal); err != nil {
+		t.Fatal(err)
+	}
+	if got := get("nobody").ContentSource; got != ContentSourceExternal {
+		t.Fatalf("after SetItemContentSource: source=%q, want external", got)
+	}
+
+	// GetItem is user-scoped: another user can't read the item.
+	other, err := db.UpsertUserByUsername(ctx, "other", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if it, err := db.GetItem(ctx, other.ID, pending.ID); err != nil {
+		t.Fatal(err)
+	} else if it != nil {
+		t.Fatal("GetItem leaked an item to a non-owner")
+	}
+}
+
 func hasColumn(t *testing.T, sdb *sql.DB, table, column string) bool {
 	t.Helper()
 	var n int

@@ -66,6 +66,18 @@ func migrate(sdb *sql.DB) error {
 	if err := ensureColumn(sdb, "items", "content", `ALTER TABLE items ADD COLUMN content TEXT NOT NULL DEFAULT ''`); err != nil {
 		return err
 	}
+	// items.content_source (#98): provenance of the reader body ('' pending | rss |
+	// fetched | external). Added after items.content so the backfill below can read
+	// both columns. Idempotent-safe on every boot.
+	if err := ensureColumn(sdb, "items", "content_source", `ALTER TABLE items ADD COLUMN content_source TEXT NOT NULL DEFAULT ''`); err != nil {
+		return err
+	}
+	// One-time backfill (#98): an existing non-empty body came from the feed, so
+	// mark it 'rss'. WHERE content_source = '' makes it idempotent - it only fills
+	// rows still at the default and never fights a later fetched/external marking.
+	if err := backfillContentSource(sdb); err != nil {
+		return err
+	}
 	// Durable sessions (#67): single duration, read cursor, lifecycle status.
 	if err := ensureColumn(sdb, "sessions", "duration_min", `ALTER TABLE sessions ADD COLUMN duration_min INTEGER NOT NULL DEFAULT 0`); err != nil {
 		return err
@@ -156,6 +168,25 @@ func populateSourceFeedID(sdb *sql.DB) error {
 	_, err := sdb.Exec(`UPDATE sources
 		SET feed_id = (SELECT fs.feed_id FROM feed_sources fs WHERE fs.source_id = sources.id LIMIT 1)
 		WHERE feed_id IS NULL`)
+	return err
+}
+
+// backfillContentSource marks every existing item that already has a body as
+// 'rss' (#98): before this column existed, a non-empty content came from the
+// feed. WHERE content_source = ” makes it idempotent and non-destructive - it
+// only touches rows still at the default, so a later fetched/external marking is
+// never clobbered. Guarded on the items table existing so it no-ops on a partial
+// DB. Runs after the items.content and items.content_source columns are ensured.
+func backfillContentSource(sdb *sql.DB) error {
+	var n int
+	if err := sdb.QueryRowContext(context.Background(),
+		`SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='items'`).Scan(&n); err != nil {
+		return err
+	}
+	if n == 0 {
+		return nil
+	}
+	_, err := sdb.Exec(`UPDATE items SET content_source = 'rss' WHERE content != '' AND content_source = ''`)
 	return err
 }
 
@@ -706,10 +737,10 @@ func (db *DB) SourcesToFetch(ctx context.Context, userID int64) ([]Source, error
 // seen/skip history.
 func (db *DB) UpsertItem(ctx context.Context, it *Item) (bool, error) {
 	res, err := db.sql.ExecContext(ctx,
-		`INSERT INTO items (source_id, external_id, url, title, summary, content, author, thumbnail_url, media_type, duration_sec, published_at)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		`INSERT INTO items (source_id, external_id, url, title, summary, content, content_source, author, thumbnail_url, media_type, duration_sec, published_at)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		 ON CONFLICT(source_id, external_id) DO NOTHING`,
-		it.SourceID, it.ExternalID, it.URL, it.Title, it.Summary, it.Content, it.Author, it.ThumbnailURL,
+		it.SourceID, it.ExternalID, it.URL, it.Title, it.Summary, it.Content, it.ContentSource, it.Author, it.ThumbnailURL,
 		def(it.MediaType, "unknown"), it.DurationSec, it.PublishedAt.UTC().Format(time.RFC3339))
 	if err != nil {
 		return false, err
@@ -718,10 +749,12 @@ func (db *DB) UpsertItem(ctx context.Context, it *Item) (bool, error) {
 		return true, nil // genuinely new insert
 	}
 	// Existing row: backfill content only when it's empty and we actually have a
-	// body to write. Once populated the WHERE guard makes this a no-op.
+	// body to write. The feed shipped it, so mark it 'rss' in the same update -
+	// this reclaims an item earlier resolved to 'external' if the feed later starts
+	// carrying the body. Once content is non-empty the WHERE guard makes it a no-op.
 	if it.Content != "" {
 		if _, err := db.sql.ExecContext(ctx,
-			`UPDATE items SET content = ? WHERE source_id = ? AND external_id = ? AND content = ''`,
+			`UPDATE items SET content = ?, content_source = 'rss' WHERE source_id = ? AND external_id = ? AND content = ''`,
 			it.Content, it.SourceID, it.ExternalID); err != nil {
 			return false, err
 		}
@@ -740,7 +773,7 @@ func (db *DB) MarkFetched(ctx context.Context, sourceID int64, fetchErr string) 
 // "catch up on this creator" drill-in view.
 func (db *DB) ListRecentItemsBySource(ctx context.Context, userID, sourceID int64, limit int) ([]Item, error) {
 	rows, err := db.sql.QueryContext(ctx,
-		`SELECT id, source_id, url, title, summary, content, author, thumbnail_url, media_type, duration_sec, published_at, fetched_at
+		`SELECT id, source_id, url, title, summary, content, content_source, author, thumbnail_url, media_type, duration_sec, published_at, fetched_at
 		 FROM items WHERE source_id = ? ORDER BY published_at DESC LIMIT ?`, sourceID, limit)
 	if err != nil {
 		return nil, err
@@ -757,7 +790,7 @@ func (db *DB) ListRecentItemsBySource(ctx context.Context, userID, sourceID int6
 // (chi conflicts on mismatched wildcard names).
 func (db *DB) ListRecentItemsByFeed(ctx context.Context, userID, feedID int64, limit int) ([]Item, error) {
 	rows, err := db.sql.QueryContext(ctx,
-		`SELECT i.id, i.source_id, i.url, i.title, i.summary, i.content, i.author, i.thumbnail_url,
+		`SELECT i.id, i.source_id, i.url, i.title, i.summary, i.content, i.content_source, i.author, i.thumbnail_url,
 		        i.media_type, i.duration_sec, i.published_at, i.fetched_at
 		 FROM items i
 		 JOIN sources s ON s.id = i.source_id
@@ -780,7 +813,7 @@ func (db *DB) ListRecentItemsByFeed(ctx context.Context, userID, feedID int64, l
 // order so scanCandidates can read any result set. The two ? placeholders are the
 // cadence-window bound, twice; arg alignment is identical across callers.
 func candidateCols() string {
-	return `i.id, i.source_id, i.url, i.title, i.summary, i.content, i.author, i.thumbnail_url,
+	return `i.id, i.source_id, i.url, i.title, i.summary, i.content, i.content_source, i.author, i.thumbnail_url,
 	             i.media_type, i.duration_sec, i.published_at, i.fetched_at,
 	             s.title, s.weight, s.per_session_cap, s.half_life_days,
 	             (SELECT COUNT(*) FROM items i2 WHERE i2.source_id = s.id
@@ -842,7 +875,7 @@ func scanCandidates(rows *sql.Rows, windowDays int) ([]Candidate, error) {
 		var winCount int
 		var winSpan, halfLife float64
 		var diversity int
-		if err := rows.Scan(&c.ID, &c.SourceID, &c.URL, &c.Title, &c.Summary, &c.Content, &c.Author, &c.ThumbnailURL,
+		if err := rows.Scan(&c.ID, &c.SourceID, &c.URL, &c.Title, &c.Summary, &c.Content, &c.ContentSource, &c.Author, &c.ThumbnailURL,
 			&c.MediaType, &c.DurationSec, &pub, &fetched,
 			&c.SourceTitle, &c.SourceWeight, &c.PerSessionCap, &c.SourceHalfLifeDays,
 			&winCount, &winSpan, &halfLife, &diversity); err != nil {
@@ -949,7 +982,7 @@ func (db *DB) ItemsByIDs(ctx context.Context, ids []int64) ([]Item, error) {
 	if len(ids) == 0 {
 		return nil, nil
 	}
-	q := `SELECT id, source_id, url, title, summary, content, author, thumbnail_url, media_type, duration_sec, published_at, fetched_at
+	q := `SELECT id, source_id, url, title, summary, content, content_source, author, thumbnail_url, media_type, duration_sec, published_at, fetched_at
 	      FROM items WHERE id IN (` + placeholders(len(ids)) + `)`
 	args := make([]any, len(ids))
 	for i, id := range ids {
@@ -963,12 +996,55 @@ func (db *DB) ItemsByIDs(ctx context.Context, ids []int64) ([]Item, error) {
 	return scanItems(rows)
 }
 
+// GetItem returns a single item scoped to the owning user (via its source), or
+// (nil, nil) when it doesn't exist or isn't the user's. Carries content_source
+// so the on-demand full-text endpoint (#98) can decide fetch vs. return-cached
+// without a second read.
+func (db *DB) GetItem(ctx context.Context, userID, id int64) (*Item, error) {
+	row := db.sql.QueryRowContext(ctx,
+		`SELECT i.id, i.source_id, i.url, i.title, i.summary, i.content, i.content_source, i.author,
+		        i.thumbnail_url, i.media_type, i.duration_sec, i.published_at, i.fetched_at
+		 FROM items i JOIN sources s ON s.id = i.source_id
+		 WHERE i.id = ? AND s.user_id = ?`, id, userID)
+	var it Item
+	var pub, fetched string
+	err := row.Scan(&it.ID, &it.SourceID, &it.URL, &it.Title, &it.Summary, &it.Content, &it.ContentSource,
+		&it.Author, &it.ThumbnailURL, &it.MediaType, &it.DurationSec, &pub, &fetched)
+	if err == sql.ErrNoRows {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	it.PublishedAt = parseTime(pub)
+	it.FetchedAt = parseTime(fetched)
+	return &it, nil
+}
+
+// SetItemContent stores an on-demand extracted body and its provenance (#98):
+// the readability HTML plus content_source ('fetched'). Persisting this is the
+// cache - the endpoint fetches an item's URL exactly once.
+func (db *DB) SetItemContent(ctx context.Context, id int64, content, source string) error {
+	_, err := db.sql.ExecContext(ctx,
+		`UPDATE items SET content = ?, content_source = ? WHERE id = ?`, content, source, id)
+	return err
+}
+
+// SetItemContentSource records an item's content provenance without a body (#98),
+// e.g. marking it 'external' when extraction fails or the item is a video/audio/
+// paywalled page. Also persists the once-only decision so we don't re-fetch.
+func (db *DB) SetItemContentSource(ctx context.Context, id int64, source string) error {
+	_, err := db.sql.ExecContext(ctx,
+		`UPDATE items SET content_source = ? WHERE id = ?`, source, id)
+	return err
+}
+
 func scanItems(rows *sql.Rows) ([]Item, error) {
 	var out []Item
 	for rows.Next() {
 		var it Item
 		var pub, fetched string
-		if err := rows.Scan(&it.ID, &it.SourceID, &it.URL, &it.Title, &it.Summary, &it.Content, &it.Author,
+		if err := rows.Scan(&it.ID, &it.SourceID, &it.URL, &it.Title, &it.Summary, &it.Content, &it.ContentSource, &it.Author,
 			&it.ThumbnailURL, &it.MediaType, &it.DurationSec, &pub, &fetched); err != nil {
 			return nil, err
 		}
@@ -1123,7 +1199,7 @@ func (db *DB) History(ctx context.Context, userID int64, filter string, limit, o
 		where = "1=1"
 		orderTS = "COALESCE(st.surfaced_at, st.acted_at)"
 	}
-	q := fmt.Sprintf(`SELECT i.id, i.source_id, i.url, i.title, i.summary, i.content, i.author, i.thumbnail_url,
+	q := fmt.Sprintf(`SELECT i.id, i.source_id, i.url, i.title, i.summary, i.content, i.content_source, i.author, i.thumbnail_url,
 	        i.media_type, i.duration_sec, i.published_at, i.fetched_at,
 	        st.state, %[1]s AS interacted_at
 	    FROM item_state st JOIN items i ON i.id = st.item_id
@@ -1139,7 +1215,7 @@ func (db *DB) History(ctx context.Context, userID int64, filter string, limit, o
 	for rows.Next() {
 		var h HistoryItem
 		var pub, fetched, at string
-		if err := rows.Scan(&h.ID, &h.SourceID, &h.URL, &h.Title, &h.Summary, &h.Content, &h.Author,
+		if err := rows.Scan(&h.ID, &h.SourceID, &h.URL, &h.Title, &h.Summary, &h.Content, &h.ContentSource, &h.Author,
 			&h.ThumbnailURL, &h.MediaType, &h.DurationSec, &pub, &fetched, &h.State, &at); err != nil {
 			return nil, err
 		}

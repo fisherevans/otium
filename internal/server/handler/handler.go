@@ -9,6 +9,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"github.com/fisherevans/otium/internal/server/feeds"
+	"github.com/fisherevans/otium/internal/server/fulltext"
 	"github.com/fisherevans/otium/internal/server/middleware"
 	"github.com/fisherevans/otium/internal/server/session"
 	"github.com/fisherevans/otium/internal/server/store"
@@ -24,11 +25,12 @@ import (
 type Handler struct {
 	db  *store.DB
 	ing *feeds.Ingester
+	ft  *fulltext.Fetcher
 	log *slog.Logger
 }
 
 func New(db *store.DB, ing *feeds.Ingester, log *slog.Logger) *Handler {
-	return &Handler{db: db, ing: ing, log: log}
+	return &Handler{db: db, ing: ing, ft: fulltext.New(), log: log}
 }
 
 // --- users ---
@@ -665,6 +667,111 @@ func (h *Handler) ItemDwell(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
+}
+
+// --- full-text content (#98) ---
+
+// ItemContent returns the best reader body for an item, fetching + extracting it
+// on demand for feeds that ship no full content (#98). Fisher's rule: attempt the
+// in-app render first, fall back to "open original". Resolution:
+//
+//   - a stored body (content_source rss|fetched): return it as-is.
+//   - already resolved to external: return external, no re-fetch.
+//   - non-article media (video/audio/live): mark external without a network hit.
+//   - otherwise pending: fetch the URL through readability; a real article is
+//     stored as content_source=fetched, anything else is marked external.
+//
+// The persisted content_source is the cache: an item's URL is fetched at most
+// once. This lives only on the content endpoint, never on the ingest or ranking
+// path, so a slow fetch can't stall a session build (ItemEffectiveScore untouched).
+func (h *Handler) ItemContent(w http.ResponseWriter, r *http.Request) {
+	uid := userID(r)
+	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	if err != nil {
+		badRequest(w, "bad item id")
+		return
+	}
+	it, err := h.db.GetItem(r.Context(), uid, id)
+	if err != nil {
+		serverError(w, h.log, "get item", err)
+		return
+	}
+	if it == nil {
+		writeJSON(w, http.StatusNotFound, map[string]any{"code": "not_found", "message": "item not found"})
+		return
+	}
+
+	// Already have a body: return it. content_source is rss/fetched; default a
+	// legacy empty-but-populated row to rss.
+	if it.Content != "" {
+		src := it.ContentSource
+		if src == "" {
+			src = store.ContentSourceRSS
+		}
+		writeItemContent(w, src, it.Content)
+		return
+	}
+	// Already tried and it wasn't extractable.
+	if it.ContentSource == store.ContentSourceExternal {
+		writeItemContent(w, store.ContentSourceExternal, "")
+		return
+	}
+	// Non-article media never extracts to an article - mark external, no fetch.
+	if !fetchableMedia(it.MediaType) {
+		if err := h.db.SetItemContentSource(r.Context(), id, store.ContentSourceExternal); err != nil {
+			h.log.Warn("mark external", "item", id, "err", err)
+		}
+		writeItemContent(w, store.ContentSourceExternal, "")
+		return
+	}
+
+	// Pending: fetch + extract once. Bound the fetch independently of the request
+	// so a hung origin doesn't hold the connection open to the write timeout.
+	ctx, cancel := context.WithTimeout(r.Context(), 12*time.Second)
+	defer cancel()
+	html, ok, err := h.ft.Extract(ctx, it.URL)
+	if err != nil {
+		// Unexpected: return external but don't persist, so a transient failure can
+		// be retried on the next open.
+		h.log.Warn("full-text extract error", "item", id, "url", it.URL, "err", err)
+		writeItemContent(w, store.ContentSourceExternal, "")
+		return
+	}
+	if !ok {
+		if err := h.db.SetItemContentSource(r.Context(), id, store.ContentSourceExternal); err != nil {
+			h.log.Warn("mark external", "item", id, "err", err)
+		}
+		writeItemContent(w, store.ContentSourceExternal, "")
+		return
+	}
+	if err := h.db.SetItemContent(r.Context(), id, html, store.ContentSourceFetched); err != nil {
+		serverError(w, h.log, "store fetched content", err)
+		return
+	}
+	writeItemContent(w, store.ContentSourceFetched, html)
+}
+
+// writeItemContent is the shared shape for GET /items/{id}/content: the resolved
+// body, its provenance, and a convenience has_full_text flag (#96 renders
+// content-aware actions off it - read in-app vs open original vs watch).
+func writeItemContent(w http.ResponseWriter, source, content string) {
+	writeJSON(w, http.StatusOK, map[string]any{
+		"content_source": source,
+		"content":        content,
+		"has_full_text":  content != "",
+	})
+}
+
+// fetchableMedia reports whether an item's media type is a text article worth a
+// readability fetch. Video/audio/live never are - they resolve straight to
+// external (open original / watch) without a network hit.
+func fetchableMedia(mediaType string) bool {
+	switch mediaType {
+	case "short", "long", "video", "audio", "live":
+		return false
+	default: // article, unknown, "" -> try to extract
+		return true
+	}
 }
 
 // --- history (#83) ---

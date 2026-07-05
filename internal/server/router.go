@@ -80,6 +80,9 @@ func NewRouter(h *handler.Handler, authMiddleware func(http.Handler) http.Handle
 			r.Post("/sessions", h.CreateSession)
 			r.Get("/sessions/current", h.CurrentSession)
 			r.Patch("/sessions/{id}", h.UpdateSession)
+			// On-demand full-text (#98): fetch + readability-extract the article body
+			// for teaser-only feeds, cached into items.content. Powers #96's actions.
+			r.Get("/items/{id}/content", h.ItemContent)
 			r.Post("/items/{id}/event", h.ItemEvent)
 			// Dwell (#68): append-only engagement measurement, never into the ranker.
 			r.Post("/items/{id}/dwell", h.ItemDwell)
