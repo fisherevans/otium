@@ -316,3 +316,25 @@ column; verified boot against a prod DB copy, then confirmed clean on prod.
 All four shore-ups (#69 intent one-pager, #67 durable sessions, #66 feed-mgmt
 pages, #68 dwell) + collections (#57) shipped. **The "next big bet" (reader-depth
 for Palma / session TTS / Discovery / LLM operator) is Fisher's to pick.**
+
+## 2026-07-04 (evening) · Live-use polish rounds (v0.16 - v0.18)
+
+Fisher used the app across several rounds; shipped his feedback in three deploys.
+- **v0.16.0** - intent preset chips (5/15/30/1hr) -> slider with +/-5 (#70); flat
+  lucide icons everywhere + bookmark Save, no emojis (#71); feed-icon set 29->115
+  incl. locality cluster (#72); date above the hero, prominent + refined format
+  (#73); reader swipe-close + footer cleanup (#74); clickable source -> context
+  menu (#75). All Palma-verified.
+- **v0.17.0** - per-source half-life + multi-feed resolution rule (source > feed >
+  global) as a Settings > Preferences toggle (#76). decisions.md entry added.
+- **v0.18.0** - reader header actions (Save/Open/···/X) + Copy link + Share (#77,
+  delivers #56); interactive drag-to-close + Android-back closes the reader not
+  the SPA (#78, back-behavior verified); session-over end-card instead of a
+  mid-read redirect (#79).
+
+Notes: caught + fixed a session-migration index-ordering bug (would've crashed
+boot on the pre-existing sessions table) and a resulting red store test.
+Screenshot harness + isolated worktrees are the standing pattern; the two things
+not headlessly verifiable (drag feel, session-end timing) are flagged for
+on-device testing. All of Fisher's feedback through this round is shipped; the
+"next big bet" (reader-depth / TTS / Discovery / LLM operator) remains his to pick.
