@@ -8,18 +8,17 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
+	"github.com/fisherevans/otium/internal/server/feeds"
+	"github.com/fisherevans/otium/internal/server/middleware"
+	"github.com/fisherevans/otium/internal/server/session"
+	"github.com/fisherevans/otium/internal/server/store"
+	"github.com/go-chi/chi/v5"
+	"io"
 	"log/slog"
 	"net/http"
 	"strconv"
 	"strings"
 	"time"
-
-	"github.com/go-chi/chi/v5"
-
-	"github.com/fisherevans/otium/internal/server/feeds"
-	"github.com/fisherevans/otium/internal/server/middleware"
-	"github.com/fisherevans/otium/internal/server/session"
-	"github.com/fisherevans/otium/internal/server/store"
 )
 
 type Handler struct {
@@ -699,6 +698,49 @@ func (h *Handler) UpdateSettings(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, s)
+}
+
+// --- appearance preferences (#80/#81/#82) ---
+//
+// Display-only preferences: reader typography, card styling, and the intent-page
+// session-length presets. Stored as a JSON blob in kv (store.Preferences). These
+// never touch the ranker or the session builder - they only shape presentation,
+// so a change here can't re-rank or re-select content.
+
+// GetPreferences returns the user's appearance preferences, merged onto the
+// server-side defaults (a fresh user gets today's look).
+func (h *Handler) GetPreferences(w http.ResponseWriter, r *http.Request) {
+	uid := userID(r)
+	p, err := h.db.GetPreferences(r.Context(), uid)
+	if err != nil {
+		serverError(w, h.log, "get preferences", err)
+		return
+	}
+	writeJSON(w, http.StatusOK, p)
+}
+
+// UpdatePreferences merges the JSON body onto the user's current preferences and
+// persists them, returning the full clamped result. Merge semantics: the body
+// only needs the fields it changes. The raw body is passed through so a partial
+// patch preserves untouched fields (see store.UpdatePreferences).
+func (h *Handler) UpdatePreferences(w http.ResponseWriter, r *http.Request) {
+	uid := userID(r)
+	body, err := io.ReadAll(io.LimitReader(r.Body, 1<<16))
+	if err != nil {
+		badRequest(w, "invalid body")
+		return
+	}
+	// Reject a non-object body early so a stray array/string can't clobber the blob.
+	if len(body) > 0 && !json.Valid(body) {
+		badRequest(w, "invalid json body")
+		return
+	}
+	p, err := h.db.UpdatePreferences(r.Context(), uid, body)
+	if err != nil {
+		serverError(w, h.log, "update preferences", err)
+		return
+	}
+	writeJSON(w, http.StatusOK, p)
 }
 
 // FetchNow triggers an on-demand ingest of all the user's sources.

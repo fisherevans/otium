@@ -665,7 +665,8 @@ h1.display {
   align-items: center;
   gap: 6px;
   font-family: var(--grot);
-  font-size: 13px;
+  /* #81: feed-tag size is user-tunable; theme default 13px. */
+  font-size: var(--pref-card-feedtag-size, 13px);
   font-weight: 600;
   color: var(--ink);
 }
@@ -683,10 +684,15 @@ h1.display {
 .id-type,
 .id-age {
   font-family: var(--mono);
-  font-size: 11px;
+  /* #81: sub-text size (the meta group). Source has its own override below. */
+  font-size: var(--pref-card-meta-size, 11px);
   text-transform: uppercase;
   letter-spacing: 0.04em;
   color: var(--ink-mute);
+}
+.id-source {
+  /* #81: the source label is separately sizable. */
+  font-size: var(--pref-card-source-size, 11px);
 }
 .id-source.lead {
   color: var(--ink-soft); /* source is the anchor when there's no feed */
@@ -699,6 +705,8 @@ h1.display {
   border: 1.5px solid var(--rule-hard);
   overflow: hidden;
   margin: 4px 0 6px;
+  /* #81: hero show/hide via the prefs var (none hides the whole media block). */
+  display: var(--pref-hero-display, block);
 }
 .media.h {
   aspect-ratio: 16 / 9;
@@ -717,7 +725,8 @@ h1.display {
   width: 100%;
   height: 100%;
   object-fit: cover;
-  filter: grayscale(1) contrast(1.15);
+  /* #81: grayscale/dither vs color, driven by the hero-filter pref var. */
+  filter: var(--pref-hero-filter, grayscale(1) contrast(1.15));
   /* dithered feel: blend the grain over the image */
   mix-blend-mode: multiply;
 }
@@ -1409,12 +1418,25 @@ h1.display {
 }
 .reader-body {
   font-family: var(--serif);
-  font-size: 17px;
-  line-height: 1.62;
+  /* #61/#80: reader typography is user-tunable via prefs CSS vars, with the
+     current theme values as the fallback so the default look is unchanged.
+     Measure (max line length) shortens lines left-aligned; 0/unset = full. */
+  font-size: var(--pref-reader-font-size, 17px);
+  line-height: var(--pref-reader-line-height, 1.62);
   color: var(--ink-soft);
+  max-width: var(--pref-reader-measure, none);
 }
 .reader-body p {
   margin: 0 0 16px;
+}
+/* #61/#80: images-in-reader toggle + responsive, e-ink-grayscaled inline media.
+   --pref-reader-img-display flips to none when the user turns reader images off. */
+.reader-body img {
+  display: var(--pref-reader-img-display, block);
+  max-width: 100%;
+  height: auto;
+  margin: 4px 0 16px;
+  filter: grayscale(1) contrast(1.05);
 }
 .reader-body a {
   color: var(--ink);
@@ -2219,7 +2241,8 @@ h1.display {
 /* ===== #73 card-date: prominent age above the hero ===== */
 .card-date {
   font-family: var(--grot);
-  font-size: 13px;
+  /* #81: date size/prominence is user-tunable; theme default 13px. */
+  font-size: var(--pref-card-date-size, 13px);
   font-weight: 600;
   letter-spacing: 0.02em;
   color: var(--ink-soft);
@@ -2259,7 +2282,7 @@ button.id-source {
   margin: 0;
   cursor: pointer;
   font-family: var(--mono);
-  font-size: 11px;
+  font-size: var(--pref-card-source-size, 11px);
   text-transform: uppercase;
   letter-spacing: 0.04em;
   color: var(--ink-mute);
@@ -2324,3 +2347,145 @@ button.id-source:active {
   z-index: 70;
 }
 /* ===== end #77/#78 ===== */
+
+/* ===== #80/#81/#82 Appearance screen + live preview ========================= */
+/* The Appearance screen: a live preview pinned at the top, calm controls below.
+   The preview renders the real card + reader components; edits write CSS vars to
+   :root (and to the preview's own inline scope), so both the preview and the live
+   app restyle instantly. */
+.appearance {
+  display: flex;
+  flex-direction: column;
+}
+
+/* Settings -> Appearance entry row (also the shape for other settings links). */
+.settings-link {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  width: 100%;
+  text-align: left;
+  padding: 16px 0;
+  background: none;
+  border: none;
+  border-top: 1px solid var(--hair);
+  border-bottom: 1px solid var(--hair);
+  margin: 14px 0 4px;
+}
+.settings-link:active {
+  background: var(--paper-2);
+}
+.settings-link-chev {
+  flex: 0 0 auto;
+  font-family: var(--grot);
+  font-size: 18px;
+  color: var(--ink-mute);
+}
+
+/* --- the live preview pane --- */
+.preview {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  margin: 8px 0 4px;
+  background: var(--paper);
+  border: 1.5px solid var(--rule-hard);
+}
+.preview-tag {
+  font-family: var(--grot);
+  font-size: 9px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--ink-mute);
+  padding: 7px 12px;
+  border-bottom: 1px solid var(--hair);
+  background: var(--paper-2);
+}
+.preview-scroll {
+  max-height: 46vh;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  padding: 16px;
+}
+/* Neutralize the full-screen scroll-snap card layout for the compact preview
+   while keeping every child selector (.snap h3 / .excerpt / .reason ...). */
+.appearance .pv-card.snap {
+  min-height: auto;
+  justify-content: flex-start;
+  padding: 0;
+  border-bottom: none;
+  cursor: default;
+  transition: none;
+}
+/* The reader block sizes to its content in the preview (not the tall sheet). */
+.appearance .pv-reader.reader {
+  flex: none;
+  overflow: visible;
+  margin-top: 20px;
+  padding-top: 16px;
+  border-top: 1px solid var(--hair);
+}
+
+/* --- control groups --- */
+.ctl-groups {
+  margin-top: 6px;
+}
+.ctl-section {
+  padding: 6px 0 10px;
+  border-top: 1px solid var(--hair);
+  margin-top: 14px;
+}
+.ctl-heading {
+  font-family: var(--didot);
+  font-weight: 500;
+  font-size: 20px;
+  margin: 6px 0 2px;
+}
+.ctl {
+  margin-top: 10px;
+}
+/* the segmented .wbuckets already style the options; just space the label */
+
+/* --- preset editor (#82) --- */
+.preset-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 12px;
+}
+.preset-edit-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+}
+.preset-edit-val {
+  min-width: 84px;
+  text-align: center;
+  font-family: var(--grot);
+  font-size: 15px;
+  color: var(--ink);
+}
+.preset-remove {
+  flex: 0 0 auto;
+  width: 36px;
+  height: 36px;
+  border: 1.5px solid var(--rule);
+  background: var(--paper);
+  color: var(--ink-mute);
+  font-size: 18px;
+  line-height: 1;
+}
+.preset-remove:active {
+  background: var(--paper-3);
+  color: var(--ink);
+}
+.preset-remove:disabled {
+  opacity: 0.35;
+}
+.preset-add {
+  margin-top: 4px;
+  align-self: flex-start;
+}
+/* ===== end #80/#81/#82 ===== */

@@ -74,6 +74,18 @@ export default function SettingsPage() {
 
       {err && <p className="err">{err}</p>}
 
+      {/* Appearance (#80/#81/#82): reader typography, card styling, and session
+          presets, with a live preview. Its own screen so the preview has room. */}
+      <button className="settings-link" onClick={() => nav("/settings/appearance")}>
+        <div className="settings-copy">
+          <b>Appearance</b>
+          <span>Reader typography, card styling, and session-length presets - with a live preview.</span>
+        </div>
+        <span className="settings-link-chev" aria-hidden>
+          →
+        </span>
+      </button>
+
       {settings && (
         <div className="settings-list">
           <div className="settings-row">
