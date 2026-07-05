@@ -84,6 +84,45 @@ func TestUpdatePreferencesClamps(t *testing.T) {
 	}
 }
 
+// #90: font_weight/meta_weight clamp to [300,700]; font_family/ink/meta_ink are
+// curated enums that fall back to their default when given an unknown value.
+func TestClampTypography(t *testing.T) {
+	db, uid := newTestDB(t)
+	ctx := context.Background()
+	patch := []byte(`{"reader":{"font_weight":999,"font_family":"comic","ink":"neon"},"card":{"meta_weight":100,"meta_ink":"bogus"}}`)
+	got, err := db.UpdatePreferences(ctx, uid, patch)
+	if err != nil {
+		t.Fatalf("update: %v", err)
+	}
+	if got.Reader.FontWeight != 700 {
+		t.Fatalf("font_weight not clamped to 700: %v", got.Reader.FontWeight)
+	}
+	if got.Card.MetaWeight != 300 {
+		t.Fatalf("meta_weight not clamped to 300: %v", got.Card.MetaWeight)
+	}
+	if got.Reader.FontFamily != "charter" {
+		t.Fatalf("unknown font_family should fall back to charter: %q", got.Reader.FontFamily)
+	}
+	if got.Reader.Ink != "soft" {
+		t.Fatalf("unknown reader ink should fall back to soft: %q", got.Reader.Ink)
+	}
+	if got.Card.MetaInk != "mute" {
+		t.Fatalf("unknown meta_ink should fall back to mute: %q", got.Card.MetaInk)
+	}
+
+	// A valid curated value is preserved.
+	got, err = db.UpdatePreferences(ctx, uid, []byte(`{"reader":{"font_family":"didot","font_weight":525}}`))
+	if err != nil {
+		t.Fatalf("update2: %v", err)
+	}
+	if got.Reader.FontFamily != "didot" {
+		t.Fatalf("valid font_family should persist: %q", got.Reader.FontFamily)
+	}
+	if got.Reader.FontWeight != 525 {
+		t.Fatalf("in-range niche weight should persist: %v", got.Reader.FontWeight)
+	}
+}
+
 func TestClampPresets(t *testing.T) {
 	tests := []struct {
 		name string
