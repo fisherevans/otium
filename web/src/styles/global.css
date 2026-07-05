@@ -2901,12 +2901,12 @@ button.id-source:active {
 
 /* blurb: enticing teaser, clamped to a few lines (not the full body) */
 .card-blurb {
-  margin: 13px 0 0;
+  margin: 10px 0 0;
   color: var(--ink-soft);
   font-size: 15px;
-  line-height: 1.5;
+  line-height: 1.45;
   display: -webkit-box;
-  -webkit-line-clamp: 3;
+  -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
 }
@@ -2917,7 +2917,25 @@ button.id-source:active {
   flex-wrap: wrap;
   align-items: center;
   gap: 8px;
-  margin-top: 18px;
+  margin-top: 14px;
+}
+
+/* #101: keep the whole card within the viewport so the feed pill (top) and the
+   callout buttons (bottom) are never clipped - no scroll-to-reach. Cap the hero
+   and trim the card's vertical padding + the byline gap. */
+.snap {
+  padding-top: 14px;
+  padding-bottom: 14px;
+}
+.snap .media {
+  max-height: min(188px, 26vh);
+  margin: 2px 0;
+}
+.card-top {
+  margin-bottom: 10px;
+}
+.card-byline {
+  margin-bottom: 10px;
 }
 .callout-primary {
   display: inline-flex;
