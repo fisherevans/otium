@@ -708,12 +708,12 @@ func (h *Handler) ItemContent(w http.ResponseWriter, r *http.Request) {
 		if src == "" {
 			src = store.ContentSourceRSS
 		}
-		writeItemContent(w, src, it.Content)
+		writeItemContent(w, src, it.Content, it.Summary)
 		return
 	}
 	// Already tried and it wasn't extractable.
 	if it.ContentSource == store.ContentSourceExternal {
-		writeItemContent(w, store.ContentSourceExternal, "")
+		writeItemContent(w, store.ContentSourceExternal, "", it.Summary)
 		return
 	}
 	// Non-article media never extracts to an article - mark external, no fetch.
@@ -721,7 +721,7 @@ func (h *Handler) ItemContent(w http.ResponseWriter, r *http.Request) {
 		if err := h.db.SetItemContentSource(r.Context(), id, store.ContentSourceExternal); err != nil {
 			h.log.Warn("mark external", "item", id, "err", err)
 		}
-		writeItemContent(w, store.ContentSourceExternal, "")
+		writeItemContent(w, store.ContentSourceExternal, "", it.Summary)
 		return
 	}
 
@@ -734,31 +734,62 @@ func (h *Handler) ItemContent(w http.ResponseWriter, r *http.Request) {
 		// Unexpected: return external but don't persist, so a transient failure can
 		// be retried on the next open.
 		h.log.Warn("full-text extract error", "item", id, "url", it.URL, "err", err)
-		writeItemContent(w, store.ContentSourceExternal, "")
+		writeItemContent(w, store.ContentSourceExternal, "", it.Summary)
 		return
 	}
 	if !ok {
 		if err := h.db.SetItemContentSource(r.Context(), id, store.ContentSourceExternal); err != nil {
 			h.log.Warn("mark external", "item", id, "err", err)
 		}
-		writeItemContent(w, store.ContentSourceExternal, "")
+		writeItemContent(w, store.ContentSourceExternal, "", it.Summary)
 		return
 	}
 	if err := h.db.SetItemContent(r.Context(), id, html, store.ContentSourceFetched); err != nil {
 		serverError(w, h.log, "store fetched content", err)
 		return
 	}
-	writeItemContent(w, store.ContentSourceFetched, html)
+	writeItemContent(w, store.ContentSourceFetched, html, it.Summary)
+}
+
+// Explicit render states for GET /items/{id}/content (#99). content_source stays
+// the provenance source of truth (rss|fetched|external); render is the derived,
+// unambiguous engagement the card should use so #96 never has to combine
+// content_source + has_full_text + media_type itself:
+//
+//   - renderFullText: an in-app reader body exists (rss|fetched).
+//   - renderPreview:  no full text, but a teaser/summary to show inline while the
+//     card links out to the original.
+//   - renderExternal: no full text and nothing to preview - pure open original /
+//     watch.
+const (
+	renderFullText = "full_text"
+	renderPreview  = "preview"
+	renderExternal = "external"
+)
+
+// resolveRender maps a resolved (source, content, summary) to the render state.
+// A body always wins (full_text). Otherwise it's external provenance; a non-empty
+// teaser makes it preview, a bare item is external.
+func resolveRender(content, summary string) string {
+	if strings.TrimSpace(content) != "" {
+		return renderFullText
+	}
+	if strings.TrimSpace(summary) != "" {
+		return renderPreview
+	}
+	return renderExternal
 }
 
 // writeItemContent is the shared shape for GET /items/{id}/content: the resolved
-// body, its provenance, and a convenience has_full_text flag (#96 renders
-// content-aware actions off it - read in-app vs open original vs watch).
-func writeItemContent(w http.ResponseWriter, source, content string) {
+// body, its provenance (content_source), the derived render state, and the legacy
+// has_full_text convenience flag (#96 branches on render; has_full_text kept for
+// back-compat - it equals render == full_text).
+func writeItemContent(w http.ResponseWriter, source, content, summary string) {
 	writeJSON(w, http.StatusOK, map[string]any{
 		"content_source": source,
 		"content":        content,
 		"has_full_text":  content != "",
+		"render":         resolveRender(content, summary),
 	})
 }
 

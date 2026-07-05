@@ -73,14 +73,20 @@ export interface Item {
   fetched_at: string;
 }
 
-// On-demand full-text (#98): the /items/{id}/content response. content is the
+// On-demand full-text (#98/#99): the /items/{id}/content response. content is the
 // best reader body ("" when external); content_source is the resolved provenance
-// (rss | fetched | external); has_full_text is the convenience flag #96 branches
-// on (true -> render in-app, false -> offer "open original" / "watch").
+// (rss | fetched | external). `render` is the explicit engagement state #96
+// branches on so it never has to combine content_source + media_type itself:
+//   - "full_text": in-app reader body exists (rss|fetched).
+//   - "preview":   no full text, but a teaser/summary to show while linking out.
+//   - "external":  no full text, nothing to preview - open original / watch.
+// has_full_text is kept for back-compat and equals render === "full_text".
+export type ItemRender = "full_text" | "preview" | "external";
 export interface ItemContent {
   content_source: string;
   content: string;
   has_full_text: boolean;
+  render: ItemRender;
 }
 
 // --- #83 personal-history block ---
