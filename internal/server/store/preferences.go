@@ -40,19 +40,45 @@ type ReaderPrefs struct {
 	Ink        string  `json:"ink"`         // curated ink key (#90): ink|graphite|soft|mute
 }
 
-// CardPrefs tunes the swipe card (#81/#90). The four size fields are px; hero_show
-// hides the media block; hero_color switches the hero between color and the
-// default grayscale/dither treatment. MetaWeight/MetaInk (#90) tune the identity
-// line + card date - weight is numeric (300-700), ink is a curated enum key.
+// CardPrefs tunes the swipe card (#81/#90/#97). The four size fields are px;
+// hero_show hides the media block; hero_color switches the hero between color and
+// the default grayscale/dither treatment.
+//
+// #97 replaced the single shared meta weight/ink with PER-ELEMENT weight+ink for
+// each of the four meta parts (feed pill, source, author, date), plus a byline
+// delimiter control (glyph + spacing). Each element keeps its existing size field.
+// The legacy MetaWeight/MetaInk fields are retained as the migration seed only:
+// GetPreferences folds a customized shared value into the author/date per-element
+// fields for old blobs (the two elements the shared control actually drove in the
+// v0.29 card), then the per-element fields own the styling going forward.
 type CardPrefs struct {
-	MetaSize    float64 `json:"meta_size"`     // sub-text / media-type meta, px
+	MetaSize    float64 `json:"meta_size"`     // author line size, px (was the shared sub-text size)
 	SourceSize  float64 `json:"source_size"`   // source label, px
-	FeedTagSize float64 `json:"feed_tag_size"` // feed identity tag, px
-	DateSize    float64 `json:"date_size"`     // the date above the hero (#73), px
+	FeedTagSize float64 `json:"feed_tag_size"` // feed pill name, px
+	DateSize    float64 `json:"date_size"`     // date, px
 	HeroShow    bool    `json:"hero_show"`     // show the hero/media block
 	HeroColor   bool    `json:"hero_color"`    // true = color; false = grayscale/dither (default)
-	MetaWeight  int     `json:"meta_weight"`   // identity/date weight (#90), 300-700
-	MetaInk     string  `json:"meta_ink"`      // identity/date ink key (#90)
+
+	// #97 per-element weight (300-700) + ink (curated enum). FeedInk additionally
+	// allows "feed" = keep the feed's own color tint (the default, distinctive look).
+	FeedWeight   int    `json:"feed_weight"`
+	FeedInk      string `json:"feed_ink"`
+	SourceWeight int    `json:"source_weight"`
+	SourceInk    string `json:"source_ink"`
+	AuthorWeight int    `json:"author_weight"`
+	AuthorInk    string `json:"author_ink"`
+	DateWeight   int    `json:"date_weight"`
+	DateInk      string `json:"date_ink"`
+
+	// #97 byline delimiter: the separator between author and date. Delim is a
+	// curated glyph key (dot|pipe|slash|space); DelimGap is the byline spacing, px.
+	Delim    string `json:"delim"`
+	DelimGap int    `json:"delim_gap"`
+
+	// Legacy shared meta controls (pre-#97). Kept for back-compat migration only;
+	// no longer surfaced in the UI. See migrateLegacyMeta.
+	MetaWeight int    `json:"meta_weight"` // identity/date weight (#90), 300-700
+	MetaInk    string `json:"meta_ink"`    // identity/date ink key (#90)
 }
 
 // DefaultPreferences is the out-of-the-box look - the current e-ink theme's
@@ -67,6 +93,15 @@ func DefaultPreferences() Preferences {
 		Card: CardPrefs{
 			MetaSize: 11, SourceSize: 11, FeedTagSize: 13, DateSize: 13,
 			HeroShow: true, HeroColor: false,
+			// #97 per-element defaults mirror the v0.29 card's designed look exactly:
+			// feed pill 600 + feed-color tint, source 600 + soft, author 500 + mute,
+			// date 400 + mute. So a fresh user (and one who never touched the old
+			// shared control) sees no change.
+			FeedWeight: 600, FeedInk: "feed",
+			SourceWeight: 600, SourceInk: "soft",
+			AuthorWeight: 500, AuthorInk: "mute",
+			DateWeight: 400, DateInk: "mute",
+			Delim: "dot", DelimGap: 7,
 			MetaWeight: 400, MetaInk: "mute",
 		},
 		Presets: []int{5, 15, 30, 60},
@@ -89,9 +124,49 @@ func (db *DB) GetPreferences(ctx context.Context, userID int64) (Preferences, er
 		// Overlay stored values onto the defaults. Unknown/absent keys keep the
 		// default; a malformed blob leaves the defaults intact.
 		_ = json.Unmarshal([]byte(v), &p)
+		migrateLegacyMeta(&p.Card, []byte(v))
 	}
 	clampPreferences(&p)
 	return p, nil
+}
+
+// migrateLegacyMeta folds a pre-#97 blob's shared meta_weight/meta_ink into the
+// new per-element fields so an existing user's card doesn't shift on upgrade. In
+// the v0.29 card the shared control only drove the AUTHOR and DATE parts (feed
+// pill + source were hardcoded 600 and not ink-tunable), so that's all it seeds.
+// It only runs when the stored blob predates #97 (no per-element keys present) and
+// the user had actually moved the shared control off its default; a fresh or
+// already-migrated blob is left untouched.
+func migrateLegacyMeta(p *CardPrefs, raw []byte) {
+	var probe struct {
+		Card struct {
+			FeedWeight   *int    `json:"feed_weight"`
+			FeedInk      *string `json:"feed_ink"`
+			SourceWeight *int    `json:"source_weight"`
+			SourceInk    *string `json:"source_ink"`
+			AuthorWeight *int    `json:"author_weight"`
+			AuthorInk    *string `json:"author_ink"`
+			DateWeight   *int    `json:"date_weight"`
+			DateInk      *string `json:"date_ink"`
+			Delim        *string `json:"delim"`
+		} `json:"card"`
+	}
+	_ = json.Unmarshal(raw, &probe)
+	c := probe.Card
+	hasPerElement := c.FeedWeight != nil || c.FeedInk != nil || c.SourceWeight != nil ||
+		c.SourceInk != nil || c.AuthorWeight != nil || c.AuthorInk != nil ||
+		c.DateWeight != nil || c.DateInk != nil || c.Delim != nil
+	if hasPerElement {
+		return // already a #97-era blob; per-element fields own the styling
+	}
+	if p.MetaWeight != 400 { // customized shared weight -> author + date
+		p.AuthorWeight = p.MetaWeight
+		p.DateWeight = p.MetaWeight
+	}
+	if p.MetaInk != "" && p.MetaInk != "mute" { // customized shared ink -> author + date
+		p.AuthorInk = p.MetaInk
+		p.DateInk = p.MetaInk
+	}
 }
 
 // UpdatePreferences merges a raw JSON patch onto the user's current preferences
@@ -135,6 +210,17 @@ func clampPreferences(p *Preferences) {
 	p.Card.DateSize = clampF(p.Card.DateSize, 9, 22)
 	p.Card.MetaWeight = clampI(p.Card.MetaWeight, 300, 700)
 	p.Card.MetaInk = validEnum(p.Card.MetaInk, inkShades, "mute")
+	// #97 per-element weight/ink. Feed ink additionally allows "feed" (keep tint).
+	p.Card.FeedWeight = clampI(p.Card.FeedWeight, 300, 700)
+	p.Card.FeedInk = validEnum(p.Card.FeedInk, feedInkShades, "feed")
+	p.Card.SourceWeight = clampI(p.Card.SourceWeight, 300, 700)
+	p.Card.SourceInk = validEnum(p.Card.SourceInk, inkShades, "soft")
+	p.Card.AuthorWeight = clampI(p.Card.AuthorWeight, 300, 700)
+	p.Card.AuthorInk = validEnum(p.Card.AuthorInk, inkShades, "mute")
+	p.Card.DateWeight = clampI(p.Card.DateWeight, 300, 700)
+	p.Card.DateInk = validEnum(p.Card.DateInk, inkShades, "mute")
+	p.Card.Delim = validEnum(p.Card.Delim, delimGlyphs, "dot")
+	p.Card.DelimGap = clampI(p.Card.DelimGap, 2, 16)
 	p.Presets = clampPresets(p.Presets)
 }
 
@@ -145,6 +231,10 @@ func clampPreferences(p *Preferences) {
 var (
 	fontFamilies = map[string]bool{"charter": true, "book": true, "didot": true, "grotesk": true}
 	inkShades    = map[string]bool{"ink": true, "graphite": true, "soft": true, "mute": true}
+	// #97: feed pill ink also allows "feed" = keep the feed's own color tint.
+	feedInkShades = map[string]bool{"feed": true, "ink": true, "graphite": true, "soft": true, "mute": true}
+	// #97: curated byline delimiter glyphs.
+	delimGlyphs = map[string]bool{"dot": true, "pipe": true, "slash": true, "space": true}
 )
 
 func validEnum(v string, allowed map[string]bool, def string) string {

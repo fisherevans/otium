@@ -282,6 +282,10 @@ export interface Settings {
 // maps them to a system font stack / grayscale ink so styling stays on-theme.
 export type FontKey = "charter" | "book" | "didot" | "grotesk";
 export type InkKey = "ink" | "graphite" | "soft" | "mute";
+// #97: the feed pill ink can also be "feed" (keep the feed's own color tint).
+export type FeedInkKey = InkKey | "feed";
+// #97: curated byline delimiter glyph keys.
+export type DelimKey = "dot" | "pipe" | "slash" | "space";
 export interface ReaderPrefs {
   font_size: number; // px
   line_height: number; // unitless
@@ -292,14 +296,27 @@ export interface ReaderPrefs {
   ink: InkKey; // #90 body ink shade
 }
 export interface CardPrefs {
-  meta_size: number; // sub-text / media-type meta, px
+  meta_size: number; // #97 author line size, px
   source_size: number; // source label, px
-  feed_tag_size: number; // feed identity tag, px
-  date_size: number; // date above the hero (#73), px
+  feed_tag_size: number; // feed pill name, px
+  date_size: number; // date, px
   hero_show: boolean; // show the hero/media block
   hero_color: boolean; // true = color; false = grayscale/dither
-  meta_weight: number; // #90 identity/date weight, 300-700
-  meta_ink: InkKey; // #90 identity/date ink shade
+  // #97 per-element weight (300-700) + ink. Feed ink allows "feed" (keep tint).
+  feed_weight: number;
+  feed_ink: FeedInkKey;
+  source_weight: number;
+  source_ink: InkKey;
+  author_weight: number;
+  author_ink: InkKey;
+  date_weight: number;
+  date_ink: InkKey;
+  // #97 byline delimiter: separator glyph + byline spacing (px).
+  delim: DelimKey;
+  delim_gap: number;
+  // legacy shared meta (pre-#97), retained for back-compat migration only.
+  meta_weight: number;
+  meta_ink: InkKey;
 }
 export interface Preferences {
   reader: ReaderPrefs;

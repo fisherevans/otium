@@ -123,6 +123,114 @@ func TestClampTypography(t *testing.T) {
 	}
 }
 
+// #97: per-element weight clamps to [300,700]; per-element ink is a curated enum
+// (feed ink additionally allows "feed"); delim is an enum; delim_gap clamps.
+func TestClampPerElementMeta(t *testing.T) {
+	db, uid := newTestDB(t)
+	ctx := context.Background()
+	patch := []byte(`{"card":{"feed_weight":999,"feed_ink":"neon","source_weight":100,` +
+		`"author_ink":"bogus","date_weight":800,"delim":"emoji","delim_gap":99}}`)
+	got, err := db.UpdatePreferences(ctx, uid, patch)
+	if err != nil {
+		t.Fatalf("update: %v", err)
+	}
+	if got.Card.FeedWeight != 700 {
+		t.Fatalf("feed_weight not clamped to 700: %v", got.Card.FeedWeight)
+	}
+	if got.Card.FeedInk != "feed" {
+		t.Fatalf("unknown feed_ink should fall back to feed: %q", got.Card.FeedInk)
+	}
+	if got.Card.SourceWeight != 300 {
+		t.Fatalf("source_weight not clamped to 300: %v", got.Card.SourceWeight)
+	}
+	if got.Card.AuthorInk != "mute" {
+		t.Fatalf("unknown author_ink should fall back to mute: %q", got.Card.AuthorInk)
+	}
+	if got.Card.DateWeight != 700 {
+		t.Fatalf("date_weight not clamped to 700: %v", got.Card.DateWeight)
+	}
+	if got.Card.Delim != "dot" {
+		t.Fatalf("unknown delim should fall back to dot: %q", got.Card.Delim)
+	}
+	if got.Card.DelimGap != 16 {
+		t.Fatalf("delim_gap not clamped to 16: %v", got.Card.DelimGap)
+	}
+
+	// A valid feed ink override + delim glyph persists.
+	got, err = db.UpdatePreferences(ctx, uid, []byte(`{"card":{"feed_ink":"graphite","delim":"pipe"}}`))
+	if err != nil {
+		t.Fatalf("update2: %v", err)
+	}
+	if got.Card.FeedInk != "graphite" || got.Card.Delim != "pipe" {
+		t.Fatalf("valid feed_ink/delim should persist: %q %q", got.Card.FeedInk, got.Card.Delim)
+	}
+}
+
+// #97: a pre-#97 blob (shared meta_weight/meta_ink, no per-element keys) folds the
+// customized shared value into the author + date parts on read, leaving feed +
+// source at their designed defaults. A default shared value leaves everything
+// at the designed per-element defaults.
+func TestMigrateLegacyMeta(t *testing.T) {
+	t.Run("customized shared meta folds into author+date", func(t *testing.T) {
+		db, uid := newTestDB(t)
+		ctx := context.Background()
+		// Write a legacy blob directly (no per-element keys, customized shared meta).
+		if err := db.kvSet(ctx, uid, settingPreferences, `{"card":{"meta_weight":700,"meta_ink":"ink"}}`); err != nil {
+			t.Fatalf("seed: %v", err)
+		}
+		got, err := db.GetPreferences(ctx, uid)
+		if err != nil {
+			t.Fatalf("get: %v", err)
+		}
+		if got.Card.AuthorWeight != 700 || got.Card.DateWeight != 700 {
+			t.Fatalf("author/date weight should inherit legacy 700: %v %v", got.Card.AuthorWeight, got.Card.DateWeight)
+		}
+		if got.Card.AuthorInk != "ink" || got.Card.DateInk != "ink" {
+			t.Fatalf("author/date ink should inherit legacy ink: %q %q", got.Card.AuthorInk, got.Card.DateInk)
+		}
+		if got.Card.FeedWeight != 600 || got.Card.SourceWeight != 600 {
+			t.Fatalf("feed/source weight should keep designed defaults: %v %v", got.Card.FeedWeight, got.Card.SourceWeight)
+		}
+		if got.Card.FeedInk != "feed" || got.Card.SourceInk != "soft" {
+			t.Fatalf("feed/source ink should keep designed defaults: %q %q", got.Card.FeedInk, got.Card.SourceInk)
+		}
+	})
+
+	t.Run("default legacy blob keeps designed defaults", func(t *testing.T) {
+		db, uid := newTestDB(t)
+		ctx := context.Background()
+		if err := db.kvSet(ctx, uid, settingPreferences, `{"reader":{"font_size":18}}`); err != nil {
+			t.Fatalf("seed: %v", err)
+		}
+		got, err := db.GetPreferences(ctx, uid)
+		if err != nil {
+			t.Fatalf("get: %v", err)
+		}
+		def := DefaultPreferences().Card
+		if got.Card.AuthorWeight != def.AuthorWeight || got.Card.DateInk != def.DateInk {
+			t.Fatalf("default legacy blob should keep designed per-element defaults")
+		}
+	})
+
+	t.Run("per-element blob is not re-migrated", func(t *testing.T) {
+		db, uid := newTestDB(t)
+		ctx := context.Background()
+		// Has a per-element key AND a customized shared meta; the shared meta must
+		// NOT clobber the explicit per-element author weight.
+		blob := `{"card":{"meta_weight":700,"author_weight":450,"date_weight":460}}`
+		if err := db.kvSet(ctx, uid, settingPreferences, blob); err != nil {
+			t.Fatalf("seed: %v", err)
+		}
+		got, err := db.GetPreferences(ctx, uid)
+		if err != nil {
+			t.Fatalf("get: %v", err)
+		}
+		if got.Card.AuthorWeight != 450 || got.Card.DateWeight != 460 {
+			t.Fatalf("explicit per-element weights should win over legacy meta: %v %v", got.Card.AuthorWeight, got.Card.DateWeight)
+		}
+	})
+}
+
 func TestClampPresets(t *testing.T) {
 	tests := []struct {
 		name string

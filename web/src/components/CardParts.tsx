@@ -87,8 +87,11 @@ export function CardSource({ sel, onSource }: { sel: Selected; onSource: () => v
 }
 
 // Byline (#96): author before date; date is relative (relTime). Either may be
-// absent - render only what exists, with a dot between when both are present.
-// Returns null when there's neither, so the card omits the line entirely.
+// absent - render only what exists, with a delimiter between when both are
+// present. Returns null when there's neither, so the card omits the line entirely.
+// #97: the separator glyph + spacing are user-tunable; the .card-dot span is empty
+// and its glyph comes from `--pref-card-delim` via CSS (::before), so the delimiter
+// control drives it without any prop drilling.
 export function Byline({ item }: { item: Item }) {
   const age = relTime(item.published_at || item.fetched_at);
   const author = item.author?.trim();
@@ -96,7 +99,7 @@ export function Byline({ item }: { item: Item }) {
   return (
     <div className="card-byline">
       {author && <span className="card-author">{author}</span>}
-      {author && age && <span className="card-dot" aria-hidden>·</span>}
+      {author && age && <span className="card-dot" aria-hidden />}
       {age && <span className="card-age">{age}</span>}
     </div>
   );

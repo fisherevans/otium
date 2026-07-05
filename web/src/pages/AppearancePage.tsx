@@ -1,6 +1,6 @@
 import { useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import type { FontKey, InkKey, Selected } from "@/api/client";
+import type { DelimKey, FeedInkKey, FontKey, InkKey, Selected } from "@/api/client";
 import { Media, FeedPill, CardSource, Byline, Blurb } from "@/components/CardParts";
 import { usePreferences, prefsToVars, FONT_STACKS, INK_SHADES } from "@/context/PreferencesContext";
 
@@ -172,9 +172,12 @@ function InkSwatches({
   onChange,
 }: {
   label: string;
-  options: { label: string; value: InkKey }[];
-  value: InkKey;
-  onChange: (v: InkKey) => void;
+  // #97: value is a plain string so the feed pill's "feed" (keep-tint) option fits
+  // alongside the grayscale ink keys. An option may carry its own `swatch` color
+  // (e.g. the feed tint sample); otherwise the dot uses the ink-key shade.
+  options: { label: string; value: string; swatch?: string }[];
+  value: string;
+  onChange: (v: string) => void;
 }) {
   return (
     <div className="ctl">
@@ -187,7 +190,7 @@ function InkSwatches({
             onClick={() => onChange(o.value)}
             title={o.label}
           >
-            <span className="ink-dot" style={{ background: INK_SHADES[o.value] }} />
+            <span className="ink-dot" style={{ background: o.swatch ?? INK_SHADES[o.value as InkKey] }} />
             <span className="ink-name">{o.label}</span>
           </button>
         ))}
@@ -302,6 +305,28 @@ const CARD_INK: { label: string; value: InkKey }[] = [
   { label: "Graphite", value: "graphite" },
   { label: "Soft", value: "soft" },
   { label: "Muted", value: "mute" },
+];
+// #97: the feed pill ink adds a "Feed" option that keeps the feed's own color tint
+// (the default, distinctive look). Its swatch shows the sample feed color so the
+// pick is WYSIWYG; picking a grayscale shade overrides the tint.
+const FEED_INK: { label: string; value: FeedInkKey; swatch?: string }[] = [
+  { label: "Feed", value: "feed", swatch: SAMPLE.feed?.color || "#6b7f6b" },
+  { label: "Graphite", value: "graphite" },
+  { label: "Soft", value: "soft" },
+  { label: "Muted", value: "mute" },
+];
+// #97: byline delimiter - curated separator glyphs + the byline spacing. The glyph
+// chips render the actual character so the choice previews itself.
+const DELIM_GLYPH: { label: string; value: DelimKey }[] = [
+  { label: "·", value: "dot" },
+  { label: "|", value: "pipe" },
+  { label: "/", value: "slash" },
+  { label: "Space", value: "space" },
+];
+const DELIM_GAP = [
+  { label: "Tight", value: 4 },
+  { label: "Default", value: 7 },
+  { label: "Loose", value: 11 },
 ];
 
 type Tab = "reader" | "card" | "sessions";
@@ -451,7 +476,7 @@ export default function AppearancePage() {
               label="Ink"
               options={READER_INK}
               value={prefs.reader.ink}
-              onChange={(v) => update({ reader: { ink: v } })}
+              onChange={(v) => update({ reader: { ink: v as InkKey } })}
             />
             <Segmented
               label="Text size"
@@ -480,49 +505,107 @@ export default function AppearancePage() {
           </section>
         )}
 
-        {/* Card styling (#81/#90) */}
+        {/* Card styling (#81/#90/#97). #97: the four meta parts each style
+            independently - size, weight, ink per element - grouped by element so
+            the controls map 1:1 to what you see on the card above. */}
         {tab === "card" && (
           <section className="ctl-section" role="tabpanel">
-            <WeightSlider
-              label="Meta weight"
-              value={prefs.card.meta_weight}
-              onChange={(v) => update({ card: { meta_weight: v } })}
-            />
-            <InkSwatches
-              label="Meta ink"
-              options={CARD_INK}
-              value={prefs.card.meta_ink}
-              onChange={(v) => update({ card: { meta_ink: v } })}
-            />
-            <p className="sub" style={{ marginTop: 4 }}>
-              Weight and ink apply to the feed tag, source, and date together.
-            </p>
+            <div className="ctl-grouphead">Feed pill</div>
             <Segmented
-              label="Sub-text size"
-              options={META_SIZE}
-              value={prefs.card.meta_size}
-              onChange={(v) => update({ card: { meta_size: v } })}
-            />
-            <Segmented
-              label="Source label"
-              options={META_SIZE}
-              value={prefs.card.source_size}
-              onChange={(v) => update({ card: { source_size: v } })}
-            />
-            <Segmented
-              label="Feed tag"
+              label="Size"
               options={TAG_SIZE}
               value={prefs.card.feed_tag_size}
               onChange={(v) => update({ card: { feed_tag_size: v } })}
             />
+            <WeightSlider
+              label="Weight"
+              value={prefs.card.feed_weight}
+              onChange={(v) => update({ card: { feed_weight: v } })}
+            />
+            <InkSwatches
+              label="Ink"
+              options={FEED_INK}
+              value={prefs.card.feed_ink}
+              onChange={(v) => update({ card: { feed_ink: v as FeedInkKey } })}
+            />
+
+            <div className="ctl-grouphead">Source</div>
             <Segmented
-              label="Date"
+              label="Size"
+              options={META_SIZE}
+              value={prefs.card.source_size}
+              onChange={(v) => update({ card: { source_size: v } })}
+            />
+            <WeightSlider
+              label="Weight"
+              value={prefs.card.source_weight}
+              onChange={(v) => update({ card: { source_weight: v } })}
+            />
+            <InkSwatches
+              label="Ink"
+              options={CARD_INK}
+              value={prefs.card.source_ink}
+              onChange={(v) => update({ card: { source_ink: v as InkKey } })}
+            />
+
+            <div className="ctl-grouphead">Author</div>
+            <Segmented
+              label="Size"
+              options={META_SIZE}
+              value={prefs.card.meta_size}
+              onChange={(v) => update({ card: { meta_size: v } })}
+            />
+            <WeightSlider
+              label="Weight"
+              value={prefs.card.author_weight}
+              onChange={(v) => update({ card: { author_weight: v } })}
+            />
+            <InkSwatches
+              label="Ink"
+              options={CARD_INK}
+              value={prefs.card.author_ink}
+              onChange={(v) => update({ card: { author_ink: v as InkKey } })}
+            />
+
+            <div className="ctl-grouphead">Date</div>
+            <Segmented
+              label="Size"
               options={TAG_SIZE}
               value={prefs.card.date_size}
               onChange={(v) => update({ card: { date_size: v } })}
             />
+            <WeightSlider
+              label="Weight"
+              value={prefs.card.date_weight}
+              onChange={(v) => update({ card: { date_weight: v } })}
+            />
+            <InkSwatches
+              label="Ink"
+              options={CARD_INK}
+              value={prefs.card.date_ink}
+              onChange={(v) => update({ card: { date_ink: v as InkKey } })}
+            />
+
+            <div className="ctl-grouphead">Delimiter</div>
+            <p className="sub" style={{ marginTop: 0 }}>
+              The separator between the author and date in the byline.
+            </p>
             <Segmented
-              label="Hero image"
+              label="Glyph"
+              options={DELIM_GLYPH}
+              value={prefs.card.delim}
+              onChange={(v) => update({ card: { delim: v as DelimKey } })}
+            />
+            <Segmented
+              label="Spacing"
+              options={DELIM_GAP}
+              value={prefs.card.delim_gap}
+              onChange={(v) => update({ card: { delim_gap: v } })}
+            />
+
+            <div className="ctl-grouphead">Hero image</div>
+            <Segmented
+              label="Color"
               options={HERO_COLOR}
               value={prefs.card.hero_color ? 1 : 0}
               onChange={(v) => update({ card: { hero_color: v === 1 } })}
