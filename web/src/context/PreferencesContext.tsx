@@ -30,6 +30,18 @@ const DEFAULTS: Preferences = {
     date_size: 13,
     hero_show: true,
     hero_color: false,
+    // #97 per-element meta defaults mirror the v0.29 card's designed look.
+    feed_weight: 600,
+    feed_ink: "feed",
+    source_weight: 600,
+    source_ink: "soft",
+    author_weight: 500,
+    author_ink: "mute",
+    date_weight: 400,
+    date_ink: "mute",
+    delim: "dot",
+    delim_gap: 7,
+    // legacy shared meta (pre-#97), kept only as the server-side migration seed.
     meta_weight: 400,
     meta_ink: "mute",
   },
@@ -60,6 +72,15 @@ export const INK_SHADES: Record<InkKey, string> = {
 // stylesheet consumes. Kept in one place so the live :root application and the
 // preview scope stay identical. Values carry their units here (px/ch), and the
 // hero controls become a display keyword + a filter, so the card needs no JS.
+// #97: byline delimiter glyph keys -> the actual CSS `content` string (quoted, so
+// it drops straight into `content: var(--pref-card-delim)`).
+const DELIM_GLYPHS: Record<string, string> = {
+  dot: '"·"',
+  pipe: '"|"',
+  slash: '"/"',
+  space: '" "',
+};
+
 export function prefsToVars(p: Preferences): CSSProperties {
   const heroFilter = p.card.hero_color ? "none" : "grayscale(1) contrast(1.15)";
   return {
@@ -77,29 +98,36 @@ export function prefsToVars(p: Preferences): CSSProperties {
     "--pref-card-date-size": `${p.card.date_size}px`,
     "--pref-hero-display": p.card.hero_show ? "block" : "none",
     "--pref-hero-filter": heroFilter,
-    // #90: the card identity/date share a single weight + ink control, but the
-    // theme defaults are deliberately heterogeneous (feed tag 600/ink, source
-    // 400/mute, date 600/soft). Emitting a uniform var at the default value would
-    // flatten that designed look, so these two vars are omitted while at default
-    // (each element keeps its own CSS fallback) and only emitted once the user
-    // moves them - at which point they intentionally unify the whole meta line.
-    // applyToRoot clears them when omitted so returning to default restores the
-    // per-element look. CARD_META_VARS lists them for that cleanup.
-    ...(p.card.meta_weight !== DEFAULTS.card.meta_weight
-      ? { "--pref-card-meta-weight": `${p.card.meta_weight}` }
-      : {}),
-    ...(p.card.meta_ink !== DEFAULTS.card.meta_ink ? { "--pref-card-meta-ink": INK_SHADES[p.card.meta_ink] } : {}),
+    // #97: per-element meta weight/ink. Each card meta part (feed pill, source,
+    // author, date) styles independently. Weight + ink are always emitted with the
+    // resolved value; the matching global.css rule carries the same default as its
+    // CSS fallback (pure safety). The one exception is the feed pill's ink: its
+    // default "feed" means "keep the feed's own color tint," so that var is omitted
+    // at default and the CSS fallback (inherit -> feed color) stands. applyToRoot
+    // clears it (CARD_COND_VARS) so returning to "feed" restores the tint.
+    "--pref-card-feed-weight": `${p.card.feed_weight}`,
+    "--pref-card-source-weight": `${p.card.source_weight}`,
+    "--pref-card-source-ink": INK_SHADES[p.card.source_ink] ?? INK_SHADES.soft,
+    "--pref-card-author-weight": `${p.card.author_weight}`,
+    "--pref-card-author-ink": INK_SHADES[p.card.author_ink] ?? INK_SHADES.mute,
+    "--pref-card-date-weight": `${p.card.date_weight}`,
+    "--pref-card-date-ink": INK_SHADES[p.card.date_ink] ?? INK_SHADES.mute,
+    // #97: byline delimiter glyph + spacing.
+    "--pref-card-delim": DELIM_GLYPHS[p.card.delim] ?? DELIM_GLYPHS.dot,
+    "--pref-card-delim-gap": `${p.card.delim_gap}px`,
+    ...(p.card.feed_ink !== "feed" ? { "--pref-card-feed-ink": INK_SHADES[p.card.feed_ink as InkKey] } : {}),
   } as CSSProperties;
 }
 
-// Conditionally-emitted vars (see prefsToVars). Cleared before each apply so
-// that returning a control to its default removes the override rather than
-// leaving a stale value on :root.
-const CARD_META_VARS = ["--pref-card-meta-weight", "--pref-card-meta-ink"];
+// Conditionally-emitted vars (see prefsToVars). Cleared before each apply so that
+// returning a control to its default removes the override rather than leaving a
+// stale value on :root. #97: only the feed pill ink is conditional (its "feed"
+// default keeps the feed-color tint via the CSS fallback).
+const CARD_COND_VARS = ["--pref-card-feed-ink"];
 
 function applyToRoot(p: Preferences) {
   const style = document.documentElement.style;
-  for (const k of CARD_META_VARS) style.removeProperty(k);
+  for (const k of CARD_COND_VARS) style.removeProperty(k);
   const vars = prefsToVars(p) as Record<string, string>;
   for (const [k, v] of Object.entries(vars)) style.setProperty(k, v);
 }

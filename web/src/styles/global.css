@@ -2594,6 +2594,25 @@ button.id-source:active {
   font-size: 20px;
   margin: 6px 0 2px;
 }
+/* #97: per-element group label inside a tab panel (e.g. the Card tab's Feed pill /
+   Source / Author / Date groups). Quieter than .ctl-heading - a mono eyebrow with a
+   hairline above so the controls read as grouped, not one long flat list. */
+.ctl-grouphead {
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+  margin: 20px 0 2px;
+  padding-top: 12px;
+  border-top: 1px solid var(--hair);
+}
+.ctl-grouphead:first-child {
+  margin-top: 4px;
+  padding-top: 0;
+  border-top: none;
+}
 .ctl {
   margin-top: 10px;
 }
@@ -2805,7 +2824,11 @@ button.id-source:active {
 .feed-pill-name {
   font-family: var(--mono);
   font-size: var(--pref-card-feedtag-size, 12px);
-  font-weight: 600;
+  /* #97: per-element weight; default 600. Ink defaults to the feed's own color
+     tint (inherit from .feed-pill) and only overrides when the user picks a
+     grayscale shade (var emitted only then). */
+  font-weight: var(--pref-card-feed-weight, 600);
+  color: var(--pref-card-feed-ink, inherit);
   letter-spacing: 0.05em;
   text-transform: uppercase;
   white-space: nowrap;
@@ -2825,8 +2848,9 @@ button.id-source:active {
   text-align: left;
   font-family: var(--serif);
   font-size: var(--pref-card-source-size, 15px);
-  font-weight: 600;
-  color: var(--ink-soft);
+  /* #97: per-element source weight + ink (defaults 600 / soft). */
+  font-weight: var(--pref-card-source-weight, 600);
+  color: var(--pref-card-source-ink, var(--ink-soft));
 }
 .card-source:active {
   color: var(--ink);
@@ -2841,28 +2865,38 @@ button.id-source:active {
   margin: 2px 0 9px;
 }
 
-/* byline: author before a relative date, quiet mono */
+/* byline: author before a relative date, quiet mono. #97: author + date style
+   independently (own weight + ink), and the delimiter glyph/spacing is tunable -
+   the gap is the byline spacing, the .card-dot glyph comes from --pref-card-delim. */
 .card-byline {
   display: flex;
   flex-wrap: wrap;
   align-items: baseline;
-  gap: 7px;
+  gap: var(--pref-card-delim-gap, 7px);
   margin-bottom: 14px;
   font-family: var(--mono);
-  color: var(--pref-card-meta-ink, var(--ink-mute));
 }
 .card-author {
   font-size: var(--pref-card-meta-size, 11px);
-  font-weight: var(--pref-card-meta-weight, 500);
+  /* #97: per-element author weight + ink (defaults 500 / mute). */
+  font-weight: var(--pref-card-author-weight, 500);
+  color: var(--pref-card-author-ink, var(--ink-mute));
   letter-spacing: 0.03em;
 }
 .card-age {
   font-size: var(--pref-card-date-size, 12px);
-  font-weight: var(--pref-card-meta-weight, 400);
+  /* #97: per-element date weight + ink (defaults 400 / mute). */
+  font-weight: var(--pref-card-date-weight, 400);
+  color: var(--pref-card-date-ink, var(--ink-mute));
   letter-spacing: 0.03em;
 }
+/* #97: delimiter glyph is CSS-driven (span is empty in the DOM). "space" resolves
+   to a " " glyph; the surrounding gap still separates author/date either way. */
 .card-dot {
   color: var(--ink-mute);
+}
+.card-dot::before {
+  content: var(--pref-card-delim, "·");
 }
 
 /* blurb: enticing teaser, clamped to a few lines (not the full body) */
