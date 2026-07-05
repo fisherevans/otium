@@ -2,12 +2,10 @@ package handler
 
 import (
 	"errors"
+	"github.com/fisherevans/otium/internal/server/store"
+	"github.com/go-chi/chi/v5"
 	"net/http"
 	"strconv"
-
-	"github.com/go-chi/chi/v5"
-
-	"github.com/fisherevans/otium/internal/server/store"
 )
 
 // Collections (#57): named lists of saved items. Builtins (Saved, Watch Later,
@@ -104,7 +102,13 @@ func (h *Handler) CollectionItems(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	items, err := h.db.CollectionItems(r.Context(), uid, id)
+	// ?sort=saved|published (#89): review order within the list. Default saved
+	// (when it was added); anything unrecognized falls back in the store.
+	sort := r.URL.Query().Get("sort")
+	if sort != store.SortPublished {
+		sort = store.SortSaved
+	}
+	items, err := h.db.CollectionItems(r.Context(), uid, id, sort)
 	if err != nil {
 		serverError(w, h.log, "collection items", err)
 		return

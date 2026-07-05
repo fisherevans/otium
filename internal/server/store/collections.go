@@ -146,22 +146,50 @@ func (db *DB) DeleteCollection(ctx context.Context, userID, id int64) error {
 	return nil
 }
 
-// CollectionItems returns a collection's items, newest-added first. Scoped to
-// the owning user so one user can't browse another's list.
-func (db *DB) CollectionItems(ctx context.Context, userID, collectionID int64) ([]Item, error) {
+// Collection review sort modes (#89). SortSaved orders by when the item was
+// added to the collection ("when I saved it"); SortPublished orders by the
+// item's publish time. Both are newest-first. Anything else falls back to Saved.
+const (
+	SortSaved     = "saved"
+	SortPublished = "published"
+)
+
+// CollectionItems returns a collection's items with their added-at timestamps,
+// newest-first by the chosen sort (#89): SortSaved orders by ci.added_at,
+// SortPublished by i.published_at. Scoped to the owning user so one user can't
+// browse another's list. item_id is the stable tiebreaker so ties order the
+// same across both modes.
+func (db *DB) CollectionItems(ctx context.Context, userID, collectionID int64, sort string) ([]CollectionItem, error) {
+	order := `ci.added_at DESC, ci.item_id DESC`
+	if sort == SortPublished {
+		order = `i.published_at DESC, ci.item_id DESC`
+	}
 	rows, err := db.sql.QueryContext(ctx,
 		`SELECT i.id, i.source_id, i.url, i.title, i.summary, i.content, i.author, i.thumbnail_url,
-		        i.media_type, i.duration_sec, i.published_at, i.fetched_at
+		        i.media_type, i.duration_sec, i.published_at, i.fetched_at, ci.added_at
 		 FROM collection_items ci
 		 JOIN items i ON i.id = ci.item_id
 		 JOIN collections c ON c.id = ci.collection_id
 		 WHERE ci.collection_id = ? AND c.user_id = ?
-		 ORDER BY ci.added_at DESC, ci.item_id DESC`, collectionID, userID)
+		 ORDER BY `+order, collectionID, userID)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	return scanItems(rows)
+	var out []CollectionItem
+	for rows.Next() {
+		var ci CollectionItem
+		var pub, fetched, added string
+		if err := rows.Scan(&ci.ID, &ci.SourceID, &ci.URL, &ci.Title, &ci.Summary, &ci.Content, &ci.Author,
+			&ci.ThumbnailURL, &ci.MediaType, &ci.DurationSec, &pub, &fetched, &added); err != nil {
+			return nil, err
+		}
+		ci.PublishedAt = parseTime(pub)
+		ci.FetchedAt = parseTime(fetched)
+		ci.AddedAt = parseTime(added)
+		out = append(out, ci)
+	}
+	return out, rows.Err()
 }
 
 // ownsCollection verifies a collection belongs to the user before a membership

@@ -102,7 +102,7 @@ func TestCollectionMembership(t *testing.T) {
 	if err := db.AddItemToCollection(ctx, u.ID, saved.ID, item1); err != nil {
 		t.Fatal(err)
 	}
-	items, err := db.CollectionItems(ctx, u.ID, saved.ID)
+	items, err := db.CollectionItems(ctx, u.ID, saved.ID, SortSaved)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -126,7 +126,7 @@ func TestCollectionMembership(t *testing.T) {
 	if err := db.AddItemToCollection(ctx, u.ID, saved.ID, item2); err != nil {
 		t.Fatal(err)
 	}
-	items, _ = db.CollectionItems(ctx, u.ID, saved.ID)
+	items, _ = db.CollectionItems(ctx, u.ID, saved.ID, SortSaved)
 	if len(items) != 2 || items[0].ID != item2 {
 		t.Fatalf("want newest-first [item2, item1], got %+v", items)
 	}
@@ -135,7 +135,7 @@ func TestCollectionMembership(t *testing.T) {
 	if err := db.RemoveItemFromCollection(ctx, u.ID, saved.ID, item1); err != nil {
 		t.Fatal(err)
 	}
-	items, _ = db.CollectionItems(ctx, u.ID, saved.ID)
+	items, _ = db.CollectionItems(ctx, u.ID, saved.ID, SortSaved)
 	if len(items) != 1 || items[0].ID != item2 {
 		t.Fatalf("after remove want [item2], got %+v", items)
 	}
@@ -188,6 +188,98 @@ func TestLikeWiringToLikedCollection(t *testing.T) {
 	if liked.Contains == nil || *liked.Contains {
 		t.Fatalf("Liked should no longer contain the item: %+v", liked)
 	}
+}
+
+// TestCollectionItemsSort locks the #89 review sort: SortSaved orders by
+// added_at (when it was saved), SortPublished by published_at (when it ran).
+// The setup makes the two orders diverge - the item published earlier is saved
+// later - so a sort that ignored its param would fail. added_at is also carried
+// back on every row.
+func TestCollectionItemsSort(t *testing.T) {
+	db, err := Open(":memory:")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	ctx := context.Background()
+	u, err := db.UpsertUserByUsername(ctx, "tester", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := db.EnsureBuiltinCollections(ctx, u.ID); err != nil {
+		t.Fatal(err)
+	}
+	saved := collBySlug(t, mustList(t, db, u.ID, 0), SlugSaved)
+
+	s, err := db.CreateSource(ctx, &Source{UserID: u.ID, Title: "S", FeedURL: "http://s", State: "followed", Weight: 1})
+	if err != nil {
+		t.Fatal(err)
+	}
+	// older published earlier; newer published later.
+	older := seedItemPub(t, db, s.ID, "older", time.Now().Add(-72*time.Hour).UTC())
+	newer := seedItemPub(t, db, s.ID, "newer", time.Now().Add(-1*time.Hour).UTC())
+
+	// Save both, then stamp explicit added_at values (the default is second-
+	// granularity, too coarse to order two same-second inserts). older is saved
+	// later, so saved-order (newest-added first) is [older, newer] - the inverse
+	// of published-order [newer, older].
+	if err := db.AddItemToCollection(ctx, u.ID, saved.ID, newer); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.AddItemToCollection(ctx, u.ID, saved.ID, older); err != nil {
+		t.Fatal(err)
+	}
+	stamp := func(itemID int64, at time.Time) {
+		if _, err := db.sql.ExecContext(ctx, `UPDATE collection_items SET added_at = ? WHERE collection_id = ? AND item_id = ?`,
+			at.UTC().Format("2006-01-02 15:04:05"), saved.ID, itemID); err != nil {
+			t.Fatal(err)
+		}
+	}
+	stamp(newer, time.Now().Add(-48*time.Hour)) // saved earlier
+	stamp(older, time.Now().Add(-1*time.Hour))  // saved later (newest-added)
+
+	bySaved, err := db.CollectionItems(ctx, u.ID, saved.ID, SortSaved)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(bySaved) != 2 || bySaved[0].ID != older || bySaved[1].ID != newer {
+		t.Fatalf("SortSaved want [older, newer], got %+v", bySaved)
+	}
+	if bySaved[0].AddedAt.IsZero() {
+		t.Fatalf("SortSaved must carry added_at, got zero: %+v", bySaved[0])
+	}
+
+	byPub, err := db.CollectionItems(ctx, u.ID, saved.ID, SortPublished)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(byPub) != 2 || byPub[0].ID != newer || byPub[1].ID != older {
+		t.Fatalf("SortPublished want [newer, older], got %+v", byPub)
+	}
+
+	// An unrecognized sort falls back to Saved order.
+	byDefault, err := db.CollectionItems(ctx, u.ID, saved.ID, "bogus")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(byDefault) != 2 || byDefault[0].ID != older {
+		t.Fatalf("unknown sort should fall back to Saved order, got %+v", byDefault)
+	}
+}
+
+// seedItemPub inserts an item on an existing source with an explicit published
+// time and returns its id, for the sort test.
+func seedItemPub(t *testing.T, db *DB, sourceID int64, ext string, pub time.Time) int64 {
+	t.Helper()
+	ctx := context.Background()
+	if _, err := db.UpsertItem(ctx, &Item{SourceID: sourceID, ExternalID: ext, URL: "u", Title: ext, PublishedAt: pub}); err != nil {
+		t.Fatal(err)
+	}
+	var id int64
+	if err := db.sql.QueryRowContext(ctx, `SELECT id FROM items WHERE source_id = ? AND external_id = ?`, sourceID, ext).Scan(&id); err != nil {
+		t.Fatal(err)
+	}
+	return id
 }
 
 // TestBuiltinsProtected verifies builtins refuse rename/delete and user lists

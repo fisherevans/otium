@@ -120,6 +120,16 @@ type Item struct {
 	FetchedAt    time.Time `json:"fetched_at"`
 }
 
+// CollectionItem is an item paired with the timestamp it was added to a
+// collection (#89). The collection review surface sorts by either AddedAt
+// ("when I saved it") or the embedded Item.PublishedAt ("when it ran"), so both
+// are carried. Membership is organization only - reading this never touches
+// item_state, so the ranker is unaffected.
+type CollectionItem struct {
+	Item
+	AddedAt time.Time `json:"added_at"`
+}
+
 // HistoryItem is an item paired with the user's interaction on it, for the
 // personal history view (#83): "articles I've read versus just articles I've
 // been shown." It is a read-only projection over item_state - the same table
