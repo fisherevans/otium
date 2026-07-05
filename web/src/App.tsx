@@ -7,6 +7,9 @@ import CollectionsPage from "@/pages/CollectionsPage";
 import ImportPage from "@/pages/ImportPage";
 import MixPage from "@/pages/MixPage";
 import SettingsPage from "@/pages/SettingsPage";
+// --- #83 personal-history page ---
+import HistoryPage from "@/pages/HistoryPage";
+// --- end #83 ---
 // --- #66 feed-mgmt-pages: dedicated source/feed pages ---
 import SourcePage from "@/pages/SourcePage";
 import FeedPage from "@/pages/FeedPage";
@@ -61,6 +64,7 @@ export default function App() {
           <Route path="/feeds/:slug" element={<FeedPage />} />
           {/* --- end #66 --- */}
           <Route path="/collections" element={<CollectionsPage />} />
+          <Route path="/history" element={<HistoryPage />} /> {/* #83: personal shown-vs-engaged history */}
           <Route path="/mix" element={<MixPage />} />
           <Route path="/settings" element={<SettingsPage />} /> {/* #68: preferences (fast-scroll check-in) */}
           <Route path="/import" element={<ImportPage />} />

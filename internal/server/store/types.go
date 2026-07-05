@@ -104,6 +104,22 @@ type Item struct {
 	FetchedAt    time.Time `json:"fetched_at"`
 }
 
+// HistoryItem is an item paired with the user's interaction on it, for the
+// personal history view (#83): "articles I've read versus just articles I've
+// been shown." It is a read-only projection over item_state - the same table
+// the ranker reads, but History never writes it and the ranker never reads
+// History, so surfacing history can't perturb ranking (ItemEffectiveScore is
+// untouched). State is the current item_state.state (surfaced | opened | liked
+// | skipped | saved | dismissed). InteractedAt is the timestamp the query
+// ordered by: surfaced_at for the "shown" filter, acted_at for the engaged
+// (read/liked/saved) filters - i.e. when the interaction that put the item in
+// this filter happened.
+type HistoryItem struct {
+	Item
+	State        string    `json:"state"`
+	InteractedAt time.Time `json:"interacted_at"`
+}
+
 // Session is a durable, stateful consumption session (#67): the built queue
 // (ItemIDs, in order) plus the read Cursor into it, so a refresh or a return
 // resumes the same items at the same place. Exactly one session per user is

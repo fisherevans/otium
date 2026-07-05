@@ -235,6 +235,10 @@ export default function SourcesPage() {
           <button className="lib-fsbtn" onClick={() => nav("/collections")}>
             Collections
           </button>
+          {/* #83: personal history - shown vs engaged */}
+          <button className="lib-fsbtn" onClick={() => nav("/history")}>
+            History
+          </button>
           <button className="lib-fsbtn" onClick={() => setManageOpen(true)}>
             Manage
           </button>
