@@ -29,6 +29,7 @@ const SAMPLE: Selected = {
     summary:
       "Finite, chosen sessions beat the infinite scroll - not because restraint is virtuous, but because a boundary is what lets a thing feel finished.",
     content: "",
+    content_source: "rss",
     author: "A. Writer",
     thumbnail_url: HERO,
     media_type: "article",
