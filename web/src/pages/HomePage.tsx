@@ -1,79 +1,83 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { api, type Feed, type Source } from "@/api/client";
-import { usePreferences } from "@/context/PreferencesContext";
 
-// #69 + #70: the intent page is one dead-simple, no-scroll screen.
+// #95: the intent page is one calm, no-scroll screen with two controls.
+//   - Time: a big Didot numeral with - / + steppers (5-min steps, default 15,
+//     bounds 5..120) and a thin fine-tune slider under it. The steppers are the
+//     primary control; the slider is optional polish. Two taps down reaches 5.
+//   - Topics: the user's feeds as a quiet multi-select checklist (option B, the
+//     chosen direction over underline tabs), all checked by default. An All /
+//     Clear toggle flips the whole set at once.
+// One solid "Start reading" button is the only heavy element (de-noised style:
+// type + whitespace over borders, a single solid CTA).
 //
-// #70 refines it into two calm states:
-//   - Blank state: four preset-length chips (5 / 15 / 30 / 1 hr). This is the
-//     front door - a few clear choices, not a raw slider.
-//   - Slider state: tapping a preset reveals the #69 slider experience pre-set
-//     to that value, with -5 / +5 nudge buttons flanking the slider so you can
-//     fine-tune without thumb-scrubbing. Topics + Start appear here.
-// A session is that one chosen duration - no range, no flexibility axis.
+// Session build is unchanged from #67/#69: POST /sessions with the chosen
+// duration + the selected feed slugs as `themes`. "All checked" maps to an empty
+// themes list so feedless sources (e.g. YouTube channels) are still included -
+// exactly the pre-#95 blank-selection default.
 const MIN_MINUTES = 5;
 const MAX_MINUTES = 120;
+const DEFAULT_MINUTES = 15;
 const STEP = 5;
-
-// How a preset renders on its chip: whole-hour values show as "1 hour" / "2
-// hours", everything else as "N min". Keeps the chips readable now that presets
-// are user-defined and can run up to 120 (#82).
-function chipParts(v: number): { num: string; unit: string; aria: string } {
-  if (v >= 60 && v % 60 === 0) {
-    const h = v / 60;
-    return { num: String(h), unit: h === 1 ? "hour" : "hours", aria: `${h} hour${h === 1 ? "" : "s"}` };
-  }
-  return { num: String(v), unit: "min", aria: `${v} minutes` };
-}
 
 export default function HomePage() {
   const nav = useNavigate();
-  const { prefs } = usePreferences();
-  // User-defined session-length presets (#82), de-duped + sorted for display.
-  const presets = useMemo(() => [...new Set(prefs.presets)].sort((a, b) => a - b), [prefs.presets]);
-  // null = blank state (no duration chosen yet); a number = slider state.
-  const [minutes, setMinutes] = useState<number | null>(null);
+  const [minutes, setMinutes] = useState(DEFAULT_MINUTES);
   const [feeds, setFeeds] = useState<Feed[]>([]);
   const [sources, setSources] = useState<Source[]>([]);
   const [picked, setPicked] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
 
-  const chosen = minutes !== null;
-
   useEffect(() => {
-    api.feeds().then(setFeeds).catch(() => setFeeds([]));
+    api
+      .feeds()
+      .then((f) => {
+        setFeeds(f);
+        setPicked(f.map((x) => x.slug)); // default: everything checked
+      })
+      .catch(() => setFeeds([]));
     api.sources().then(setSources).catch(() => setSources([]));
   }, []);
 
-  // Unseen supply for the current theme selection - used only to disable Start
-  // (and say so) when there's genuinely nothing new. Not shown as a count.
+  const allSelected = feeds.length > 0 && picked.length === feeds.length;
+  const noneSelected = feeds.length > 0 && picked.length === 0;
+
+  // "All feeds checked" is the same intent as the old blank selection: send an
+  // empty themes list so the backend includes feedless sources too. A subset
+  // sends exactly those slugs.
+  const themes = allSelected ? [] : picked;
+
+  // Unseen supply for the current selection - only used to disable Start when
+  // there's genuinely nothing new. Mirrors the themes mapping: all-checked (or
+  // no feeds at all) counts every source; a subset counts only matching feeds.
   const unseenForSelection = useMemo(() => {
-    const match = picked.length
-      ? sources.filter((s) => s.feed_slug && picked.includes(s.feed_slug))
-      : sources;
+    const match =
+      allSelected || feeds.length === 0
+        ? sources
+        : sources.filter((s) => s.feed_slug && picked.includes(s.feed_slug));
     return match.reduce((n, s) => n + (s.unseen_count ?? 0), 0);
-  }, [sources, picked]);
-  const nothingNew = sources.length > 0 && unseenForSelection === 0;
+  }, [sources, picked, allSelected, feeds.length]);
+  const nothingNew = !noneSelected && sources.length > 0 && unseenForSelection === 0;
 
   function toggle(slug: string) {
     setPicked((p) => (p.includes(slug) ? p.filter((s) => s !== slug) : [...p, slug]));
   }
 
+  function setAll(on: boolean) {
+    setPicked(on ? feeds.map((f) => f.slug) : []);
+  }
+
   function nudge(delta: number) {
-    setMinutes((m) => {
-      const base = m ?? 15;
-      return Math.min(MAX_MINUTES, Math.max(MIN_MINUTES, base + delta));
-    });
+    setMinutes((m) => Math.min(MAX_MINUTES, Math.max(MIN_MINUTES, m + delta)));
   }
 
   async function start() {
-    if (minutes === null) return;
     setBusy(true);
     setErr("");
     try {
-      const resp = await api.createSession(minutes, picked);
+      const resp = await api.createSession(minutes, themes);
       if (resp && resp.session_id) nav(`/session/${resp.session_id}`);
       else setErr("Nothing new to gather right now.");
     } catch (e: any) {
@@ -83,101 +87,94 @@ export default function HomePage() {
     }
   }
 
+  const disabled = busy || noneSelected || nothingNew;
+  const label = noneSelected
+    ? "Pick a topic"
+    : nothingNew
+      ? "Nothing new right now"
+      : "Start reading";
+
   return (
     <div className="intent">
       <div className="intent-head">
         <h1 className="display">How much time?</h1>
-        <p className="sub">Pick a length. Otium builds a session to fit it.</p>
+        <p className="sub">Set a length and pick your topics. Otium builds a session to fit.</p>
       </div>
 
-      {!chosen ? (
-        <div className="preset-pick">
-          <div className="preset-grid">
-            {presets.map((p) => {
-              const { num, unit, aria } = chipParts(p);
+      <div className="time-pick">
+        <div className="time-set">
+          <button
+            className="step"
+            onClick={() => nudge(-STEP)}
+            disabled={minutes <= MIN_MINUTES}
+            aria-label="5 minutes less"
+          >
+            &minus;
+          </button>
+          <div className="time-readout">
+            <span className="big">{minutes}</span>
+            <span className="unit">min</span>
+          </div>
+          <button
+            className="step"
+            onClick={() => nudge(STEP)}
+            disabled={minutes >= MAX_MINUTES}
+            aria-label="5 minutes more"
+          >
+            +
+          </button>
+        </div>
+        <input
+          className="time-slider"
+          type="range"
+          min={MIN_MINUTES}
+          max={MAX_MINUTES}
+          step={STEP}
+          value={minutes}
+          onChange={(e) => setMinutes(Number(e.target.value))}
+          aria-label="How much time"
+          aria-valuetext={`${minutes} minutes`}
+        />
+      </div>
+
+      {feeds.length > 0 && (
+        <div className="intent-topics">
+          <div className="topics-head">
+            <span className="topics-label">Topics</span>
+            <button className="topics-all" onClick={() => setAll(!allSelected)}>
+              {allSelected ? "Clear" : "All"}
+            </button>
+          </div>
+          <ul className="topic-list">
+            {feeds.map((f) => {
+              const on = picked.includes(f.slug);
               return (
-                <button key={p} className="preset-chip" onClick={() => setMinutes(p)} aria-label={aria}>
-                  <span className="preset-num">{num}</span>
-                  <span className="preset-unit">{unit}</span>
-                </button>
+                <li key={f.slug}>
+                  <button
+                    className="topic-row"
+                    onClick={() => toggle(f.slug)}
+                    role="checkbox"
+                    aria-checked={on}
+                  >
+                    <span className={`topic-check ${on ? "on" : ""}`} aria-hidden="true" />
+                    <span className="topic-name">{f.name}</span>
+                  </button>
+                </li>
               );
             })}
-          </div>
-          <p className="intent-hint">Choose a starting length - you can fine-tune it next.</p>
-        </div>
-      ) : (
-        <div className="slider-state">
-          <button className="reset-link" onClick={() => setMinutes(null)}>
-            Change length
-          </button>
-
-          <div className="time-pick">
-            <div className="time-readout">
-              <span className="big">{minutes}</span>
-              <span className="unit">minutes</span>
-            </div>
-            <div className="time-adjust">
-              <button
-                className="nudge"
-                onClick={() => nudge(-STEP)}
-                disabled={minutes <= MIN_MINUTES}
-                aria-label="5 minutes less"
-              >
-                &minus;5
-              </button>
-              <input
-                className="time-slider"
-                type="range"
-                min={MIN_MINUTES}
-                max={MAX_MINUTES}
-                step={STEP}
-                value={minutes ?? 15}
-                onChange={(e) => setMinutes(Number(e.target.value))}
-                aria-label="How much time"
-                aria-valuetext={`${minutes} minutes`}
-              />
-              <button
-                className="nudge"
-                onClick={() => nudge(STEP)}
-                disabled={minutes >= MAX_MINUTES}
-                aria-label="5 minutes more"
-              >
-                +5
-              </button>
-            </div>
-            <div className="time-scale">
-              <span>{MIN_MINUTES} min</span>
-              <span>{MAX_MINUTES} min</span>
-            </div>
-          </div>
-
-          {feeds.length > 0 && (
-            <div className="intent-topics">
-              <div className="section-label">Topics</div>
-              <div className="chips">
-                {feeds.map((f) => (
-                  <button
-                    key={f.slug}
-                    className={`chip ${picked.includes(f.slug) ? "on" : ""}`}
-                    onClick={() => toggle(f.slug)}
-                  >
-                    {f.name}
-                  </button>
-                ))}
-              </div>
-              <p className="intent-hint">
-                {picked.length === 0 ? "Nothing picked = everything you follow." : `${picked.length} selected.`}
-              </p>
-            </div>
-          )}
-
-          {err && <p className="intent-hint" role="alert">{err}</p>}
-
-          <button className="btn" onClick={start} disabled={busy || nothingNew}>
-            {nothingNew ? "Nothing new right now" : "Start reading"}
-          </button>
+          </ul>
         </div>
       )}
+
+      {err && (
+        <p className="intent-hint" role="alert">
+          {err}
+        </p>
+      )}
+
+      <button className="btn" onClick={start} disabled={disabled}>
+        {label}
+      </button>
     </div>
   );
 }
