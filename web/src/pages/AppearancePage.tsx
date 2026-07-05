@@ -1,8 +1,8 @@
-import { useMemo } from "react";
+import { useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import type { Selected } from "@/api/client";
+import type { FontKey, InkKey, Selected } from "@/api/client";
 import { Media, CardDate, Identity } from "@/components/CardParts";
-import { usePreferences, prefsToVars } from "@/context/PreferencesContext";
+import { usePreferences, prefsToVars, FONT_STACKS, INK_SHADES } from "@/context/PreferencesContext";
 
 // Appearance screen (#80/#81/#82). The centerpiece is a LIVE PREVIEW pinned at
 // the top: a real session card + a reader text block, built from the same
@@ -132,6 +132,131 @@ function ToggleRow({
   );
 }
 
+// Font picker (#90): a segmented bar where each chip is set in its own face, so
+// the choice previews the typeface itself. Curated keys only - no free-form
+// font entry - so the app stays on-theme.
+const FONTS: { label: string; value: FontKey }[] = [
+  { label: "Charter", value: "charter" },
+  { label: "Iowan", value: "book" },
+  { label: "Didot", value: "didot" },
+  { label: "Grotesk", value: "grotesk" },
+];
+
+function FontPicker({ value, onChange }: { value: FontKey; onChange: (v: FontKey) => void }) {
+  return (
+    <div className="ctl">
+      <div className="ctl-label">Font</div>
+      <div className="wbuckets">
+        {FONTS.map((o) => (
+          <button
+            key={o.value}
+            className={`wbucket ${value === o.value ? "on" : ""}`}
+            style={{ fontFamily: FONT_STACKS[o.value] }}
+            onClick={() => onChange(o.value)}
+          >
+            {o.label}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// Ink swatches (#90): a small row of curated grayscale shades (not a full color
+// picker). Each swatch shows the actual ink so the pick is WYSIWYG.
+function InkSwatches({
+  label,
+  options,
+  value,
+  onChange,
+}: {
+  label: string;
+  options: { label: string; value: InkKey }[];
+  value: InkKey;
+  onChange: (v: InkKey) => void;
+}) {
+  return (
+    <div className="ctl">
+      <div className="ctl-label">{label}</div>
+      <div className="ink-row">
+        {options.map((o) => (
+          <button
+            key={o.value}
+            className={`ink-swatch ${value === o.value ? "on" : ""}`}
+            onClick={() => onChange(o.value)}
+            title={o.label}
+          >
+            <span className="ink-dot" style={{ background: INK_SHADES[o.value] }} />
+            <span className="ink-name">{o.label}</span>
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// Weight control (#90): a slider that soft-snaps to common weights but still lets
+// a niche value stand. Dragging updates live (for the preview); on release we
+// pull to the nearest common weight only if it's within SNAP_PULL, otherwise the
+// in-between value is kept. The labeled ticks below double as exact jumps.
+const WEIGHT_SNAPS = [300, 400, 500, 600, 700];
+const WEIGHT_LABEL: Record<number, string> = {
+  300: "Light",
+  400: "Regular",
+  500: "Medium",
+  600: "Semibold",
+  700: "Bold",
+};
+const SNAP_PULL = 15;
+
+function nearestSnap(v: number): number {
+  return WEIGHT_SNAPS.reduce((a, b) => (Math.abs(b - v) < Math.abs(a - v) ? b : a));
+}
+function weightLabel(v: number): string {
+  const s = nearestSnap(v);
+  return v === s ? WEIGHT_LABEL[s] : String(v);
+}
+
+function WeightSlider({
+  label,
+  value,
+  onChange,
+}: {
+  label: string;
+  value: number;
+  onChange: (v: number) => void;
+}) {
+  function commit(raw: number) {
+    const s = nearestSnap(raw);
+    onChange(Math.abs(s - raw) <= SNAP_PULL ? s : raw);
+  }
+  return (
+    <div className="ctl">
+      <div className="ctl-label">
+        {label} <span className="ctl-val">{weightLabel(value)}</span>
+      </div>
+      <input
+        type="range"
+        className="wslider"
+        min={300}
+        max={700}
+        step={5}
+        value={value}
+        onChange={(e) => onChange(Number(e.target.value))}
+        onPointerUp={(e) => commit(Number((e.target as HTMLInputElement).value))}
+        onKeyUp={(e) => commit(Number((e.target as HTMLInputElement).value))}
+      />
+      <div className="wticks">
+        {WEIGHT_SNAPS.map((w) => (
+          <button key={w} className={`wtick ${nearestSnap(value) === w ? "on" : ""}`} onClick={() => onChange(w)}>
+            {WEIGHT_LABEL[w]}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 // --- the page ----------------------------------------------------------------
 
 const READER_SIZE = [
@@ -165,6 +290,25 @@ const HERO_COLOR = [
   { label: "Grayscale", value: 0 },
   { label: "Color", value: 1 },
 ];
+// #90 curated ink shades per surface. Reader body wants darker options (light
+// ink is hard to read as body); card meta leans lighter (it's secondary text).
+const READER_INK: { label: string; value: InkKey }[] = [
+  { label: "Ink", value: "ink" },
+  { label: "Graphite", value: "graphite" },
+  { label: "Soft", value: "soft" },
+];
+const CARD_INK: { label: string; value: InkKey }[] = [
+  { label: "Graphite", value: "graphite" },
+  { label: "Soft", value: "soft" },
+  { label: "Muted", value: "mute" },
+];
+
+type Tab = "reader" | "card" | "sessions";
+const TABS: { id: Tab; label: string }[] = [
+  { id: "reader", label: "Reader" },
+  { id: "card", label: "Card" },
+  { id: "sessions", label: "Sessions" },
+];
 
 const PRESET_MIN = 5;
 const PRESET_MAX = 120;
@@ -195,6 +339,18 @@ function presetLabel(v: number): string {
 export default function AppearancePage() {
   const nav = useNavigate();
   const { prefs, update } = usePreferences();
+
+  // The Card/Reader split (#90): tabs group the controls by surface. The live
+  // preview stays pinned above and shows BOTH surfaces; switching a tab scrolls
+  // the preview to the one you're editing so the relevant surface leads.
+  const [tab, setTab] = useState<Tab>("reader");
+  const cardRef = useRef<HTMLDivElement>(null);
+  const readerRef = useRef<HTMLDivElement>(null);
+  function selectTab(t: Tab) {
+    setTab(t);
+    const el = t === "card" ? cardRef.current : t === "reader" ? readerRef.current : null;
+    el?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  }
 
   function setPresetAt(i: number, v: number) {
     const next = prefs.presets.slice();
@@ -228,7 +384,7 @@ export default function AppearancePage() {
       <div className="preview" style={prefsToVars(prefs)}>
         <div className="preview-tag">Live preview</div>
         <div className="preview-scroll">
-          <div className="pv-card snap">
+          <div className="pv-card snap" ref={cardRef}>
             <div className="reason-row">
               <span className="reason">{SAMPLE.reason}</span>
             </div>
@@ -239,7 +395,7 @@ export default function AppearancePage() {
             <p className="excerpt">{SAMPLE.item.summary}</p>
           </div>
 
-          <div className="pv-reader reader">
+          <div className="pv-reader reader" ref={readerRef}>
             <h3 className="reader-title">{SAMPLE.item.title}</h3>
             <div className="reader-meta">
               <span>{SAMPLE.source_title}</span>
@@ -261,79 +417,124 @@ export default function AppearancePage() {
         </div>
       </div>
 
-      <div className="ctl-groups">
-        {/* Reader typography (#61) */}
-        <section className="ctl-section">
-          <h2 className="ctl-heading">Reader</h2>
-          <Segmented
-            label="Text size"
-            options={READER_SIZE}
-            value={prefs.reader.font_size}
-            onChange={(v) => update({ reader: { font_size: v } })}
-          />
-          <Segmented
-            label="Line spacing"
-            options={LINE_HEIGHT}
-            value={prefs.reader.line_height}
-            onChange={(v) => update({ reader: { line_height: v } })}
-          />
-          <Segmented
-            label="Line length"
-            options={MEASURE}
-            value={prefs.reader.measure}
-            onChange={(v) => update({ reader: { measure: v } })}
-          />
-          <ToggleRow
-            label="Images in reader"
-            desc="Show images inline while reading. Off is calmer on e-ink and lighter on data."
-            on={prefs.reader.images}
-            onChange={(v) => update({ reader: { images: v } })}
-          />
-        </section>
+      {/* #90: Card vs Reader split. Tabs choose which surface's controls show;
+          Sessions keeps the intent-page presets on its own tab. */}
+      <div className="ap-tabs" role="tablist" aria-label="Appearance sections">
+        {TABS.map((t) => (
+          <button
+            key={t.id}
+            role="tab"
+            aria-selected={tab === t.id}
+            className={`ap-tab ${tab === t.id ? "on" : ""}`}
+            onClick={() => selectTab(t.id)}
+          >
+            {t.label}
+          </button>
+        ))}
+      </div>
 
-        {/* Card styling (#81) */}
-        <section className="ctl-section">
-          <h2 className="ctl-heading">Card</h2>
-          <Segmented
-            label="Sub-text size"
-            options={META_SIZE}
-            value={prefs.card.meta_size}
-            onChange={(v) => update({ card: { meta_size: v } })}
-          />
-          <Segmented
-            label="Source label"
-            options={META_SIZE}
-            value={prefs.card.source_size}
-            onChange={(v) => update({ card: { source_size: v } })}
-          />
-          <Segmented
-            label="Feed tag"
-            options={TAG_SIZE}
-            value={prefs.card.feed_tag_size}
-            onChange={(v) => update({ card: { feed_tag_size: v } })}
-          />
-          <Segmented
-            label="Date"
-            options={TAG_SIZE}
-            value={prefs.card.date_size}
-            onChange={(v) => update({ card: { date_size: v } })}
-          />
-          <Segmented
-            label="Hero image"
-            options={HERO_COLOR}
-            value={prefs.card.hero_color ? 1 : 0}
-            onChange={(v) => update({ card: { hero_color: v === 1 } })}
-          />
-          <ToggleRow
-            label="Show hero image"
-            desc="Show the lead image on the card. Off keeps cards text-first."
-            on={prefs.card.hero_show}
-            onChange={(v) => update({ card: { hero_show: v } })}
-          />
-        </section>
+      <div className="ctl-groups">
+        {/* Reader typography (#61/#90) */}
+        {tab === "reader" && (
+          <section className="ctl-section" role="tabpanel">
+            <FontPicker value={prefs.reader.font_family} onChange={(v) => update({ reader: { font_family: v } })} />
+            <WeightSlider
+              label="Weight"
+              value={prefs.reader.font_weight}
+              onChange={(v) => update({ reader: { font_weight: v } })}
+            />
+            <InkSwatches
+              label="Ink"
+              options={READER_INK}
+              value={prefs.reader.ink}
+              onChange={(v) => update({ reader: { ink: v } })}
+            />
+            <Segmented
+              label="Text size"
+              options={READER_SIZE}
+              value={prefs.reader.font_size}
+              onChange={(v) => update({ reader: { font_size: v } })}
+            />
+            <Segmented
+              label="Line spacing"
+              options={LINE_HEIGHT}
+              value={prefs.reader.line_height}
+              onChange={(v) => update({ reader: { line_height: v } })}
+            />
+            <Segmented
+              label="Line length"
+              options={MEASURE}
+              value={prefs.reader.measure}
+              onChange={(v) => update({ reader: { measure: v } })}
+            />
+            <ToggleRow
+              label="Images in reader"
+              desc="Show images inline while reading. Off is calmer on e-ink and lighter on data."
+              on={prefs.reader.images}
+              onChange={(v) => update({ reader: { images: v } })}
+            />
+          </section>
+        )}
+
+        {/* Card styling (#81/#90) */}
+        {tab === "card" && (
+          <section className="ctl-section" role="tabpanel">
+            <WeightSlider
+              label="Meta weight"
+              value={prefs.card.meta_weight}
+              onChange={(v) => update({ card: { meta_weight: v } })}
+            />
+            <InkSwatches
+              label="Meta ink"
+              options={CARD_INK}
+              value={prefs.card.meta_ink}
+              onChange={(v) => update({ card: { meta_ink: v } })}
+            />
+            <p className="sub" style={{ marginTop: 4 }}>
+              Weight and ink apply to the feed tag, source, and date together.
+            </p>
+            <Segmented
+              label="Sub-text size"
+              options={META_SIZE}
+              value={prefs.card.meta_size}
+              onChange={(v) => update({ card: { meta_size: v } })}
+            />
+            <Segmented
+              label="Source label"
+              options={META_SIZE}
+              value={prefs.card.source_size}
+              onChange={(v) => update({ card: { source_size: v } })}
+            />
+            <Segmented
+              label="Feed tag"
+              options={TAG_SIZE}
+              value={prefs.card.feed_tag_size}
+              onChange={(v) => update({ card: { feed_tag_size: v } })}
+            />
+            <Segmented
+              label="Date"
+              options={TAG_SIZE}
+              value={prefs.card.date_size}
+              onChange={(v) => update({ card: { date_size: v } })}
+            />
+            <Segmented
+              label="Hero image"
+              options={HERO_COLOR}
+              value={prefs.card.hero_color ? 1 : 0}
+              onChange={(v) => update({ card: { hero_color: v === 1 } })}
+            />
+            <ToggleRow
+              label="Show hero image"
+              desc="Show the lead image on the card. Off keeps cards text-first."
+              on={prefs.card.hero_show}
+              onChange={(v) => update({ card: { hero_show: v } })}
+            />
+          </section>
+        )}
 
         {/* Session-length presets (#82) */}
-        <section className="ctl-section">
+        {tab === "sessions" && (
+        <section className="ctl-section" role="tabpanel">
           <h2 className="ctl-heading">Session lengths</h2>
           <p className="sub" style={{ marginTop: 0 }}>
             The starting-length chips on the intent page. {PRESET_MIN}-{PRESET_MAX} minutes, in steps of {PRESET_STEP}.
@@ -373,6 +574,7 @@ export default function AppearancePage() {
             </button>
           </div>
         </section>
+        )}
       </div>
     </div>
   );

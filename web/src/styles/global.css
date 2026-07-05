@@ -20,6 +20,9 @@
   --grot: "Helvetica Neue", "Arial", sans-serif;
   --mono: "SF Mono", "Menlo", ui-monospace, monospace;
   --didot: "Didot", "Hoefler Text", "Baskerville", serif;
+  /* #90: a warm book serif for the reader font-family choice. System stacks
+     only (no self-hosted/CDN faces); degrades to generic serif off-iOS. */
+  --book: "Iowan Old Style", "Palatino", "Palatino Linotype", "Georgia", serif;
   --bar-h: 58px;
 }
 
@@ -677,7 +680,8 @@ h1.display {
   font-family: var(--grot);
   /* #81: feed-tag size is user-tunable; theme default 13px. */
   font-size: var(--pref-card-feedtag-size, 13px);
-  font-weight: 600;
+  /* #90: weight joins the shared card-meta control (default 600 when unset). */
+  font-weight: var(--pref-card-meta-weight, 600);
   color: var(--ink);
 }
 .id-feed svg {
@@ -696,9 +700,11 @@ h1.display {
   font-family: var(--mono);
   /* #81: sub-text size (the meta group). Source has its own override below. */
   font-size: var(--pref-card-meta-size, 11px);
+  /* #90: shared card-meta weight + ink (defaults match the theme when unset). */
+  font-weight: var(--pref-card-meta-weight, 400);
   text-transform: uppercase;
   letter-spacing: 0.04em;
-  color: var(--ink-mute);
+  color: var(--pref-card-meta-ink, var(--ink-mute));
 }
 .id-source {
   /* #81: the source label is separately sizable. */
@@ -1427,13 +1433,15 @@ h1.display {
   margin-bottom: 16px;
 }
 .reader-body {
-  font-family: var(--serif);
-  /* #61/#80: reader typography is user-tunable via prefs CSS vars, with the
+  /* #61/#80/#90: reader typography is user-tunable via prefs CSS vars, with the
      current theme values as the fallback so the default look is unchanged.
-     Measure (max line length) shortens lines left-aligned; 0/unset = full. */
+     Measure (max line length) shortens lines left-aligned; 0/unset = full.
+     Family/weight/ink come from the #90 curated controls. */
+  font-family: var(--pref-reader-font-family, var(--serif));
+  font-weight: var(--pref-reader-font-weight, 400);
   font-size: var(--pref-reader-font-size, 17px);
   line-height: var(--pref-reader-line-height, 1.62);
-  color: var(--ink-soft);
+  color: var(--pref-reader-ink, var(--ink-soft));
   max-width: var(--pref-reader-measure, none);
 }
 .reader-body p {
@@ -2253,9 +2261,10 @@ h1.display {
   font-family: var(--grot);
   /* #81: date size/prominence is user-tunable; theme default 13px. */
   font-size: var(--pref-card-date-size, 13px);
-  font-weight: 600;
+  /* #90: shares the card-meta weight + ink (defaults match the theme when unset). */
+  font-weight: var(--pref-card-meta-weight, 600);
   letter-spacing: 0.02em;
-  color: var(--ink-soft);
+  color: var(--pref-card-meta-ink, var(--ink-soft));
   margin: 2px 0 8px;
 }
 /* ===== end #73 ===== */
@@ -2497,7 +2506,120 @@ button.id-source:active {
 .ctl {
   margin-top: 10px;
 }
+.ctl-val {
+  float: right;
+  font-family: var(--mono);
+  letter-spacing: 0.02em;
+  text-transform: none;
+  color: var(--ink-soft);
+}
 /* the segmented .wbuckets already style the options; just space the label */
+
+/* #90: Card/Reader/Sessions tab bar. Same ink-on-paper language as .wbuckets
+   but a hairline-underlined bar so it reads as navigation, not a picker. */
+.ap-tabs {
+  display: flex;
+  gap: 0;
+  margin: 12px 0 2px;
+  border-bottom: 1.5px solid var(--rule-hard);
+}
+.ap-tab {
+  flex: 1;
+  padding: 11px 2px 9px;
+  background: none;
+  border: none;
+  font-family: var(--grot);
+  font-size: 12px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ink-mute);
+  border-bottom: 2px solid transparent;
+  margin-bottom: -1.5px;
+}
+.ap-tab.on {
+  color: var(--ink);
+  border-bottom-color: var(--ink);
+}
+
+/* #90: ink swatch row - curated grayscale shades shown WYSIWYG. */
+.ink-row {
+  display: flex;
+  gap: 8px;
+}
+.ink-swatch {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 9px 2px;
+  background: var(--paper);
+  border: 1.5px solid var(--hair);
+}
+.ink-swatch.on {
+  border-color: var(--rule-hard);
+}
+.ink-dot {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: 1px solid var(--rule-hard);
+}
+.ink-name {
+  font-family: var(--grot);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-mute);
+}
+.ink-swatch.on .ink-name {
+  color: var(--ink);
+}
+
+/* #90: weight slider - a hard-edged e-ink range with labeled snap ticks below.
+   The track/thumb are squared to match the theme (no rounded chrome). */
+.wslider {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 100%;
+  height: 2px;
+  margin: 14px 0 8px;
+  background: var(--rule-hard);
+}
+.wslider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 16px;
+  height: 22px;
+  background: var(--ink);
+  border: none;
+}
+.wslider::-moz-range-thumb {
+  width: 16px;
+  height: 22px;
+  border: none;
+  border-radius: 0;
+  background: var(--ink);
+}
+.wticks {
+  display: flex;
+  justify-content: space-between;
+  gap: 4px;
+}
+.wtick {
+  flex: 1;
+  padding: 4px 0;
+  background: none;
+  border: none;
+  font-family: var(--grot);
+  font-size: 9px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink-mute);
+}
+.wtick.on {
+  color: var(--ink);
+}
 
 /* --- preset editor (#82) --- */
 .preset-editor {
