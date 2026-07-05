@@ -182,6 +182,7 @@ export default function SessionPage() {
   const lastContent = useRef<Selected | null>(null); // retains the surface item through the sheet's exit anim
   const prevIdx = useRef(0);
   const endedServer = useRef(false); // did we already mark the session ended server-side
+  const readerPushed = useRef(false); // is there a history entry backing an open reader (#78)
   const didInitialScroll = useRef(false);
   const stageRef = useRef<HTMLDivElement>(null);
   const itemEls = useRef<(HTMLDivElement | null)[]>([]);
@@ -277,6 +278,21 @@ export default function SessionPage() {
       if (document.visibilityState === "visible") setElapsed((e) => e + 1);
     }, 1000);
     return () => window.clearInterval(t);
+  }, []);
+
+  // Back gesture / button closes an open reader instead of navigating (#78). Only
+  // acts when a reader-backed history entry is live; otherwise back navigates the
+  // SPA as usual. The entry is already popped by the browser here, so we just
+  // clear our flag and close the surface.
+  useEffect(() => {
+    const onPop = () => {
+      if (readerPushed.current) {
+        readerPushed.current = false;
+        setContent(null);
+      }
+    };
+    window.addEventListener("popstate", onPop);
+    return () => window.removeEventListener("popstate", onPop);
   }, []);
 
   // Persist the cursor as the user advances (debounced). The backend only accepts
@@ -423,9 +439,24 @@ export default function SessionPage() {
       api.itemEvent(sel.item.id, "open", id).catch(() => {});
     }
   }
+  // Opening the reader/player pushes a history entry (#78) so the Android back
+  // gesture / browser back closes the modal instead of navigating the SPA out of
+  // the session. popstate (above) closes the modal; closeContent pops the entry
+  // when dismissed by the X / drag / scrim so history stays balanced.
   function openContent(sel: Selected) {
     recordOpen(sel);
     setContent(sel);
+    if (!readerPushed.current) {
+      window.history.pushState({ otiumReader: true }, "");
+      readerPushed.current = true;
+    }
+  }
+  function closeContent() {
+    setContent(null);
+    if (readerPushed.current) {
+      readerPushed.current = false;
+      window.history.back(); // consume our pushed entry (fires popstate; the ref is already cleared)
+    }
   }
   function openExternal(sel: Selected) {
     recordOpen(sel);
@@ -605,7 +636,7 @@ export default function SessionPage() {
         item={shown && shownKind === "read" ? shown.item : null}
         sourceTitle={shown?.source_title}
         open={content !== null && shownKind === "read"}
-        onClose={() => setContent(null)}
+        onClose={closeContent}
         onOpen={() => shown && openExternal(shown)}
         onSave={() => shown && setSaveItem(shown.item)}
       />
@@ -613,7 +644,7 @@ export default function SessionPage() {
         item={shown && shownKind !== "read" ? shown.item : null}
         sourceTitle={shown?.source_title}
         open={content !== null && shownKind !== "read"}
-        onClose={() => setContent(null)}
+        onClose={closeContent}
         onOpenOriginal={() => shown && openExternal(shown)}
         onSave={() => shown && setSaveItem(shown.item)}
       />
