@@ -1,14 +1,90 @@
 import { useState } from "react";
-import { ExternalLink, Bookmark, MoreHorizontal, Link2, Share2 } from "lucide-react";
+import { ExternalLink, Bookmark, Link2, Share2, Check } from "lucide-react";
 import type { Item } from "@/api/client";
-import { BottomSheet } from "./BottomSheet";
+import { canWebShare, copyText, shareOrCopy } from "@/lib/share";
 
-// Header action cluster for the reader/player title bar (#77, delivers #56).
-// The two primary actions (Save, Open source) sit as flat icons next to the X so
-// they're reachable without scrolling; a "···" overflow parks Copy link (#56
-// clipboard) and Share (Web Share API - the Android system share sheet on the
-// Palma). Sharing the original `item.url` is not an engagement signal, so nothing
-// here fires an item event.
+// Share / copy-link, surfaced as visible actions (#92). These used to hide in a
+// "···" overflow, which Fisher couldn't find or couldn't get to work on the
+// Palma browser. Now Copy link + Share sit out in the open (reader header + card
+// callout), each with a reliable fallback: clipboard -> execCommand -> a
+// manual-select panel, always with a visible "copied" confirmation. Sharing the
+// original url is not an engagement signal, so nothing here fires an item event.
+
+// ManualCopy is the last-resort path when both clipboard strategies fail: show
+// the url in an auto-selected readonly field so the user can long-press -> copy.
+function ManualCopy({ url, onClose }: { url: string; onClose: () => void }) {
+  return (
+    <div className="copy-manual-scrim" onClick={onClose}>
+      <div className="copy-manual" onClick={(e) => e.stopPropagation()}>
+        <p className="copy-manual-lead">Copy this link</p>
+        <input
+          className="copy-manual-field"
+          readOnly
+          value={url}
+          onFocus={(e) => e.currentTarget.select()}
+          ref={(el) => {
+            if (el) {
+              el.focus();
+              el.select();
+            }
+          }}
+        />
+        <p className="copy-manual-hint">Press and hold to select, then Copy.</p>
+        <button className="btn ghost" onClick={onClose}>
+          Done
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ShareActions renders the visible Copy link + Share pair. `labeled` shows text
+// beside the icons (reader header); the default is icon-only (tight rows).
+export function ShareActions({ item, labeled }: { item: Item; labeled?: boolean }) {
+  const [toast, setToast] = useState("");
+  const [manual, setManual] = useState(false);
+  const cls = labeled ? "share-act labeled" : "share-act";
+
+  function flash(msg: string) {
+    setToast(msg);
+    window.setTimeout(() => setToast((t) => (t === msg ? "" : t)), 1800);
+  }
+  async function onCopy() {
+    if (await copyText(item.url)) flash("Link copied");
+    else setManual(true);
+  }
+  async function onShare() {
+    const r = await shareOrCopy({ title: item.title, url: item.url });
+    if (r === "copied") flash("Link copied");
+    else if (r === "failed") setManual(true);
+    // "shared" -> the native sheet handled it; no confirmation needed.
+  }
+
+  return (
+    <>
+      <button className={cls} onClick={onCopy} aria-label="Copy link">
+        <Link2 size={18} strokeWidth={1.75} aria-hidden />
+        {labeled && <span>Copy link</span>}
+      </button>
+      {canWebShare() && (
+        <button className={cls} onClick={onShare} aria-label="Share">
+          <Share2 size={18} strokeWidth={1.75} aria-hidden />
+          {labeled && <span>Share</span>}
+        </button>
+      )}
+      {manual && <ManualCopy url={item.url} onClose={() => setManual(false)} />}
+      {toast && (
+        <div className="toast over-sheet">
+          <Check size={15} strokeWidth={2} aria-hidden /> {toast}
+        </div>
+      )}
+    </>
+  );
+}
+
+// Header action cluster for the reader/player sheet title bar (used by the Player
+// and the shared Reader sheet). Save + Open source as flat icons, then the
+// now-visible Copy link + Share (#92) - no more "···" overflow.
 export function ReaderHeaderActions({
   item,
   onSave,
@@ -18,32 +94,6 @@ export function ReaderHeaderActions({
   onSave?: () => void;
   onOpen: () => void;
 }) {
-  const [menu, setMenu] = useState(false);
-  const [toast, setToast] = useState("");
-  const canShare = typeof navigator !== "undefined" && typeof navigator.share === "function";
-
-  function flash(msg: string) {
-    setToast(msg);
-    window.setTimeout(() => setToast((t) => (t === msg ? "" : t)), 1800);
-  }
-  async function copyLink() {
-    setMenu(false);
-    try {
-      await navigator.clipboard.writeText(item.url);
-      flash("Link copied");
-    } catch {
-      flash("Couldn't copy the link");
-    }
-  }
-  async function share() {
-    setMenu(false);
-    try {
-      await navigator.share({ title: item.title, url: item.url });
-    } catch {
-      // user dismissed the share sheet, or it's unsupported - stay calm, no toast.
-    }
-  }
-
   return (
     <div className="head-actions">
       {onSave && (
@@ -54,26 +104,7 @@ export function ReaderHeaderActions({
       <button className="head-act" onClick={onOpen} aria-label="Open source">
         <ExternalLink size={18} strokeWidth={1.75} aria-hidden />
       </button>
-      <button className="head-act" onClick={() => setMenu(true)} aria-label="More actions">
-        <MoreHorizontal size={18} strokeWidth={1.75} aria-hidden />
-      </button>
-
-      <BottomSheet open={menu} onClose={() => setMenu(false)} kicker="Share">
-        <div className="sheet-rows">
-          <button className="sheet-row" onClick={copyLink}>
-            <span>Copy link</span>
-            <Link2 size={17} strokeWidth={1.75} aria-hidden />
-          </button>
-          {canShare && (
-            <button className="sheet-row" onClick={share}>
-              <span>Share…</span>
-              <Share2 size={17} strokeWidth={1.75} aria-hidden />
-            </button>
-          )}
-        </div>
-      </BottomSheet>
-
-      {toast && <div className="toast over-sheet">{toast}</div>}
+      <ShareActions item={item} />
     </div>
   );
 }

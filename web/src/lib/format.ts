@@ -51,6 +51,16 @@ export function relTime(iso?: string): string {
   );
 }
 
+// readTime estimates reading minutes from a plain-text word count at a calm
+// ~220 wpm. Returns "" for empty text so the caller can omit the cue. Floors at
+// "~1 min read" so a short post never reads as "~0 min".
+export function readTime(text: string): string {
+  const words = text.trim().split(/\s+/).filter(Boolean).length;
+  if (words === 0) return "";
+  const m = Math.max(1, Math.round(words / 220));
+  return `~${m} min read`;
+}
+
 export function relDate(iso?: string): string {
   if (!iso) return "";
   const d = new Date(iso);
