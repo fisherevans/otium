@@ -411,3 +411,26 @@ Fisher's big feedback round → decisions + builds:
 
 Design docs served on WiFi/Tailscale :8099 - nav-redesign, visual-simplify,
 intent-card-iterations, choices.
+
+## 2026-07-05 (late) · Reading-experience rework + auth fix (v0.27-v0.29)
+
+- **v0.27.0** auth fix (#100): stale/expired /auth/callback auto-restarts login
+  (transparent re-auth) with a retry-cookie loop guard; genuine failures get a
+  styled on-brand page instead of the bare "login expired" dead-end. Fisher hit
+  this via Firefox autocomplete to a stale callback URL on the Boox.
+- **v0.28.0** content pipeline hardening (#99): hypermedia→external gate, goquery
+  nav/footer cleanup, 3-state render (full_text/preview/external).
+- **v0.29.0** reading-experience rework (#96/#85/#87/#88/#92/#94): new card in the
+  locked order (reason → feed pill → source → title → author·date → hero → blurb →
+  content-aware callouts), reader as a pushed page with scroll-progress bar +
+  read-time estimate + prominent Copy-link/Share, bookmark save icon, de-noised.
+  NOTE: the Phase-2 agent hit the account session limit mid-CSS; the CSS (~350
+  lines for card + reader page + share) was finished by hand, verified at Palma
+  res (card in full_text state + reader both confirmed), then shipped.
+
+### Phase 3 remaining
+- #97 appearance card enrichment: per-element meta styling (feed/source/date) +
+  delimiter control (element reorder deferred - Fisher decided composable rows are
+  too much).
+- #93 weight visual language: words in the source control (roomy) + dots(1-5)+icon
+  indicator in the library/lists (NOT on the reading card).
