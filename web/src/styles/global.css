@@ -2273,3 +2273,54 @@ button.id-source:active {
   color: var(--ink);
 }
 /* ===== end #75 ===== */
+
+/* ===== #77 reader-header-actions + #78 drag-handle ===== */
+/* The title bar now carries the kicker (truncating), the reader action cluster,
+   then the X. Let the kicker give up space to the actions. */
+.sheet-head {
+  gap: 8px;
+  touch-action: none;
+}
+.sheet-k {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.head-actions {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.head-act {
+  width: 34px;
+  height: 34px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--paper);
+  border: 1.5px solid var(--rule);
+  color: var(--ink);
+}
+.head-act:active {
+  background: var(--paper-3);
+}
+.head-act svg {
+  display: block;
+}
+/* #78: a grab handle on the draggable reading sheets. touch-action:none so a
+   vertical drag on the header chrome drives the dismiss instead of scrolling. */
+.sheet-handle {
+  flex: 0 0 auto;
+  width: 40px;
+  height: 4px;
+  margin: 0 auto 8px;
+  background: var(--rule);
+  border-radius: 2px;
+  touch-action: none;
+}
+/* The reader/player copy-link confirm toast must sit above the sheet scrim
+   (z 60), unlike the page-level toast (z 40). */
+.toast.over-sheet {
+  z-index: 70;
+}
+/* ===== end #77/#78 ===== */

@@ -2,6 +2,7 @@ import { useMemo } from "react";
 import { ExternalLink, Bookmark } from "lucide-react";
 import type { Item } from "@/api/client";
 import { BottomSheet } from "./BottomSheet";
+import { ReaderHeaderActions } from "./ReaderActions";
 import { renderSummary } from "@/lib/html";
 import { fmtDate } from "@/lib/format";
 
@@ -37,7 +38,14 @@ export function Reader({
   );
 
   return (
-    <BottomSheet open={open} onClose={onClose} variant="tall" swipeClose kicker={item?.media_type ?? ""}>
+    <BottomSheet
+      open={open}
+      onClose={onClose}
+      variant="tall"
+      swipeClose
+      kicker={item?.media_type ?? ""}
+      headActions={item ? <ReaderHeaderActions item={item} onSave={onSave} onOpen={onOpen} /> : undefined}
+    >
       {item && (
         <div className="reader">
           <h3 className="reader-title">{item.title}</h3>

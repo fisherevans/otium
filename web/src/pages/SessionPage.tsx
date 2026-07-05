@@ -113,12 +113,14 @@ function Identity({ sel, onSource }: { sel: Selected; onSource: () => void }) {
   );
 }
 
-// #67: the session is durable. This page drives entirely off the backend session
-// identified by the URL id - it does NOT rebuild a feed. On load it resumes the
-// active session (its stored queue + cursor); as the user advances it persists
-// the cursor; when the session is over (elapsed >= the single duration, or the
-// queue is exhausted) it marks the session ended and returns home. A refresh
-// mid-session lands back on the same items at the same place.
+// #67/#79: the session is durable. This page drives entirely off the backend
+// session identified by the URL id - it does NOT rebuild a feed. On load it
+// resumes the active session (its stored queue + cursor); as the user advances it
+// persists the cursor. When the session is over (elapsed >= the single duration,
+// or the queue is exhausted) it does NOT yank the user out (#79): the current
+// item stays readable as long as they like. The end only surfaces as a terminal
+// end-card the *next time they advance for more*. A refresh mid-session lands
+// back on the same items at the same place.
 type Checkin = null | "fast";
 
 // Fast-scroll check-in tuning (#68). An advance counts as a "fast pass" when the
@@ -143,8 +145,20 @@ export default function SessionPage() {
   const [breakdown, setBreakdown] = useState<Selected | null>(null);
   const [content, setContent] = useState<Selected | null>(null); // the in-app content surface (#51)
   const [sourceSel, setSourceSel] = useState<Selected | null>(null); // source context menu target (#75)
+  // #79: when the time budget runs out we freeze the reel here (the index the
+  // user was on) instead of navigating - the queue collapses to this item + a
+  // terminal end-card, so "keep reading" works and "go further" hits the end.
+  // null = session still running (show the full queue).
+  const [overIdx, setOverIdx] = useState<number | null>(null);
 
   const durationSec = duration * 60;
+
+  // #79: how many real cards the reel shows. Full queue while running; once the
+  // time budget freezes it (overIdx), collapse to that item + the end-card so
+  // going further can only land on the end. The end-card lives at index
+  // `visibleCount`. Declared here (above the effects that read it) so the
+  // IntersectionObserver closure sees a defined binding.
+  const visibleCount = overIdx !== null ? Math.min(overIdx + 1, items.length) : items.length;
 
   // The strongest rank score in the queue - the yardstick the on-card score cue
   // fills against, so each cue reads as "how strongly did this rank vs the best."
@@ -167,30 +181,41 @@ export default function SessionPage() {
   const opened = useRef<Set<number>>(new Set()); // ids that fired an `open` event (dedupe, #51)
   const lastContent = useRef<Selected | null>(null); // retains the surface item through the sheet's exit anim
   const prevIdx = useRef(0);
-  const finished = useRef(false);
+  const endedServer = useRef(false); // did we already mark the session ended server-side
+  const readerPushed = useRef(false); // is there a history entry backing an open reader (#78)
   const didInitialScroll = useRef(false);
   const stageRef = useRef<HTMLDivElement>(null);
   const itemEls = useRef<(HTMLDivElement | null)[]>([]);
 
-  // finish ends the session server-side (idempotent) and returns home. The single
-  // exit for both "time's up" and "queue exhausted" (#67).
-  const finish = useCallback(() => {
-    if (finished.current) return;
-    finished.current = true;
+  // endServer marks the session ended server-side, once (idempotent). It does NOT
+  // navigate (#79) - the durable "ended" status is only written when the session
+  // is genuinely done (the user reached the end-card or chose to leave), so a
+  // refresh while still reading past the time budget resumes the session intact.
+  const endServer = useCallback(() => {
+    if (endedServer.current) return;
+    endedServer.current = true;
     if (id) api.updateSession(id, { status: "ended" }).catch(() => {});
-    nav("/", { replace: true });
-  }, [id, nav]);
+  }, [id]);
+
+  // goHome ends the session and returns to intent. The explicit exit for the
+  // end-card's "Start a new session", the fast-scroll "Something else", and the
+  // empty-state button. Never fired automatically (#79).
+  const goHome = useCallback(() => {
+    endServer();
+    nav("/");
+  }, [endServer, nav]);
 
   // Load / resume the active session by id. If there is no active session, or the
   // URL points at a session that's no longer current (superseded / ended), this
   // URL is stale - go home ("this session's over").
   useEffect(() => {
     let cancelled = false;
-    finished.current = false;
+    endedServer.current = false;
     didInitialScroll.current = false;
     setLoading(true);
     setErr("");
     setElapsed(0);
+    setOverIdx(null);
     setCheckin(null);
     fastStreak.current = 0;
     shownAt.current = Date.now();
@@ -255,6 +280,21 @@ export default function SessionPage() {
     return () => window.clearInterval(t);
   }, []);
 
+  // Back gesture / button closes an open reader instead of navigating (#78). Only
+  // acts when a reader-backed history entry is live; otherwise back navigates the
+  // SPA as usual. The entry is already popped by the browser here, so we just
+  // clear our flag and close the surface.
+  useEffect(() => {
+    const onPop = () => {
+      if (readerPushed.current) {
+        readerPushed.current = false;
+        setContent(null);
+      }
+    };
+    window.addEventListener("popstate", onPop);
+    return () => window.removeEventListener("popstate", onPop);
+  }, []);
+
   // Persist the cursor as the user advances (debounced). The backend only accepts
   // a cursor write on an active session, so a late write is a harmless no-op.
   useEffect(() => {
@@ -265,23 +305,16 @@ export default function SessionPage() {
     return () => window.clearTimeout(t);
   }, [current, id, loading]);
 
-  // Time budget reached (#67): the single duration is up. End + home - but not
-  // while the user is mid-read in the content surface (defer until they close it,
-  // so we never yank them out of an article).
+  // Time budget reached (#79): the single duration is up. Do NOT navigate - just
+  // freeze the reel at wherever the user is (overIdx). The queue collapses to
+  // this item plus a terminal end-card, so they can keep reading the current item
+  // indefinitely and only meet the end when they advance for more. Works even
+  // while mid-read in the content surface: the collapse happens behind the open
+  // sheet, so nothing yanks them out.
   useEffect(() => {
-    if (loading || finished.current) return;
-    if (elapsed >= durationSec && !content) finish();
-  }, [elapsed, durationSec, content, loading, finish]);
-
-  // Queue exhausted: the end panel is centered. Let the affirming end-state show
-  // for a calm beat, then return home.
-  useEffect(() => {
-    if (loading || items.length === 0) return;
-    if (current >= items.length) {
-      const t = window.setTimeout(finish, 2200);
-      return () => window.clearTimeout(t);
-    }
-  }, [current, items.length, loading, finish]);
+    if (loading || items.length === 0 || overIdx !== null) return;
+    if (elapsed >= durationSec) setOverIdx(current);
+  }, [elapsed, durationSec, loading, items.length, overIdx, current]);
 
   // Scroll-snap: an IntersectionObserver marks the centered item as current,
   // marks it seen, and tracks advance pace (fast-flicking check-in). No refill -
@@ -329,6 +362,12 @@ export default function SessionPage() {
           }
           prevIdx.current = idx;
           shownAt.current = Date.now(); // the newly-centered item starts its dwell now
+          // Reaching the terminal end-card (#79) is the moment the session is
+          // genuinely done: mark it ended server-side (idempotent). No nav.
+          if (idx >= visibleCount) {
+            endServer();
+            continue;
+          }
           const it = items[idx];
           if (it && !shownIds.current.has(it.item.id)) {
             shownIds.current.add(it.item.id);
@@ -341,7 +380,7 @@ export default function SessionPage() {
     itemEls.current.forEach((el) => el && obs.observe(el));
     return () => obs.disconnect();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [items, id, checkin]);
+  }, [items, id, checkin, visibleCount]);
 
   function scrollTo(idx: number) {
     const el = itemEls.current[idx];
@@ -352,7 +391,7 @@ export default function SessionPage() {
   }
 
   const cur = items[current];
-  const atEnd = current >= items.length;
+  const atEnd = current >= visibleCount;
 
   // The in-app content surface (#51). Retain the item through the close
   // animation so the sheet doesn't blank as it slides down.
@@ -400,9 +439,24 @@ export default function SessionPage() {
       api.itemEvent(sel.item.id, "open", id).catch(() => {});
     }
   }
+  // Opening the reader/player pushes a history entry (#78) so the Android back
+  // gesture / browser back closes the modal instead of navigating the SPA out of
+  // the session. popstate (above) closes the modal; closeContent pops the entry
+  // when dismissed by the X / drag / scrim so history stays balanced.
   function openContent(sel: Selected) {
     recordOpen(sel);
     setContent(sel);
+    if (!readerPushed.current) {
+      window.history.pushState({ otiumReader: true }, "");
+      readerPushed.current = true;
+    }
+  }
+  function closeContent() {
+    setContent(null);
+    if (readerPushed.current) {
+      readerPushed.current = false;
+      window.history.back(); // consume our pushed entry (fires popstate; the ref is already cleared)
+    }
   }
   function openExternal(sel: Selected) {
     recordOpen(sel);
@@ -428,9 +482,11 @@ export default function SessionPage() {
     setSaveItem(cur.item);
   }
   function next() {
-    if (current < items.length - 1) scrollTo(current + 1);
-    else if (current === items.length - 1) scrollTo(items.length); // to end panel
-    else finish();
+    // Advancing past the last shown card lands on the terminal end-card (#79).
+    // When the time budget has frozen the reel (overIdx), visibleCount collapses
+    // so the very next advance is the end-card - "go further → session's over".
+    if (current < visibleCount - 1) scrollTo(current + 1);
+    else scrollTo(visibleCount);
   }
   function dismissCheckin() {
     setCheckin(null);
@@ -444,13 +500,14 @@ export default function SessionPage() {
       <div className="center">
         <p className="display">Nothing left to surface.</p>
         <p>You're caught up on {themes.length ? themes.join(", ") : "everything you follow"}.</p>
-        <button className="btn ghost" onClick={finish}>Back to intent</button>
+        <button className="btn ghost" onClick={goHome}>Back to intent</button>
       </div>
     );
   }
 
   const progress = Math.min(1, elapsed / durationSec);
-  const isLastReal = current === items.length - 1;
+  const isLastReal = current === visibleCount - 1;
+  const shownItems = overIdx !== null ? items.slice(0, visibleCount) : items;
 
   return (
     <div className="focus-session">
@@ -472,13 +529,13 @@ export default function SessionPage() {
           <p>You're scrolling fast - want to keep going, or do something else?</p>
           <div className="checkin-actions">
             <button className="mini" onClick={dismissCheckin}>Keep going</button>
-            <button className="mini solid" onClick={finish}>Something else</button>
+            <button className="mini solid" onClick={goHome}>Something else</button>
           </div>
         </div>
       )}
 
       <div className="stage" ref={stageRef}>
-        {items.map((it, i) => (
+        {shownItems.map((it, i) => (
           <div
             className={`snap ${i === current ? "" : "away"}`}
             key={`${it.item.id}-${i}`}
@@ -515,18 +572,24 @@ export default function SessionPage() {
             {it.item.summary && <p className="excerpt">{it.item.summary}</p>}
           </div>
         ))}
-        {/* end panel - reaching it ends the session and returns home */}
+        {/* Terminal end-card (#79). Reaching it is passive - the session is
+            already over; this just offers the way onward. No auto-redirect: the
+            user got here by choosing to advance. */}
         <div
           className="snap"
-          data-idx={items.length}
+          data-idx={visibleCount}
           ref={(el) => {
-            itemEls.current[items.length] = el;
+            itemEls.current[visibleCount] = el;
           }}
         >
           <div className="center" style={{ padding: "20px 0" }}>
-            <p className="display">That's your session.</p>
-            <p>About {mins(elapsed)} spent. Returning home…</p>
-            <button className="btn" onClick={finish}>Done</button>
+            <p className="display">{overIdx !== null ? "That's your session." : "That's everything new."}</p>
+            <p>
+              {overIdx !== null
+                ? `About ${mins(elapsed)} spent - that's the time you asked for.`
+                : `You're caught up on ${themes.length ? themes.join(", ") : "everything you follow"}.`}
+            </p>
+            <button className="btn" onClick={goHome}>Start a new session</button>
           </div>
         </div>
       </div>
@@ -544,9 +607,9 @@ export default function SessionPage() {
           <Bookmark className="ic" size={18} strokeWidth={1.75} aria-hidden />
           Save
         </button>
-        <button className="act-btn" onClick={next}>
+        <button className="act-btn" onClick={atEnd ? goHome : next}>
           <ChevronDown className="ic" size={18} strokeWidth={1.75} aria-hidden />
-          {atEnd ? "Done" : isLastReal ? "Finish" : "Next"}
+          {atEnd ? "New" : isLastReal ? "Finish" : "Next"}
         </button>
       </div>
 
@@ -573,7 +636,7 @@ export default function SessionPage() {
         item={shown && shownKind === "read" ? shown.item : null}
         sourceTitle={shown?.source_title}
         open={content !== null && shownKind === "read"}
-        onClose={() => setContent(null)}
+        onClose={closeContent}
         onOpen={() => shown && openExternal(shown)}
         onSave={() => shown && setSaveItem(shown.item)}
       />
@@ -581,7 +644,7 @@ export default function SessionPage() {
         item={shown && shownKind !== "read" ? shown.item : null}
         sourceTitle={shown?.source_title}
         open={content !== null && shownKind !== "read"}
-        onClose={() => setContent(null)}
+        onClose={closeContent}
         onOpenOriginal={() => shown && openExternal(shown)}
         onSave={() => shown && setSaveItem(shown.item)}
       />
