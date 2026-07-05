@@ -1,0 +1,192 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>otium · visual simplification pass</title>
+<style>
+  :root{--ink:#1c1813;--mute:#7a6f62;--faint:#a89e90;--line:#ded7c9;--paper:#f4f0e8;--panel:#efe9dd;--wire:#cdc5b6;--wire2:#e3ddd0;--accent:#1c1813}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--paper);color:var(--ink);font-family:"Charter","Georgia",serif;line-height:1.55;padding:44px 18px 120px}
+  main{max-width:900px;margin:0 auto}
+  h1{font-family:"Didot","Georgia",serif;font-weight:400;font-size:38px;margin:0 0 4px}
+  .sub{color:var(--mute);font-size:15px;margin:0 0 32px}
+  h2{font-family:"Didot","Georgia",serif;font-weight:400;font-size:24px;margin:44px 0 8px;padding-bottom:7px;border-bottom:1px solid var(--line)}
+  h3{font-size:15px;margin:20px 0 4px;font-family:"SF Mono",monospace;letter-spacing:.02em}
+  p,li{font-size:15.5px}
+  .lead{font-size:17px;border-left:3px solid var(--ink);padding-left:15px;margin:18px 0}
+  code{font-family:"SF Mono",ui-monospace,monospace;font-size:12.5px;background:var(--panel);padding:1px 5px;border-radius:3px}
+  table{border-collapse:collapse;width:100%;margin:12px 0;font-size:13.5px}
+  th,td{text-align:left;vertical-align:top;padding:8px 9px;border-bottom:1px solid var(--line)}
+  th{font-size:11px;text-transform:uppercase;letter-spacing:.07em;color:var(--mute);font-weight:600}
+  .keep{color:#2c4a2c;font-family:"SF Mono";font-size:11px}.cut{color:#7a1f14;font-family:"SF Mono";font-size:11px}
+  /* before/after */
+  .ba{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin:14px 0 6px}
+  .col h4{margin:0 0 8px;font-family:"SF Mono",monospace;font-size:11px;letter-spacing:.06em;text-transform:uppercase}
+  .col.b h4{color:#7a1f14}.col.a h4{color:#2c4a2c}
+  .cap{font-size:12.5px;color:var(--mute);margin:8px 2px 0}
+  /* phone */
+  .ph{width:100%;max-width:230px;margin:0 auto;height:430px;border:2px solid var(--ink);border-radius:20px;background:var(--paper);padding:9px 9px 0;display:flex;flex-direction:column;overflow:hidden}
+  .ph .body{flex:1;overflow:hidden;padding:3px 4px;display:flex;flex-direction:column;gap:7px}
+  .txt{background:var(--wire);border-radius:2px;height:8px}.txt.sm{height:6px;background:var(--wire2)}
+  .txt.t{height:12px;width:78%}.w70{width:70%}.w55{width:55%}.w40{width:40%}.w30{width:30%}.w85{width:85%}.w60{width:60%}
+  .img{background:repeating-linear-gradient(45deg,#dcd5c7,#dcd5c7 4px,#e6e0d2 4px,#e6e0d2 8px);border-radius:3px;height:64px}
+  .row{display:flex;gap:6px;align-items:center}
+  .center{display:flex;flex-direction:column;align-items:center;gap:8px}
+  /* NOISY primitives (borders/boxes everywhere) */
+  .b-chip{border:1.4px solid var(--ink);border-radius:4px;padding:6px 9px;font-family:"SF Mono";font-size:8px;color:var(--ink)}
+  .b-chip.on{background:var(--ink);color:var(--paper)}
+  .b-badge{border:1.4px solid var(--ink);border-radius:3px;padding:4px 6px;font-family:"SF Mono";font-size:7px}
+  .b-btn{border:1.4px solid var(--ink);border-radius:4px;width:26px;height:22px;display:flex;align-items:center;justify-content:center;font-size:9px}
+  .b-pill{border:1px solid var(--wire);border-radius:3px;padding:4px 7px;font-family:"SF Mono";font-size:7px;color:var(--mute);display:inline-block}
+  .b-seg{display:flex;border:1.4px solid var(--ink);border-radius:4px;overflow:hidden}
+  .b-seg span{flex:1;text-align:center;font-family:"SF Mono";font-size:7.5px;padding:5px 0;border-right:1.4px solid var(--ink)}
+  .b-seg span:last-child{border-right:0}.b-seg span.on{background:var(--ink);color:var(--paper)}
+  .divider{border-bottom:1.5px solid var(--ink);opacity:.85}
+  /* CLEAN primitives (type + space) */
+  .c-tag{font-family:"SF Mono";font-size:8px;letter-spacing:.06em;color:var(--mute)}
+  .c-tag.on{color:var(--ink);font-weight:700;border-bottom:1.4px solid var(--ink);padding-bottom:2px}
+  .c-num{font-family:"Didot",serif;font-size:20px;color:var(--faint)}
+  .c-num.on{color:var(--ink)}
+  .c-badge{font-family:"SF Mono";font-size:7px;color:var(--faint);letter-spacing:.04em}
+  .c-ico{width:13px;height:13px;border-radius:2px;background:none;opacity:.62;display:flex;align-items:center;justify-content:center;font-size:11px;color:var(--ink)}
+  .c-divider{height:1px;background:var(--wire2)}
+  .solid{background:var(--ink);color:var(--paper);border-radius:5px;height:26px;display:flex;align-items:center;justify-content:center;font-family:"SF Mono";font-size:8px;letter-spacing:.05em}
+  footer{margin-top:50px;padding-top:14px;border-top:1px solid var(--line);color:var(--mute);font-size:13px}
+  @media (max-width:640px){body{padding:22px 13px 90px}h1{font-size:30px}.ba{grid-template-columns:1fr 1fr;gap:9px}.ph{height:360px;padding:7px 6px 0}.lead{font-size:16px}}
+</style>
+</head>
+<body>
+<main>
+  <h1>otium — visual simplification</h1>
+  <p class="sub">A pass to cut visual noise: the app leans on hard borders and boxed chips almost everywhere, which reads as "a panel of controls" and fights calm reading. This audits the frivolous elements and mocks up de-noised versions of the key pages. July 2026.</p>
+
+  <p class="lead">The core move: <b>replace borders and boxes with typography and whitespace.</b> A bordered box says "I'm a control, look at me." A quiet label with the right size/weight/space says the same thing without shouting. Reserve borders for genuine inputs (a text field), and reserve the one <b>solid</b> element per screen for the primary action.</p>
+
+  <h2>1 · The noise inventory</h2>
+  <p>Every element below currently carries a hard 1.4px border or a filled box. Most don't need one.</p>
+  <table>
+    <tr><th>Element (where)</th><th>Today</th><th>Proposed</th></tr>
+    <tr><td><b>Preset time chips</b> (intent)</td><td>2×2 grid of hard-bordered boxes</td><td class="cut">CUT the boxes — large plain numerals in a row; the chosen one just goes ink-dark. No border.</td></tr>
+    <tr><td><b>Topic / mood chips</b> (intent, filters)</td><td>bordered pill per topic</td><td class="cut">CUT borders — plain small-caps text; active = ink + underline, inactive = muted. Tap target stays.</td></tr>
+    <tr><td><b>Reason pill</b> ("FRESH — POSTED RECENTLY", card)</td><td>bordered box + a trailing hairline</td><td class="cut">CUT the box + hairline — quiet small-caps mono text above the title.</td></tr>
+    <tr><td><b>Weight badge</b> ("NORMAL"/"FAV", card + library)</td><td>hard-bordered box left of every row/card</td><td class="cut">CUT from the reading card entirely (it's management detail). In the library, a one-word muted label, no box.</td></tr>
+    <tr><td><b>Action buttons</b> ("···", reader header Save/Open/···/×)</td><td>each glyph in its own bordered box</td><td class="cut">CUT the boxes — free-standing icons with breathing room. Icons don't need frames.</td></tr>
+    <tr><td><b>Segmented controls</b> (Followed/Archived, weight buckets, Collections/History, Appearance)</td><td>one hard-bordered bar, cells divided by borders</td><td class="cut">DE-BORDER — a quiet row of labels; active = ink + underline (or a single subtle fill), no outer box or cell dividers.</td></tr>
+    <tr><td><b>Row dividers</b> (lists everywhere)</td><td>1.5px near-black hairline between every row</td><td class="cut">LIGHTEN — a faint hairline (or just whitespace). Near-black rules chop the page into slabs.</td></tr>
+    <tr><td><b>Score cue</b> (hairline meter, card)</td><td>a little bar top-right of each card</td><td class="cut">MOVE into the "why this" sheet only — off the reading surface.</td></tr>
+    <tr><td><b>Cap stepper, feed chips, Archive/Visit/Delete</b> (source sheet)</td><td>bordered − 2 +, bordered chips, 3 bordered buttons</td><td class="cut">DE-BORDER the steppers/chips; the destructive actions can stay outlined (they're deliberate).</td></tr>
+    <tr><td>Primary action ("START READING", "Add")</td><td>solid ink block</td><td class="keep">KEEP — the one solid thing per screen. It should be the <em>only</em> heavy element.</td></tr>
+    <tr><td>Text input (add-a-source, search)</td><td>bordered field</td><td class="keep">KEEP a border — a real input earns one.</td></tr>
+  </table>
+
+  <h2>2 · Before → after mockups</h2>
+
+  <h3>INTENT</h3>
+  <div class="ba">
+    <div class="col b"><h4>Before — boxed</h4>
+      <div class="ph"><div class="body">
+        <div class="txt t"></div><div class="txt sm w55"></div><div style="height:2px"></div>
+        <div class="row" style="flex-wrap:wrap;gap:6px"><span class="b-chip on">5</span><span class="b-chip">15</span><span class="b-chip">30</span><span class="b-chip">1h</span></div>
+        <div style="height:4px"></div>
+        <div class="row" style="flex-wrap:wrap;gap:5px"><span class="b-chip">Comics</span><span class="b-chip">News</span><span class="b-chip">Local</span><span class="b-chip">Dev</span></div>
+        <div style="flex:1"></div><div class="solid">START READING</div><div style="height:4px"></div>
+      </div></div></div>
+    <div class="col a"><h4>After — typographic</h4>
+      <div class="ph"><div class="body">
+        <div class="txt t"></div><div class="txt sm w55"></div><div style="height:8px"></div>
+        <div class="row" style="justify-content:space-around;align-items:baseline"><span class="c-num on">5</span><span class="c-num">15</span><span class="c-num">30</span><span class="c-num">1h</span></div>
+        <div style="height:14px"></div>
+        <div class="row" style="flex-wrap:wrap;gap:12px"><span class="c-tag on">Comics</span><span class="c-tag">News</span><span class="c-tag">Local</span><span class="c-tag">Dev</span></div>
+        <div style="flex:1"></div><div class="solid">Start reading</div><div style="height:4px"></div>
+      </div></div></div>
+  </div>
+  <p class="cap">The chosen length is just the dark numeral; topics are quiet words. One solid button. Far less to parse.</p>
+
+  <h3>SESSION CARD</h3>
+  <div class="ba">
+    <div class="col b"><h4>Before</h4>
+      <div class="ph"><div class="body">
+        <div class="row" style="justify-content:space-between"><span class="b-pill">FRESH — RARE</span><span class="b-btn">···</span></div>
+        <div class="txt t"></div><div class="txt sm w40"></div>
+        <div class="img"></div>
+        <div class="row"><span class="b-badge">NORMAL</span><div class="txt sm w55"></div></div>
+        <div class="txt sm w85"></div><div class="txt sm w70"></div>
+        <div style="flex:1"></div>
+        <div class="row" style="justify-content:space-between;border-top:1.5px solid var(--ink);padding-top:5px"><span class="b-btn">↗</span><span class="b-btn">♥</span><span class="b-btn">▣</span><span class="b-btn">v</span></div>
+      </div></div></div>
+    <div class="col a"><h4>After</h4>
+      <div class="ph"><div class="body">
+        <div class="row" style="justify-content:space-between"><span class="c-tag">FRESH · RARE</span><span class="c-ico">⋯</span></div>
+        <div class="txt t" style="height:14px"></div><div class="txt sm w40"></div>
+        <div class="img"></div>
+        <div class="txt sm w55" style="margin-top:2px"></div>
+        <div class="txt sm w85"></div><div class="txt sm w70"></div>
+        <div style="flex:1"></div>
+        <div class="row" style="justify-content:space-around;padding-top:5px"><span class="c-ico">↗</span><span class="c-ico">♡</span><span class="c-ico">🔖</span><span class="c-ico">⌄</span></div>
+      </div></div></div>
+  </div>
+  <p class="cap">No reason-box, no weight badge on the reading surface, no boxed buttons, no heavy action-bar rule. Just the article and quiet affordances. The card breathes.</p>
+
+  <h3>READER</h3>
+  <div class="ba">
+    <div class="col b"><h4>Before</h4>
+      <div class="ph"><div class="body">
+        <div class="row" style="justify-content:flex-end;gap:5px"><span class="b-btn">▣</span><span class="b-btn">↗</span><span class="b-btn">···</span><span class="b-btn">×</span></div>
+        <div class="divider" style="margin:2px 0"></div>
+        <div class="txt t" style="height:14px"></div><div class="txt sm w40"></div>
+        <div class="txt sm"></div><div class="txt sm w85"></div><div class="txt sm"></div><div class="txt sm w70"></div><div class="txt sm"></div><div class="txt sm w60"></div>
+      </div></div></div>
+    <div class="col a"><h4>After</h4>
+      <div class="ph"><div class="body">
+        <div class="row" style="justify-content:flex-end;gap:16px"><span class="c-ico">🔖</span><span class="c-ico">↗</span><span class="c-ico">⋯</span><span class="c-ico">×</span></div>
+        <div style="height:6px"></div>
+        <div class="txt t" style="height:14px"></div><div class="txt sm w40"></div>
+        <div style="height:4px"></div>
+        <div class="txt sm"></div><div class="txt sm w85"></div><div class="txt sm"></div><div class="txt sm w70"></div><div class="txt sm"></div><div class="txt sm w60"></div>
+      </div></div></div>
+  </div>
+  <p class="cap">Reading is the point here, so it matters most: unboxed icons, no divider slab under the header, more air before the text. Nothing frames the words.</p>
+
+  <h3>LIBRARY LIST</h3>
+  <div class="ba">
+    <div class="col b"><h4>Before</h4>
+      <div class="ph"><div class="body">
+        <div class="txt t"></div>
+        <div class="b-seg"><span class="on">Followed</span><span>Archived</span><span>Filter</span></div>
+        <div class="row"><span class="b-badge">FAV</span><div style="flex:1"><div class="txt sm w70"></div><div class="txt sm w40" style="margin-top:3px"></div></div></div>
+        <div class="divider"></div>
+        <div class="row"><span class="b-badge">NORMAL</span><div style="flex:1"><div class="txt sm w60"></div><div class="txt sm w55" style="margin-top:3px"></div></div></div>
+        <div class="divider"></div>
+        <div class="row"><span class="b-badge">NORMAL</span><div style="flex:1"><div class="txt sm w70"></div><div class="txt sm w30" style="margin-top:3px"></div></div></div>
+        <div class="divider"></div>
+      </div></div></div>
+    <div class="col a"><h4>After</h4>
+      <div class="ph"><div class="body">
+        <div class="txt t"></div>
+        <div class="row" style="gap:14px;padding:2px 0"><span class="c-tag on">Followed</span><span class="c-tag">Archived</span><span class="c-tag" style="margin-left:auto">Filter ⌄</span></div>
+        <div style="padding:5px 0"><div class="txt sm w70"></div><div class="row" style="gap:6px;margin-top:3px"><span class="c-badge">fav</span><div class="txt sm w40"></div></div></div>
+        <div class="c-divider"></div>
+        <div style="padding:5px 0"><div class="txt sm w60"></div><div class="row" style="gap:6px;margin-top:3px"><span class="c-badge">normal</span><div class="txt sm w55"></div></div></div>
+        <div class="c-divider"></div>
+        <div style="padding:5px 0"><div class="txt sm w70"></div><div class="row" style="gap:6px;margin-top:3px"><span class="c-badge">normal</span><div class="txt sm w30"></div></div></div>
+        <div class="c-divider"></div>
+      </div></div></div>
+  </div>
+  <p class="cap">Weight drops from a boxed badge to a quiet inline word; the segmented control loses its cage (active = underline); dividers go faint. Same info, a third of the ink.</p>
+
+  <h2>3 · The rules (once, applied everywhere)</h2>
+  <ol>
+    <li><b>Type &amp; space over borders.</b> Hierarchy comes from size / weight / caps / color / whitespace — not from drawing a box around things.</li>
+    <li><b>Active state = fill or underline, not a persistent border.</b> Don't outline every option; mark only the chosen one.</li>
+    <li><b>One solid element per screen</b> — the primary action. Everything else is quiet. If two things are heavy, one is wrong.</li>
+    <li><b>Icons live free.</b> No bordered button-boxes, especially in the reader. A padded tap target, not a drawn frame.</li>
+    <li><b>Faint dividers, or none.</b> Whitespace separates rows; reserve a visible rule for a real section break.</li>
+    <li><b>Keep management detail off the reading surface.</b> Weight badges, score cues, and steppers belong in management screens, not on the card you're reading.</li>
+    <li><b>Borders are earned</b> — a text input or a deliberately-destructive action (Delete) may keep one. A label never does.</li>
+  </ol>
+
+  <footer>Mockups are schematic — they show the <em>treatment</em> (border vs. no border, boxed vs. typographic), not final pixels. This is a token-level change (border-widths, chip/badge/segment styles, divider weights, action-bar chrome) plus pulling management detail off the card — so it's mostly CSS, low-risk, and lands screen by screen with a Palma-res check each time. Pick the direction (or veto specific cuts) and I'll fold it into the redesign work in flight.</footer>
+</main>
+</body>
+</html>
