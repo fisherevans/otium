@@ -1,0 +1,272 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>otium · navigation redesign — wireframes</title>
+<style>
+  :root{--ink:#1c1813;--mute:#7a6f62;--faint:#b9afaf;--line:#d9d1c4;--paper:#f4f0e8;--panel:#efe9dd;--wire:#cfc7b8;--wire2:#e2dccf;--accent:#1c1813;}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--paper);color:var(--ink);font-family:"Charter","Georgia",serif;line-height:1.55;padding:44px 18px 120px}
+  main{max-width:960px;margin:0 auto}
+  h1{font-family:"Didot","Georgia",serif;font-weight:400;font-size:38px;margin:0 0 4px}
+  .sub{color:var(--mute);font-size:15px;margin:0 0 34px}
+  h2{font-family:"Didot","Georgia",serif;font-weight:400;font-size:25px;margin:46px 0 10px;padding-bottom:7px;border-bottom:1px solid var(--line)}
+  h3{font-size:16px;margin:22px 0 6px}
+  p,li{font-size:15.5px}
+  code{font-family:"SF Mono",ui-monospace,monospace;font-size:12.5px;background:var(--panel);padding:1px 5px;border-radius:3px}
+  .lead{font-size:17px;border-left:3px solid var(--ink);padding-left:15px;margin:18px 0}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:14px 16px}
+  .card h3{margin-top:0}
+  table{border-collapse:collapse;width:100%;margin:12px 0;font-size:13.5px}
+  th,td{text-align:left;vertical-align:top;padding:8px 9px;border-bottom:1px solid var(--line)}
+  th{font-size:11px;text-transform:uppercase;letter-spacing:.07em;color:var(--mute);font-weight:600}
+  .tag{font-family:"SF Mono",monospace;font-size:11px}
+  .bad{color:#7a1f14}
+  /* wireframe explorer */
+  .toggle{display:flex;gap:8px;margin:14px 0 6px;flex-wrap:wrap}
+  .tbtn{font-family:"SF Mono",monospace;font-size:12px;letter-spacing:.03em;padding:9px 15px;border:1.5px solid var(--ink);background:var(--paper);color:var(--ink);cursor:pointer;border-radius:6px}
+  .tbtn.on{background:var(--ink);color:var(--paper)}
+  .model{display:none}
+  .model.on{display:block}
+  .modelnote{font-size:14px;color:var(--mute);margin:6px 0 16px}
+  .strip{display:flex;gap:16px;overflow-x:auto;padding:6px 2px 18px;scroll-snap-type:x mandatory}
+  .screen{flex:0 0 auto;width:196px;scroll-snap-align:start}
+  .cap{font-size:12px;color:var(--mute);margin:8px 2px 0;text-align:center;font-family:"SF Mono",monospace}
+  /* phone frame */
+  .ph{width:196px;height:400px;border:2px solid var(--ink);border-radius:22px;background:var(--paper);padding:8px 8px 0;display:flex;flex-direction:column;overflow:hidden;position:relative}
+  .ph .top{height:22px;display:flex;align-items:center;justify-content:space-between;font-family:"SF Mono",monospace;font-size:8px;color:var(--mute);padding:0 3px;flex:0 0 auto}
+  .ph .body{flex:1;overflow:hidden;padding:2px 3px;display:flex;flex-direction:column;gap:5px}
+  .ph .tabs{flex:0 0 auto;height:30px;border-top:1.5px solid var(--ink);display:flex;margin:0 -8px}
+  .ph .tab{flex:1;display:flex;align-items:center;justify-content:center;font-family:"SF Mono",monospace;font-size:7.5px;letter-spacing:.03em;color:var(--faint)}
+  .ph .tab.on{color:var(--ink);font-weight:700}
+  /* wire primitives */
+  .bar{background:var(--wire);border-radius:2px;height:8px}
+  .bar.sm{height:6px;background:var(--wire2)}
+  .bar.title{height:13px;background:var(--wire);width:80%}
+  .bar.w60{width:60%}.bar.w40{width:40%}.bar.w75{width:75%}.bar.w50{width:50%}.bar.w30{width:30%}
+  .box{background:var(--wire2);border:1px dashed var(--wire);border-radius:4px}
+  .img{background:repeating-linear-gradient(45deg,#ddd6c8,#ddd6c8 4px,#e6e0d2 4px,#e6e0d2 8px);border-radius:4px;height:56px}
+  .row{display:flex;gap:5px;align-items:center}
+  .chip{font-family:"SF Mono",monospace;font-size:7px;border:1px solid var(--wire);border-radius:3px;padding:3px 5px;color:var(--mute);white-space:nowrap}
+  .chip.on{background:var(--ink);color:var(--paper);border-color:var(--ink)}
+  .listrow{border-bottom:1px solid var(--wire2);padding:6px 0;display:flex;flex-direction:column;gap:4px}
+  .btnbig{background:var(--ink);border-radius:5px;height:26px;display:flex;align-items:center;justify-content:center;color:var(--paper);font-family:"SF Mono",monospace;font-size:8px;letter-spacing:.05em}
+  .hdr{display:flex;align-items:center;gap:6px;padding:2px 0 4px}
+  .back{font-family:"SF Mono",monospace;font-size:9px;color:var(--mute)}
+  .ico{width:12px;height:12px;border:1.3px solid var(--mute);border-radius:3px;flex:0 0 auto}
+  .push{position:absolute;top:8px;right:9px;font-family:"SF Mono",monospace;font-size:7px;color:var(--faint)}
+  .goodbad{display:flex;gap:10px;margin-top:8px}
+  .gb{flex:1;font-size:13px}
+  .gb b{font-family:"SF Mono",monospace;font-size:10px;letter-spacing:.04em}
+  .pro b{color:#2c4a2c}.con b{color:#7a1f14}
+  footer{margin-top:52px;padding-top:14px;border-top:1px solid var(--line);color:var(--mute);font-size:13px}
+</style>
+</head>
+<body>
+<main>
+  <h1>otium — navigation redesign</h1>
+  <p class="sub">An audit of today's information architecture and two alternative navigation models to explore, as wireframes. Low-fi on purpose — this is about structure, not styling. July 2026.</p>
+
+  <p class="lead">The root problem: <b>11 destinations are squeezed into 2 bottom tabs, a crammed Library header, and 8 different modal/sheet components.</b> Everything the two tabs can't hold spilled into content headers (overflow) and into modals (scroll-fight, wasted space). The fix isn't more polish — it's a flatter, page-based IA where each screen does one thing and every destination has an obvious home.</p>
+
+  <h2>1 · What we have today</h2>
+  <p><b>Bottom nav:</b> Intent · Library — only two. <b>Everything else</b> (Collections, History, Feed mix, Settings, Appearance, Import, Manage, Add, Refresh, feed/state filters, sort) is reached from <em>inside the Library header</em> or a <em>Manage sheet</em>. <b>Detail</b> lives on real pages (source, feed) but is often entered <em>through</em> a modal. Content viewing (reader/player) and most actions are <b>sheets over a scrollable page</b>.</p>
+  <table>
+    <tr><th>Symptom (your words)</th><th>Cause in the current IA</th></tr>
+    <tr><td>"Library UI overflows horizontally — Collections, Manage, and other things"</td><td>Only 2 bottom tabs, so 6+ secondary destinations crowd the Library header row.</td></tr>
+    <tr><td>"Scrolling is broken… fight between scrolling the background page vs the foreground modal"</td><td>Sheets (Manage, Filter&amp;sort, source menu, reader) sit over a scrollable page → two scroll contexts compete.</td></tr>
+    <tr><td>"No easy way to get to user settings"</td><td>Settings is 3 levels deep: Library → Manage sheet → Settings → Appearance.</td></tr>
+    <tr><td>"We overuse modals… inefficient screen real estate, noise and clutter around the edges"</td><td>8 sheet/modal components; scrims + padding eat space and frame the screen in clutter.</td></tr>
+    <tr><td>"Crowded, shows too much at once"</td><td>The Library tries to be list + filters + management + a launchpad for every other screen.</td></tr>
+  </table>
+
+  <h2>2 · Redesign principles</h2>
+  <div class="grid2">
+    <div class="card"><h3>Pages, not modals</h3><p>Navigate to a <b>full page</b> (push → back) for anything with content or controls. One scroll context, room to breathe, a clear back. Reserve sheets for one genuinely-transient thing (a confirm, a single quick action).</p></div>
+    <div class="card"><h3>A nav that actually holds the app</h3><p>Give the primary destinations a real top-level home so nothing spills into content headers. The Library becomes <em>just the library</em>.</p></div>
+    <div class="card"><h3>One job per page</h3><p>Each screen is narrow and focused. Management, browsing, reading, and settings are separate places, not one crowded surface.</p></div>
+    <div class="card"><h3>Settings & secondary = one obvious tap</h3><p>Settings, appearance, insights, import, history live in a clear place — never buried behind a content menu.</p></div>
+  </div>
+
+  <h2>3 · Two navigation models</h2>
+  <p>Both apply the principles above (pages over modals; clean Library). They differ in <b>how the destinations are held</b>. Flip between them — swipe the phone strip sideways to see each screen.</p>
+  <div class="toggle">
+    <button class="tbtn on" onclick="pick('A',this)">Model A — 4 tabs</button>
+    <button class="tbtn" onclick="pick('B',this)">Model B — 2 tabs + Hub</button>
+    <button class="tbtn" onclick="pick('C',this)">Reader: modal → page</button>
+  </div>
+
+  <!-- MODEL A -->
+  <div class="model on" id="A">
+    <p class="modelnote"><b>Read · Library · Saved · You</b> — a conventional 4-tab bar. Every destination has a tab; details push as pages. Familiar, scales, kills the header overflow, settings is one tap.</p>
+    <div class="strip">
+      <!-- Read -->
+      <div class="screen"><div class="ph"><div class="top"><span>otium</span><span>9:41</span></div>
+        <div class="body">
+          <div class="bar title" style="margin-top:4px"></div>
+          <div class="bar sm w60"></div>
+          <div class="row" style="margin-top:6px;flex-wrap:wrap;gap:4px"><span class="chip on">5m</span><span class="chip">15m</span><span class="chip">30m</span><span class="chip">1h</span></div>
+          <div style="height:6px"></div><div class="bar w75" style="height:10px;margin:0 auto"></div>
+          <div class="row" style="flex-wrap:wrap;gap:4px;margin-top:8px"><span class="chip">Comics</span><span class="chip">News</span><span class="chip">Local</span><span class="chip">Dev</span></div>
+          <div style="flex:1"></div><div class="btnbig">START READING</div><div style="height:4px"></div>
+        </div>
+        <div class="tabs"><div class="tab on">READ</div><div class="tab">LIBRARY</div><div class="tab">SAVED</div><div class="tab">YOU</div></div></div>
+        <div class="cap">Read — start a session</div></div>
+      <!-- Library -->
+      <div class="screen"><div class="ph"><div class="top"><span>Library</span><span>◱ filter</span></div>
+        <div class="body">
+          <div class="bar title"></div>
+          <div class="row" style="gap:4px;margin:4px 0"><span class="chip on">Sources</span><span class="chip">Feeds</span><span class="ico" style="margin-left:auto"></span></div>
+          <div class="listrow"><div class="bar w75"></div><div class="bar sm w40"></div></div>
+          <div class="listrow"><div class="bar w60"></div><div class="bar sm w50"></div></div>
+          <div class="listrow"><div class="bar w75"></div><div class="bar sm w30"></div></div>
+          <div class="listrow"><div class="bar w50"></div><div class="bar sm w40"></div></div>
+          <div class="listrow"><div class="bar w60"></div><div class="bar sm w50"></div></div>
+        </div>
+        <div class="tabs"><div class="tab">READ</div><div class="tab on">LIBRARY</div><div class="tab">SAVED</div><div class="tab">YOU</div></div></div>
+        <div class="cap">Library — just the list + one filter</div></div>
+      <!-- Source detail (pushed) -->
+      <div class="screen"><div class="ph"><span class="push">pushed page</span><div class="top"><span>← Library</span><span></span></div>
+        <div class="body">
+          <div class="bar title"></div><div class="bar sm w40"></div>
+          <div class="box" style="height:22px;margin:4px 0"></div>
+          <div class="row" style="gap:3px"><span class="chip">v.low</span><span class="chip on">normal</span><span class="chip">fav</span></div>
+          <div class="bar sm w60" style="margin-top:6px"></div>
+          <div class="bar sm" style="font-size:6px;color:var(--mute)"></div>
+          <div class="bar w40" style="height:7px;background:var(--wire2);margin-top:6px"></div>
+          <div class="img" style="height:30px"></div>
+          <div class="listrow"><div class="bar w75"></div></div>
+          <div class="listrow"><div class="bar w60"></div></div>
+        </div>
+        <div class="tabs"><div class="tab">READ</div><div class="tab on">LIBRARY</div><div class="tab">SAVED</div><div class="tab">YOU</div></div></div>
+        <div class="cap">Source — settings + posts, full page</div></div>
+      <!-- Saved -->
+      <div class="screen"><div class="ph"><div class="top"><span>Saved</span><span></span></div>
+        <div class="body">
+          <div class="bar title"></div>
+          <div class="row" style="gap:4px;margin:4px 0"><span class="chip on">Collections</span><span class="chip">History</span></div>
+          <div class="listrow row"><span class="ico"></span><div class="bar w60"></div></div>
+          <div class="listrow row"><span class="ico"></span><div class="bar w50"></div></div>
+          <div class="listrow row"><span class="ico"></span><div class="bar w40"></div></div>
+          <div class="listrow row"><span class="ico"></span><div class="bar w60"></div></div>
+        </div>
+        <div class="tabs"><div class="tab">READ</div><div class="tab">LIBRARY</div><div class="tab on">SAVED</div><div class="tab">YOU</div></div></div>
+        <div class="cap">Saved — Collections / History</div></div>
+      <!-- You -->
+      <div class="screen"><div class="ph"><div class="top"><span>You</span><span></span></div>
+        <div class="body">
+          <div class="bar title"></div>
+          <div class="listrow row"><span class="ico"></span><div class="bar w50">Settings</div></div>
+          <div class="listrow row"><span class="ico"></span><div class="bar w60"></div></div>
+          <div class="listrow row"><span class="ico"></span><div class="bar w40"></div></div>
+          <div class="listrow row"><span class="ico"></span><div class="bar w50"></div></div>
+          <div class="listrow row"><span class="ico"></span><div class="bar w40"></div></div>
+        </div>
+        <div class="tabs"><div class="tab">READ</div><div class="tab">LIBRARY</div><div class="tab">SAVED</div><div class="tab on">YOU</div></div></div>
+        <div class="cap">You — Settings, Appearance, Insights, Import</div></div>
+    </div>
+    <div class="goodbad">
+      <div class="gb pro"><b>+ WHY</b> — every destination is one tap, no header overflow, settings obvious, conventional/learnable, scales to new features (a new tab or a row in a tab).</div>
+      <div class="gb con"><b>− COST</b> — 4 tabs is a bit more persistent chrome than otium's minimalist 2. "Read/Library/Saved/You" labels are conventional (could be quieter).</div>
+    </div>
+  </div>
+
+  <!-- MODEL B -->
+  <div class="model" id="B">
+    <p class="modelnote"><b>Read · Library</b> stay the only bottom tabs (keeps the calm minimal chrome). A small persistent <b>Hub</b> button (top-left) opens a full-page hub holding everything secondary. Minimal, but secondary destinations are one extra tap and the hub must be discoverable.</p>
+    <div class="strip">
+      <div class="screen"><div class="ph"><div class="top"><span>⊕ otium</span><span>9:41</span></div>
+        <div class="body">
+          <div class="bar title" style="margin-top:4px"></div><div class="bar sm w60"></div>
+          <div class="row" style="margin-top:6px;flex-wrap:wrap;gap:4px"><span class="chip on">5m</span><span class="chip">15m</span><span class="chip">30m</span><span class="chip">1h</span></div>
+          <div style="height:6px"></div><div class="bar w75" style="height:10px;margin:0 auto"></div>
+          <div class="row" style="flex-wrap:wrap;gap:4px;margin-top:8px"><span class="chip">Comics</span><span class="chip">News</span><span class="chip">Local</span></div>
+          <div style="flex:1"></div><div class="btnbig">START READING</div><div style="height:4px"></div>
+        </div>
+        <div class="tabs"><div class="tab on">READ</div><div class="tab">LIBRARY</div></div></div>
+        <div class="cap">Read — ⊕ hub top-left</div></div>
+      <div class="screen"><div class="ph"><div class="top"><span>⊕ Library</span><span>◱</span></div>
+        <div class="body">
+          <div class="bar title"></div>
+          <div class="row" style="gap:4px;margin:4px 0"><span class="chip on">Sources</span><span class="chip">Feeds</span></div>
+          <div class="listrow"><div class="bar w75"></div><div class="bar sm w40"></div></div>
+          <div class="listrow"><div class="bar w60"></div><div class="bar sm w50"></div></div>
+          <div class="listrow"><div class="bar w75"></div><div class="bar sm w30"></div></div>
+          <div class="listrow"><div class="bar w50"></div><div class="bar sm w40"></div></div>
+          <div class="listrow"><div class="bar w60"></div><div class="bar sm w50"></div></div>
+        </div>
+        <div class="tabs"><div class="tab">READ</div><div class="tab on">LIBRARY</div></div></div>
+        <div class="cap">Library — same clean list</div></div>
+      <div class="screen"><div class="ph"><span class="push">full page</span><div class="top"><span>← close</span><span>Hub</span></div>
+        <div class="body">
+          <div class="bar title" style="width:40%"></div><div style="height:4px"></div>
+          <div class="listrow row"><span class="ico"></span><div class="bar w50">Saved</div></div>
+          <div class="listrow row"><span class="ico"></span><div class="bar w50">History</div></div>
+          <div class="listrow row"><span class="ico"></span><div class="bar w60">Insights</div></div>
+          <div class="listrow row"><span class="ico"></span><div class="bar w50">Settings</div></div>
+          <div class="listrow row"><span class="ico"></span><div class="bar w40">Import</div></div>
+        </div>
+        <div class="tabs"><div class="tab">READ</div><div class="tab">LIBRARY</div></div></div>
+        <div class="cap">Hub — every secondary destination</div></div>
+      <div class="screen"><div class="ph"><span class="push">pushed</span><div class="top"><span>← Hub</span><span></span></div>
+        <div class="body">
+          <div class="bar title" style="width:45%"></div>
+          <div class="listrow row"><span class="ico"></span><div class="bar w60">Reader text</div></div>
+          <div class="listrow row"><span class="ico"></span><div class="bar w50"></div></div>
+          <div class="listrow row"><span class="ico"></span><div class="bar w40"></div></div>
+          <div class="listrow row"><span class="ico"></span><div class="bar w60"></div></div>
+        </div>
+        <div class="tabs"><div class="tab">READ</div><div class="tab">LIBRARY</div></div></div>
+        <div class="cap">Settings etc. push from the hub</div></div>
+    </div>
+    <div class="goodbad">
+      <div class="gb pro"><b>+ WHY</b> — keeps the ultra-minimal 2-tab calm; the Library still gets clean; secondary stuff has one clear home (the hub) instead of a crammed header.</div>
+      <div class="gb con"><b>− COST</b> — Saved/History/Settings are two taps (hub → item); a single hidden ⊕ button carries a lot, so discoverability + labeling matter.</div>
+    </div>
+  </div>
+
+  <!-- READER as page -->
+  <div class="model" id="C">
+    <p class="modelnote">The single biggest "scrolling is broken" fix, in both models: the <b>reader/player stops being a sheet over the session</b> and becomes a <b>pushed full page</b>. One scroll context, no background bleed, back returns to the card (we already made Android-back close it). Sheets shrink to <em>only</em> transient things.</p>
+    <div class="strip">
+      <div class="screen"><div class="ph"><div class="top"><span>Session</span><span></span></div>
+        <div class="body" style="position:relative">
+          <div class="bar title"></div><div class="bar sm w40"></div><div class="img"></div><div class="bar w60"></div><div class="bar sm"></div>
+          <div style="position:absolute;left:6px;right:6px;top:40%;bottom:6px;background:rgba(0,0,0,.06);border:1.5px solid var(--ink);border-radius:8px;padding:6px">
+            <div class="row" style="justify-content:space-between"><span class="chip">reader</span><span class="chip">✕</span></div>
+            <div class="bar sm" style="margin-top:6px"></div><div class="bar sm w75"></div><div class="bar sm w60"></div>
+            <div style="font-family:'SF Mono';font-size:6px;color:#7a1f14;margin-top:6px">↕ scroll fights the page behind</div>
+          </div>
+        </div>
+        <div class="tabs"><div class="tab on">READ</div><div class="tab">LIBRARY</div></div></div>
+        <div class="cap bad" style="color:#7a1f14">TODAY — reader is a sheet over the reel</div></div>
+      <div class="screen"><div class="ph"><span class="push">pushed page</span><div class="top"><span>← back</span><span></span></div>
+        <div class="body">
+          <div class="row" style="justify-content:flex-end;gap:4px"><span class="ico"></span><span class="ico"></span><span class="ico"></span></div>
+          <div class="bar title"></div><div class="bar sm w40"></div>
+          <div class="img"></div>
+          <div class="bar sm"></div><div class="bar sm w75"></div><div class="bar sm"></div><div class="bar sm w60"></div><div class="bar sm"></div><div class="bar sm w50"></div>
+        </div>
+        <div class="tabs"><div class="tab on">READ</div><div class="tab">LIBRARY</div></div></div>
+        <div class="cap">PROPOSED — reader is its own page</div></div>
+    </div>
+    <p style="font-size:14px;color:var(--mute)">What stays a sheet: a delete/archive <b>confirm</b>, the <b>save-to-collection</b> picker (one tap, no scroll), a quick weight change. Everything with a list or a scroll (source detail, feed, manage, filters, settings, reader) becomes a page.</p>
+  </div>
+
+  <h2>4 · Recommendation</h2>
+  <p>Lead with <b>Model A (4 tabs)</b> + the <b>pages-not-modals</b> pass. It most directly kills your two biggest complaints — the Library-header overflow (every destination gets its own tab) and the scroll-fight (content lives on pages, not sheets) — and it makes Settings a one-tap, obvious place. Model B is the fallback if you want to protect the ultra-minimal 2-tab chrome; it solves the same problems but trades a second tap and leans on one hub button.</p>
+  <p>Concretely, whichever model: <b>Library</b> becomes just a sources/feeds list + one filter entry; <b>Collections + History</b> move together (Saved / hub); <b>Settings · Appearance · Insights(mix) · Import</b> get a home (You / hub); the <b>reader/player + all management</b> convert from sheets to pushed pages; sheets survive only for confirms + the save picker + quick weight. Net: fewer components, no overflow, no scroll-fight, each page narrow and calm.</p>
+
+  <footer>Wireframes are low-fi by intent — structure first, visual styling second. Next step is yours: pick a model (or a hybrid) and I'll build the nav shell + convert the worst modal offenders (Library, reader, settings) to pages, screen by screen, verifying each at Palma resolution.</footer>
+</main>
+<script>
+  function pick(id,btn){
+    document.querySelectorAll('.model').forEach(m=>m.classList.toggle('on',m.id===id));
+    document.querySelectorAll('.tbtn').forEach(b=>b.classList.remove('on'));
+    btn.classList.add('on');
+  }
+</script>
+</body>
+</html>
