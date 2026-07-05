@@ -102,10 +102,18 @@ func (f *Fetcher) Extract(ctx context.Context, rawURL string) (html string, ok b
 		return "", false, nil
 	}
 	content := strings.TrimSpace(article.Content)
-	// Reject empty or too-thin extractions (a teaser/nav-only page) - the caller
-	// marks these external so the client offers "open original".
-	if content == "" || article.Length < minTextLength {
+	if content == "" {
 		return "", false, nil
 	}
-	return content, true, nil
+
+	// Post-process (#99): strip nav/skip/footer chrome readability leaves behind,
+	// then gate on the cleaned body. cleanArticleHTML returns the clean HTML plus
+	// its plain text; isArticleLike rejects media-dominated / embed-built /
+	// markup-heavy pages so they resolve to 'external' rather than a broken text
+	// render. A normal article with a few inline images clears the gate.
+	cleaned, plain := cleanArticleHTML(content)
+	if cleaned == "" || !isArticleLike(cleaned, plain) {
+		return "", false, nil
+	}
+	return cleaned, true, nil
 }

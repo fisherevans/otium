@@ -3,6 +3,7 @@ module github.com/fisherevans/otium
 go 1.26
 
 require (
+	github.com/PuerkitoBio/goquery v1.8.0
 	github.com/coreos/go-oidc/v3 v3.11.0
 	github.com/go-chi/chi/v5 v5.1.0
 	github.com/go-chi/cors v1.2.1
@@ -13,7 +14,6 @@ require (
 )
 
 require (
-	github.com/PuerkitoBio/goquery v1.8.0 // indirect
 	github.com/andybalholm/cascadia v1.3.3 // indirect
 	github.com/araddon/dateparse v0.0.0-20210429162001-6b43995a97de // indirect
 	github.com/dustin/go-humanize v1.0.1 // indirect
