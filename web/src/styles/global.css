@@ -488,7 +488,9 @@ h1.display {
 }
 .intent .btn {
   flex: 0 0 auto;
-  margin-top: 12px;
+  /* auto keeps the CTA pinned to the bottom even when there are no feeds (no
+     flex:1 topics list to consume the free space). */
+  margin-top: auto;
 }
 
 /* --- theme chips --- */
