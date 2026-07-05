@@ -2,6 +2,7 @@ import { useMemo, type CSSProperties } from "react";
 import { ExternalLink, Bookmark } from "lucide-react";
 import type { Item } from "@/api/client";
 import { BottomSheet } from "./BottomSheet";
+import { ReaderHeaderActions } from "./ReaderActions";
 import { fmtDate } from "@/lib/format";
 import { parseYouTubeId, embedUrl } from "@/lib/youtube";
 
@@ -65,7 +66,14 @@ export function Player({
   const ytId = useMemo(() => (isVideo ? parseYouTubeId(item?.url) : null), [isVideo, item?.url]);
 
   return (
-    <BottomSheet open={open} onClose={onClose} variant="tall" swipeClose kicker={item?.media_type ?? ""}>
+    <BottomSheet
+      open={open}
+      onClose={onClose}
+      variant="tall"
+      swipeClose
+      kicker={item?.media_type ?? ""}
+      headActions={item ? <ReaderHeaderActions item={item} onSave={onSave} onOpen={onOpenOriginal} /> : undefined}
+    >
       {item && (
         <div className="reader">
           {isVideo && ytId ? (
