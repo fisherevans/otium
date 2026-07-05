@@ -2653,3 +2653,357 @@ button.id-source:active {
   align-self: flex-start;
 }
 /* ===== end #80/#81/#82 ===== */
+
+/* ============================================================
+   #96 session card (rebuilt) + #85/#87/#88/#92 reader page + share
+   Fixed order: FeedPill -> Source -> Title -> Byline -> Hero -> Blurb -> callout.
+   De-noised: reason loses its box, callout icons are frameless, one solid element.
+   ============================================================ */
+
+/* reason: quiet caps, no box (visual-simplify) */
+.snap .reason {
+  border: none;
+  padding: 0;
+}
+.card-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-height: 18px;
+  margin-bottom: 14px;
+}
+.card-top:empty {
+  display: none;
+  margin: 0;
+}
+
+/* feed pill: the one deliberately distinctive element on a quiet card */
+.feed-pill {
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 100%;
+  padding: 4px 11px 4px 9px;
+  margin-bottom: 9px;
+  border-radius: 999px;
+  background: var(--paper-3);
+  color: var(--feed-color, var(--ink));
+}
+.feed-pill svg {
+  flex: 0 0 auto;
+}
+.feed-pill-dot {
+  flex: 0 0 auto;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--feed-color, var(--ink));
+}
+.feed-pill-name {
+  font-family: var(--mono);
+  font-size: var(--pref-card-feedtag-size, 12px);
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* source name: tappable, secondary emphasis; leads when the source has no feed */
+.card-source {
+  align-self: flex-start;
+  max-width: 100%;
+  margin-bottom: 9px;
+  padding: 0;
+  border: none;
+  background: none;
+  cursor: pointer;
+  text-align: left;
+  font-family: var(--serif);
+  font-size: var(--pref-card-source-size, 15px);
+  font-weight: 600;
+  color: var(--ink-soft);
+}
+.card-source:active {
+  color: var(--ink);
+}
+.card-source.lead {
+  font-size: 17px;
+  color: var(--ink);
+}
+
+/* title: inherits .snap h3 (serif 600 23px); just tighten the stack rhythm */
+.snap .card-title {
+  margin: 2px 0 9px;
+}
+
+/* byline: author before a relative date, quiet mono */
+.card-byline {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 7px;
+  margin-bottom: 14px;
+  font-family: var(--mono);
+  color: var(--pref-card-meta-ink, var(--ink-mute));
+}
+.card-author {
+  font-size: var(--pref-card-meta-size, 11px);
+  font-weight: var(--pref-card-meta-weight, 500);
+  letter-spacing: 0.03em;
+}
+.card-age {
+  font-size: var(--pref-card-date-size, 12px);
+  font-weight: var(--pref-card-meta-weight, 400);
+  letter-spacing: 0.03em;
+}
+.card-dot {
+  color: var(--ink-mute);
+}
+
+/* blurb: enticing teaser, clamped to a few lines (not the full body) */
+.card-blurb {
+  margin: 13px 0 0;
+  color: var(--ink-soft);
+  font-size: 15px;
+  line-height: 1.5;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/* callout row: one solid primary + frameless save/share + quiet open-original */
+.card-callout {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin-top: 18px;
+}
+.callout-primary {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 11px 18px;
+  border: none;
+  border-radius: 7px;
+  background: var(--ink);
+  color: var(--paper);
+  cursor: pointer;
+  font-family: var(--mono);
+  font-size: 13px;
+  letter-spacing: 0.03em;
+}
+.callout-primary:active {
+  opacity: 0.85;
+}
+.callout-act,
+.share-act {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 9px;
+  border: none;
+  background: none;
+  color: var(--ink-soft);
+  cursor: pointer;
+}
+.callout-act:active,
+.share-act:active {
+  color: var(--ink);
+}
+.share-act.labeled {
+  gap: 7px;
+  padding: 8px 6px;
+  font-family: var(--mono);
+  font-size: 13px;
+  color: var(--ink-soft);
+}
+.callout-orig {
+  padding: 9px 4px;
+  border: none;
+  background: none;
+  cursor: pointer;
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--ink-mute);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.callout-orig:active {
+  color: var(--ink);
+}
+
+/* ---- reader as a pushed page (#85): slides in over the session ---- */
+.readerpage {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: flex;
+  flex-direction: column;
+  background: var(--paper);
+  transform: translateX(100%);
+  transition: transform 0.32s cubic-bezier(0.22, 0.61, 0.36, 1);
+  will-change: transform;
+}
+.readerpage.in {
+  transform: translateX(0);
+}
+.readerpage-head {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--hair);
+}
+.rp-back {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px;
+  border: none;
+  background: none;
+  color: var(--ink);
+  cursor: pointer;
+}
+.rp-readtime {
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.03em;
+  color: var(--ink-mute);
+}
+.rp-actions,
+.head-actions {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+.rp-act,
+.head-act {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px;
+  border: none;
+  background: none;
+  color: var(--ink-soft);
+  cursor: pointer;
+}
+.rp-act:active,
+.head-act:active {
+  color: var(--ink);
+}
+.readerpage-body {
+  flex: 1;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  padding: 22px 20px 64px;
+}
+.rp-title {
+  margin: 0 0 10px;
+  font-family: var(--serif);
+  font-weight: 600;
+  font-size: 27px;
+  line-height: 1.2;
+}
+.rp-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 22px;
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.03em;
+  color: var(--ink-mute);
+}
+.rp-loading {
+  padding: 34px 0;
+  font-family: var(--mono);
+  font-size: 13px;
+  color: var(--ink-mute);
+}
+.rp-foot {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 34px;
+  padding-top: 18px;
+  border-top: 1px solid var(--hair);
+}
+.reader-open {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 9px 14px;
+  border: 1px solid var(--rule);
+  border-radius: 6px;
+  background: none;
+  cursor: pointer;
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--ink-soft);
+}
+.reader-open:active {
+  border-color: var(--ink);
+  color: var(--ink);
+}
+
+/* #87 scroll-progress bar: thin, always visible, single ink, pinned bottom */
+.rp-progress {
+  flex: 0 0 auto;
+  height: 3px;
+  background: var(--paper-3);
+}
+.rp-progress-fill {
+  height: 100%;
+  background: var(--ink);
+  transform-origin: left center;
+  transition: transform 0.1s linear;
+}
+
+/* #92 copy-manual fallback (when clipboard + share both fail) */
+.copy-manual-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 70;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: rgba(0, 0, 0, 0.35);
+}
+.copy-manual {
+  width: 100%;
+  max-width: 340px;
+  padding: 22px;
+  border-radius: 10px;
+  background: var(--paper);
+  text-align: center;
+}
+.copy-manual-lead {
+  margin: 0 0 12px;
+  font-family: var(--serif);
+  font-size: 17px;
+}
+.copy-manual-field {
+  width: 100%;
+  margin-bottom: 8px;
+  padding: 9px 10px;
+  border: 1px solid var(--rule);
+  border-radius: 5px;
+  background: var(--paper-2);
+  color: var(--ink);
+  font-family: var(--mono);
+  font-size: 12px;
+}
+.copy-manual-hint {
+  margin: 0 0 16px;
+  font-size: 12px;
+  color: var(--ink-mute);
+}
+/* ===== end #96/#85/#87/#88/#92 ===== */

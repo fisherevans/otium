@@ -1,12 +1,11 @@
 import { useEffect, useState } from "react";
 import { api, type Item, type Selected, type Source } from "@/api/client";
 import { BottomSheet } from "./BottomSheet";
-import { Reader } from "./Reader";
 import { SourceDetail } from "./SourceDetail";
 import { SourceItems } from "./SourceItems";
 import { BUCKETS, BLABEL, bucketOf, type Bucket } from "@/lib/weight";
 
-type Sub = null | "reader" | "detail" | "items";
+type Sub = null | "detail" | "items";
 
 // The "…" overflow container for the current session item (#43). Keeps the four
 // primary bar actions (Open/Like/Save/Next) calm by parking the deeper actions
@@ -18,14 +17,15 @@ export function ItemActions({
   selected,
   open,
   onClose,
-  onOpen,
+  onRead,
   onSave,
   onWhy,
 }: {
   selected: Selected | null;
   open: boolean;
   onClose: () => void;
-  onOpen: () => void;
+  // Opens the in-app reader (the pushed ReaderPage, #85) for this item.
+  onRead: () => void;
   // Opens the collection Save picker for this item (#57).
   onSave?: (item: Item) => void;
   onWhy: () => void;
@@ -81,7 +81,7 @@ export function ItemActions({
             <span className="sheet-chev">▸</span>
           </button>
 
-          <button className="sheet-row" onClick={() => setSub("reader")}>
+          <button className="sheet-row" onClick={onRead}>
             <span>Read in app</span>
             <span className="sheet-chev">▸</span>
           </button>
@@ -117,15 +117,6 @@ export function ItemActions({
           </button>
         </div>
       </BottomSheet>
-
-      <Reader
-        item={item}
-        sourceTitle={selected?.source_title}
-        open={open && sub === "reader"}
-        onClose={() => setSub(null)}
-        onOpen={onOpen}
-        onSave={onSave ? () => onSave(item) : undefined}
-      />
 
       <SourceDetail
         source={source}

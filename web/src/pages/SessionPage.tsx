@@ -1,18 +1,20 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
+import { useCallback, useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { api, type Item, type Selected } from "@/api/client";
+import { api, type Item, type ItemContent, type ItemRender, type Selected } from "@/api/client";
 import { ItemActions } from "@/components/ItemActions";
-import { Reader } from "@/components/Reader";
+import { ReaderPage } from "@/components/ReaderPage";
 import { Player } from "@/components/Player";
 import { SavePicker } from "@/components/SavePicker";
-import { ScoreCue, ScoreBreakdownSheet } from "@/components/ScoreBreakdown";
+import { ScoreBreakdownSheet } from "@/components/ScoreBreakdown";
 import { SourceSheet } from "@/components/SourceSheet";
-import { Media, CardDate, Identity } from "@/components/CardParts";
-import { ExternalLink, Heart, Bookmark, ChevronDown } from "lucide-react";
+import { FeedPill, CardSource, Byline, Blurb, Media } from "@/components/CardParts";
+import { ShareActions } from "@/components/ReaderActions";
+import { Heart, Bookmark, ChevronDown, BookOpen, Play, ExternalLink } from "lucide-react";
+import { cardRender, isMedia, isVideo } from "@/lib/render";
 import { mins } from "@/lib/format";
 
 // Which in-app content surface an item opens into (#51). Video/audio play in
-// the Player; everything else (article/rss/quote/text) reads in the Reader.
+// the Player; everything else (article/rss/quote/text) reads in the ReaderPage.
 function contentKind(item: Item): "video" | "audio" | "read" {
   if (item.media_type === "short" || item.media_type === "long" || item.media_type === "live") return "video";
   if (item.media_type === "audio") return "audio";
@@ -51,6 +53,12 @@ export default function SessionPage() {
   const [breakdown, setBreakdown] = useState<Selected | null>(null);
   const [content, setContent] = useState<Selected | null>(null); // the in-app content surface (#51)
   const [sourceSel, setSourceSel] = useState<Selected | null>(null); // source context menu target (#75)
+  // #96: content-aware callout state. renderMap holds the authoritative 3-state
+  // `render` once the content endpoint resolves an item; until then the card uses
+  // the synchronous cardRender() guess. contentCache retains the fetched body so
+  // opening the reader is instant (no second round-trip).
+  const [renderMap, setRenderMap] = useState<Record<number, ItemRender>>({});
+  const contentCache = useRef<Map<number, ItemContent>>(new Map());
   // #79: when the time budget runs out we freeze the reel here (the index the
   // user was on) instead of navigating - the queue collapses to this item + a
   // terminal end-card, so "keep reading" works and "go further" hits the end.
@@ -65,10 +73,6 @@ export default function SessionPage() {
   // `visibleCount`. Declared here (above the effects that read it) so the
   // IntersectionObserver closure sees a defined binding.
   const visibleCount = overIdx !== null ? Math.min(overIdx + 1, items.length) : items.length;
-
-  // The strongest rank score in the queue - the yardstick the on-card score cue
-  // fills against, so each cue reads as "how strongly did this rank vs the best."
-  const maxScore = useMemo(() => items.reduce((m, s) => Math.max(m, s.score), 0), [items]);
 
   const [elapsed, setElapsed] = useState(0);
   const [checkin, setCheckin] = useState<Checkin>(null);
@@ -85,13 +89,19 @@ export default function SessionPage() {
   const shownIds = useRef<Set<number>>(new Set());
   const engaged = useRef<Set<number>>(new Set()); // ids that got open/like/save
   const opened = useRef<Set<number>>(new Set()); // ids that fired an `open` event (dedupe, #51)
-  const lastContent = useRef<Selected | null>(null); // retains the surface item through the sheet's exit anim
+  const lastContent = useRef<Selected | null>(null); // retains the surface item through the exit anim
   const prevIdx = useRef(0);
   const endedServer = useRef(false); // did we already mark the session ended server-side
   const readerPushed = useRef(false); // is there a history entry backing an open reader (#78)
   const didInitialScroll = useRef(false);
   const stageRef = useRef<HTMLDivElement>(null);
   const itemEls = useRef<(HTMLDivElement | null)[]>([]);
+
+  // The authoritative render state for a card's callout (#96): the resolved value
+  // once fetched, else the synchronous guess off the payload.
+  function renderOf(item: Item): ItemRender {
+    return renderMap[item.id] ?? cardRender(item);
+  }
 
   // endServer marks the session ended server-side, once (idempotent). It does NOT
   // navigate (#79) - the durable "ended" status is only written when the session
@@ -178,6 +188,28 @@ export default function SessionPage() {
       .catch(() => {});
   }, []);
 
+  // #96: resolve the focused card's render state + prefetch its reader body. Only
+  // for readable items (video/audio are always "external" and need no fetch) and
+  // only once per id (cached). This both fixes the callout label and makes the
+  // reader open instantly. Skips the end-card index.
+  useEffect(() => {
+    if (loading || current >= visibleCount) return;
+    const it = items[current]?.item;
+    if (!it || isMedia(it) || contentCache.current.has(it.id)) return;
+    let cancelled = false;
+    api
+      .itemContent(it.id)
+      .then((c) => {
+        if (cancelled) return;
+        contentCache.current.set(it.id, c);
+        setRenderMap((m) => ({ ...m, [it.id]: c.render }));
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [current, items, loading, visibleCount]);
+
   // Active-time ticker (pauses while hidden).
   useEffect(() => {
     const t = window.setInterval(() => {
@@ -216,7 +248,7 @@ export default function SessionPage() {
   // this item plus a terminal end-card, so they can keep reading the current item
   // indefinitely and only meet the end when they advance for more. Works even
   // while mid-read in the content surface: the collapse happens behind the open
-  // sheet, so nothing yanks them out.
+  // page, so nothing yanks them out.
   useEffect(() => {
     if (loading || items.length === 0 || overIdx !== null) return;
     if (elapsed >= durationSec) setOverIdx(current);
@@ -300,10 +332,11 @@ export default function SessionPage() {
   const atEnd = current >= visibleCount;
 
   // The in-app content surface (#51). Retain the item through the close
-  // animation so the sheet doesn't blank as it slides down.
+  // animation so the surface doesn't blank as it slides away.
   if (content) lastContent.current = content;
   const shown = content ?? lastContent.current;
   const shownKind = shown ? contentKind(shown.item) : null;
+  const shownContent = shown ? contentCache.current.get(shown.item.id) ?? null : null;
 
   // Tap-to-open (#47) vs scroll-snap drag vs swipe-to-advance (#10). Track the
   // pointer from press to release: past a small move threshold it's a scroll, a
@@ -332,7 +365,18 @@ export default function SessionPage() {
     const p = press.current;
     press.current = null;
     if (p?.moved) return; // it was a scroll or a swipe, not a tap
-    openContent(sel);
+    // Title/body tap is content-aware (#96): full text reads in-app, video/audio
+    // play in-app, and a link-only article opens the original in a new tab.
+    engage(sel);
+  }
+
+  // The content-aware primary engagement (#96). full_text -> reader page;
+  // video/audio -> Player; preview/external article -> original in a new tab.
+  function engage(sel: Selected) {
+    const r = renderOf(sel.item);
+    if (r === "full_text") openContent(sel);
+    else if (isMedia(sel.item)) openContent(sel);
+    else openExternal(sel);
   }
 
   // Opening content in-app (or handing off to the source) is genuine
@@ -346,9 +390,9 @@ export default function SessionPage() {
     }
   }
   // Opening the reader/player pushes a history entry (#78) so the Android back
-  // gesture / browser back closes the modal instead of navigating the SPA out of
-  // the session. popstate (above) closes the modal; closeContent pops the entry
-  // when dismissed by the X / drag / scrim so history stays balanced.
+  // gesture / browser back closes it instead of navigating the SPA out of the
+  // session. popstate (above) closes it; closeContent pops the entry when
+  // dismissed by the back button / scrim so history stays balanced.
   function openContent(sel: Selected) {
     recordOpen(sel);
     setContent(sel);
@@ -368,9 +412,6 @@ export default function SessionPage() {
     recordOpen(sel);
     window.open(sel.item.url, "_blank", "noopener");
   }
-  function open() {
-    if (cur) openExternal(cur);
-  }
   function like() {
     if (!cur) return;
     engaged.current.add(cur.item.id);
@@ -382,10 +423,9 @@ export default function SessionPage() {
     });
     api.itemEvent(cur.item.id, willLike ? "like" : "unlike", id).catch(() => {});
   }
-  function save() {
-    if (!cur) return;
-    engaged.current.add(cur.item.id);
-    setSaveItem(cur.item);
+  function save(sel: Selected) {
+    engaged.current.add(sel.item.id);
+    setSaveItem(sel.item);
   }
   function next() {
     // Advancing past the last shown card lands on the terminal end-card (#79).
@@ -397,6 +437,15 @@ export default function SessionPage() {
   function dismissCheckin() {
     setCheckin(null);
     fastStreak.current = 0;
+  }
+
+  // The primary callout button per render state (#96): label + icon + action.
+  function primaryFor(sel: Selected): { label: string; Icon: typeof BookOpen; onClick: () => void } {
+    const r = renderOf(sel.item);
+    if (r === "full_text") return { label: "Read", Icon: BookOpen, onClick: () => openContent(sel) };
+    if (isVideo(sel.item)) return { label: "Watch", Icon: Play, onClick: () => openContent(sel) };
+    if (sel.item.media_type === "audio") return { label: "Listen", Icon: Play, onClick: () => openContent(sel) };
+    return { label: "Open original", Icon: ExternalLink, onClick: () => openExternal(sel) };
   }
 
   if (err) return <div className="err">Couldn't resume your session: {err}</div>;
@@ -441,43 +490,74 @@ export default function SessionPage() {
       )}
 
       <div className="stage" ref={stageRef}>
-        {shownItems.map((it, i) => (
-          <div
-            className={`snap ${i === current ? "" : "away"}`}
-            key={`${it.item.id}-${i}`}
-            data-idx={i}
-            ref={(el) => {
-              itemEls.current[i] = el;
-            }}
-            onPointerDown={cardPointerDown}
-            onPointerMove={cardPointerMove}
-            onPointerUp={(e) => cardPointerUp(e, i)}
-            onClick={() => cardClick(it)}
-            role="link"
-          >
-            <div className="reason-row" onClick={(e) => e.stopPropagation()}>
-              <span className="reason">{it.reason}</span>
-              <ScoreCue sel={it} maxScore={maxScore} onOpen={() => setBreakdown(it)} />
+        {shownItems.map((it, i) => {
+          const primary = primaryFor(it);
+          const render = renderOf(it.item);
+          return (
+            <div
+              className={`snap ${i === current ? "" : "away"}`}
+              key={`${it.item.id}-${i}`}
+              data-idx={i}
+              ref={(el) => {
+                itemEls.current[i] = el;
+              }}
+              onPointerDown={cardPointerDown}
+              onPointerMove={cardPointerMove}
+              onPointerUp={(e) => cardPointerUp(e, i)}
+              onClick={() => cardClick(it)}
+              role="link"
+            >
+              {/* Quiet reason line (de-noised, no box) + the ··· overflow. */}
+              <div className="card-top" onClick={(e) => e.stopPropagation()}>
+                {it.reason && <span className="reason">{it.reason}</span>}
+                {i === current && (
+                  <button
+                    className="item-more"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setMenuOpen(true);
+                    }}
+                    aria-label="More actions"
+                  >
+                    ···
+                  </button>
+                )}
+              </div>
+
+              {/* Fixed card order (#96): Feed pill -> Source -> Title ->
+                  Author·Date -> Hero -> Preview blurb -> callout buttons. */}
+              <FeedPill feed={it.feed} />
+              <CardSource sel={it} onSource={() => setSourceSel(it)} />
+              <h3 className="card-title">{it.item.title}</h3>
+              <Byline item={it.item} />
+              <Media item={it.item} />
+              <Blurb item={it.item} />
+
+              {i === current && (
+                <div
+                  className="card-callout"
+                  onPointerDown={(e) => e.stopPropagation()}
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <button className="callout-primary" onClick={primary.onClick}>
+                    <primary.Icon size={16} strokeWidth={1.9} aria-hidden />
+                    {primary.label}
+                  </button>
+                  <button className="callout-act" onClick={() => save(it)} aria-label="Save">
+                    <Bookmark size={18} strokeWidth={1.75} aria-hidden />
+                  </button>
+                  <ShareActions item={it.item} />
+                  {/* full_text keeps a quiet path to the original alongside Read. */}
+                  {render === "full_text" && (
+                    <button className="callout-orig" onClick={() => openExternal(it)}>
+                      Open original
+                    </button>
+                  )}
+                </div>
+              )}
             </div>
-            {i === current && (
-              <button
-                className="item-more"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setMenuOpen(true);
-                }}
-                aria-label="More actions"
-              >
-                ···
-              </button>
-            )}
-            <h3>{it.item.title}</h3>
-            <CardDate item={it.item} />
-            <Media item={it.item} />
-            <Identity sel={it} onSource={() => setSourceSel(it)} />
-            {it.item.summary && <p className="excerpt">{it.item.summary}</p>}
-          </div>
-        ))}
+          );
+        })}
         {/* Terminal end-card (#79). Reaching it is passive - the session is
             already over; this just offers the way onward. No auto-redirect: the
             user got here by choosing to advance. */}
@@ -500,18 +580,13 @@ export default function SessionPage() {
         </div>
       </div>
 
+      {/* Slim session controls: the content actions (Read/Open/Watch/Save/Share)
+          live on the card now (#96), so the fixed bar keeps only the session-level
+          one-taps - Like (quiet signal) and advance. */}
       <div className="actionbar">
-        <button className="act-btn" onClick={open} disabled={atEnd}>
-          <ExternalLink className="ic" size={18} strokeWidth={1.75} aria-hidden />
-          Original
-        </button>
         <button className={`act-btn ${cur && liked.has(cur.item.id) ? "on" : ""}`} onClick={like} disabled={atEnd}>
           <Heart className="ic" size={18} strokeWidth={1.75} fill={cur && liked.has(cur.item.id) ? "currentColor" : "none"} aria-hidden />
           Like
-        </button>
-        <button className="act-btn" onClick={save} disabled={atEnd}>
-          <Bookmark className="ic" size={18} strokeWidth={1.75} aria-hidden />
-          Save
         </button>
         <button className="act-btn" onClick={atEnd ? goHome : next}>
           <ChevronDown className="ic" size={18} strokeWidth={1.75} aria-hidden />
@@ -523,7 +598,10 @@ export default function SessionPage() {
         selected={atEnd ? null : cur}
         open={menuOpen}
         onClose={() => setMenuOpen(false)}
-        onOpen={open}
+        onRead={() => {
+          setMenuOpen(false);
+          if (cur) openContent(cur);
+        }}
         onSave={(it) => {
           setMenuOpen(false);
           setSaveItem(it);
@@ -536,11 +614,12 @@ export default function SessionPage() {
 
       <ScoreBreakdownSheet sel={breakdown} open={breakdown !== null} onClose={() => setBreakdown(null)} />
 
-      {/* In-app content surface (#51): text reads in the Reader, video/audio play
-          in the Player. Tapping the card body opens the kind that fits the item. */}
-      <Reader
+      {/* In-app content surfaces (#51/#85): text reads in the pushed ReaderPage,
+          video/audio play in the Player sheet. */}
+      <ReaderPage
         item={shown && shownKind === "read" ? shown.item : null}
         sourceTitle={shown?.source_title}
+        preloaded={shownKind === "read" ? shownContent : null}
         open={content !== null && shownKind === "read"}
         onClose={closeContent}
         onOpen={() => shown && openExternal(shown)}
@@ -566,8 +645,8 @@ export default function SessionPage() {
         onClose={() => setSourceSel(null)}
       />
 
-      {/* Save picker (#57): the deliberate save destination for the bottom-bar
-          Save, the ··· menu, and the reader/player. */}
+      {/* Save picker (#57): the deliberate save destination for the card Save,
+          the ··· menu, and the reader/player. */}
       <SavePicker item={saveItem} open={saveItem !== null} onClose={() => setSaveItem(null)} />
     </div>
   );

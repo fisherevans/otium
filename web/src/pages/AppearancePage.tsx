@@ -1,7 +1,7 @@
 import { useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import type { FontKey, InkKey, Selected } from "@/api/client";
-import { Media, CardDate, Identity } from "@/components/CardParts";
+import { Media, FeedPill, CardSource, Byline, Blurb } from "@/components/CardParts";
 import { usePreferences, prefsToVars, FONT_STACKS, INK_SHADES } from "@/context/PreferencesContext";
 
 // Appearance screen (#80/#81/#82). The centerpiece is a LIVE PREVIEW pinned at
@@ -385,15 +385,18 @@ export default function AppearancePage() {
       <div className="preview" style={prefsToVars(prefs)}>
         <div className="preview-tag">Live preview</div>
         <div className="preview-scroll">
+          {/* Same fixed order + markup as the live session card (#96), so the
+              #90 controls preview exactly what the card will look like. */}
           <div className="pv-card snap" ref={cardRef}>
-            <div className="reason-row">
+            <div className="card-top">
               <span className="reason">{SAMPLE.reason}</span>
             </div>
-            <h3>{SAMPLE.item.title}</h3>
-            <CardDate item={SAMPLE.item} />
+            <FeedPill feed={SAMPLE.feed} />
+            <CardSource sel={SAMPLE} onSource={() => {}} />
+            <h3 className="card-title">{SAMPLE.item.title}</h3>
+            <Byline item={SAMPLE.item} />
             <Media item={SAMPLE.item} />
-            <Identity sel={SAMPLE} onSource={() => {}} />
-            <p className="excerpt">{SAMPLE.item.summary}</p>
+            <Blurb item={SAMPLE.item} />
           </div>
 
           <div className="pv-reader reader" ref={readerRef}>
