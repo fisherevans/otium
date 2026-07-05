@@ -434,3 +434,20 @@ intent-card-iterations, choices.
   too much).
 - #93 weight visual language: words in the source control (roomy) + dots(1-5)+icon
   indicator in the library/lists (NOT on the reading card).
+
+## 2026-07-05 (end) · Card work wrapped (v0.30.0)
+
+- **#97** per-element card meta styling (feed/source/author/date each = size+weight+ink)
+  + byline delimiter control, in the Appearance Card tab; back-compat migration
+  preserves the v0.29 look for existing users.
+- **#93** weight visual language: roomy vertical words control (Favorite→Rarely +
+  hints, no truncation) in source config; reusable gauge+dots(1-5) indicator in
+  library rows + source pages (NOT the reading card); library de-noise (underline
+  tabs, dots replace boxed badges, lighter dividers).
+
+The card + reading surface is now complete: intent → session card (locked order,
+content-aware, de-noised, per-element tunable) → reader-as-page (progress, read
+estimate, share) → library (de-noised, dots weight). Two agents built these in
+parallel worktrees (disjoint global.css sections, clean merge). Note: an earlier
+Phase-2 reader agent hit the account session limit mid-CSS; that CSS was finished
+by hand (see v0.29 entry).
