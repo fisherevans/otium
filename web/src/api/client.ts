@@ -207,6 +207,28 @@ export interface Collection {
 // picker hides it - saving is the deliberate path, liking is the one-tap path.
 export const LIKED_SLUG = "liked";
 
+// Display relabel (#89): built-ins keep their backend slugs but read as
+// "Favorites" (liked) and "Read Later" (watch-later) everywhere in the UI.
+// Saved and user lists show their stored name. One place so the browse view and
+// the Save picker never disagree on a name.
+export function collectionDisplayName(c: Collection): string {
+  if (c.kind === "builtin") {
+    if (c.slug === "liked") return "Favorites";
+    if (c.slug === "watch-later") return "Read Later";
+  }
+  return c.name;
+}
+
+// An item within a collection, carrying when it was added (#89). The review
+// surface sorts by added_at ("when I saved it") or the item's published_at.
+export interface CollectionItem extends Item {
+  added_at: string;
+}
+
+// Collection review sort (#89): "saved" orders by when the item was added,
+// "published" by its publish time. Both newest-first. Default saved.
+export type CollectionSort = "saved" | "published";
+
 // A group (#86): a user-created overlay gathering several feeds (many-to-many).
 // feed_count is the denormalized membership size.
 export interface Group {
@@ -391,7 +413,9 @@ export const api = {
   renameCollection: (id: number, name: string) =>
     req<{ ok: boolean }>("PATCH", `/collections/${id}`, { name }),
   deleteCollection: (id: number) => req<{ ok: boolean }>("DELETE", `/collections/${id}`),
-  collectionItems: (id: number) => req<Item[]>("GET", `/collections/${id}/items`),
+  // sort (#89): "saved" (added_at, default) or "published" (published_at).
+  collectionItems: (id: number, sort: CollectionSort = "saved") =>
+    req<CollectionItem[]>("GET", `/collections/${id}/items?sort=${sort}`),
   addToCollection: (id: number, itemId: number) =>
     req<{ ok: boolean }>("POST", `/collections/${id}/items`, { item_id: itemId }),
   removeFromCollection: (id: number, itemId: number) =>

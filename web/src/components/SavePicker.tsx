@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { api, LIKED_SLUG, type Collection, type Item } from "@/api/client";
+import { api, collectionDisplayName, LIKED_SLUG, type Collection, type Item } from "@/api/client";
 import { BottomSheet } from "./BottomSheet";
 
 // Save picker (#57): the deliberate "set this aside" path. A calm sheet of
@@ -91,7 +91,7 @@ export function SavePicker({
             <button key={c.id} className="sheet-row" onClick={() => toggle(c)} disabled={busy !== null}>
               <span className="save-check" aria-hidden>{c.contains ? "◉" : "○"}</span>
               <span className="save-name">
-                {c.name}
+                {collectionDisplayName(c)}
                 {c.kind === "builtin" && <span className="save-kind"> · built-in</span>}
               </span>
               <span className="lib-count">{c.item_count}</span>
