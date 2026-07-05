@@ -259,11 +259,18 @@ export interface Settings {
 // Appearance preferences (#80/#81/#82). Display-only: reader typography, card
 // styling, and the intent-page session-length presets. Never read by the ranker.
 // The server fills defaults for a fresh user, so this is always fully populated.
+// #90: font_family and ink are curated enum keys (not free-form) - the client
+// maps them to a system font stack / grayscale ink so styling stays on-theme.
+export type FontKey = "charter" | "book" | "didot" | "grotesk";
+export type InkKey = "ink" | "graphite" | "soft" | "mute";
 export interface ReaderPrefs {
   font_size: number; // px
   line_height: number; // unitless
   measure: number; // max line length, ch
   images: boolean; // render images inside the reader body
+  font_family: FontKey; // #90 curated body face
+  font_weight: number; // #90 body weight, 300-700
+  ink: InkKey; // #90 body ink shade
 }
 export interface CardPrefs {
   meta_size: number; // sub-text / media-type meta, px
@@ -272,6 +279,8 @@ export interface CardPrefs {
   date_size: number; // date above the hero (#73), px
   hero_show: boolean; // show the hero/media block
   hero_color: boolean; // true = color; false = grayscale/dither
+  meta_weight: number; // #90 identity/date weight, 300-700
+  meta_ink: InkKey; // #90 identity/date ink shade
 }
 export interface Preferences {
   reader: ReaderPrefs;
