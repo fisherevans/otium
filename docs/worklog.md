@@ -338,3 +338,26 @@ Screenshot harness + isolated worktrees are the standing pattern; the two things
 not headlessly verifiable (drag feel, session-end timing) are flagged for
 on-device testing. All of Fisher's feedback through this round is shipped; the
 "next big bet" (reader-depth / TTS / Discovery / LLM operator) remains his to pick.
+
+## 2026-07-04 (night) · Reader-depth start + history (v0.19 - v0.20)
+
+Fisher greenlit "reader-depth" (appearance/typography), focused on user styling
+with live preview; also asked for a personal history.
+- **v0.19.0** - personal **History** view (#83): /history from the Library,
+  Shown/Read/Liked/Saved filters over item_state, tappable to reopen. Read-only.
+- **v0.20.0** - **appearance/preferences system + live-preview editor** (#80/#81/
+  #82, delivers #61). Per-user prefs (kv JSON, /preferences, display-only/
+  off-ranker) applied as CSS custom properties so the live app AND a sticky
+  preview react instantly. Appearance screen (/settings/appearance): a
+  pixel-identical sample card+reader (shared CardParts) on top, controls below.
+  Reader: text size/spacing/measure/images. Card: sub-text/feed-tag/date sizes,
+  hero show-hide, hero grayscale-vs-color. Intent presets: user-editable chips.
+  Both Palma-verified.
+
+Two parallel worktree agents (appearance + history) merged with only trivial
+additive conflicts (App.tsx imports, global.css EOF blocks). CSS-var architecture
+is the reusable foundation for future theming.
+
+### Reader-depth remaining (Fisher's direction)
+#60 explicit e-ink mode + volume-key page-turns, #59 offline caching. The
+typography half (#61) is done; these two are the device-native half.
