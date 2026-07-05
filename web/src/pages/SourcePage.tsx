@@ -1,9 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { api, type Feed, type Item, type Source } from "@/api/client";
-import { BUCKETS, BLABEL, bucketOf, type Bucket } from "@/lib/weight";
+import { BLABEL, bucketOf, type Bucket } from "@/lib/weight";
 import { feedIcon } from "@/lib/feedIcons";
 import { PostsList } from "@/components/PostsList";
+import { WeightControl } from "@/components/WeightControl";
+import { WeightIndicator } from "@/components/WeightIndicator";
 
 // Per-source freshness half-life presets (days). 0 = inherit (the source falls
 // back to its feed's half-life, then the global 21d). Mirrors the feed control's
@@ -170,7 +172,7 @@ export default function SourcePage() {
       <div className="reader-meta" style={{ marginTop: -2 }}>
         <span>{source.kind}</span>
         <span>·</span>
-        <span>weight {BLABEL[bucket]}</span>
+        <WeightIndicator bucket={bucket} label />
         {state === "archived" && (
           <>
             <span>·</span>
@@ -202,13 +204,7 @@ export default function SourcePage() {
       {source.fetch_error && <p className="err">Fetch error: {source.fetch_error}</p>}
 
       <div className="ctl-label">Weight</div>
-      <div className="wbuckets">
-        {BUCKETS.map((b) => (
-          <button key={b} className={`wbucket ${bucket === b ? "on" : ""}`} onClick={() => setWeight(b)}>
-            {BLABEL[b]}
-          </button>
-        ))}
-      </div>
+      <WeightControl value={bucket} onChange={setWeight} />
 
       <div className="ctl-label">Per-session cap</div>
       <div className="capstep">

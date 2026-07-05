@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { api, type Feed, type Source } from "@/api/client";
-import { BLABEL, bucketOf } from "@/lib/weight";
 import { feedIcon } from "@/lib/feedIcons";
+import { WeightIndicator } from "@/components/WeightIndicator";
 import { FeedIconPicker } from "@/components/FeedIconPicker";
 import { BottomSheet } from "@/components/BottomSheet";
 
@@ -292,13 +292,12 @@ export default function SourcesPage() {
               </div>
             ))}
           {g.items.map((s) => {
-        const b = bucketOf(s.weight);
         return (
           // #66: the whole row navigates to the source's dedicated page - no
           // inline expansion, no sheet. Rows stay scannable: weight · name · signal · ▸.
           <div className="lib-row" key={s.id}>
             <div className="lib-head" onClick={() => nav(`/sources/${s.id}`)}>
-              <span className="wtag">{BLABEL[b]}</span>
+              <WeightIndicator weight={s.weight} className="wtag" />
               <div className="nm">
                 <b>{s.title}</b>
                 <span>{s.kind} · {signal(s)}{s.fetch_error ? " · fetch error" : ""}</span>
