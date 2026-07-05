@@ -385,3 +385,29 @@ typography half (#61) is done; these two are the device-native half.
   card. Overlaps ch.2's surfaces → plan to do them as ONE combined reader/card/
   sheets pass once Fisher confirms the visual cuts.
 - Pre-existing: empty-DB `.map(null)` crash (guard with `?? []`) - fold into the pass.
+
+## 2026-07-05 (cont.) · Feedback pass: intent, collections, typography, content pipeline
+
+Fisher's big feedback round → decisions + builds:
+- **v0.23.0** collections review (#89): Saved/Read Later/Favorites + saved-vs-published sort.
+- **v0.24.0** appearance typography (#90): Reader/Card/Sessions tabs + font/weight/ink.
+- **v0.25.0** intent redesign (#95): big-number ± time (default 15, ±5) + checklist topics (B).
+- **v0.26.0** backend full-text fetch (#98): content_source (rss/fetched/external/pending);
+  GET /items/{id}/content lazily extracts via go-readability + caches. Verified on real
+  data (VTDigger/Seven Days extracted, SCOTUSblog → external; 2145 pending items benefit).
+
+### Locked design decisions (choices report + prose)
+- Save icon = bookmark (#94). Weight = words in the control + dots/icon indicator elsewhere (#93).
+- Card meta = per-element + reorderable + delimiter control (#97).
+- Card order: Title → Feed → Source → Time → Hero(optional) → preview blurb; content-aware
+  actions (Read in-app / Open original / Watch) driven by content_source (#96).
+
+### In flight
+- **#99 content-pipeline hardening**: hypermedia→external gate (don't text-ify media-heavy
+  pages), nav/footer cleanup, explicit 3 states (preview-only / full-text / original), trust
+  RSS full text. Building.
+- **Phase 2 (#96)**: the card + reader rework - waits on #99's clean 3-state model.
+- **Phase 3**: appearance card enrichment (#97), weight visual language (#93).
+
+Design docs served on WiFi/Tailscale :8099 - nav-redesign, visual-simplify,
+intent-card-iterations, choices.
