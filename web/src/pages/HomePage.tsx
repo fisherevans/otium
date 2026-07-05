@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { api, type Feed, type Source } from "@/api/client";
+import { usePreferences } from "@/context/PreferencesContext";
 
 // #69 + #70: the intent page is one dead-simple, no-scroll screen.
 //
@@ -12,12 +13,25 @@ import { api, type Feed, type Source } from "@/api/client";
 //     fine-tune without thumb-scrubbing. Topics + Start appear here.
 // A session is that one chosen duration - no range, no flexibility axis.
 const MIN_MINUTES = 5;
-const MAX_MINUTES = 60;
+const MAX_MINUTES = 120;
 const STEP = 5;
-const PRESETS = [5, 15, 30, 60];
+
+// How a preset renders on its chip: whole-hour values show as "1 hour" / "2
+// hours", everything else as "N min". Keeps the chips readable now that presets
+// are user-defined and can run up to 120 (#82).
+function chipParts(v: number): { num: string; unit: string; aria: string } {
+  if (v >= 60 && v % 60 === 0) {
+    const h = v / 60;
+    return { num: String(h), unit: h === 1 ? "hour" : "hours", aria: `${h} hour${h === 1 ? "" : "s"}` };
+  }
+  return { num: String(v), unit: "min", aria: `${v} minutes` };
+}
 
 export default function HomePage() {
   const nav = useNavigate();
+  const { prefs } = usePreferences();
+  // User-defined session-length presets (#82), de-duped + sorted for display.
+  const presets = useMemo(() => [...new Set(prefs.presets)].sort((a, b) => a - b), [prefs.presets]);
   // null = blank state (no duration chosen yet); a number = slider state.
   const [minutes, setMinutes] = useState<number | null>(null);
   const [feeds, setFeeds] = useState<Feed[]>([]);
@@ -79,17 +93,15 @@ export default function HomePage() {
       {!chosen ? (
         <div className="preset-pick">
           <div className="preset-grid">
-            {PRESETS.map((p) => (
-              <button
-                key={p}
-                className="preset-chip"
-                onClick={() => setMinutes(p)}
-                aria-label={p === 60 ? "1 hour" : `${p} minutes`}
-              >
-                <span className="preset-num">{p === 60 ? "1" : p}</span>
-                <span className="preset-unit">{p === 60 ? "hour" : "min"}</span>
-              </button>
-            ))}
+            {presets.map((p) => {
+              const { num, unit, aria } = chipParts(p);
+              return (
+                <button key={p} className="preset-chip" onClick={() => setMinutes(p)} aria-label={aria}>
+                  <span className="preset-num">{num}</span>
+                  <span className="preset-unit">{unit}</span>
+                </button>
+              );
+            })}
           </div>
           <p className="intent-hint">Choose a starting length - you can fine-tune it next.</p>
         </div>
