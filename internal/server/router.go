@@ -79,6 +79,10 @@ func NewRouter(h *handler.Handler, authMiddleware func(http.Handler) http.Handle
 			r.Post("/items/{id}/dwell", h.ItemDwell)
 			r.Post("/fetch", h.FetchNow)
 
+			// Personal history (#83): items shown vs engaged, read-only over
+			// item_state; never touches the ranker.
+			r.Get("/history", h.History)
+
 			// User settings (#68): the fast-scroll check-in toggle.
 			r.Get("/settings", h.GetSettings)
 			r.Patch("/settings", h.UpdateSettings)

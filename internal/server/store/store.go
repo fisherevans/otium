@@ -1086,6 +1086,73 @@ func (db *DB) LogEvent(ctx context.Context, userID int64, typ string, itemID, so
 	return err
 }
 
+// --- history (#83) ---
+
+// History returns the user's items paired with their interaction, newest
+// interaction first, for the personal history view. It is a read-only join over
+// item_state (the one row per user+item that carries state + timestamps); it
+// never writes and the ranker never calls it, so it can't perturb ranking.
+//
+// The filter selects which slice of item_state to return and which timestamp
+// defines "newest interaction":
+//   - "shown"  = every item that reached the user (any item_state row), ordered
+//     by when it was surfaced (surfaced_at, falling back to acted_at for rows
+//     with no surface time, e.g. a direct save).
+//   - "read"   = engaged: opened OR liked OR saved, ordered by acted_at.
+//   - "liked"  = state 'liked', ordered by acted_at.
+//   - "saved"  = state 'saved', ordered by acted_at.
+//
+// item_state.state is last-write-wins, so an item liked and later saved reads as
+// 'saved' - it appears under "saved" (and "read"), not "liked". That matches the
+// UI's "current interaction" framing. An unknown filter is treated as "shown".
+//
+// The table is one row per (user, item) and single-user in practice, so it stays
+// small; no dedicated index is warranted (the user_id PK prefix already scopes
+// the scan). limit is clamped by the caller; offset drives "load more".
+func (db *DB) History(ctx context.Context, userID int64, filter string, limit, offset int) ([]HistoryItem, error) {
+	var where, orderTS string
+	switch filter {
+	case "read":
+		where = "st.state IN ('opened','liked','saved')"
+		orderTS = "st.acted_at"
+	case "liked":
+		where = "st.state = 'liked'"
+		orderTS = "st.acted_at"
+	case "saved":
+		where = "st.state = 'saved'"
+		orderTS = "st.acted_at"
+	default: // "shown" and anything unknown
+		where = "1=1"
+		orderTS = "COALESCE(st.surfaced_at, st.acted_at)"
+	}
+	q := fmt.Sprintf(`SELECT i.id, i.source_id, i.url, i.title, i.summary, i.content, i.author, i.thumbnail_url,
+	        i.media_type, i.duration_sec, i.published_at, i.fetched_at,
+	        st.state, %[1]s AS interacted_at
+	    FROM item_state st JOIN items i ON i.id = st.item_id
+	    WHERE st.user_id = ? AND %[2]s
+	    ORDER BY interacted_at DESC, i.id DESC
+	    LIMIT ? OFFSET ?`, orderTS, where)
+	rows, err := db.sql.QueryContext(ctx, q, userID, limit, offset)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []HistoryItem
+	for rows.Next() {
+		var h HistoryItem
+		var pub, fetched, at string
+		if err := rows.Scan(&h.ID, &h.SourceID, &h.URL, &h.Title, &h.Summary, &h.Content, &h.Author,
+			&h.ThumbnailURL, &h.MediaType, &h.DurationSec, &pub, &fetched, &h.State, &at); err != nil {
+			return nil, err
+		}
+		h.PublishedAt = parseTime(pub)
+		h.FetchedAt = parseTime(fetched)
+		h.InteractedAt = parseTime(at)
+		out = append(out, h)
+	}
+	return out, rows.Err()
+}
+
 // --- sessions ---
 //
 // A session is durable and stateful (#67): the built queue (item_ids) and the

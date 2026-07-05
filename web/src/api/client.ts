@@ -67,6 +67,20 @@ export interface Item {
   fetched_at: string;
 }
 
+// --- #83 personal-history block ---
+// One history filter: the slice of item_state to browse. "shown" = everything
+// surfaced in a session; "read" = engaged (opened/liked/saved); then liked/saved.
+export type HistoryFilter = "shown" | "read" | "liked" | "saved";
+
+// HistoryItem is an Item plus the user's interaction on it (#83). state is the
+// current item_state.state; interacted_at is when the interaction that put it in
+// this filter happened (surface time for "shown", act time otherwise).
+export interface HistoryItem extends Item {
+  state: string; // surfaced | opened | liked | skipped | saved | dismissed
+  interacted_at: string;
+}
+// --- end #83 block ---
+
 // ScoreBreakdown decomposes an item's effective score into the exact factors the
 // ranker used (#18). The four multipliers multiply to effective_score, which is
 // the real ranker output (matches ItemEffectiveScore server-side) - never an
@@ -288,6 +302,14 @@ export const api = {
   recordDwell: (id: number, sessionId: string, dwellMs: number, engaged: boolean) =>
     req<{ ok: boolean }>("POST", `/items/${id}/dwell`, { session_id: sessionId, dwell_ms: dwellMs, engaged }),
   fetchNow: () => req<{ new_items: number }>("POST", "/fetch"),
+
+  // --- #83 personal-history block ---
+  // Personal history (#83): items shown vs engaged, newest-interaction-first,
+  // each with its interaction state + timestamp. Read-only; never touches the
+  // ranker. limit/offset drive "load more".
+  history: (filter: HistoryFilter, limit = 50, offset = 0) =>
+    req<HistoryItem[]>("GET", `/history?filter=${filter}&limit=${limit}&offset=${offset}`),
+  // --- end #83 block ---
 
   // Settings (#68): the fast-scroll check-in toggle. updateSettings returns the
   // full current settings.

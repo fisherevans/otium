@@ -2324,3 +2324,19 @@ button.id-source:active {
   z-index: 70;
 }
 /* ===== end #77/#78 ===== */
+
+/* ===== #83 personal-history =================================================
+   The interaction badge on each history row (Shown / Read / Liked / …). A small
+   uppercase grotesque tag so the interaction reads at a glance, ahead of the
+   source + relative time in the same subtitle line. Reuses the library chip row
+   (.lib-filter / .lib-fchip) for the filter chips - no new chip styles. */
+.hist-tag {
+  font-family: var(--grot);
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  border: 1px solid var(--rule-hard);
+  padding: 1px 5px;
+  margin-right: 1px;
+}
+/* ===== end #83 ===== */

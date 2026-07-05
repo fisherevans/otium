@@ -654,6 +654,48 @@ func (h *Handler) ItemDwell(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
 }
 
+// --- history (#83) ---
+
+// historyFilters is the set the History endpoint accepts. "shown" is the
+// default (everything surfaced); the rest narrow to engagement.
+var historyFilters = map[string]bool{"shown": true, "read": true, "liked": true, "saved": true}
+
+// History returns the user's items newest-interaction-first with their
+// interaction state + timestamp, for the personal history view (#83). Read-only:
+// it joins over item_state but never writes it, and the ranker never reads
+// History, so it can't move rankings. filter is one of shown|read|liked|saved
+// (default shown). Pagination is limit (capped) + offset for "load more".
+func (h *Handler) History(w http.ResponseWriter, r *http.Request) {
+	uid := userID(r)
+	filter := r.URL.Query().Get("filter")
+	if filter == "" {
+		filter = "shown"
+	}
+	if !historyFilters[filter] {
+		badRequest(w, "unknown filter")
+		return
+	}
+	limit := intParam(r, "limit", 50)
+	if limit < 1 {
+		limit = 1
+	} else if limit > 200 {
+		limit = 200
+	}
+	offset := intParam(r, "offset", 0)
+	if offset < 0 {
+		offset = 0
+	}
+	items, err := h.db.History(r.Context(), uid, filter, limit, offset)
+	if err != nil {
+		serverError(w, h.log, "history", err)
+		return
+	}
+	if items == nil {
+		items = []store.HistoryItem{}
+	}
+	writeJSON(w, http.StatusOK, items)
+}
+
 // --- settings (#68) ---
 
 // GetSettings returns the user's toggleable preferences (defaults applied for
