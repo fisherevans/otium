@@ -1,0 +1,130 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>otium · intent + card iterations</title>
+<style>
+  :root{--ink:#1c1813;--mute:#7a6f62;--faint:#a89e90;--line:#ded7c9;--paper:#f4f0e8;--panel:#efe9dd;--wire:#cdc5b6;--wire2:#e3ddd0}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--paper);color:var(--ink);font-family:"Charter","Georgia",serif;line-height:1.55;padding:44px 18px 120px}
+  main{max-width:920px;margin:0 auto}
+  h1{font-family:"Didot","Georgia",serif;font-weight:400;font-size:36px;margin:0 0 4px}
+  .sub{color:var(--mute);font-size:15px;margin:0 0 30px}
+  h2{font-family:"Didot","Georgia",serif;font-weight:400;font-size:24px;margin:42px 0 6px;padding-bottom:7px;border-bottom:1px solid var(--line)}
+  .lead{font-size:16px;color:var(--mute);margin:6px 0 16px}
+  p,li{font-size:15px}
+  .row3{display:flex;gap:16px;overflow-x:auto;padding:6px 2px 8px;scroll-snap-type:x mandatory}
+  .opt{flex:0 0 auto;width:216px;scroll-snap-align:start}
+  .opt h3{font-size:14px;margin:0 0 3px}
+  .opt .note{font-size:12.5px;color:var(--mute);margin:0 0 9px;min-height:34px}
+  .ph{width:216px;height:418px;border:2px solid var(--ink);border-radius:20px;background:var(--paper);padding:10px 10px 0;display:flex;flex-direction:column;overflow:hidden}
+  .ph .top{height:16px;font-family:"SF Mono";font-size:8px;color:var(--faint);display:flex;justify-content:space-between}
+  .ph .body{flex:1;overflow:hidden;padding:3px 4px;display:flex;flex-direction:column;gap:7px}
+  .ph .tabs{flex:0 0 auto;height:26px;border-top:1px solid var(--wire2);display:flex;margin:0 -10px}
+  .ph .tab{flex:1;text-align:center;font-family:"SF Mono";font-size:7px;color:var(--faint);padding-top:7px}
+  .ph .tab.on{color:var(--ink);font-weight:700}
+  .txt{background:var(--wire);border-radius:2px;height:9px}.txt.sm{height:6px;background:var(--wire2)}
+  .txt.t{height:13px;width:80%}.w70{width:70%}.w55{width:55%}.w40{width:40%}.w30{width:30%}.w85{width:85%}.w60{width:60%}.w50{width:50%}
+  .img{background:repeating-linear-gradient(45deg,#dcd5c7,#dcd5c7 4px,#e6e0d2 4px,#e6e0d2 8px);border-radius:3px}
+  .r{display:flex;gap:6px;align-items:center}
+  .num{font-family:"Didot",serif;font-size:15px;color:var(--faint)}.num.on{color:var(--ink)}
+  .tlabel{font-family:"SF Mono";font-size:8.5px;color:var(--faint);letter-spacing:.02em}.tlabel.on{color:var(--ink);font-weight:700}
+  .topic{font-family:"SF Mono";font-size:9px;color:var(--mute)}.topic.on{color:var(--ink);font-weight:700;border-bottom:1.4px solid var(--ink);padding-bottom:2px}
+  .check{width:12px;height:12px;border:1.3px solid var(--mute);border-radius:2px;flex:0 0 auto}.check.on{background:var(--ink);border-color:var(--ink)}
+  .ico{opacity:.6;font-size:12px}
+  .solid{background:var(--ink);color:var(--paper);border-radius:5px;height:26px;display:flex;align-items:center;justify-content:center;font-family:"SF Mono";font-size:8px;letter-spacing:.05em}
+  .caps{font-family:"SF Mono";font-size:8px;color:var(--mute);letter-spacing:.05em}
+  footer{margin-top:48px;padding-top:14px;border-top:1px solid var(--line);color:var(--mute);font-size:13px}
+  @media(max-width:640px){body{padding:22px 13px 90px}h1{font-size:29px}.ph{width:200px;height:380px}.opt{width:200px}}
+</style>
+</head>
+<body>
+<main>
+  <h1>intent + card — iterations</h1>
+  <p class="sub">A few options each, in the de-noised style you approved (type &amp; space over borders). Swipe each row sideways. Pick a direction per surface (or mix elements) and I'll build it.</p>
+
+  <h2>Intent page</h2>
+  <p class="lead">Common to all: full time labels ("5 MIN", "1 HR" - not bare 5/1h), and one solid Start. They differ in how <b>topics</b> read.</p>
+  <div class="row3">
+    <!-- I-1 underline tabs -->
+    <div class="opt"><h3>A · Underline-tab topics</h3><p class="note">Topics as a quiet horizontal tab row, active = underline. Reads as "pick a lane." Simplest, matches the feed-tab feel you liked.</p>
+      <div class="ph"><div class="top"><span>otium</span><span>9:41</span></div><div class="body">
+        <div class="txt t"></div><div class="txt sm w55"></div><div style="height:6px"></div>
+        <div class="r" style="justify-content:space-around;align-items:baseline"><span class="tlabel on">5 MIN</span><span class="tlabel">15</span><span class="tlabel">30</span><span class="tlabel">1 HR</span></div>
+        <div style="height:16px"></div><div class="caps">TOPICS</div>
+        <div class="r" style="gap:14px;flex-wrap:wrap"><span class="topic on">All</span><span class="topic">News</span><span class="topic">Comics</span><span class="topic">Local</span></div>
+        <div style="flex:1"></div><div class="solid">Start reading</div><div style="height:5px"></div>
+      </div><div class="tabs"><div class="tab on">READ</div><div class="tab">LIBRARY</div><div class="tab">SAVED</div><div class="tab">YOU</div></div></div></div>
+    <!-- I-2 checklist -->
+    <div class="opt"><h3>B · Checklist topics</h3><p class="note">Topics as an explicit multi-select checklist (checkbox + name). Clearest that you can pick several; feels like composing the session.</p>
+      <div class="ph"><div class="top"><span>otium</span><span>9:41</span></div><div class="body">
+        <div class="txt t"></div><div style="height:6px"></div>
+        <div class="r" style="justify-content:space-around;align-items:baseline"><span class="tlabel on">5 MIN</span><span class="tlabel">15</span><span class="tlabel">30</span><span class="tlabel">1 HR</span></div>
+        <div style="height:12px"></div><div class="caps">TOPICS</div>
+        <div class="r"><span class="check on"></span><div class="txt sm w60"></div></div>
+        <div class="r"><span class="check on"></span><div class="txt sm w40"></div></div>
+        <div class="r"><span class="check"></span><div class="txt sm w50"></div></div>
+        <div class="r"><span class="check"></span><div class="txt sm w40"></div></div>
+        <div style="flex:1"></div><div class="solid">Start reading</div><div style="height:5px"></div>
+      </div><div class="tabs"><div class="tab on">READ</div><div class="tab">LIBRARY</div><div class="tab">SAVED</div><div class="tab">YOU</div></div></div></div>
+    <!-- I-3 minimal -->
+    <div class="opt"><h3>C · Big number + slider</h3><p class="note">Time is one big numeral you tune with −/+ or a slider; topics quiet inline words below. Most minimal; the time is the hero.</p>
+      <div class="ph"><div class="top"><span>otium</span><span>9:41</span></div><div class="body">
+        <div class="txt t w55"></div><div style="height:14px"></div>
+        <div class="r" style="justify-content:center;align-items:baseline;gap:8px"><span class="ico">−</span><span style="font-family:Didot;font-size:40px">20</span><span class="caps">MIN</span><span class="ico">+</span></div>
+        <div class="r" style="justify-content:center"><div class="txt sm w60"></div></div>
+        <div style="height:16px"></div>
+        <div class="r" style="gap:12px;justify-content:center;flex-wrap:wrap"><span class="topic on">All</span><span class="topic">News</span><span class="topic">Comics</span></div>
+        <div style="flex:1"></div><div class="solid">Start reading</div><div style="height:5px"></div>
+      </div><div class="tabs"><div class="tab on">READ</div><div class="tab">LIBRARY</div><div class="tab">SAVED</div><div class="tab">YOU</div></div></div></div>
+  </div>
+
+  <h2>Session card</h2>
+  <p class="lead">All de-noised (no reason-box, no weight badge, no boxed buttons, quiet actions). They differ in <b>emphasis</b> and how much the media leads.</p>
+  <div class="row3">
+    <!-- C-1 text-forward -->
+    <div class="opt"><h3>A · Text-forward</h3><p class="note">Title + date lead; media sits under them; identity + excerpt below. Reads like an article headline. Calmest for text feeds.</p>
+      <div class="ph"><div class="top"><span>← intent</span><span>library</span></div><div class="body">
+        <div class="r" style="justify-content:space-between"><span class="caps">FRESH · RARE</span><span class="ico">⋯</span></div>
+        <div class="txt t" style="height:15px"></div><div class="txt sm w30" style="height:8px;background:var(--wire)"></div>
+        <div class="img" style="height:64px"></div>
+        <div class="caps">Local · VTDigger · 2d</div>
+        <div class="txt sm w85"></div><div class="txt sm w70"></div>
+        <div style="flex:1"></div>
+        <div class="r" style="justify-content:space-around"><span class="ico">↗</span><span class="ico">♡</span><span class="ico">🔖</span><span class="ico">⌄</span></div>
+      </div></div></div>
+    <!-- C-2 media-forward -->
+    <div class="opt"><h3>B · Media-forward</h3><p class="note">Hero image leads (great for video/photo-heavy feeds), title below it, minimal meta. More visual; date + source tuck under the title.</p>
+      <div class="ph"><div class="top"><span>← intent</span><span>library</span></div><div class="body">
+        <div class="r" style="justify-content:space-between"><span class="caps">RARE</span><span class="ico">⋯</span></div>
+        <div class="img" style="height:100px"></div>
+        <div class="txt t" style="height:15px"></div>
+        <div class="caps">VTDigger · Local · 2d ago</div>
+        <div class="txt sm w70"></div>
+        <div style="flex:1"></div>
+        <div class="r" style="justify-content:space-around"><span class="ico">↗</span><span class="ico">♡</span><span class="ico">🔖</span><span class="ico">⌄</span></div>
+      </div></div></div>
+    <!-- C-3 ultra minimal -->
+    <div class="opt"><h3>C · Ultra-minimal read</h3><p class="note">Almost pure text: title, date, a longer excerpt; media optional/small. Actions a single quiet row. Maximal reading calm — media can be toggled off (Appearance).</p>
+      <div class="ph"><div class="top"><span>← intent</span><span>library</span></div><div class="body">
+        <div style="height:6px"></div>
+        <div class="txt t" style="height:16px"></div>
+        <div class="caps" style="margin-top:2px">Local · VTDigger · 2 days ago</div>
+        <div style="height:8px"></div>
+        <div class="txt sm w85"></div><div class="txt sm"></div><div class="txt sm w70"></div><div class="txt sm w85"></div><div class="txt sm w55"></div>
+        <div style="flex:1"></div>
+        <div class="r" style="justify-content:flex-end;gap:16px"><span class="ico">↗</span><span class="ico">♡</span><span class="ico">🔖</span><span class="ico">⌄</span></div>
+      </div></div></div>
+  </div>
+
+  <h2>Two open questions from your notes</h2>
+  <ul>
+    <li><b>Save icon</b> — the 🔖 above is a placeholder. In-app it's a flat lucide bookmark; I'll pick a cleaner one that reads clearly as "save," not decoration (#94). If "add to a list" is the truer meaning, a small "+ list" or a folder-in might fit better than a bookmark - say which mental model you prefer.</li>
+    <li><b>Weight labels</b> — "v.low/v.high" is going away (#93). Options: full words (<b>Rarely · Less · Normal · More · Favorite</b>), or a 5-dot / 5-star scale, or a slider. My lean: the word scale (clear, no truncation). Preference?</li>
+  </ul>
+
+  <footer>Pick an intent option (A/B/C) and a card option (A/B/C) - or mix (e.g. intent-A topics with card-C reading calm). Once you choose, I fold it into the reader/card/sheets pass along with the visual-simplify + reader-to-page conversion. Meanwhile the collections review + expanded typography are already building.</footer>
+</main>
+</body>
+</html>
