@@ -1,0 +1,240 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>otium · design choices</title>
+<style>
+  :root{--ink:#1c1813;--mute:#7a6f62;--faint:#a89e90;--line:#ded7c9;--paper:#f4f0e8;--panel:#efe9dd;--wire:#cdc5b6;--wire2:#e3ddd0;--pick:#2c4a2c}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--paper);color:var(--ink);font-family:"Charter","Georgia",serif;line-height:1.5;padding:0 0 160px}
+  main{max-width:920px;margin:0 auto;padding:20px 16px}
+  h1{font-family:"Didot","Georgia",serif;font-weight:400;font-size:32px;margin:0 0 3px}
+  .sub{color:var(--mute);font-size:14px;margin:0 0 8px}
+  h2{font-family:"Didot","Georgia",serif;font-weight:400;font-size:21px;margin:34px 0 2px}
+  .q{font-size:13px;color:var(--mute);margin:0 0 12px}
+  .opts{display:flex;gap:12px;overflow-x:auto;padding:4px 2px 10px;scroll-snap-type:x mandatory}
+  .choice{flex:0 0 auto;scroll-snap-align:start;cursor:pointer;border:2px solid transparent;border-radius:14px;padding:8px;transition:border-color .12s,background .12s;position:relative}
+  .choice:active{transform:scale(.99)}
+  .choice.sel{border-color:var(--pick);background:#e9 efe2;background:#eaefe2}
+  .choice .lbl{font-size:13px;font-weight:700;margin:2px 2px 2px}
+  .choice .nt{font-size:11.5px;color:var(--mute);margin:0 2px 8px;max-width:200px;min-height:30px}
+  .choice .badge{position:absolute;top:12px;right:12px;width:20px;height:20px;border-radius:50%;border:2px solid var(--wire);background:var(--paper);display:flex;align-items:center;justify-content:center;font-size:11px;color:var(--paper);z-index:3}
+  .choice.sel .badge{background:var(--pick);border-color:var(--pick)}
+  .choice.sel .badge::after{content:"✓"}
+  /* phone */
+  .ph{width:190px;height:360px;border:2px solid var(--ink);border-radius:18px;background:var(--paper);padding:8px 8px 0;display:flex;flex-direction:column;overflow:hidden}
+  .ph .top{height:14px;font-family:"SF Mono";font-size:7px;color:var(--faint);display:flex;justify-content:space-between}
+  .ph .bd{flex:1;overflow:hidden;padding:2px 3px;display:flex;flex-direction:column;gap:6px}
+  .ph .tb{flex:0 0 auto;height:22px;border-top:1px solid var(--wire2);display:flex;margin:0 -8px}
+  .ph .tb span{flex:1;text-align:center;font-family:"SF Mono";font-size:6px;color:var(--faint);padding-top:6px}
+  .ph .tb span.on{color:var(--ink);font-weight:700}
+  .tx{background:var(--wire);border-radius:2px;height:8px}.tx.s{height:5px;background:var(--wire2)}
+  .tx.t{height:12px;width:80%}.w70{width:70%}.w55{width:55%}.w40{width:40%}.w30{width:30%}.w85{width:85%}.w60{width:60%}.w50{width:50%}
+  .img{background:repeating-linear-gradient(45deg,#dcd5c7,#dcd5c7 4px,#e6e0d2 4px,#e6e0d2 8px);border-radius:3px}
+  .r{display:flex;gap:5px;align-items:center}
+  .tl{font-family:"SF Mono";font-size:8px;color:var(--faint)}.tl.on{color:var(--ink);font-weight:700}
+  .tp{font-family:"SF Mono";font-size:8px;color:var(--mute)}.tp.on{color:var(--ink);font-weight:700;border-bottom:1.3px solid var(--ink);padding-bottom:1px}
+  .ck{width:11px;height:11px;border:1.2px solid var(--mute);border-radius:2px;flex:0 0 auto}.ck.on{background:var(--ink);border-color:var(--ink)}
+  .ico{opacity:.6;font-size:11px}
+  .solid{background:var(--ink);color:var(--paper);border-radius:4px;height:22px;display:flex;align-items:center;justify-content:center;font-family:"SF Mono";font-size:7px;letter-spacing:.05em}
+  .caps{font-family:"SF Mono";font-size:7px;color:var(--mute);letter-spacing:.05em}
+  /* small option tiles (icon / label choices) */
+  .tile{width:200px;height:130px;border:1px solid var(--line);border-radius:10px;background:var(--panel);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px}
+  .tile svg{display:block}
+  .scale{display:flex;gap:9px;align-items:center;font-family:"SF Mono";font-size:9px}
+  .dot{width:11px;height:11px;border-radius:50%;border:1.4px solid var(--ink)}.dot.f{background:var(--ink)}
+  .star{font-size:15px;color:var(--ink)}.star.e{color:var(--wire)}
+  .wl{font-family:"SF Mono";font-size:9px;color:var(--faint)}.wl.on{color:var(--ink);font-weight:700}
+  /* summary dock */
+  .dock{position:fixed;left:0;right:0;bottom:0;background:var(--panel);border-top:2px solid var(--ink);padding:10px 16px;z-index:20;box-shadow:0 -6px 20px rgba(0,0,0,.08)}
+  .dock .inner{max-width:920px;margin:0 auto;display:flex;gap:12px;align-items:center;flex-wrap:wrap}
+  .dock .sumtxt{flex:1;min-width:200px;font-family:"SF Mono";font-size:12px;line-height:1.6}
+  .dock b{color:var(--pick)}
+  .btn{font-family:"SF Mono";font-size:11px;letter-spacing:.03em;padding:9px 13px;border:1.5px solid var(--ink);background:var(--paper);color:var(--ink);border-radius:6px;cursor:pointer}
+  .btn.p{background:var(--ink);color:var(--paper)}
+  .notes{width:100%;margin-top:6px}
+  .notes input{width:100%;font-family:"SF Mono";font-size:12px;padding:7px 9px;border:1px solid var(--line);border-radius:5px;background:var(--paper);color:var(--ink)}
+  .notes label{font-family:"SF Mono";font-size:10px;color:var(--faint);letter-spacing:.04em}
+  #jsonbox{width:100%;max-width:920px;margin:8px auto 0;display:block;font-family:"SF Mono";font-size:11px;padding:8px;border:1px solid var(--line);border-radius:5px;background:var(--paper);color:var(--ink);height:96px}
+  .hint{font-size:12px;color:var(--mute)}
+  @media(max-width:640px){main{padding:16px 12px}h1{font-size:27px}.ph{width:172px;height:328px}.tile{width:150px}}
+</style>
+</head>
+<body>
+<main>
+  <h1>otium — design choices</h1>
+  <p class="sub">Tap one option per question. Your picks save automatically. When done, hit <b>Copy my choices</b> at the bottom and paste it back to me (or Save the JSON on desktop).</p>
+
+  <!-- Q1 intent -->
+  <h2>1 · Intent page layout</h2>
+  <p class="q">How the "start a session" screen reads. All share full time labels (5 MIN / 1 HR) and one solid Start.</p>
+  <div class="opts" data-group="intent-layout">
+    <div class="choice" data-value="A"><span class="badge"></span><div class="lbl">A · Underline-tab topics</div><div class="nt">Topics as a quiet tab row, active underlined. Simplest.</div>
+      <div class="ph"><div class="top"><span>otium</span><span>9:41</span></div><div class="bd">
+        <div class="tx t"></div><div class="tx s w55"></div><div style="height:5px"></div>
+        <div class="r" style="justify-content:space-around;align-items:baseline"><span class="tl on">5 MIN</span><span class="tl">15</span><span class="tl">30</span><span class="tl">1 HR</span></div>
+        <div style="height:12px"></div><div class="caps">TOPICS</div>
+        <div class="r" style="gap:12px;flex-wrap:wrap"><span class="tp on">All</span><span class="tp">News</span><span class="tp">Comics</span><span class="tp">Local</span></div>
+        <div style="flex:1"></div><div class="solid">Start reading</div><div style="height:4px"></div>
+      </div><div class="tb"><span class="on">READ</span><span>LIBRARY</span><span>SAVED</span><span>YOU</span></div></div></div>
+    <div class="choice" data-value="B"><span class="badge"></span><div class="lbl">B · Checklist topics</div><div class="nt">Explicit multi-select checklist. Clearest you can pick several.</div>
+      <div class="ph"><div class="top"><span>otium</span><span>9:41</span></div><div class="bd">
+        <div class="tx t"></div><div style="height:5px"></div>
+        <div class="r" style="justify-content:space-around;align-items:baseline"><span class="tl on">5 MIN</span><span class="tl">15</span><span class="tl">30</span><span class="tl">1 HR</span></div>
+        <div style="height:9px"></div><div class="caps">TOPICS</div>
+        <div class="r"><span class="ck on"></span><div class="tx s w60"></div></div>
+        <div class="r"><span class="ck on"></span><div class="tx s w40"></div></div>
+        <div class="r"><span class="ck"></span><div class="tx s w50"></div></div>
+        <div class="r"><span class="ck"></span><div class="tx s w40"></div></div>
+        <div style="flex:1"></div><div class="solid">Start reading</div><div style="height:4px"></div>
+      </div><div class="tb"><span class="on">READ</span><span>LIBRARY</span><span>SAVED</span><span>YOU</span></div></div></div>
+    <div class="choice" data-value="C"><span class="badge"></span><div class="lbl">C · Big number + slider</div><div class="nt">Time is one big numeral you tune; topics quiet words. Most minimal.</div>
+      <div class="ph"><div class="top"><span>otium</span><span>9:41</span></div><div class="bd">
+        <div class="tx t w55"></div><div style="height:10px"></div>
+        <div class="r" style="justify-content:center;align-items:baseline;gap:7px"><span class="ico">−</span><span style="font-family:Didot;font-size:34px">20</span><span class="caps">MIN</span><span class="ico">+</span></div>
+        <div class="r" style="justify-content:center"><div class="tx s w60"></div></div>
+        <div style="height:12px"></div>
+        <div class="r" style="gap:10px;justify-content:center;flex-wrap:wrap"><span class="tp on">All</span><span class="tp">News</span><span class="tp">Comics</span></div>
+        <div style="flex:1"></div><div class="solid">Start reading</div><div style="height:4px"></div>
+      </div><div class="tb"><span class="on">READ</span><span>LIBRARY</span><span>SAVED</span><span>YOU</span></div></div></div>
+  </div>
+  <div class="notes"><label>Notes (optional)</label><input data-notes="intent-layout" placeholder="e.g. A topics but bigger time labels"></div>
+
+  <!-- Q2 card -->
+  <h2>2 · Session card layout</h2>
+  <p class="q">The reading card. All de-noised (no reason-box, no weight badge, quiet icon actions).</p>
+  <div class="opts" data-group="card-layout">
+    <div class="choice" data-value="A"><span class="badge"></span><div class="lbl">A · Text-forward</div><div class="nt">Title + date lead, media below. Reads like a headline. Calmest for text.</div>
+      <div class="ph"><div class="top"><span>← intent</span><span>library</span></div><div class="bd">
+        <div class="r" style="justify-content:space-between"><span class="caps">FRESH · RARE</span><span class="ico">⋯</span></div>
+        <div class="tx t" style="height:13px"></div><div class="tx s w30" style="height:7px;background:var(--wire)"></div>
+        <div class="img" style="height:54px"></div>
+        <div class="caps">Local · VTDigger · 2d</div>
+        <div class="tx s w85"></div><div class="tx s w70"></div>
+        <div style="flex:1"></div>
+        <div class="r" style="justify-content:space-around"><span class="ico">↗</span><span class="ico">♡</span><span class="ico">🔖</span><span class="ico">⌄</span></div>
+      </div></div></div>
+    <div class="choice" data-value="B"><span class="badge"></span><div class="lbl">B · Media-forward</div><div class="nt">Hero image leads (great for video/photo), title below, minimal meta.</div>
+      <div class="ph"><div class="top"><span>← intent</span><span>library</span></div><div class="bd">
+        <div class="r" style="justify-content:space-between"><span class="caps">RARE</span><span class="ico">⋯</span></div>
+        <div class="img" style="height:86px"></div>
+        <div class="tx t" style="height:13px"></div>
+        <div class="caps">VTDigger · Local · 2d ago</div>
+        <div class="tx s w70"></div>
+        <div style="flex:1"></div>
+        <div class="r" style="justify-content:space-around"><span class="ico">↗</span><span class="ico">♡</span><span class="ico">🔖</span><span class="ico">⌄</span></div>
+      </div></div></div>
+    <div class="choice" data-value="C"><span class="badge"></span><div class="lbl">C · Ultra-minimal read</div><div class="nt">Almost pure text: title, date, longer excerpt; media optional. Max calm.</div>
+      <div class="ph"><div class="top"><span>← intent</span><span>library</span></div><div class="bd">
+        <div style="height:5px"></div>
+        <div class="tx t" style="height:14px"></div>
+        <div class="caps" style="margin-top:2px">Local · VTDigger · 2 days ago</div>
+        <div style="height:6px"></div>
+        <div class="tx s w85"></div><div class="tx s"></div><div class="tx s w70"></div><div class="tx s w85"></div><div class="tx s w55"></div>
+        <div style="flex:1"></div>
+        <div class="r" style="justify-content:flex-end;gap:14px"><span class="ico">↗</span><span class="ico">♡</span><span class="ico">🔖</span><span class="ico">⌄</span></div>
+      </div></div></div>
+  </div>
+  <div class="notes"><label>Notes (optional)</label><input data-notes="card-layout" placeholder="e.g. C but keep a small hero image"></div>
+
+  <!-- Q3 save icon -->
+  <h2>3 · Save icon &amp; meaning</h2>
+  <p class="q">What does the save action mean to you - and which glyph fits?</p>
+  <div class="opts" data-group="save-icon">
+    <div class="choice" data-value="bookmark"><span class="badge"></span><div class="lbl">Bookmark</div><div class="nt">"Mark this one." Classic save.</div>
+      <div class="tile"><svg width="34" height="42" viewBox="0 0 24 30"><path d="M5 2h14a1 1 0 0 1 1 1v25l-8-6-8 6V3a1 1 0 0 1 1-1z" fill="none" stroke="#1c1813" stroke-width="1.6"/></svg></div></div>
+    <div class="choice" data-value="list"><span class="badge"></span><div class="lbl">Add to list</div><div class="nt">"Put it in a collection." A + / folder-in.</div>
+      <div class="tile"><svg width="42" height="40" viewBox="0 0 30 28"><path d="M3 6a2 2 0 0 1 2-2h6l2 3h10a2 2 0 0 1 2 2v13a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" fill="none" stroke="#1c1813" stroke-width="1.6"/><path d="M15 12v7M11.5 15.5h7" stroke="#1c1813" stroke-width="1.6" stroke-linecap="round"/></svg></div></div>
+    <div class="choice" data-value="tag"><span class="badge"></span><div class="lbl">Tag</div><div class="nt">"Label it." The current-ish look.</div>
+      <div class="tile"><svg width="42" height="40" viewBox="0 0 30 28"><path d="M4 4h11l11 11-11 11L4 15z" fill="none" stroke="#1c1813" stroke-width="1.6"/><circle cx="9.5" cy="9.5" r="1.8" fill="#1c1813"/></svg></div></div>
+  </div>
+  <div class="notes"><label>Notes (optional)</label><input data-notes="save-icon" placeholder=""></div>
+
+  <!-- Q4 weight labels -->
+  <h2>4 · Source weight control</h2>
+  <p class="q">Replacing "v.low / low / normal / high / fav." How should weight read?</p>
+  <div class="opts" data-group="weight-labels">
+    <div class="choice" data-value="words"><span class="badge"></span><div class="lbl">Words</div><div class="nt">Clear, no truncation. (My lean.)</div>
+      <div class="tile"><div style="display:flex;flex-direction:column;gap:5px;align-items:flex-start"><span class="wl">Rarely</span><span class="wl">Less</span><span class="wl on">Normal</span><span class="wl">More</span><span class="wl">Favorite</span></div></div></div>
+    <div class="choice" data-value="dots"><span class="badge"></span><div class="lbl">Dots</div><div class="nt">A 1-5 density scale.</div>
+      <div class="tile"><div class="scale"><span class="dot f"></span><span class="dot f"></span><span class="dot f"></span><span class="dot"></span><span class="dot"></span></div><div class="caps">MORE ⟶ surfaces often</div></div></div>
+    <div class="choice" data-value="stars"><span class="badge"></span><div class="lbl">Stars</div><div class="nt">Familiar 1-5 rating feel.</div>
+      <div class="tile"><div class="scale"><span class="star">★</span><span class="star">★</span><span class="star">★</span><span class="star e">★</span><span class="star e">★</span></div></div></div>
+    <div class="choice" data-value="slider"><span class="badge"></span><div class="lbl">Slider</div><div class="nt">Continuous, quiet.</div>
+      <div class="tile"><div style="width:130px"><div style="height:2px;background:var(--ink);position:relative"><div style="position:absolute;left:55%;top:-6px;width:14px;height:14px;background:var(--ink);border-radius:2px"></div></div><div class="r" style="justify-content:space-between;margin-top:8px"><span class="caps">rare</span><span class="caps">fav</span></div></div></div></div>
+  </div>
+  <div class="notes"><label>Notes (optional)</label><input data-notes="weight-labels" placeholder=""></div>
+
+  <!-- Q5 card meta control -->
+  <h2>5 · Card meta styling control</h2>
+  <p class="q">In Appearance, the card's feed-tag / source / date sizing+color. One flag from the last build.</p>
+  <div class="opts" data-group="card-meta">
+    <div class="choice" data-value="unified"><span class="badge"></span><div class="lbl">One unified control</div><div class="nt">Feed-tag + source + date move together. Simpler (what shipped).</div>
+      <div class="tile"><div style="text-align:center"><div class="caps" style="font-size:9px">FEED · SOURCE · DATE</div><div style="margin-top:8px;font-family:'SF Mono';font-size:9px;color:var(--mute)">1 slider → all three</div></div></div></div>
+    <div class="choice" data-value="per-element"><span class="badge"></span><div class="lbl">Per-element</div><div class="nt">Tune feed-tag, source, and date independently. More control, more knobs.</div>
+      <div class="tile"><div style="text-align:left;font-family:'SF Mono';font-size:9px;color:var(--mute);display:flex;flex-direction:column;gap:6px"><span>feed-tag → ▭▭▭</span><span>source → ▭▭</span><span>date → ▭▭▭▭</span></div></div></div>
+  </div>
+  <div class="notes"><label>Notes (optional)</label><input data-notes="card-meta" placeholder=""></div>
+
+  <textarea id="jsonbox" readonly placeholder="Your choices JSON appears here after you pick — copy it to me, or use Save on desktop."></textarea>
+  <p class="hint" id="loadwrap">Restore a saved set: <input type="file" id="loadfile" accept="application/json"></p>
+</main>
+
+<div class="dock"><div class="inner">
+  <div class="sumtxt" id="summary">No picks yet — tap an option in each section.</div>
+  <button class="btn p" id="copybtn">Copy my choices</button>
+  <button class="btn" id="savebtn">Save JSON</button>
+</div></div>
+
+<script>
+  const KEY="otium-choices-v1";
+  const state=JSON.parse(localStorage.getItem(KEY)||"{}");
+  const groups=["intent-layout","card-layout","save-icon","weight-labels","card-meta"];
+  const nice={"intent-layout":"Intent","card-layout":"Card","save-icon":"Save","weight-labels":"Weight","card-meta":"Card-meta"};
+
+  function render(){
+    // reflect selections
+    document.querySelectorAll(".opts").forEach(o=>{
+      const g=o.dataset.group;
+      o.querySelectorAll(".choice").forEach(c=>c.classList.toggle("sel",state[g]&&state[g].action===c.dataset.value));
+    });
+    document.querySelectorAll("[data-notes]").forEach(i=>{const g=i.dataset.notes; if(state[g]&&state[g].notes!==undefined) i.value=state[g].notes;});
+    // summary
+    const parts=groups.filter(g=>state[g]&&state[g].action).map(g=>`${nice[g]}: <b>${state[g].action}</b>`);
+    document.getElementById("summary").innerHTML = parts.length? parts.join(" &nbsp;·&nbsp; ")+`  (${parts.length}/5)` : "No picks yet — tap an option in each section.";
+    // json
+    document.getElementById("jsonbox").value = JSON.stringify(payload(),null,2);
+  }
+  function payload(){
+    return {report:"otium-design-choices", savedAt:new Date().toISOString(),
+      items: groups.map(g=>({id:g, action:(state[g]&&state[g].action)||null, notes:(state[g]&&state[g].notes)||""}))};
+  }
+  function set(g,v){ state[g]=state[g]||{}; state[g].action=v; localStorage.setItem(KEY,JSON.stringify(state)); render(); }
+
+  document.querySelectorAll(".opts").forEach(o=>{
+    o.querySelectorAll(".choice").forEach(c=>c.addEventListener("click",()=>set(o.dataset.group,c.dataset.value)));
+  });
+  document.querySelectorAll("[data-notes]").forEach(i=>i.addEventListener("input",()=>{
+    const g=i.dataset.notes; state[g]=state[g]||{}; state[g].notes=i.value; localStorage.setItem(KEY,JSON.stringify(state)); document.getElementById("jsonbox").value=JSON.stringify(payload(),null,2);
+  }));
+  document.getElementById("copybtn").addEventListener("click",async()=>{
+    const txt="otium choices → "+groups.map(g=>`${nice[g]}: ${(state[g]&&state[g].action)||"?"}`).join(" · ")
+      +"\n\n"+JSON.stringify(payload());
+    try{ await navigator.clipboard.writeText(txt); document.getElementById("copybtn").textContent="Copied ✓"; setTimeout(()=>document.getElementById("copybtn").textContent="Copy my choices",1600);}
+    catch(e){ const b=document.getElementById("jsonbox"); b.focus(); b.select(); alert("Select-all + copy the box above, then paste it to me."); }
+  });
+  document.getElementById("savebtn").addEventListener("click",()=>{
+    const blob=new Blob([JSON.stringify(payload(),null,2)],{type:"application/json"});
+    const a=document.createElement("a"); a.href=URL.createObjectURL(blob);
+    a.download="otium-design-choices.decisions."+new Date().toISOString().replace(/[:.]/g,"-")+".json"; a.click();
+  });
+  document.getElementById("loadfile").addEventListener("change",e=>{
+    const f=e.target.files[0]; if(!f)return; const rd=new FileReader();
+    rd.onload=()=>{ try{ const d=JSON.parse(rd.result); (d.items||[]).forEach(it=>{ if(it.id){ state[it.id]={action:it.action,notes:it.notes||""}; }}); localStorage.setItem(KEY,JSON.stringify(state)); render(); }catch(x){alert("Couldn't read that file.");} };
+    rd.readAsText(f);
+  });
+  render();
+</script>
+</body>
+</html>
