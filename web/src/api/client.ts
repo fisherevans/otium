@@ -216,6 +216,37 @@ export interface Settings {
   multi_feed_rule: MultiFeedRule;
 }
 
+// Appearance preferences (#80/#81/#82). Display-only: reader typography, card
+// styling, and the intent-page session-length presets. Never read by the ranker.
+// The server fills defaults for a fresh user, so this is always fully populated.
+export interface ReaderPrefs {
+  font_size: number; // px
+  line_height: number; // unitless
+  measure: number; // max line length, ch
+  images: boolean; // render images inside the reader body
+}
+export interface CardPrefs {
+  meta_size: number; // sub-text / media-type meta, px
+  source_size: number; // source label, px
+  feed_tag_size: number; // feed identity tag, px
+  date_size: number; // date above the hero (#73), px
+  hero_show: boolean; // show the hero/media block
+  hero_color: boolean; // true = color; false = grayscale/dither
+}
+export interface Preferences {
+  reader: ReaderPrefs;
+  card: CardPrefs;
+  presets: number[]; // intent-page chips, minutes
+}
+
+// A deep-partial patch for PUT /preferences: the server merges it onto the
+// stored blob, so a change need only carry the fields it touches.
+export type PreferencesPatch = {
+  reader?: Partial<ReaderPrefs>;
+  card?: Partial<CardPrefs>;
+  presets?: number[];
+};
+
 export class Unauthorized extends Error {}
 
 function handleAuth(status: number) {
@@ -315,6 +346,11 @@ export const api = {
   // full current settings.
   getSettings: () => req<Settings>("GET", "/settings"),
   updateSettings: (patch: Partial<Settings>) => req<Settings>("PATCH", "/settings", patch),
+
+  // Appearance preferences (#80/#81/#82): display-only reader/card/preset styling.
+  // updatePreferences merges the patch server-side and returns the full result.
+  getPreferences: () => req<Preferences>("GET", "/preferences"),
+  updatePreferences: (patch: PreferencesPatch) => req<Preferences>("PUT", "/preferences", patch),
 
   // Collections (#57). Pass an itemId to get per-collection membership flags for
   // the Save picker; omit it for the plain list-with-counts.

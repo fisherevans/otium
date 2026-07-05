@@ -2,14 +2,12 @@ package server
 
 import (
 	"encoding/json"
-	"net/http"
-
+	"github.com/fisherevans/otium/internal/oidc"
+	"github.com/fisherevans/otium/internal/server/handler"
 	"github.com/go-chi/chi/v5"
 	chimw "github.com/go-chi/chi/v5/middleware"
 	"github.com/go-chi/cors"
-
-	"github.com/fisherevans/otium/internal/oidc"
-	"github.com/fisherevans/otium/internal/server/handler"
+	"net/http"
 )
 
 // NewRouter wires the HTTP surface: health, the OIDC /auth/* flow (ungated),
@@ -86,6 +84,11 @@ func NewRouter(h *handler.Handler, authMiddleware func(http.Handler) http.Handle
 			// User settings (#68): the fast-scroll check-in toggle.
 			r.Get("/settings", h.GetSettings)
 			r.Patch("/settings", h.UpdateSettings)
+
+			// Appearance preferences (#80/#81/#82): display-only reader/card/preset
+			// styling. PUT merges a JSON patch; never read by the ranker.
+			r.Get("/preferences", h.GetPreferences)
+			r.Put("/preferences", h.UpdatePreferences)
 
 			r.Post("/import/parse", h.ParseImport)
 			r.Post("/import/commit", h.CommitImport)

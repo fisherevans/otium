@@ -1,5 +1,18 @@
 // Small formatting helpers shared across the reader + drill-in surfaces.
 
+// clock renders a duration as m:ss (media badge on the card).
+export function clock(sec: number): string {
+  const m = Math.floor(sec / 60);
+  const s = Math.round(sec % 60);
+  return `${m}:${String(s).padStart(2, "0")}`;
+}
+
+// mins renders a duration as a coarse "N min" label ("<1 min" under a minute).
+export function mins(sec: number): string {
+  const m = Math.round(sec / 60);
+  return m < 1 ? "<1 min" : `${m} min`;
+}
+
 export function fmtDate(iso?: string): string {
   if (!iso) return "";
   const d = new Date(iso);

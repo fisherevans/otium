@@ -10,6 +10,7 @@ import SettingsPage from "@/pages/SettingsPage";
 // --- #83 personal-history page ---
 import HistoryPage from "@/pages/HistoryPage";
 // --- end #83 ---
+import AppearancePage from "@/pages/AppearancePage";
 // --- #66 feed-mgmt-pages: dedicated source/feed pages ---
 import SourcePage from "@/pages/SourcePage";
 import FeedPage from "@/pages/FeedPage";
@@ -67,6 +68,7 @@ export default function App() {
           <Route path="/history" element={<HistoryPage />} /> {/* #83: personal shown-vs-engaged history */}
           <Route path="/mix" element={<MixPage />} />
           <Route path="/settings" element={<SettingsPage />} /> {/* #68: preferences (fast-scroll check-in) */}
+          <Route path="/settings/appearance" element={<AppearancePage />} /> {/* #80/#81/#82: appearance + live preview */}
           <Route path="/import" element={<ImportPage />} />
         </Routes>
       </main>

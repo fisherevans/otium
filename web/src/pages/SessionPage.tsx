@@ -7,7 +7,9 @@ import { Player } from "@/components/Player";
 import { SavePicker } from "@/components/SavePicker";
 import { ScoreCue, ScoreBreakdownSheet } from "@/components/ScoreBreakdown";
 import { SourceSheet } from "@/components/SourceSheet";
+import { Media, CardDate, Identity } from "@/components/CardParts";
 import { ExternalLink, Heart, Bookmark, ChevronDown } from "lucide-react";
+import { mins } from "@/lib/format";
 
 // Which in-app content surface an item opens into (#51). Video/audio play in
 // the Player; everything else (article/rss/quote/text) reads in the Reader.
@@ -15,102 +17,6 @@ function contentKind(item: Item): "video" | "audio" | "read" {
   if (item.media_type === "short" || item.media_type === "long" || item.media_type === "live") return "video";
   if (item.media_type === "audio") return "audio";
   return "read";
-}
-import { feedIcon } from "@/lib/feedIcons";
-import { relTime } from "@/lib/format";
-
-function clock(sec: number) {
-  const m = Math.floor(sec / 60);
-  const s = Math.round(sec % 60);
-  return `${m}:${String(s).padStart(2, "0")}`;
-}
-function mins(sec: number) {
-  const m = Math.round(sec / 60);
-  return m < 1 ? "<1 min" : `${m} min`;
-}
-
-// Media preview, rendered as e-ink: real thumbnail (grayscaled) when we have one,
-// otherwise a dithered placeholder, with the right aspect + affordances per type.
-function Media({ item }: { item: Item }) {
-  const t = item.media_type;
-  if (t === "audio") {
-    return (
-      <div className="wave" aria-label="audio">
-        {Array.from({ length: 40 }, (_, i) => (
-          <i key={i} style={{ height: `${20 + Math.abs(Math.sin(i * 1.7)) * 60}%` }} />
-        ))}
-      </div>
-    );
-  }
-  if (t === "short" || t === "long" || t === "live") {
-    const vertical = t === "short";
-    return (
-      <div className={`media ${vertical ? "v" : "h"}`}>
-        {item.thumbnail_url ? <img src={item.thumbnail_url} alt="" loading="lazy" /> : <div className="dither" />}
-        <div className="dither" />
-        <div className="play" />
-        {item.duration_sec > 0 && <span className="dur">{clock(item.duration_sec)}</span>}
-      </div>
-    );
-  }
-  if (t === "article" && item.thumbnail_url) {
-    return (
-      <div className="media h">
-        <img src={item.thumbnail_url} alt="" loading="lazy" />
-        <div className="dither" />
-      </div>
-    );
-  }
-  return null; // quote / plain text: no media
-}
-
-// The prominent date above the hero (#73). The item's relative age reads first,
-// larger and clearer than the mono identity line, so "when" lands at a glance
-// before the media. relTime returns "" for a missing stamp, in which case we
-// omit the cue rather than fabricate one.
-function CardDate({ item }: { item: Item }) {
-  const age = relTime(item.published_at || item.fetched_at);
-  if (!age) return null;
-  return <div className="card-date">{age}</div>;
-}
-
-// The card's identity line (#44/#48): feed as the emphasized anchor (icon +
-// name), then the source and the media descriptor. The relative age moved above
-// the hero (#73), so it's no longer on this line. The source name is tappable
-// (#75): it opens the source context menu, and stops propagation so it doesn't
-// also trigger the card-body tap-to-open. A feedless source (e.g. YouTube) has
-// no feed ref, so the line degrades to source-only. Icons inherit ink via
-// currentColor; when a feed has no icon set we fall back to its color swatch.
-function Identity({ sel, onSource }: { sel: Selected; onSource: () => void }) {
-  const f = sel.feed;
-  const Ic = feedIcon(f?.icon);
-  const type = sel.item.media_type === "audio" ? mins(sel.item.duration_sec || sel.est_duration_sec) : sel.item.media_type;
-  return (
-    <div className="identity">
-      {f && (
-        <span className="id-feed">
-          {Ic ? (
-            <Ic size={15} strokeWidth={1.75} aria-hidden />
-          ) : (
-            <span className="id-swatch" style={{ background: f.color || "var(--ink-mute)" }} />
-          )}
-          <span className="id-feed-name">{f.name}</span>
-        </span>
-      )}
-      <button
-        type="button"
-        className={f ? "id-source" : "id-source lead"}
-        onPointerDown={(e) => e.stopPropagation()}
-        onClick={(e) => {
-          e.stopPropagation();
-          onSource();
-        }}
-      >
-        {sel.source_title}
-      </button>
-      {type && <span className="id-type">{type}</span>}
-    </div>
-  );
 }
 
 // #67/#79: the session is durable. This page drives entirely off the backend
