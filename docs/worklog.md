@@ -361,3 +361,27 @@ is the reusable foundation for future theming.
 ### Reader-depth remaining (Fisher's direction)
 #60 explicit e-ink mode + volume-key page-turns, #59 offline caching. The
 typography half (#61) is done; these two are the device-native half.
+
+## 2026-07-05 · Nav redesign + data-model change (v0.21 - v0.22)
+
+- **v0.21.0** - Model-A nav shell (#84): 4-tab bottom nav Read/Library/Saved/You;
+  Saved (Collections/History segments) + You (Settings/Appearance/Insights/Import)
+  homes; Library header decluttered, no overflow. Session stays tabless.
+- **v0.22.0** - data model (#86): source → exactly one feed (feed_id, populated
+  from feed_sources which is left intact for rollback); groups + group_feeds
+  (feed↔many groups); single-feed picker + Groups management; multi-feed
+  half-life rule (#76) deleted → source>feed>global. **Migration verified against
+  a copy of prod** (all 160 sources populated, zero mismatch); pre-migration prod
+  backup at ~/dev/otium-db-backups/otium-premodel-2026-07-05.db.
+
+### Design deliverables (docs/, served on WiFi :8099)
+- nav-redesign.html (Model A/B wireframes - Model A chosen, executing).
+- visual-simplify.html (noise inventory + before/after mockups - awaiting Fisher's
+  read on the bolder cuts).
+
+### Open / pending
+- Nav redesign **ch.2** (#85): reader/player + management sheets → pushed pages.
+- **Visual simplification**: borders/boxes → typography; pull mgmt detail off the
+  card. Overlaps ch.2's surfaces → plan to do them as ONE combined reader/card/
+  sheets pass once Fisher confirms the visual cuts.
+- Pre-existing: empty-DB `.map(null)` crash (guard with `?? []`) - fold into the pass.
