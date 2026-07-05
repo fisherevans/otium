@@ -111,6 +111,12 @@ func normalize(s store.Source, e *gofeed.Item) *store.Item {
 		PublishedAt:  pub,
 	}
 	it.MediaType = classify(s, e, dur)
+	// content_source provenance (#98): a feed that shipped a body is 'rss'; an
+	// empty body stays pending ('') so the on-demand content endpoint can try a
+	// readability fetch the first time the item is opened.
+	if it.Content != "" {
+		it.ContentSource = store.ContentSourceRSS
+	}
 	return it
 }
 
