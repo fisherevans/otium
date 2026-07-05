@@ -51,7 +51,7 @@ export default function HomePage() {
   // (and say so) when there's genuinely nothing new. Not shown as a count.
   const unseenForSelection = useMemo(() => {
     const match = picked.length
-      ? sources.filter((s) => (s.feed_slugs ?? []).some((slug) => picked.includes(slug)))
+      ? sources.filter((s) => s.feed_slug && picked.includes(s.feed_slug))
       : sources;
     return match.reduce((n, s) => n + (s.unseen_count ?? 0), 0);
   }, [sources, picked]);

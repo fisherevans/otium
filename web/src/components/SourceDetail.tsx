@@ -39,7 +39,7 @@ export function SourceDetail({
   const [bucket, setBucket] = useState<Bucket>("normal");
   const [cap, setCap] = useState(3);
   const [state, setState] = useState("followed");
-  const [feedSlugs, setFeedSlugs] = useState<string[]>([]);
+  const [feedSlug, setFeedSlug] = useState<string>(""); // #86: a source has one feed
   const [confirmDel, setConfirmDel] = useState(false);
 
   // Re-seed local state only when the source identity changes (opening a
@@ -50,7 +50,7 @@ export function SourceDetail({
     setBucket(bucketOf(source.weight));
     setCap(source.per_session_cap);
     setState(source.state);
-    setFeedSlugs(source.feed_slugs ?? []);
+    setFeedSlug(source.feed_slug ?? "");
     setConfirmDel(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [source?.id]);
@@ -89,12 +89,10 @@ export function SourceDetail({
       });
     }
   }
-  async function toggleFeed(slug: string) {
-    const cur = new Set(feedSlugs);
-    cur.has(slug) ? cur.delete(slug) : cur.add(slug);
-    const next = [...cur];
-    setFeedSlugs(next);
-    await api.setSourceFeeds(source!.id, next).catch(() => {});
+  async function chooseFeed(slug: string) {
+    const next = feedSlug === slug ? "" : slug; // #86: single feed; re-tap clears
+    setFeedSlug(next);
+    await api.setSourceFeed(source!.id, next).catch(() => {});
     onChanged?.();
   }
   async function del() {
@@ -168,15 +166,15 @@ export function SourceDetail({
 
         {feeds && feeds.length > 0 && (
           <>
-            <div className="ctl-label">Feeds</div>
+            <div className="ctl-label">Feed</div>
             <div className="feed-assign">
               {feeds.map((f) => {
                 const Ic = feedIcon(f.icon);
                 return (
                   <button
                     key={f.slug}
-                    className={`fa-chip ${feedSlugs.includes(f.slug) ? "on" : ""}`}
-                    onClick={() => toggleFeed(f.slug)}
+                    className={`fa-chip ${feedSlug === f.slug ? "on" : ""}`}
+                    onClick={() => chooseFeed(f.slug)}
                   >
                     {Ic && <Ic size={13} strokeWidth={1.75} aria-hidden />}
                     {f.name}

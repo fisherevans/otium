@@ -22,7 +22,7 @@ const mixCadenceDays = 45
 type MixSource struct {
 	SourceID       int64          `json:"source_id"`
 	SourceTitle    string         `json:"source_title"`
-	Feed           *store.FeedRef `json:"feed"` // primary feed identity; null for a feedless source
+	Feed           *store.FeedRef `json:"feed"` // the source's one feed (#86); null for a feedless source
 	EffectiveShare float64        `json:"effective_share"`
 	IntendedShare  float64        `json:"intended_share"`
 	SkipPct        float64        `json:"skip_pct"`
@@ -80,12 +80,7 @@ func (h *Handler) Mix(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	rule, err := h.db.MultiFeedRule(r.Context(), uid)
-	if err != nil {
-		serverError(w, h.log, "mix multi-feed rule", err)
-		return
-	}
-	items, err := h.db.MixItems(r.Context(), uid, sourceIDs, mixCadenceDays, rule)
+	items, err := h.db.MixItems(r.Context(), uid, sourceIDs, mixCadenceDays)
 	if err != nil {
 		serverError(w, h.log, "mix items", err)
 		return
@@ -129,8 +124,8 @@ func (h *Handler) Mix(w http.ResponseWriter, r *http.Request) {
 
 	feedOf := map[int64]store.FeedRef{}
 	if len(order) > 0 {
-		if m, err := h.db.PrimaryFeedsForSources(r.Context(), uid, order); err != nil {
-			h.log.Warn("mix primary feeds", "err", err)
+		if m, err := h.db.FeedsForSources(r.Context(), uid, order); err != nil {
+			h.log.Warn("mix feeds", "err", err)
 		} else {
 			feedOf = m
 		}

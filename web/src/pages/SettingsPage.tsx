@@ -1,16 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { api, type MultiFeedRule, type Settings } from "@/api/client";
-
-// The multi-feed half-life rule options (#76). A source can live in several feeds
-// with different freshness half-lives; this decides which one wins. "Primary"
-// matches how feed identity already resolves (lowest-sorted feed), so it's the
-// neutral default. A per-source override still beats whatever this resolves to.
-const RULE_OPTIONS: { value: MultiFeedRule; label: string }[] = [
-  { value: "primary", label: "Primary feed" },
-  { value: "shortest", label: "Shortest" },
-  { value: "longest", label: "Longest" },
-];
+import { api, type Settings } from "@/api/client";
 
 // Settings (#68). A lightweight preferences surface, reachable from the library's
 // Manage sheet. One toggle today: the fast-scroll check-in. The copy is
@@ -41,21 +31,6 @@ export default function SettingsPage() {
       .catch((e) => {
         setErr(String(e.message ?? e));
         setSettings((s) => (s ? { ...s, fast_scroll_checkin: !next } : s)); // revert
-      })
-      .finally(() => setSaving(false));
-  }
-
-  function setRule(rule: MultiFeedRule) {
-    if (!settings || saving || settings.multi_feed_rule === rule) return;
-    const prev = settings.multi_feed_rule;
-    setSettings({ ...settings, multi_feed_rule: rule }); // optimistic
-    setSaving(true);
-    api
-      .updateSettings({ multi_feed_rule: rule })
-      .then(setSettings)
-      .catch((e) => {
-        setErr(String(e.message ?? e));
-        setSettings((s) => (s ? { ...s, multi_feed_rule: prev } : s)); // revert
       })
       .finally(() => setSaving(false));
   }
@@ -111,35 +86,6 @@ export default function SettingsPage() {
         </div>
       )}
 
-      {settings && (
-        <div className="page-section">
-          <div className="ctl-label">Preferences</div>
-          <p className="sub" style={{ marginTop: 0 }}>
-            Advanced ranking behavior. More knobs will live here over time.
-          </p>
-
-          <div className="settings-copy" style={{ marginBottom: 8 }}>
-            <b>Multi-feed half-life</b>
-            <span>
-              When a source belongs to several feeds with different freshness half-lives, this decides which one
-              applies. Primary feed uses the source's top feed (the default). Shortest fades those items fastest;
-              longest keeps them around longest. A per-source override always wins over this.
-            </span>
-          </div>
-          <div className="wbuckets">
-            {RULE_OPTIONS.map((o) => (
-              <button
-                key={o.value}
-                className={`wbucket ${settings.multi_feed_rule === o.value ? "on" : ""}`}
-                onClick={() => setRule(o.value)}
-                disabled={saving}
-              >
-                {o.label}
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
     </div>
   );
 }

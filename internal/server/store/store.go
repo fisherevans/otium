@@ -76,19 +76,86 @@ func migrate(sdb *sql.DB) error {
 	if err := ensureColumn(sdb, "sessions", "status", `ALTER TABLE sessions ADD COLUMN status TEXT NOT NULL DEFAULT 'active'`); err != nil {
 		return err
 	}
+	// One-feed model (#86): sources.feed_id. SQLite permits ADD COLUMN with a
+	// REFERENCES clause only when the added column's default is NULL, which this is.
+	if err := ensureColumn(sdb, "sources", "feed_id", `ALTER TABLE sources ADD COLUMN feed_id INTEGER REFERENCES feeds(id) ON DELETE SET NULL`); err != nil {
+		return err
+	}
 	// Index created here (not schema.sql) so it runs AFTER the status column is
 	// ensured on a pre-existing sessions table. See schema.sql note. Guarded on
 	// the table existing so migrate() stays safe against a partial DB (e.g. a
 	// test that sets up only the feeds table), matching ensureColumn's contract.
-	var sessionsExists int
-	if err := sdb.QueryRowContext(context.Background(),
-		`SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='sessions'`).Scan(&sessionsExists); err != nil {
+	if err := ensureIndexIfTable(sdb, "sessions", `CREATE INDEX IF NOT EXISTS idx_sessions_user_status ON sessions(user_id, status)`); err != nil {
 		return err
 	}
-	if sessionsExists == 0 {
+	// Group tier (#86): groups + group_feeds. CREATE TABLE IF NOT EXISTS is safe on
+	// every boot; forward FK references (users/feeds) are resolved at write time, so
+	// creating these before those tables exist (a partial test DB) is fine.
+	if _, err := sdb.Exec(`CREATE TABLE IF NOT EXISTS groups (
+		id         INTEGER PRIMARY KEY AUTOINCREMENT,
+		user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+		name       TEXT NOT NULL,
+		slug       TEXT NOT NULL,
+		icon       TEXT NOT NULL DEFAULT '',
+		sort       INTEGER NOT NULL DEFAULT 0,
+		created_at TEXT NOT NULL DEFAULT (datetime('now')),
+		UNIQUE (user_id, slug)
+	)`); err != nil {
+		return err
+	}
+	if _, err := sdb.Exec(`CREATE TABLE IF NOT EXISTS group_feeds (
+		group_id INTEGER NOT NULL REFERENCES groups(id) ON DELETE CASCADE,
+		feed_id  INTEGER NOT NULL REFERENCES feeds(id) ON DELETE CASCADE,
+		PRIMARY KEY (group_id, feed_id)
+	)`); err != nil {
+		return err
+	}
+	// Back-populate sources.feed_id from the single legacy feed_sources membership
+	// (#86). Idempotent: only fills rows still NULL, so it never fights a later
+	// picker change. Guarded on both tables existing (a partial test DB may have
+	// neither). feed_sources is left intact for rollback; this is its last reader.
+	if err := populateSourceFeedID(sdb); err != nil {
+		return err
+	}
+	// Index on the migrated column, created after the column is guaranteed present.
+	return ensureIndexIfTable(sdb, "sources", `CREATE INDEX IF NOT EXISTS idx_sources_feed ON sources(feed_id)`)
+}
+
+// ensureIndexIfTable creates an index only when its table exists, so migrate()
+// stays safe against a partial DB (a test that set up only a subset of tables).
+// The DDL itself is CREATE INDEX IF NOT EXISTS, so it's also safe to re-run.
+func ensureIndexIfTable(sdb *sql.DB, table, ddl string) error {
+	var n int
+	if err := sdb.QueryRowContext(context.Background(),
+		`SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name = ?`, table).Scan(&n); err != nil {
+		return err
+	}
+	if n == 0 {
 		return nil
 	}
-	_, err := sdb.Exec(`CREATE INDEX IF NOT EXISTS idx_sessions_user_status ON sessions(user_id, status)`)
+	_, err := sdb.Exec(ddl)
+	return err
+}
+
+// populateSourceFeedID back-fills sources.feed_id from the legacy feed_sources
+// table (#86): each source's single membership becomes its one feed. WHERE
+// feed_id IS NULL makes it idempotent (a re-run touches nothing) and non-
+// destructive to any assignment made through the new picker. Guarded on both
+// tables so it no-ops on a partial DB.
+func populateSourceFeedID(sdb *sql.DB) error {
+	for _, t := range []string{"sources", "feed_sources"} {
+		var n int
+		if err := sdb.QueryRowContext(context.Background(),
+			`SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name = ?`, t).Scan(&n); err != nil {
+			return err
+		}
+		if n == 0 {
+			return nil
+		}
+	}
+	_, err := sdb.Exec(`UPDATE sources
+		SET feed_id = (SELECT fs.feed_id FROM feed_sources fs WHERE fs.source_id = sources.id LIMIT 1)
+		WHERE feed_id IS NULL`)
 	return err
 }
 
@@ -149,7 +216,7 @@ func (db *DB) UpsertUserByUsername(ctx context.Context, username, email string) 
 func (db *DB) ListFeeds(ctx context.Context, userID int64) ([]Feed, error) {
 	rows, err := db.sql.QueryContext(ctx,
 		`SELECT f.id, f.name, f.slug, f.color, f.icon, f.half_life_days, f.diversity, f.sort, f.created_at,
-		        (SELECT COUNT(*) FROM feed_sources fs WHERE fs.feed_id = f.id) AS source_count
+		        (SELECT COUNT(*) FROM sources s WHERE s.feed_id = f.id) AS source_count
 		 FROM feeds f WHERE f.user_id = ? ORDER BY f.sort, f.name`, userID)
 	if err != nil {
 		return nil, err
@@ -243,10 +310,8 @@ func (db *DB) BackfillVideosFeed(ctx context.Context, userID int64) (int, error)
 		return 0, err
 	}
 	res, err := db.sql.ExecContext(ctx,
-		`INSERT OR IGNORE INTO feed_sources (feed_id, source_id)
-		 SELECT ?, s.id FROM sources s
-		 WHERE s.user_id = ? AND s.kind = 'youtube'
-		   AND NOT EXISTS (SELECT 1 FROM feed_sources fs WHERE fs.source_id = s.id)`,
+		`UPDATE sources SET feed_id = ?
+		 WHERE user_id = ? AND kind = 'youtube' AND feed_id IS NULL`,
 		f.ID, userID)
 	if err != nil {
 		return 0, err
@@ -291,23 +356,23 @@ func (db *DB) kvSet(ctx context.Context, userID int64, key, value string) error 
 
 const (
 	settingFastScrollCheckin = "fast_scroll_checkin"
-	settingMultiFeedRule     = "multi_feed_rule"
 )
 
 // Settings is the user's toggleable preferences. FastScrollCheckin gates the
 // dwell/engagement measurement + the fast-scroll check-in nudge (#68). Default
 // on; off = the old explicit-signals-only behavior (no dwell measured, no nudge).
-// MultiFeedRule (#76) is the resolution rule for a source that belongs to several
-// feeds - which feed supplies its freshness half-life. Default primary.
+//
+// The #76 multi-feed half-life rule was deleted in #86: a source now belongs to
+// exactly one feed, so half-life resolution is simply source override > that one
+// feed > global - there is no "which feed" ambiguity left to configure.
 type Settings struct {
-	FastScrollCheckin bool          `json:"fast_scroll_checkin"`
-	MultiFeedRule     MultiFeedRule `json:"multi_feed_rule"`
+	FastScrollCheckin bool `json:"fast_scroll_checkin"`
 }
 
 // GetSettings returns the user's settings with defaults filled in for any key
 // that has never been written.
 func (db *DB) GetSettings(ctx context.Context, userID int64) (Settings, error) {
-	s := Settings{FastScrollCheckin: true, MultiFeedRule: RulePrimaryFeed} // defaults
+	s := Settings{FastScrollCheckin: true} // defaults
 	v, ok, err := db.kvGet(ctx, userID, settingFastScrollCheckin)
 	if err != nil {
 		return s, err
@@ -315,27 +380,7 @@ func (db *DB) GetSettings(ctx context.Context, userID int64) (Settings, error) {
 	if ok {
 		s.FastScrollCheckin = v == "1"
 	}
-	rv, ok, err := db.kvGet(ctx, userID, settingMultiFeedRule)
-	if err != nil {
-		return s, err
-	}
-	if ok {
-		s.MultiFeedRule = NormalizeMultiFeedRule(rv)
-	}
 	return s, nil
-}
-
-// MultiFeedRule returns just the user's multi-feed resolution rule, for the hot
-// paths that resolve candidates and only need the rule (not the full settings).
-func (db *DB) MultiFeedRule(ctx context.Context, userID int64) (MultiFeedRule, error) {
-	v, ok, err := db.kvGet(ctx, userID, settingMultiFeedRule)
-	if err != nil {
-		return RulePrimaryFeed, err
-	}
-	if !ok {
-		return RulePrimaryFeed, nil
-	}
-	return NormalizeMultiFeedRule(v), nil
 }
 
 // SetFastScrollCheckin persists the fast-scroll check-in toggle.
@@ -345,12 +390,6 @@ func (db *DB) SetFastScrollCheckin(ctx context.Context, userID int64, on bool) e
 		v = "1"
 	}
 	return db.kvSet(ctx, userID, settingFastScrollCheckin, v)
-}
-
-// SetMultiFeedRule persists the multi-feed half-life resolution rule. The value
-// is normalized so an unknown string can never land in the store.
-func (db *DB) SetMultiFeedRule(ctx context.Context, userID int64, rule MultiFeedRule) error {
-	return db.kvSet(ctx, userID, settingMultiFeedRule, string(NormalizeMultiFeedRule(string(rule))))
 }
 
 // UpdateFeed patches a feed's presentation fields (name, color, icon) and the
@@ -388,21 +427,18 @@ func (db *DB) UpdateFeed(ctx context.Context, userID, id int64, name, color, ico
 	return err
 }
 
-// PrimaryFeedsForSources resolves the single "primary" feed for each of the
-// given sources, for the session card's identity line. A source in exactly one
-// feed maps to that feed; a source in several maps to the deterministic winner
-// (lowest feed sort, then lowest id). A source in no feed is absent from the map
-// (the card then renders source-only). Rows come back ordered so the first row
-// per source_id is its primary.
-func (db *DB) PrimaryFeedsForSources(ctx context.Context, userID int64, sourceIDs []int64) (map[int64]FeedRef, error) {
+// FeedsForSources resolves the one feed each of the given sources belongs to
+// (#86), for the session card's identity line and the mix rollup. A source with
+// a feed maps to that feed's FeedRef; a feedless source (feed_id NULL) is absent
+// from the map (the card then renders source-only).
+func (db *DB) FeedsForSources(ctx context.Context, userID int64, sourceIDs []int64) (map[int64]FeedRef, error) {
 	out := map[int64]FeedRef{}
 	if len(sourceIDs) == 0 {
 		return out, nil
 	}
-	q := `SELECT fs.source_id, f.name, f.slug, f.color, f.icon
-	      FROM feed_sources fs JOIN feeds f ON f.id = fs.feed_id
-	      WHERE f.user_id = ? AND fs.source_id IN (` + placeholders(len(sourceIDs)) + `)
-	      ORDER BY fs.source_id, f.sort, f.id`
+	q := `SELECT s.id, f.name, f.slug, f.color, f.icon
+	      FROM sources s JOIN feeds f ON f.id = s.feed_id
+	      WHERE s.user_id = ? AND s.id IN (` + placeholders(len(sourceIDs)) + `)`
 	args := []any{userID}
 	for _, id := range sourceIDs {
 		args = append(args, id)
@@ -418,48 +454,47 @@ func (db *DB) PrimaryFeedsForSources(ctx context.Context, userID int64, sourceID
 		if err := rows.Scan(&sid, &f.Name, &f.Slug, &f.Color, &f.Icon); err != nil {
 			return nil, err
 		}
-		if _, seen := out[sid]; !seen { // first row per source is the primary (ordered)
-			out[sid] = f
-		}
+		out[sid] = f
 	}
 	return out, rows.Err()
 }
 
-// SetSourceFeeds replaces the set of feeds a source belongs to (source-centric
-// assignment, for the library UI). Feeds are given by slug; unknown slugs are
-// ignored.
-func (db *DB) SetSourceFeeds(ctx context.Context, userID, sourceID int64, slugs []string) error {
-	tx, err := db.sql.BeginTx(ctx, nil)
-	if err != nil {
-		return err
-	}
-	defer tx.Rollback()
-	// verify the source belongs to the user before touching memberships
+// SetSourceFeed sets the one feed a source belongs to (#86), by slug. An empty
+// slug clears the feed (feedless). An unknown slug is a no-op that leaves the
+// source unchanged. Scoped to the owning user.
+func (db *DB) SetSourceFeed(ctx context.Context, userID, sourceID int64, slug string) error {
 	var owner int64
-	if err := tx.QueryRowContext(ctx, `SELECT user_id FROM sources WHERE id = ?`, sourceID).Scan(&owner); err != nil {
+	if err := db.sql.QueryRowContext(ctx, `SELECT user_id FROM sources WHERE id = ?`, sourceID).Scan(&owner); err != nil {
 		return err
 	}
 	if owner != userID {
 		return fmt.Errorf("source %d not owned by user", sourceID)
 	}
-	if _, err := tx.ExecContext(ctx, `DELETE FROM feed_sources WHERE source_id = ?`, sourceID); err != nil {
+	if slug == "" {
+		_, err := db.sql.ExecContext(ctx,
+			`UPDATE sources SET feed_id = NULL WHERE id = ? AND user_id = ?`, sourceID, userID)
 		return err
 	}
-	for _, slug := range slugs {
-		if _, err := tx.ExecContext(ctx,
-			`INSERT OR IGNORE INTO feed_sources (feed_id, source_id)
-			 SELECT id, ? FROM feeds WHERE user_id = ? AND slug = ?`,
-			sourceID, userID, slug); err != nil {
-			return err
-		}
+	var feedID int64
+	err := db.sql.QueryRowContext(ctx,
+		`SELECT id FROM feeds WHERE user_id = ? AND slug = ?`, userID, slug).Scan(&feedID)
+	if err == sql.ErrNoRows {
+		return nil // unknown slug: leave the source as-is
 	}
-	return tx.Commit()
+	if err != nil {
+		return err
+	}
+	_, err = db.sql.ExecContext(ctx,
+		`UPDATE sources SET feed_id = ? WHERE id = ? AND user_id = ?`, feedID, sourceID, userID)
+	return err
 }
 
-// AddFeedSource adds a source to a feed without disturbing existing members.
-func (db *DB) AddFeedSource(ctx context.Context, feedID, sourceID int64) error {
+// AssignSourceFeed sets a source's one feed by feed id (#86). Used by import and
+// the Videos backfill, which already hold the feed id. No-op guards live in the
+// callers; this is a plain scoped update.
+func (db *DB) AssignSourceFeed(ctx context.Context, sourceID, feedID int64) error {
 	_, err := db.sql.ExecContext(ctx,
-		`INSERT OR IGNORE INTO feed_sources (feed_id, source_id) VALUES (?, ?)`, feedID, sourceID)
+		`UPDATE sources SET feed_id = ? WHERE id = ?`, feedID, sourceID)
 	return err
 }
 
@@ -485,19 +520,25 @@ func (db *DB) CreateSourceImport(ctx context.Context, s *Source) (id int64, crea
 	return id, false, err
 }
 
-// SetFeedSources replaces the source membership of a feed.
+// SetFeedSources sets this feed as the one feed for exactly the given sources
+// (#86). Because a source belongs to a single feed, this both clears the feed's
+// previous members (feed_id -> NULL) and claims the listed ones - assigning a
+// source here removes it from whatever feed it was in before. Scoped to the user.
 func (db *DB) SetFeedSources(ctx context.Context, userID, feedID int64, sourceIDs []int64) error {
 	tx, err := db.sql.BeginTx(ctx, nil)
 	if err != nil {
 		return err
 	}
 	defer tx.Rollback()
-	if _, err := tx.ExecContext(ctx, `DELETE FROM feed_sources WHERE feed_id = ?`, feedID); err != nil {
+	// Release the current members of this feed.
+	if _, err := tx.ExecContext(ctx,
+		`UPDATE sources SET feed_id = NULL WHERE feed_id = ? AND user_id = ?`, feedID, userID); err != nil {
 		return err
 	}
+	// Claim the listed sources for this feed.
 	for _, sid := range sourceIDs {
 		if _, err := tx.ExecContext(ctx,
-			`INSERT OR IGNORE INTO feed_sources (feed_id, source_id) VALUES (?, ?)`, feedID, sid); err != nil {
+			`UPDATE sources SET feed_id = ? WHERE id = ? AND user_id = ?`, feedID, sid, userID); err != nil {
 			return err
 		}
 	}
@@ -510,6 +551,7 @@ func (db *DB) ListSources(ctx context.Context, userID int64) ([]Source, error) {
 	rows, err := db.sql.QueryContext(ctx,
 		`SELECT s.id, s.kind, s.title, s.feed_url, s.homepage_url, s.icon_url, s.weight,
 		        s.state, s.trial_until, s.per_session_cap, s.half_life_days, s.added_at, s.last_fetch_at, s.fetch_error,
+		        s.feed_id, f.slug,
 		        (SELECT COUNT(*) FROM items i WHERE i.source_id = s.id) AS item_count,
 		        (SELECT COUNT(*) FROM items i WHERE i.source_id = s.id
 		           AND NOT EXISTS (SELECT 1 FROM item_state st WHERE st.item_id = i.id AND st.user_id = ?)) AS unseen_count,
@@ -519,13 +561,13 @@ func (db *DB) ListSources(ctx context.Context, userID int64) ([]Source, error) {
 		         WHERE i2.source_id = s.id AND st.user_id = ?) AS skip_pct,
 		        (SELECT COUNT(*) / 30.0 FROM items i3
 		         WHERE i3.source_id = s.id AND i3.published_at >= datetime('now', '-30 days')) AS posts_per_day
-		 FROM sources s WHERE s.user_id = ? ORDER BY s.title`, userID, userID, userID)
+		 FROM sources s LEFT JOIN feeds f ON f.id = s.feed_id
+		 WHERE s.user_id = ? ORDER BY s.title`, userID, userID, userID)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
 	var out []Source
-	byID := map[int64]*Source{}
 	for rows.Next() {
 		s, err := scanSource(rows)
 		if err != nil {
@@ -533,31 +575,7 @@ func (db *DB) ListSources(ctx context.Context, userID int64) ([]Source, error) {
 		}
 		out = append(out, *s)
 	}
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-	for i := range out {
-		byID[out[i].ID] = &out[i]
-	}
-	// attach feed slugs
-	frows, err := db.sql.QueryContext(ctx,
-		`SELECT fs.source_id, f.slug FROM feed_sources fs
-		 JOIN feeds f ON f.id = fs.feed_id WHERE f.user_id = ?`, userID)
-	if err != nil {
-		return nil, err
-	}
-	defer frows.Close()
-	for frows.Next() {
-		var sid int64
-		var slug string
-		if err := frows.Scan(&sid, &slug); err != nil {
-			return nil, err
-		}
-		if s := byID[sid]; s != nil {
-			s.FeedSlugs = append(s.FeedSlugs, slug)
-		}
-	}
-	return out, frows.Err()
+	return out, rows.Err()
 }
 
 type rowScanner interface {
@@ -567,12 +585,18 @@ type rowScanner interface {
 func scanSource(r rowScanner) (*Source, error) {
 	var s Source
 	var added string
-	var trialUntil, lastFetch sql.NullString
+	var trialUntil, lastFetch, feedSlug sql.NullString
+	var feedID sql.NullInt64
 	if err := r.Scan(&s.ID, &s.Kind, &s.Title, &s.FeedURL, &s.HomepageURL, &s.IconURL, &s.Weight,
 		&s.State, &trialUntil, &s.PerSessionCap, &s.HalfLifeDays, &added, &lastFetch, &s.FetchError,
+		&feedID, &feedSlug,
 		&s.ItemCount, &s.UnseenCount, &s.SkipPct, &s.PostsPerDay); err != nil {
 		return nil, err
 	}
+	if feedID.Valid {
+		s.FeedID = &feedID.Int64
+	}
+	s.FeedSlug = feedSlug.String
 	s.AddedAt = parseTime(added)
 	if trialUntil.Valid {
 		t := parseTime(trialUntil.String)
@@ -736,9 +760,8 @@ func (db *DB) ListRecentItemsByFeed(ctx context.Context, userID, feedID int64, l
 		`SELECT i.id, i.source_id, i.url, i.title, i.summary, i.content, i.author, i.thumbnail_url,
 		        i.media_type, i.duration_sec, i.published_at, i.fetched_at
 		 FROM items i
-		 JOIN feed_sources fs ON fs.source_id = i.source_id
-		 JOIN feeds f ON f.id = fs.feed_id
-		 WHERE f.user_id = ? AND f.id = ?
+		 JOIN sources s ON s.id = i.source_id
+		 WHERE s.user_id = ? AND s.feed_id = ?
 		 ORDER BY i.published_at DESC LIMIT ?`, userID, feedID, limit)
 	if err != nil {
 		return nil, err
@@ -747,41 +770,16 @@ func (db *DB) ListRecentItemsByFeed(ctx context.Context, userID, feedID int64, l
 	return scanItems(rows)
 }
 
-// defaultHalfLifeDays is the global freshness half-life used when neither a
-// source nor a feed sets an override. Kept in lockstep with
-// session.freshnessHalfLifeDays (same value, 21) - the store needs it to compute
-// a feed's EFFECTIVE half-life for the shortest/longest multi-feed rule, where a
-// feed inheriting the global default must compare as 21 days, not 0. Same
-// deliberate duplication as cadenceRareFloor vs session.rareThresholdPerDay.
-const defaultHalfLifeDays = 21.0
-
 // candidateCols builds the shared projection for Candidates, MixItems, and
 // CandidatesByIDs: item + source facts, the source's own half-life override
 // (s.half_life_days, #76), the accumulated-history cadence inputs
-// (win_count/win_span), and the resolved feed overrides (half-life + diversity).
-//
-// The feed half-life honors the multi-feed rule (#76): by default the source's
-// primary feed (lowest sort, then id, matching PrimaryFeedsForSources), or - when
-// the user picks a rule - the shortest/longest EFFECTIVE half-life among the
-// source's feeds (a feed inheriting the global default counts as defaultHalfLifeDays
-// in that comparison, so an inheriting feed reads as 21 days, not 0; ties break on
-// sort then id for determinism). Diversity always follows the primary feed (#17) -
-// the rule governs half-life only. A feedless source COALESCEs to 0 (global
-// defaults). All callers must select these in this order so scanCandidates can read
-// any result set. The two ? placeholders are the cadence-window bound, twice; the
-// rule is inlined (never user text), so arg alignment is identical across callers.
-func candidateCols(rule MultiFeedRule) string {
-	feedHalfLife := `COALESCE((SELECT f.half_life_days FROM feed_sources fs JOIN feeds f ON f.id = fs.feed_id
-	                WHERE fs.source_id = s.id ORDER BY f.sort, f.id LIMIT 1), 0)`
-	if rule == RuleShortestHalfLife || rule == RuleLongestHalfLife {
-		dir := "ASC"
-		if rule == RuleLongestHalfLife {
-			dir = "DESC"
-		}
-		eff := fmt.Sprintf(`CASE WHEN f.half_life_days > 0 THEN f.half_life_days ELSE %g END`, defaultHalfLifeDays)
-		feedHalfLife = fmt.Sprintf(`COALESCE((SELECT %[1]s FROM feed_sources fs JOIN feeds f ON f.id = fs.feed_id
-	                WHERE fs.source_id = s.id ORDER BY (%[1]s) %[2]s, f.sort, f.id LIMIT 1), 0)`, eff, dir)
-	}
+// (win_count/win_span), and the source's one-feed ranker overrides (half-life +
+// diversity, #86). Since a source belongs to exactly one feed, the resolution is
+// a direct lookup on s.feed_id - no multi-feed rule. A feedless source (feed_id
+// NULL) COALESCEs to 0 (global defaults). All callers must select these in this
+// order so scanCandidates can read any result set. The two ? placeholders are the
+// cadence-window bound, twice; arg alignment is identical across callers.
+func candidateCols() string {
 	return `i.id, i.source_id, i.url, i.title, i.summary, i.content, i.author, i.thumbnail_url,
 	             i.media_type, i.duration_sec, i.published_at, i.fetched_at,
 	             s.title, s.weight, s.per_session_cap, s.half_life_days,
@@ -790,9 +788,8 @@ func candidateCols(rule MultiFeedRule) string {
 	             (SELECT COALESCE(julianday('now') - julianday(MIN(i2.published_at)), 0)
 	                FROM items i2 WHERE i2.source_id = s.id
 	                AND i2.published_at >= datetime('now', ?)) AS win_span,
-	             ` + feedHalfLife + ` AS feed_half_life,
-	             COALESCE((SELECT f.diversity FROM feed_sources fs JOIN feeds f ON f.id = fs.feed_id
-	                WHERE fs.source_id = s.id ORDER BY f.sort, f.id LIMIT 1), 0) AS feed_diversity`
+	             COALESCE((SELECT f.half_life_days FROM feeds f WHERE f.id = s.feed_id), 0) AS feed_half_life,
+	             COALESCE((SELECT f.diversity FROM feeds f WHERE f.id = s.feed_id), 0) AS feed_diversity`
 }
 
 // cadence-estimation floors. See cadencePerDay.
@@ -864,8 +861,8 @@ func scanCandidates(rows *sql.Rows, windowDays int) ([]Candidate, error) {
 // Candidates returns unseen items from the given sources (or all followed
 // sources if sourceIDs is empty), newest first, as ranker input. It computes
 // each source's cadence from accumulated stored history in the same pass.
-func (db *DB) Candidates(ctx context.Context, userID int64, sourceIDs []int64, sinceDays, limit int, rule MultiFeedRule) ([]Candidate, error) {
-	q := `SELECT ` + candidateCols(rule) + `
+func (db *DB) Candidates(ctx context.Context, userID int64, sourceIDs []int64, sinceDays, limit int) ([]Candidate, error) {
+	q := `SELECT ` + candidateCols() + `
 	      FROM items i
 	      JOIN sources s ON s.id = i.source_id
 	      WHERE s.user_id = ? AND s.state IN ('followed','trial')
@@ -896,8 +893,8 @@ func (db *DB) Candidates(ctx context.Context, userID int64, sourceIDs []int64, s
 // freshness-decayed score of ALL known items, so stale items fall out through
 // decay, not a WHERE clause. cadenceDays sets the rarity-boost cadence window, to
 // match the session builder's rarity semantics. Rows are ordered deterministically.
-func (db *DB) MixItems(ctx context.Context, userID int64, sourceIDs []int64, cadenceDays int, rule MultiFeedRule) ([]Candidate, error) {
-	q := `SELECT ` + candidateCols(rule) + `
+func (db *DB) MixItems(ctx context.Context, userID int64, sourceIDs []int64, cadenceDays int) ([]Candidate, error) {
+	q := `SELECT ` + candidateCols() + `
 	      FROM items i
 	      JOIN sources s ON s.id = i.source_id
 	      WHERE s.user_id = ? AND s.state IN ('followed','trial')`
@@ -919,13 +916,14 @@ func (db *DB) MixItems(ctx context.Context, userID int64, sourceIDs []int64, cad
 	return scanCandidates(rows, cadenceDays)
 }
 
-// SourceIDsForFeeds resolves feed slugs to the set of source ids in them.
+// SourceIDsForFeeds resolves feed slugs to the set of source ids in them (#86:
+// a source's one feed).
 func (db *DB) SourceIDsForFeeds(ctx context.Context, userID int64, slugs []string) ([]int64, error) {
 	if len(slugs) == 0 {
 		return nil, nil
 	}
-	q := `SELECT DISTINCT fs.source_id FROM feed_sources fs
-	      JOIN feeds f ON f.id = fs.feed_id
+	q := `SELECT s.id FROM sources s
+	      JOIN feeds f ON f.id = s.feed_id
 	      WHERE f.user_id = ? AND f.slug IN (` + placeholders(len(slugs)) + `)`
 	args := []any{userID}
 	for _, s := range slugs {
@@ -1236,11 +1234,11 @@ func (db *DB) EndSession(ctx context.Context, userID int64, id string) error {
 // their surfaced/seen state, so a stored session queue can be rebuilt on resume.
 // The cadence window matches Candidates' session-build default (45 days) so the
 // rehydrated scores line up with what the build produced.
-func (db *DB) CandidatesByIDs(ctx context.Context, userID int64, ids []int64, rule MultiFeedRule) ([]Candidate, error) {
+func (db *DB) CandidatesByIDs(ctx context.Context, userID int64, ids []int64) ([]Candidate, error) {
 	if len(ids) == 0 {
 		return nil, nil
 	}
-	q := `SELECT ` + candidateCols(rule) + `
+	q := `SELECT ` + candidateCols() + `
 	      FROM items i
 	      JOIN sources s ON s.id = i.source_id
 	      WHERE s.user_id = ? AND i.id IN (` + placeholders(len(ids)) + `)`

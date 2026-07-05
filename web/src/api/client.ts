@@ -45,7 +45,10 @@ export interface Source {
   added_at: string;
   last_fetch_at?: string;
   fetch_error?: string;
-  feed_slugs?: string[];
+  // The one feed this source belongs to (#86). feed_id is null/absent when
+  // feedless; feed_slug is the denormalized slug for the UI ("" when feedless).
+  feed_id?: number | null;
+  feed_slug?: string;
   item_count?: number;
   unseen_count?: number;
   skip_pct?: number;
@@ -204,16 +207,31 @@ export interface Collection {
 // picker hides it - saving is the deliberate path, liking is the one-tap path.
 export const LIKED_SLUG = "liked";
 
-// The multi-feed half-life resolution rule (#76): which feed supplies a source's
-// freshness half-life when the source is in several feeds.
-export type MultiFeedRule = "primary" | "shortest" | "longest";
+// A group (#86): a user-created overlay gathering several feeds (many-to-many).
+// feed_count is the denormalized membership size.
+export interface Group {
+  id: number;
+  name: string;
+  slug: string;
+  icon: string; // flat glyph key (see lib/feedIcons); "" = unset
+  sort: number;
+  created_at: string;
+  feed_count: number;
+}
+
+// GroupBrowse is GET /groups/{id}: the group's member feeds and the sources
+// aggregated across them (Group -> Feed -> Source).
+export interface GroupBrowse {
+  feeds: Feed[];
+  sources: Source[];
+}
 
 // User settings (#68). fast_scroll_checkin gates the dwell/engagement
 // measurement + the fast-scroll check-in nudge. Off = the old explicit-only
-// behavior: no dwell measured, no nudge. multi_feed_rule (#76) is a preference.
+// behavior: no dwell measured, no nudge. (The #76 multi-feed half-life rule was
+// removed in #86 - a source now has exactly one feed, so there's nothing to pick.)
 export interface Settings {
   fast_scroll_checkin: boolean;
-  multi_feed_rule: MultiFeedRule;
 }
 
 // Appearance preferences (#80/#81/#82). Display-only: reader typography, card
@@ -299,6 +317,18 @@ export const api = {
   setFeedSources: (feedId: number, sourceIds: number[]) =>
     req<{ ok: boolean }>("PUT", `/feeds/${feedId}/sources`, { source_ids: sourceIds }),
 
+  // Groups (#86): a user-created overlay grouping feeds (many-to-many). CRUD +
+  // feed-assignment + a browse endpoint (its feeds + aggregated sources).
+  groups: () => req<Group[]>("GET", "/groups"),
+  createGroup: (name: string, icon?: string) =>
+    req<Group>("POST", "/groups", { name, icon: icon ?? "" }),
+  updateGroup: (id: number, patch: { name?: string; icon?: string }) =>
+    req<{ ok: boolean }>("PATCH", `/groups/${id}`, patch),
+  deleteGroup: (id: number) => req<{ ok: boolean }>("DELETE", `/groups/${id}`),
+  setGroupFeeds: (id: number, feedIds: number[]) =>
+    req<{ ok: boolean }>("PUT", `/groups/${id}/feeds`, { feed_ids: feedIds }),
+  groupBrowse: (id: number) => req<GroupBrowse>("GET", `/groups/${id}`),
+
   sources: () => req<Source[]>("GET", "/sources"),
   createSource: (s: { title: string; feed_url: string; kind?: string; weight?: number }) =>
     req<Source>("POST", "/sources", s),
@@ -307,8 +337,9 @@ export const api = {
     patch: { weight_bucket?: string; state?: string; per_session_cap?: number; half_life_days?: number; title?: string },
   ) => req<{ ok: boolean }>("PATCH", `/sources/${id}`, patch),
   deleteSource: (id: number) => req<{ ok: boolean }>("DELETE", `/sources/${id}`),
-  setSourceFeeds: (id: number, feedSlugs: string[]) =>
-    req<{ ok: boolean }>("PUT", `/sources/${id}/feeds`, { feed_slugs: feedSlugs }),
+  // Set the source's one feed (#86). Empty slug clears it (feedless).
+  setSourceFeed: (id: number, feedSlug: string) =>
+    req<{ ok: boolean }>("PUT", `/sources/${id}/feed`, { feed_slug: feedSlug }),
   sourceItems: (id: number) => req<Item[]>("GET", `/sources/${id}/items`),
   // --- #66 feed-mgmt-pages block (feed page recent posts) ---
   feedItems: (feedId: number) => req<Item[]>("GET", `/feeds/${feedId}/items`),

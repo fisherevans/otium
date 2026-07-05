@@ -31,31 +31,46 @@ from the same factors. No ML, no embeddings in the core loop. An LLM shows up
 later only as an *operator* (a tool you converse with to retune), never as the
 ranking black box.
 
-## Freshness half-life resolves source > feed > global (#76)
+## Freshness half-life resolves source > feed > global (#76, simplified by #86)
 
 The freshness-decay half-life is tunable at three levels, resolved in strict
-precedence: a per-source override wins, else the item's resolved feed half-life,
-else the global default (21 days). Feed-level came first (#17); the per-source
-override (#76) sits on top so you can single out one noisy or one evergreen
-source without reshaping its whole feed. 0 means "inherit" at both the source and
-feed level, so the neutral setting reads as the middle, not as zero days.
+precedence: a per-source override wins, else the item's feed half-life, else the
+global default (21 days). Feed-level came first (#17); the per-source override
+(#76) sits on top so you can single out one noisy or one evergreen source without
+reshaping its whole feed. 0 means "inherit" at both the source and feed level, so
+the neutral setting reads as the middle, not as zero days.
 
-A source can belong to several feeds, so "which feed's half-life?" is ambiguous.
-The rule is a user preference (Settings > Preferences), with three options:
+Originally (#76) a source could belong to several feeds, which made "which feed's
+half-life?" ambiguous and needed a user-preference rule (primary / shortest /
+longest). **#86 collapsed the source↔feed relationship to a clean tree: a source
+belongs to exactly one feed.** That removed the ambiguity entirely - "the feed
+half-life" is now just `sources.feed_id`'s feed, so the multi-feed rule (and its
+Settings preference) is gone. The three-level precedence itself is unchanged.
 
-- **primary feed** (default) - the source's lowest-sorted feed, matching how feed
-  *identity* already resolves elsewhere. Consistent and predictable.
-- **shortest / longest half-life** - the min/max *effective* half-life among the
-  source's feeds. "Effective" is load-bearing: a feed that inherits the global
-  default counts as 21 in the comparison, not 0, so "shortest" doesn't collapse to
-  always-picking an inheriting feed.
+The feed resolution runs in SQL (in `candidateCols`, shared by the session pool,
+the mix view, and resume-rehydration) as a direct `s.feed_id` lookup, so all three
+surfaces decay identically, which is what keeps the `ItemEffectiveScore ==
+scoreOf(sel=1)` invariant intact. The one shared Go chokepoint is
+`session.halfLifeOf` - every scoring path funnels the source/feed pick through it,
+so the breakdown the card shows is still the *actual* ranking, never an
+approximation.
 
-The resolution runs in SQL (in `candidateCols`, shared by the session pool, the
-mix view, and resume-rehydration) so all three surfaces decay identically, which
-is what keeps the `ItemEffectiveScore == scoreOf(sel=1)` invariant intact. The
-one shared Go chokepoint is `session.halfLifeOf` - every scoring path funnels the
-source/feed pick through it, so the breakdown the card shows is still the *actual*
-ranking, never an approximation.
+## Source → one feed → many groups (#86)
+
+The source↔feed many-to-many was replaced with a tree: a **source belongs to
+exactly one feed** (`sources.feed_id`, nullable for a feedless source), and feeds
+group into user-created **groups** (`groups` + `group_feeds`, many-to-many - a
+feed can be in several groups). This made sources easy to place and navigate, and
+removed the multi-feed half-life ambiguity above.
+
+The migration is additive and idempotent: `sources.feed_id` is added via the
+guarded `ensureColumn` path and back-populated from the single legacy
+`feed_sources` membership (`WHERE feed_id IS NULL`, so re-runs and picker changes
+are safe). **`feed_sources` is deliberately left in place, unused, as a rollback
+net** - the migration is its last reader; new code reads/writes only `feed_id`.
+The index on the migrated column lives in `migrate()` (after the column is added),
+never in `schema.sql`, because schema.sql runs first and would trip on the missing
+column on a legacy DB - the same ordering rule as the sessions status index.
 
 ## Auth reuses bloom's OIDC client verbatim
 

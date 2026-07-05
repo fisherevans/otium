@@ -32,12 +32,14 @@ type Source struct {
 	AddedAt      time.Time  `json:"added_at"`
 	LastFetchAt  *time.Time `json:"last_fetch_at,omitempty"`
 	FetchError   string     `json:"fetch_error,omitempty"`
-	// Denormalized, populated by list queries for the UI.
-	FeedSlugs   []string `json:"feed_slugs,omitempty"`
-	ItemCount   int      `json:"item_count,omitempty"`
-	UnseenCount int      `json:"unseen_count,omitempty"`
-	SkipPct     float64  `json:"skip_pct"`      // fraction of shown items skipped (0..1)
-	PostsPerDay float64  `json:"posts_per_day"` // avg items/day over the last 30 days
+	// The one feed this source belongs to (#86). FeedID is nil for a feedless
+	// source; FeedSlug is the denormalized slug for the UI ("" when feedless).
+	FeedID      *int64  `json:"feed_id,omitempty"`
+	FeedSlug    string  `json:"feed_slug,omitempty"`
+	ItemCount   int     `json:"item_count,omitempty"`
+	UnseenCount int     `json:"unseen_count,omitempty"`
+	SkipPct     float64 `json:"skip_pct"`      // fraction of shown items skipped (0..1)
+	PostsPerDay float64 `json:"posts_per_day"` // avg items/day over the last 30 days
 }
 
 // Feed is a theme/collection ("Comedy", "Local News") - a saved grouping of
@@ -60,13 +62,27 @@ type Feed struct {
 
 // FeedRef is the compact feed identity attached to a session item so the card
 // can lead with "which feed is this". Populated only when the item's source
-// belongs to at least one feed; a feedless source (e.g. a YouTube channel) gets
+// belongs to a feed; a feedless source (e.g. a YouTube channel with no feed) gets
 // a nil ref and the card renders source-only.
 type FeedRef struct {
 	Name  string `json:"name"`
 	Slug  string `json:"slug"`
 	Color string `json:"color"`
 	Icon  string `json:"icon"`
+}
+
+// Group is a user-created overlay gathering several feeds under one name (#86):
+// "News" = Local + International. Many-to-many - a feed can be in several groups.
+// FeedCount is the denormalized membership size for the management list.
+type Group struct {
+	ID        int64     `json:"id"`
+	UserID    int64     `json:"-"`
+	Name      string    `json:"name"`
+	Slug      string    `json:"slug"`
+	Icon      string    `json:"icon"`
+	Sort      int       `json:"sort"`
+	CreatedAt time.Time `json:"created_at"`
+	FeedCount int       `json:"feed_count"`
 }
 
 // Collection is a named list of saved items (#57). Builtins (Saved, Watch
@@ -149,44 +165,9 @@ type Candidate struct {
 	// resolved by the store. 0 = inherit; it takes precedence over the feed
 	// half-life in the ranker (source override > feed > global).
 	SourceHalfLifeDays float64
-	// FeedHalfLifeDays / FeedDiversity are the item's resolved feed ranker
-	// overrides (#17). FeedHalfLifeDays honors the multi-feed rule (#76): the
-	// primary feed by default, or the shortest/longest among the source's feeds.
-	// 0 means "use the global default" (freshness half-life) / "use the source's
-	// own per-session cap".
+	// FeedHalfLifeDays / FeedDiversity are the item's feed ranker overrides (#17),
+	// resolved from the source's one feed (#86). 0 means "use the global default"
+	// (freshness half-life) / "use the source's own per-session cap".
 	FeedHalfLifeDays float64
 	FeedDiversity    int
-}
-
-// MultiFeedRule decides which feed supplies a source's freshness half-life when
-// the source belongs to more than one feed (#76). It's a user preference; the
-// store applies it while resolving a candidate's FeedHalfLifeDays. The full
-// hierarchy is source override > feed (resolved by this rule) > global default.
-type MultiFeedRule string
-
-const (
-	// RulePrimaryFeed uses the source's primary feed (lowest sort, then id),
-	// matching how feed identity already resolves elsewhere. The default.
-	RulePrimaryFeed MultiFeedRule = "primary"
-	// RuleShortestHalfLife uses the feed with the shortest EFFECTIVE half-life
-	// among the source's feeds - a feed inheriting the global default counts as
-	// that default (not 0) in the comparison. Freshness-biased: items fade fastest.
-	RuleShortestHalfLife MultiFeedRule = "shortest"
-	// RuleLongestHalfLife uses the feed with the longest effective half-life.
-	// Evergreen-biased: items linger longest.
-	RuleLongestHalfLife MultiFeedRule = "longest"
-)
-
-// NormalizeMultiFeedRule coerces an arbitrary string to a known rule, defaulting
-// to RulePrimaryFeed for empty/unknown input so a missing or malformed setting is
-// always safe.
-func NormalizeMultiFeedRule(s string) MultiFeedRule {
-	switch MultiFeedRule(s) {
-	case RuleShortestHalfLife:
-		return RuleShortestHalfLife
-	case RuleLongestHalfLife:
-		return RuleLongestHalfLife
-	default:
-		return RulePrimaryFeed
-	}
 }

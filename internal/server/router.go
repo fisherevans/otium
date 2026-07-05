@@ -48,11 +48,19 @@ func NewRouter(h *handler.Handler, authMiddleware func(http.Handler) http.Handle
 			r.Put("/feeds/{id}/sources", h.SetFeedSources)
 			r.Get("/feeds/{id}/items", h.FeedItems)
 
+			// Groups (#86): a user-created overlay grouping feeds (many-to-many).
+			r.Get("/groups", h.ListGroups)
+			r.Post("/groups", h.CreateGroup)
+			r.Get("/groups/{id}", h.GroupBrowse)
+			r.Patch("/groups/{id}", h.UpdateGroup)
+			r.Delete("/groups/{id}", h.DeleteGroup)
+			r.Put("/groups/{id}/feeds", h.SetGroupFeeds)
+
 			r.Get("/sources", h.ListSources)
 			r.Post("/sources", h.CreateSource)
 			r.Patch("/sources/{id}", h.UpdateSource)
 			r.Delete("/sources/{id}", h.DeleteSource)
-			r.Put("/sources/{id}/feeds", h.SetSourceFeeds)
+			r.Put("/sources/{id}/feed", h.SetSourceFeed)
 			r.Get("/sources/{id}/items", h.SourceItems)
 
 			r.Get("/mix", h.Mix)
