@@ -61,6 +61,12 @@ export function ReaderPage({
   const [state, setState] = useState<"loading" | "ready" | "external">("loading");
   const [body, setBody] = useState<Body>(null);
   const [progress, setProgress] = useState(0);
+  // #102: reveal-on-scroll-up condensed header. Hidden while reading down;
+  // scrolling up (to look for context) slides a title+date bar in; scrolling
+  // back down hides it. Near the very top it stays hidden (the real title is
+  // right there in the body). lastY tracks direction.
+  const [revealed, setRevealed] = useState(false);
+  const lastY = useRef(0);
   const scrollRef = useRef<HTMLDivElement>(null);
   const itemId = item?.id ?? 0;
 
@@ -73,6 +79,8 @@ export function ReaderPage({
     setState("loading");
     setBody(null);
     setProgress(0);
+    setRevealed(false);
+    lastY.current = 0;
     if (scrollRef.current) scrollRef.current.scrollTop = 0;
 
     const decide = (content: ItemContent | null) => {
@@ -108,15 +116,24 @@ export function ReaderPage({
 
   function onScroll(e: UIEvent<HTMLDivElement>) {
     const el = e.currentTarget;
+    const y = el.scrollTop;
     const max = el.scrollHeight - el.clientHeight;
-    setProgress(max > 0 ? Math.min(1, Math.max(0, el.scrollTop / max)) : 0);
+    setProgress(max > 0 ? Math.min(1, Math.max(0, y / max)) : 0);
+    // Reveal the condensed header only when scrolling UP, and only once the real
+    // in-body title has scrolled away. Near the top, keep it hidden.
+    const dy = y - lastY.current;
+    if (y < 140) setRevealed(false);
+    else if (dy < -6) setRevealed(true);
+    else if (dy > 6) setRevealed(false);
+    lastY.current = y;
   }
 
   if (!mounted || !item) return null;
 
   return (
     <div className={`readerpage ${inView ? "in" : ""}`} role="dialog" aria-modal="true">
-      <div className="readerpage-head">
+      <div className="rp-topbar">
+        <div className="readerpage-head">
         <button className="rp-back" onClick={onClose} aria-label="Back to card">
           <ChevronLeft size={20} strokeWidth={1.9} aria-hidden />
         </button>
@@ -131,6 +148,11 @@ export function ReaderPage({
             <ExternalLink size={18} strokeWidth={1.75} aria-hidden />
           </button>
           <ShareActions item={item} />
+        </div>
+        </div>
+        <div className={`rp-revealbar ${revealed ? "in" : ""}`} aria-hidden={!revealed}>
+          <span className="rp-reveal-title">{item.title}</span>
+          {item.published_at && <span className="rp-reveal-date">{fmtDate(item.published_at)}</span>}
         </div>
       </div>
 

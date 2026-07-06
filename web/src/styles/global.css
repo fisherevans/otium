@@ -3031,13 +3031,58 @@ button.id-source:active {
 .readerpage.in {
   transform: translateX(0);
 }
-.readerpage-head {
+.rp-topbar {
+  position: relative;
+  z-index: 5;
   flex: 0 0 auto;
+}
+.readerpage-head {
+  position: relative;
+  z-index: 2;
   display: flex;
   align-items: center;
   gap: 10px;
   padding: 10px 12px;
+  background: var(--paper);
   border-bottom: 1px solid var(--hair);
+}
+/* #102: condensed title+date bar that slides down from behind the head when the
+   reader scrolls UP, and tucks away on scroll down. Absolute so it overlays the
+   article without shifting the reading position; z-index below the head so it
+   hides behind it when pulled up. */
+.rp-revealbar {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px 16px 10px;
+  background: var(--paper);
+  border-bottom: 1px solid var(--hair);
+  transform: translateY(-100%);
+  transition: transform 0.26s ease;
+  pointer-events: none;
+}
+.rp-revealbar.in {
+  transform: translateY(0);
+}
+.rp-reveal-title {
+  font-family: var(--serif);
+  font-weight: 600;
+  font-size: 15px;
+  line-height: 1.25;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.rp-reveal-date {
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.03em;
+  color: var(--ink-mute);
 }
 .rp-back {
   display: inline-flex;

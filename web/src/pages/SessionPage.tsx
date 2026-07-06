@@ -94,6 +94,11 @@ export default function SessionPage() {
   const endedServer = useRef(false); // did we already mark the session ended server-side
   const readerPushed = useRef(false); // is there a history entry backing an open reader (#78)
   const didInitialScroll = useRef(false);
+  // #103: suppress cursor persistence during the initial resume. Otherwise the
+  // observer briefly reporting item 0 (before the resume-scroll lands) fires the
+  // debounced save and clobbers the stored cursor back to 0 - so every refresh
+  // resumes at the beginning. Lifted once the resume-scroll has settled.
+  const suppressPersist = useRef(true);
   const stageRef = useRef<HTMLDivElement>(null);
   const itemEls = useRef<(HTMLDivElement | null)[]>([]);
 
@@ -128,6 +133,7 @@ export default function SessionPage() {
     let cancelled = false;
     endedServer.current = false;
     didInitialScroll.current = false;
+    suppressPersist.current = true;
     setLoading(true);
     setErr("");
     setElapsed(0);
@@ -173,8 +179,25 @@ export default function SessionPage() {
   useEffect(() => {
     if (loading || didInitialScroll.current || items.length === 0) return;
     didInitialScroll.current = true;
-    const el = itemEls.current[current];
-    if (el) el.scrollIntoView({ block: "center" });
+    const stage = stageRef.current;
+    if (!stage) {
+      suppressPersist.current = false;
+      return;
+    }
+    // Each card is exactly one stage height, so the resumed item sits at
+    // index * height. A direct scrollTop is deterministic - scrollIntoView on a
+    // mandatory-snap container is unreliable on some (e-ink) browsers and can
+    // leave the reader at the top. Re-assert after a beat for slow layout, then
+    // re-enable cursor persistence so genuine advances save again.
+    const target = current;
+    const jump = () => {
+      stage.scrollTop = target * stage.clientHeight;
+    };
+    requestAnimationFrame(jump);
+    window.setTimeout(() => {
+      jump();
+      suppressPersist.current = false;
+    }, 300);
   }, [loading, items, current]);
 
   // Load the fast-scroll check-in setting once. When off, no dwell is measured
@@ -236,7 +259,7 @@ export default function SessionPage() {
   // Persist the cursor as the user advances (debounced). The backend only accepts
   // a cursor write on an active session, so a late write is a harmless no-op.
   useEffect(() => {
-    if (loading || !id) return;
+    if (loading || !id || suppressPersist.current) return;
     const t = window.setTimeout(() => {
       api.updateSession(id, { cursor: current }).catch(() => {});
     }, 500);
