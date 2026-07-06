@@ -2924,12 +2924,37 @@ button.id-source:active {
    callout buttons (bottom) are never clipped - no scroll-to-reach. Cap the hero
    and trim the card's vertical padding + the byline gap. */
 .snap {
-  padding-top: 14px;
-  padding-bottom: 14px;
+  padding-top: 12px;
+  padding-bottom: 12px;
+}
+/* Each card is exactly one viewport tall; the hero flex-shrinks to absorb the
+   space left after the (bounded) text, so the whole card - feed pill at the top,
+   callout buttons at the bottom - always fits with no scroll, on any height. */
+.snap {
+  height: 100%;
+}
+/* only the hero absorbs the overflow - every other element keeps its full
+   natural height (default flex-shrink:1 would otherwise squeeze the text). */
+.snap > * {
+  flex-shrink: 0;
 }
 .snap .media {
-  max-height: min(188px, 26vh);
+  flex: 0 1 auto;
+  min-height: 0;
   margin: 2px 0;
+}
+.snap .media.h {
+  aspect-ratio: auto;
+  width: 100%;
+  height: min(200px, 30vh);
+  max-height: min(200px, 30vh);
+}
+/* bound the one other variable-height element so the shrink always converges */
+.snap .card-title {
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }
 .card-top {
   margin-bottom: 10px;
