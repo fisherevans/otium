@@ -12,7 +12,7 @@ import { ShareActions } from "./ReaderActions";
 // sheet-over-page scroll fight is gone.
 //
 // It loads the reader body lazily via GET /items/{id}/content (#98/#99), so a
-// teaser-only feed gets its readability-extracted full text on demand. When a
+// teaser-only interest gets its readability-extracted full text on demand. When a
 // prefetched payload is handed in (the card already fetched it to pick its
 // callout), we skip the round-trip. A thin always-visible progress bar (#87)
 // tracks scroll; a read-time estimate (#88) sits in the header; Copy link +

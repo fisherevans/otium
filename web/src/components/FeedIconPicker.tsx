@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { api, type Feed } from "@/api/client";
+import { api, type Interest } from "@/api/client";
 import { BottomSheet } from "./BottomSheet";
 import { FEED_ICONS, feedIcon } from "@/lib/feedIcons";
 
@@ -14,25 +14,25 @@ const HALF_LIVES: { days: number; label: string }[] = [
   { days: 90, label: "90d" },
 ];
 
-// The feed-settings sheet (#45 icons, #17 ranker overrides): pick a feed, then
+// The interest-settings sheet (#45 icons, #17 ranker overrides): pick a interest, then
 // tune its freshness half-life, diversity, and identity glyph. Persists via
-// PATCH /feeds/{id}; no engagement signal - this is pure curation. Tapping the
-// currently-set icon again clears it, so a feed falls back to its color swatch.
+// PATCH /interests/{id}; no engagement signal - this is pure curation. Tapping the
+// currently-set icon again clears it, so a interest falls back to its color swatch.
 export function FeedIconPicker({
-  feeds,
+  interests,
   open,
   onClose,
   onChanged,
 }: {
-  feeds: Feed[];
+  interests: Interest[];
   open: boolean;
   onClose: () => void;
   onChanged: () => void;
 }) {
-  const [feedId, setFeedId] = useState<number | null>(null);
+  const [interestId, setInterestId] = useState<number | null>(null);
   const [q, setQ] = useState("");
 
-  const active = feeds.find((f) => f.id === feedId) ?? feeds[0] ?? null;
+  const active = interests.find((f) => f.id === interestId) ?? interests[0] ?? null;
   const query = q.trim().toLowerCase();
   const shown = query
     ? FEED_ICONS.filter((d) => d.label.toLowerCase().includes(query) || d.key.includes(query))
@@ -41,38 +41,38 @@ export function FeedIconPicker({
   async function choose(key: string) {
     if (!active) return;
     const next = active.icon === key ? "" : key; // re-tap the current icon to clear
-    await api.updateFeed(active.id, { icon: next }).catch(() => {});
+    await api.updateInterest(active.id, { icon: next }).catch(() => {});
     onChanged();
   }
   async function setHalfLife(days: number) {
     if (!active) return;
-    await api.updateFeed(active.id, { half_life_days: days }).catch(() => {});
+    await api.updateInterest(active.id, { half_life_days: days }).catch(() => {});
     onChanged();
   }
   async function setDiversity(n: number) {
     if (!active) return;
-    await api.updateFeed(active.id, { diversity: Math.max(0, Math.min(5, n)) }).catch(() => {});
+    await api.updateInterest(active.id, { diversity: Math.max(0, Math.min(5, n)) }).catch(() => {});
     onChanged();
   }
 
   const div = active?.diversity ?? 0;
 
   return (
-    <BottomSheet open={open} onClose={onClose} variant="tall" kicker="Feed settings">
-      <div className="sheet-title">Feed settings</div>
-      {feeds.length === 0 ? (
-        <p className="caphint">Create a feed first to tune it.</p>
+    <BottomSheet open={open} onClose={onClose} variant="tall" kicker="Interest settings">
+      <div className="sheet-title">Interest settings</div>
+      {interests.length === 0 ? (
+        <p className="caphint">Create a interest first to tune it.</p>
       ) : (
         <>
-          <div className="ctl-label">Feed</div>
-          <div className="feed-assign">
-            {feeds.map((f) => {
+          <div className="ctl-label">Interest</div>
+          <div className="interest-assign">
+            {interests.map((f) => {
               const Ic = feedIcon(f.icon);
               return (
                 <button
                   key={f.id}
                   className={`fa-chip ${active?.id === f.id ? "on" : ""}`}
-                  onClick={() => setFeedId(f.id)}
+                  onClick={() => setInterestId(f.id)}
                 >
                   {Ic && <Ic size={13} strokeWidth={1.75} aria-hidden />}
                   {f.name}
@@ -93,7 +93,7 @@ export function FeedIconPicker({
               </button>
             ))}
           </div>
-          <p className="caphint">How fast this feed's items fade. Shorter = news; longer = evergreen. Default follows the global 21 days.</p>
+          <p className="caphint">How fast this interest's items fade. Shorter = news; longer = evergreen. Default follows the global 21 days.</p>
 
           <div className="ctl-label">Diversity</div>
           <div className="capstep">

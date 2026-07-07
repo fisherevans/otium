@@ -1,6 +1,6 @@
 // Package handler implements otium's HTTP API. Handlers are thin: parse, call
 // the store or the session builder, encode JSON. The interesting logic lives in
-// internal/server/session (ranking) and internal/server/feeds (ingest).
+// internal/server/session (ranking) and internal/server/interests (ingest).
 package handler
 
 import (
@@ -45,19 +45,19 @@ func (h *Handler) GetMe(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// --- feeds ---
+// --- interests ---
 
-func (h *Handler) ListFeeds(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) ListInterests(w http.ResponseWriter, r *http.Request) {
 	uid := userID(r)
-	feeds, err := h.db.ListFeeds(r.Context(), uid)
+	interests, err := h.db.ListInterests(r.Context(), uid)
 	if err != nil {
-		serverError(w, h.log, "list feeds", err)
+		serverError(w, h.log, "list interests", err)
 		return
 	}
-	writeJSON(w, http.StatusOK, feeds)
+	writeJSON(w, http.StatusOK, interests)
 }
 
-func (h *Handler) CreateFeed(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) CreateInterest(w http.ResponseWriter, r *http.Request) {
 	uid := userID(r)
 	var body struct {
 		Name  string `json:"name"`
@@ -70,22 +70,22 @@ func (h *Handler) CreateFeed(w http.ResponseWriter, r *http.Request) {
 	if body.Slug == "" {
 		body.Slug = slugify(body.Name)
 	}
-	f, err := h.db.CreateFeed(r.Context(), uid, body.Name, body.Slug, body.Color)
+	f, err := h.db.CreateInterest(r.Context(), uid, body.Name, body.Slug, body.Color)
 	if err != nil {
-		serverError(w, h.log, "create feed", err)
+		serverError(w, h.log, "create interest", err)
 		return
 	}
 	writeJSON(w, http.StatusCreated, f)
 }
 
-// UpdateFeed patches a feed's presentation fields (name, color, icon) and its
-// per-feed ranker overrides (half-life, diversity - #17). Used by the library's
-// feed-settings sheet. No engagement signal - pure curation.
-func (h *Handler) UpdateFeed(w http.ResponseWriter, r *http.Request) {
+// UpdateInterest patches a interest's presentation fields (name, color, icon) and its
+// per-interest ranker overrides (half-life, diversity - #17). Used by the library's
+// interest-settings sheet. No engagement signal - pure curation.
+func (h *Handler) UpdateInterest(w http.ResponseWriter, r *http.Request) {
 	uid := userID(r)
 	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	if err != nil {
-		badRequest(w, "bad feed id")
+		badRequest(w, "bad interest id")
 		return
 	}
 	var body struct {
@@ -117,18 +117,18 @@ func (h *Handler) UpdateFeed(w http.ResponseWriter, r *http.Request) {
 		}
 		body.Diversity = &v
 	}
-	if err := h.db.UpdateFeed(r.Context(), uid, id, body.Name, body.Color, body.Icon, body.HalfLifeDays, body.Diversity); err != nil {
-		serverError(w, h.log, "update feed", err)
+	if err := h.db.UpdateInterest(r.Context(), uid, id, body.Name, body.Color, body.Icon, body.HalfLifeDays, body.Diversity); err != nil {
+		serverError(w, h.log, "update interest", err)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
 }
 
-func (h *Handler) SetFeedSources(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) SetInterestSources(w http.ResponseWriter, r *http.Request) {
 	uid := userID(r)
-	feedID, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	interestID, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	if err != nil {
-		badRequest(w, "bad feed id")
+		badRequest(w, "bad interest id")
 		return
 	}
 	var body struct {
@@ -137,26 +137,26 @@ func (h *Handler) SetFeedSources(w http.ResponseWriter, r *http.Request) {
 	if !decode(w, r, &body) {
 		return
 	}
-	if err := h.db.SetFeedSources(r.Context(), uid, feedID, body.SourceIDs); err != nil {
-		serverError(w, h.log, "set feed sources", err)
+	if err := h.db.SetInterestSources(r.Context(), uid, interestID, body.SourceIDs); err != nil {
+		serverError(w, h.log, "set interest sources", err)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
 }
 
-// FeedItems returns recent items across a feed's sources (by feed id), backing
-// the feed page's posts section (#66).
-func (h *Handler) FeedItems(w http.ResponseWriter, r *http.Request) {
+// InterestItems returns recent items across a interest's sources (by interest id), backing
+// the interest page's posts section (#66).
+func (h *Handler) InterestItems(w http.ResponseWriter, r *http.Request) {
 	uid := userID(r)
 	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	if err != nil {
-		badRequest(w, "bad feed id")
+		badRequest(w, "bad interest id")
 		return
 	}
 	limit := intParam(r, "limit", 50)
-	items, err := h.db.ListRecentItemsByFeed(r.Context(), uid, id, limit)
+	items, err := h.db.ListRecentItemsByInterest(r.Context(), uid, id, limit)
 	if err != nil {
-		serverError(w, h.log, "feed items", err)
+		serverError(w, h.log, "interest items", err)
 		return
 	}
 	writeJSON(w, http.StatusOK, items)
@@ -239,7 +239,7 @@ func (h *Handler) UpdateSource(w http.ResponseWriter, r *http.Request) {
 		}
 		weight = &wf
 	}
-	// Clamp the half-life override to sane bounds; 0 stays "inherit" (feed/global).
+	// Clamp the half-life override to sane bounds; 0 stays "inherit" (interest/global).
 	if body.HalfLifeDays != nil {
 		v := *body.HalfLifeDays
 		if v < 0 {
@@ -270,9 +270,9 @@ func (h *Handler) DeleteSource(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
 }
 
-// SetSourceFeed sets the one feed a source belongs to (#86). An empty feed_slug
-// clears the feed (feedless). Replaces the old multi-feed membership.
-func (h *Handler) SetSourceFeed(w http.ResponseWriter, r *http.Request) {
+// SetSourceInterest sets the one interest a source belongs to (#86). An empty interest_slug
+// clears the interest (interestless). Replaces the old multi-interest membership.
+func (h *Handler) SetSourceInterest(w http.ResponseWriter, r *http.Request) {
 	uid := userID(r)
 	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	if err != nil {
@@ -280,13 +280,13 @@ func (h *Handler) SetSourceFeed(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var body struct {
-		FeedSlug string `json:"feed_slug"`
+		InterestSlug string `json:"interest_slug"`
 	}
 	if !decode(w, r, &body) {
 		return
 	}
-	if err := h.db.SetSourceFeed(r.Context(), uid, id, body.FeedSlug); err != nil {
-		serverError(w, h.log, "set source feed", err)
+	if err := h.db.SetSourceInterest(r.Context(), uid, id, body.InterestSlug); err != nil {
+		serverError(w, h.log, "set source interest", err)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
@@ -314,7 +314,7 @@ func (h *Handler) SourceItems(w http.ResponseWriter, r *http.Request) {
 // from a single duration + themes (#69), stores it, and returns it; the queue
 // and the read cursor live in the backend so a refresh or a return resumes the
 // same items at the same place (CurrentSession) rather than rebuilding a fresh
-// feed. One session per user is active at a time - creating a new one ends the
+// interest. One session per user is active at a time - creating a new one ends the
 // previous. When the client decides the session is over (time budget reached or
 // the queue exhausted) it PATCHes status='ended' and returns home.
 
@@ -326,8 +326,8 @@ func (h *Handler) CreateSession(w http.ResponseWriter, r *http.Request) {
 	uid := userID(r)
 	var body struct {
 		DurationMin int      `json:"duration_min"`
-		Themes      []string `json:"themes"` // feed slugs; empty = all followed sources
-		Mixes       []string `json:"mixes"`  // mix slugs; each expands to its member feeds (#86)
+		Themes      []string `json:"themes"` // interest slugs; empty = all followed sources
+		Mixes       []string `json:"mixes"`  // mix slugs; each expands to its member interests (#86)
 	}
 	if !decode(w, r, &body) {
 		return
@@ -411,17 +411,17 @@ func (h *Handler) UpdateSession(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
 }
 
-// buildSessionQueue resolves themes (feed slugs) and mixes (mix slugs, each
-// expanding to its member feeds' sources, #86), pulls the candidate pool +
+// buildSessionQueue resolves themes (interest slugs) and mixes (mix slugs, each
+// expanding to its member interests' sources, #86), pulls the candidate pool +
 // behavioral stats, runs the ranker for the single duration (fed as both bounds
 // so the existing predict/selectivity path is unchanged), and attaches each
-// item's feed. Returns an empty slice when the selection resolves to no sources.
+// item's interest. Returns an empty slice when the selection resolves to no sources.
 func (h *Handler) buildSessionQueue(ctx context.Context, uid int64, durationMin int, themes, mixes []string) ([]session.Selected, error) {
 	var sourceIDs []int64
 	if len(themes) > 0 || len(mixes) > 0 {
 		set := map[int64]struct{}{}
 		if len(themes) > 0 {
-			ids, err := h.db.SourceIDsForFeeds(ctx, uid, themes)
+			ids, err := h.db.SourceIDsForInterests(ctx, uid, themes)
 			if err != nil {
 				return nil, err
 			}
@@ -459,7 +459,7 @@ func (h *Handler) buildSessionQueue(ctx context.Context, uid int64, durationMin 
 	// Single duration (#69): pass it as both bounds. predictItems averages the two,
 	// so low==high just means "exactly this many minutes" - no range/variability.
 	result := session.Build(session.Request{MinLow: durationMin, MinHigh: durationMin}, pool, time.Now().UTC(), stats)
-	h.attachFeeds(ctx, uid, result.Items)
+	h.attachInterests(ctx, uid, result.Items)
 	return result.Items, nil
 }
 
@@ -487,7 +487,7 @@ func (h *Handler) rehydrateSession(ctx context.Context, uid int64, itemIDs []int
 		}
 		out = append(out, session.SelectFor(c, now))
 	}
-	h.attachFeeds(ctx, uid, out)
+	h.attachInterests(ctx, uid, out)
 	return out, nil
 }
 
@@ -517,10 +517,10 @@ func (h *Handler) sourceStats(ctx context.Context, uid int64) (map[int64]session
 	return stats, nil
 }
 
-// attachFeeds fills each item's feed identity for the card's identity line (#86:
-// a source's one feed). Feedless sources (feed_id NULL) stay nil and render
+// attachInterests fills each item's interest identity for the card's identity line (#86:
+// a source's one interest). Interestless sources (interest_id NULL) stay nil and render
 // source-only.
-func (h *Handler) attachFeeds(ctx context.Context, uid int64, items []session.Selected) {
+func (h *Handler) attachInterests(ctx context.Context, uid int64, items []session.Selected) {
 	if len(items) == 0 {
 		return
 	}
@@ -528,15 +528,15 @@ func (h *Handler) attachFeeds(ctx context.Context, uid int64, items []session.Se
 	for _, it := range items {
 		ids = append(ids, it.Item.SourceID)
 	}
-	feedOf, err := h.db.FeedsForSources(ctx, uid, ids)
+	interestOf, err := h.db.InterestsForSources(ctx, uid, ids)
 	if err != nil {
-		h.log.Warn("resolve feeds", "err", err)
+		h.log.Warn("resolve interests", "err", err)
 		return
 	}
 	for i := range items {
-		if f, ok := feedOf[items[i].Item.SourceID]; ok {
+		if f, ok := interestOf[items[i].Item.SourceID]; ok {
 			fc := f
-			items[i].Feed = &fc
+			items[i].Interest = &fc
 		}
 	}
 }
@@ -620,7 +620,7 @@ func (h *Handler) ItemEvent(w http.ResponseWriter, r *http.Request) {
 	_ = h.db.LogEvent(r.Context(), uid, body.Type, &iid, nil, body.SessionID, "")
 	// Wire Like -> the auto Liked collection (#57). Additive membership only: the
 	// `like` state + event above are the untouched engagement signal; adding to
-	// Liked is organization and never feeds the ranker. A membership hiccup must
+	// Liked is organization and never interests the ranker. A membership hiccup must
 	// not fail the like, so it's a warn, not a hard error.
 	if body.Type == "like" {
 		if err := h.db.AddItemToBuiltinCollection(r.Context(), uid, store.SlugLiked, itemID); err != nil {
@@ -637,7 +637,7 @@ func (h *Handler) ItemEvent(w http.ResponseWriter, r *http.Request) {
 //   - Dwell is written ONLY to the append-only `events` log (type "dwell"), never
 //     to item_state. The ranker reads item_state (SourceSkipStats) and content
 //     duration (SourceAvgDuration); it never reads the events log, so dwell can
-//     never enter ranking or re-rank the feed. It is raw material for user-owned
+//     never enter ranking or re-rank the interest. It is raw material for user-owned
 //     stats (#24) and the future pacing signal (#5).
 //   - The client only sends dwell when the fast-scroll check-in setting is on;
 //     off = no measurement. There is no other consumer.
@@ -668,7 +668,7 @@ func (h *Handler) ItemDwell(w http.ResponseWriter, r *http.Request) {
 // --- full-text content (#98) ---
 
 // ItemContent returns the best reader body for an item, fetching + extracting it
-// on demand for feeds that ship no full content (#98). Fisher's rule: attempt the
+// on demand for interests that ship no full content (#98). Fisher's rule: attempt the
 // in-app render first, fall back to "open original". Resolution:
 //
 //   - a stored body (content_source rss|fetched): return it as-is.

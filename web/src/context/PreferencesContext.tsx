@@ -26,13 +26,13 @@ const DEFAULTS: Preferences = {
   card: {
     meta_size: 11,
     source_size: 11,
-    feed_tag_size: 13,
+    interest_tag_size: 13,
     date_size: 13,
     hero_show: true,
     hero_color: false,
     // #97 per-element meta defaults mirror the v0.29 card's designed look.
-    feed_weight: 600,
-    feed_ink: "feed",
+    interest_weight: 600,
+    interest_ink: "interest",
     source_weight: 600,
     source_ink: "soft",
     author_weight: 500,
@@ -94,18 +94,18 @@ export function prefsToVars(p: Preferences): CSSProperties {
     "--pref-reader-ink": INK_SHADES[p.reader.ink] ?? INK_SHADES.soft,
     "--pref-card-meta-size": `${p.card.meta_size}px`,
     "--pref-card-source-size": `${p.card.source_size}px`,
-    "--pref-card-feedtag-size": `${p.card.feed_tag_size}px`,
+    "--pref-card-interesttag-size": `${p.card.interest_tag_size}px`,
     "--pref-card-date-size": `${p.card.date_size}px`,
     "--pref-hero-display": p.card.hero_show ? "block" : "none",
     "--pref-hero-filter": heroFilter,
-    // #97: per-element meta weight/ink. Each card meta part (feed pill, source,
+    // #97: per-element meta weight/ink. Each card meta part (interest pill, source,
     // author, date) styles independently. Weight + ink are always emitted with the
     // resolved value; the matching global.css rule carries the same default as its
-    // CSS fallback (pure safety). The one exception is the feed pill's ink: its
-    // default "feed" means "keep the feed's own color tint," so that var is omitted
-    // at default and the CSS fallback (inherit -> feed color) stands. applyToRoot
-    // clears it (CARD_COND_VARS) so returning to "feed" restores the tint.
-    "--pref-card-feed-weight": `${p.card.feed_weight}`,
+    // CSS fallback (pure safety). The one exception is the interest pill's ink: its
+    // default "interest" means "keep the interest's own color tint," so that var is omitted
+    // at default and the CSS fallback (inherit -> interest color) stands. applyToRoot
+    // clears it (CARD_COND_VARS) so returning to "interest" restores the tint.
+    "--pref-card-interest-weight": `${p.card.interest_weight}`,
     "--pref-card-source-weight": `${p.card.source_weight}`,
     "--pref-card-source-ink": INK_SHADES[p.card.source_ink] ?? INK_SHADES.soft,
     "--pref-card-author-weight": `${p.card.author_weight}`,
@@ -115,15 +115,15 @@ export function prefsToVars(p: Preferences): CSSProperties {
     // #97: byline delimiter glyph + spacing.
     "--pref-card-delim": DELIM_GLYPHS[p.card.delim] ?? DELIM_GLYPHS.dot,
     "--pref-card-delim-gap": `${p.card.delim_gap}px`,
-    ...(p.card.feed_ink !== "feed" ? { "--pref-card-feed-ink": INK_SHADES[p.card.feed_ink as InkKey] } : {}),
+    ...(p.card.interest_ink !== "interest" ? { "--pref-card-interest-ink": INK_SHADES[p.card.interest_ink as InkKey] } : {}),
   } as CSSProperties;
 }
 
 // Conditionally-emitted vars (see prefsToVars). Cleared before each apply so that
 // returning a control to its default removes the override rather than leaving a
-// stale value on :root. #97: only the feed pill ink is conditional (its "feed"
-// default keeps the feed-color tint via the CSS fallback).
-const CARD_COND_VARS = ["--pref-card-feed-ink"];
+// stale value on :root. #97: only the interest pill ink is conditional (its "interest"
+// default keeps the interest-color tint via the CSS fallback).
+const CARD_COND_VARS = ["--pref-card-interest-ink"];
 
 function applyToRoot(p: Preferences) {
   const style = document.documentElement.style;

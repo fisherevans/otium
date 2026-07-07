@@ -9,9 +9,9 @@ import (
 	"github.com/go-chi/chi/v5"
 )
 
-// Mixes (#86) are a user-created overlay grouping feeds many-to-many. These
-// handlers are thin CRUD + feed-assignment + a browse endpoint that returns a
-// mix's feeds and the sources aggregated across them.
+// Mixes (#86) are a user-created overlay grouping interests many-to-many. These
+// handlers are thin CRUD + interest-assignment + a browse endpoint that returns a
+// mix's interests and the sources aggregated across them.
 
 func (h *Handler) ListMixes(w http.ResponseWriter, r *http.Request) {
 	uid := userID(r)
@@ -90,8 +90,8 @@ func (h *Handler) DeleteMix(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
 }
 
-// SetMixFeeds replaces the feeds in a mix with exactly feed_ids.
-func (h *Handler) SetMixFeeds(w http.ResponseWriter, r *http.Request) {
+// SetMixInterests replaces the interests in a mix with exactly interest_ids.
+func (h *Handler) SetMixInterests(w http.ResponseWriter, r *http.Request) {
 	uid := userID(r)
 	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	if err != nil {
@@ -99,24 +99,24 @@ func (h *Handler) SetMixFeeds(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var body struct {
-		FeedIDs []int64 `json:"feed_ids"`
+		InterestIDs []int64 `json:"interest_ids"`
 	}
 	if !decode(w, r, &body) {
 		return
 	}
-	if err := h.db.SetMixFeeds(r.Context(), uid, id, body.FeedIDs); err != nil {
+	if err := h.db.SetMixInterests(r.Context(), uid, id, body.InterestIDs); err != nil {
 		if errors.Is(err, store.ErrMixNotFound) {
 			badRequest(w, "mix not found")
 			return
 		}
-		serverError(w, h.log, "set mix feeds", err)
+		serverError(w, h.log, "set mix interests", err)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
 }
 
-// MixBrowse returns a mix with its member feeds and the sources aggregated
-// across those feeds (#86), for the Mix -> Feed -> Source browse. The mix is
+// MixBrowse returns a mix with its member interests and the sources aggregated
+// across those interests (#86), for the Mix -> Interest -> Source browse. The mix is
 // addressed by id (matching the PATCH/DELETE/PUT routes' wildcard name).
 func (h *Handler) MixBrowse(w http.ResponseWriter, r *http.Request) {
 	uid := userID(r)
@@ -125,18 +125,18 @@ func (h *Handler) MixBrowse(w http.ResponseWriter, r *http.Request) {
 		badRequest(w, "bad mix id")
 		return
 	}
-	feeds, err := h.db.MixFeeds(r.Context(), uid, id)
+	interests, err := h.db.MixInterests(r.Context(), uid, id)
 	if err != nil {
-		serverError(w, h.log, "mix feeds", err)
+		serverError(w, h.log, "mix interests", err)
 		return
 	}
-	if feeds == nil {
-		feeds = []store.Feed{}
+	if interests == nil {
+		interests = []store.Interest{}
 	}
-	// Aggregate the sources across the mix's feeds, reusing ListSources so each
-	// carries its full UI facts (weight, unseen, feed_slug).
+	// Aggregate the sources across the mix's interests, reusing ListSources so each
+	// carries its full UI facts (weight, unseen, interest_slug).
 	inMix := map[string]bool{}
-	for _, f := range feeds {
+	for _, f := range interests {
 		inMix[f.Slug] = true
 	}
 	all, err := h.db.ListSources(r.Context(), uid)
@@ -146,12 +146,12 @@ func (h *Handler) MixBrowse(w http.ResponseWriter, r *http.Request) {
 	}
 	sources := make([]store.Source, 0)
 	for _, s := range all {
-		if s.FeedSlug != "" && inMix[s.FeedSlug] {
+		if s.InterestSlug != "" && inMix[s.InterestSlug] {
 			sources = append(sources, s)
 		}
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
-		"feeds":   feeds,
-		"sources": sources,
+		"interests": interests,
+		"sources":   sources,
 	})
 }

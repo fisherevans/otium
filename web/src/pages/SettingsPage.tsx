@@ -69,7 +69,7 @@ export default function SettingsPage() {
               <span>
                 If you're scrolling fast without opening, liking, or saving anything, otium shows a calm check-in - "want
                 to keep going, or do something else?" It's a nudge toward self-honesty. It never re-ranks or changes your
-                feed. Off: no dwell is measured and no check-in appears.
+                interest. Off: no dwell is measured and no check-in appears.
               </span>
             </div>
             <button

@@ -1,8 +1,8 @@
 // Sanitize an RSS `summary`/description for the in-app reader (#41).
 //
-// Feeds ship arbitrary HTML in <description>/<content:encoded>. We render it
+// Interests ship arbitrary HTML in <description>/<content:encoded>. We render it
 // via dangerouslySetInnerHTML, so it is untrusted markup from the open internet
-// - a hostile feed Fisher follows could try to inject script or tracking into
+// - a hostile interest Fisher follows could try to inject script or tracking into
 // otium's authenticated origin. otium-web sets no CSP, so this is the only guard.
 // Use DOMPurify (the vetted standard) rather than a hand-rolled cleaner: it
 // closes the whole mXSS class (foreign-content / namespace confusion) that an

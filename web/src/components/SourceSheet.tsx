@@ -14,7 +14,7 @@ import { WeightControl } from "./WeightControl";
 //   - View source history - the source's raw recent items (reuses SourceItems),
 //     so you can see what else it puts out without leaving the session.
 //   - Manage source settings - navigates to the full source page (/sources/:id)
-//     for cap, feed membership, archive, delete.
+//     for cap, interest membership, archive, delete.
 //
 // The internal `source` state seeds the weight bucket and also backstops the
 // title through the sheet's exit animation (the parent clears the passed title

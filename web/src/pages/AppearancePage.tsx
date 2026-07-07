@@ -1,7 +1,7 @@
 import { useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import type { DelimKey, FeedInkKey, FontKey, InkKey, Selected } from "@/api/client";
-import { Media, FeedPill, CardSource, Byline, Blurb } from "@/components/CardParts";
+import type { DelimKey, InterestInkKey, FontKey, InkKey, Selected } from "@/api/client";
+import { Media, InterestPill, CardSource, Byline, Blurb } from "@/components/CardParts";
 import { usePreferences, prefsToVars, FONT_STACKS, INK_SHADES } from "@/context/PreferencesContext";
 
 // Appearance screen (#80/#81/#82). The centerpiece is a LIVE PREVIEW pinned at
@@ -38,7 +38,7 @@ const SAMPLE: Selected = {
     fetched_at: REL_TWO_DAYS,
   },
   source_title: "The Reader",
-  feed: { name: "Essays", slug: "essays", color: "#6b7f6b", icon: "" },
+  interest: { name: "Essays", slug: "essays", color: "#6b7f6b", icon: "" },
   score: 0.82,
   est_duration_sec: 300,
   reason: "Fresh - posted recently",
@@ -170,9 +170,9 @@ function InkSwatches({
   onChange,
 }: {
   label: string;
-  // #97: value is a plain string so the feed pill's "feed" (keep-tint) option fits
+  // #97: value is a plain string so the interest pill's "interest" (keep-tint) option fits
   // alongside the grayscale ink keys. An option may carry its own `swatch` color
-  // (e.g. the feed tint sample); otherwise the dot uses the ink-key shade.
+  // (e.g. the interest tint sample); otherwise the dot uses the ink-key shade.
   options: { label: string; value: string; swatch?: string }[];
   value: string;
   onChange: (v: string) => void;
@@ -304,11 +304,11 @@ const CARD_INK: { label: string; value: InkKey }[] = [
   { label: "Soft", value: "soft" },
   { label: "Muted", value: "mute" },
 ];
-// #97: the feed pill ink adds a "Feed" option that keeps the feed's own color tint
-// (the default, distinctive look). Its swatch shows the sample feed color so the
+// #97: the interest pill ink adds a "Interest" option that keeps the interest's own color tint
+// (the default, distinctive look). Its swatch shows the sample interest color so the
 // pick is WYSIWYG; picking a grayscale shade overrides the tint.
-const FEED_INK: { label: string; value: FeedInkKey; swatch?: string }[] = [
-  { label: "Feed", value: "feed", swatch: SAMPLE.feed?.color || "#6b7f6b" },
+const FEED_INK: { label: string; value: InterestInkKey; swatch?: string }[] = [
+  { label: "Interest", value: "interest", swatch: SAMPLE.interest?.color || "#6b7f6b" },
   { label: "Graphite", value: "graphite" },
   { label: "Soft", value: "soft" },
   { label: "Muted", value: "mute" },
@@ -414,7 +414,7 @@ export default function AppearancePage() {
             <div className="card-top">
               <span className="reason">{SAMPLE.reason}</span>
             </div>
-            <FeedPill feed={SAMPLE.feed} />
+            <InterestPill interest={SAMPLE.interest} />
             <CardSource sel={SAMPLE} onSource={() => {}} />
             <h3 className="card-title">{SAMPLE.item.title}</h3>
             <Byline item={SAMPLE.item} />
@@ -431,7 +431,7 @@ export default function AppearancePage() {
             </div>
             <div className="reader-body">
               <p>
-                Attention is the only truly scarce thing you spend here. Everything else - the feed, the queue, the
+                Attention is the only truly scarce thing you spend here. Everything else - the interest, the queue, the
                 endless backlog - is manufactured abundance. A session says: this much, and no more.
               </p>
               <img src={HERO} alt="" />
@@ -508,23 +508,23 @@ export default function AppearancePage() {
             the controls map 1:1 to what you see on the card above. */}
         {tab === "card" && (
           <section className="ctl-section" role="tabpanel">
-            <div className="ctl-mixhead">Feed pill</div>
+            <div className="ctl-mixhead">Interest pill</div>
             <Segmented
               label="Size"
               options={TAG_SIZE}
-              value={prefs.card.feed_tag_size}
-              onChange={(v) => update({ card: { feed_tag_size: v } })}
+              value={prefs.card.interest_tag_size}
+              onChange={(v) => update({ card: { interest_tag_size: v } })}
             />
             <WeightSlider
               label="Weight"
-              value={prefs.card.feed_weight}
-              onChange={(v) => update({ card: { feed_weight: v } })}
+              value={prefs.card.interest_weight}
+              onChange={(v) => update({ card: { interest_weight: v } })}
             />
             <InkSwatches
               label="Ink"
               options={FEED_INK}
-              value={prefs.card.feed_ink}
-              onChange={(v) => update({ card: { feed_ink: v as FeedInkKey } })}
+              value={prefs.card.interest_ink}
+              onChange={(v) => update({ card: { interest_ink: v as InterestInkKey } })}
             />
 
             <div className="ctl-mixhead">Source</div>

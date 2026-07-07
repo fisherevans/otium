@@ -1,20 +1,20 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { api, type Feed, type Source } from "@/api/client";
+import { api, type Interest, type Source } from "@/api/client";
 
 // #95: the intent page is one calm, no-scroll screen with two controls.
 //   - Time: a big Didot numeral with - / + steppers (5-min steps, default 15,
 //     bounds 5..120) and a thin fine-tune slider under it. The steppers are the
 //     primary control; the slider is optional polish. Two taps down reaches 5.
-//   - Topics: the user's feeds as a quiet multi-select checklist (option B, the
+//   - Topics: the user's interests as a quiet multi-select checklist (option B, the
 //     chosen direction over underline tabs), all checked by default. An All /
 //     Clear toggle flips the whole set at once.
 // One solid "Start reading" button is the only heavy element (de-noised style:
 // type + whitespace over borders, a single solid CTA).
 //
 // Session build is unchanged from #67/#69: POST /sessions with the chosen
-// duration + the selected feed slugs as `themes`. "All checked" maps to an empty
-// themes list so feedless sources (e.g. YouTube channels) are still included -
+// duration + the selected interest slugs as `themes`. "All checked" maps to an empty
+// themes list so interestless sources (e.g. YouTube channels) are still included -
 // exactly the pre-#95 blank-selection default.
 const MIN_MINUTES = 5;
 const MAX_MINUTES = 120;
@@ -24,7 +24,7 @@ const STEP = 5;
 export default function HomePage() {
   const nav = useNavigate();
   const [minutes, setMinutes] = useState(DEFAULT_MINUTES);
-  const [feeds, setFeeds] = useState<Feed[]>([]);
+  const [interests, setInterests] = useState<Interest[]>([]);
   const [sources, setSources] = useState<Source[]>([]);
   const [picked, setPicked] = useState<string[]>([]);
   const [busy, setBusy] = useState(false);
@@ -32,33 +32,33 @@ export default function HomePage() {
 
   useEffect(() => {
     api
-      .feeds()
+      .interests()
       .then((f) => {
-        setFeeds(f);
+        setInterests(f);
         setPicked(f.map((x) => x.slug)); // default: everything checked
       })
-      .catch(() => setFeeds([]));
+      .catch(() => setInterests([]));
     api.sources().then(setSources).catch(() => setSources([]));
   }, []);
 
-  const allSelected = feeds.length > 0 && picked.length === feeds.length;
-  const noneSelected = feeds.length > 0 && picked.length === 0;
+  const allSelected = interests.length > 0 && picked.length === interests.length;
+  const noneSelected = interests.length > 0 && picked.length === 0;
 
-  // "All feeds checked" is the same intent as the old blank selection: send an
-  // empty themes list so the backend includes feedless sources too. A subset
+  // "All interests checked" is the same intent as the old blank selection: send an
+  // empty themes list so the backend includes interestless sources too. A subset
   // sends exactly those slugs.
   const themes = allSelected ? [] : picked;
 
   // Unseen supply for the current selection - only used to disable Start when
   // there's genuinely nothing new. Mirrors the themes mapping: all-checked (or
-  // no feeds at all) counts every source; a subset counts only matching feeds.
+  // no interests at all) counts every source; a subset counts only matching interests.
   const unseenForSelection = useMemo(() => {
     const match =
-      allSelected || feeds.length === 0
+      allSelected || interests.length === 0
         ? sources
-        : sources.filter((s) => s.feed_slug && picked.includes(s.feed_slug));
+        : sources.filter((s) => s.interest_slug && picked.includes(s.interest_slug));
     return match.reduce((n, s) => n + (s.unseen_count ?? 0), 0);
-  }, [sources, picked, allSelected, feeds.length]);
+  }, [sources, picked, allSelected, interests.length]);
   const nothingNew = !noneSelected && sources.length > 0 && unseenForSelection === 0;
 
   function toggle(slug: string) {
@@ -66,7 +66,7 @@ export default function HomePage() {
   }
 
   function setAll(on: boolean) {
-    setPicked(on ? feeds.map((f) => f.slug) : []);
+    setPicked(on ? interests.map((f) => f.slug) : []);
   }
 
   function nudge(delta: number) {
@@ -137,7 +137,7 @@ export default function HomePage() {
         />
       </div>
 
-      {feeds.length > 0 && (
+      {interests.length > 0 && (
         <div className="intent-topics">
           <div className="topics-head">
             <span className="topics-label">Topics</span>
@@ -146,7 +146,7 @@ export default function HomePage() {
             </button>
           </div>
           <ul className="topic-list">
-            {feeds.map((f) => {
+            {interests.map((f) => {
               const on = picked.includes(f.slug);
               return (
                 <li key={f.slug}>

@@ -12,7 +12,7 @@ type User struct {
 	CreatedAt time.Time `json:"created_at"`
 }
 
-// Source is a creator/channel: an RSS/Atom feed, a YouTube channel (its RSS),
+// Source is a creator/channel: an RSS/Atom interest, a YouTube channel (its RSS),
 // or a podcast. Weight and PerSessionCap are the deterministic-control knobs.
 type Source struct {
 	ID            int64      `json:"id"`
@@ -27,31 +27,31 @@ type Source struct {
 	TrialUntil    *time.Time `json:"trial_until,omitempty"`
 	PerSessionCap int        `json:"per_session_cap"`
 	// Per-source freshness half-life override (#76). 0 = inherit; the resolver
-	// applies source override > feed (resolved) > global default.
+	// applies source override > interest (resolved) > global default.
 	HalfLifeDays float64    `json:"half_life_days"`
 	AddedAt      time.Time  `json:"added_at"`
 	LastFetchAt  *time.Time `json:"last_fetch_at,omitempty"`
 	FetchError   string     `json:"fetch_error,omitempty"`
-	// The one feed this source belongs to (#86). FeedID is nil for a feedless
-	// source; FeedSlug is the denormalized slug for the UI ("" when feedless).
-	FeedID      *int64  `json:"feed_id,omitempty"`
-	FeedSlug    string  `json:"feed_slug,omitempty"`
-	ItemCount   int     `json:"item_count,omitempty"`
-	UnseenCount int     `json:"unseen_count,omitempty"`
-	SkipPct     float64 `json:"skip_pct"`      // fraction of shown items skipped (0..1)
-	PostsPerDay float64 `json:"posts_per_day"` // avg items/day over the last 30 days
+	// The one interest this source belongs to (#86). InterestID is nil for a interestless
+	// source; InterestSlug is the denormalized slug for the UI ("" when interestless).
+	InterestID   *int64  `json:"interest_id,omitempty"`
+	InterestSlug string  `json:"interest_slug,omitempty"`
+	ItemCount    int     `json:"item_count,omitempty"`
+	UnseenCount  int     `json:"unseen_count,omitempty"`
+	SkipPct      float64 `json:"skip_pct"`      // fraction of shown items skipped (0..1)
+	PostsPerDay  float64 `json:"posts_per_day"` // avg items/day over the last 30 days
 }
 
-// Feed is a theme/collection ("Comedy", "Local News") - a saved grouping of
+// Interest is a theme/collection ("Comedy", "Local News") - a saved grouping of
 // sources the session builder can target.
-type Feed struct {
+type Interest struct {
 	ID     int64  `json:"id"`
 	UserID int64  `json:"-"`
 	Name   string `json:"name"`
 	Slug   string `json:"slug"`
 	Color  string `json:"color"`
 	Icon   string `json:"icon"` // flat glyph key; '' = unset (render color swatch)
-	// Per-feed ranker overrides (#17). HalfLifeDays 0 = use the global freshness
+	// Per-interest ranker overrides (#17). HalfLifeDays 0 = use the global freshness
 	// half-life; Diversity 0 = use each source's own per-session cap.
 	HalfLifeDays float64   `json:"half_life_days"`
 	Diversity    int       `json:"diversity"`
@@ -60,34 +60,34 @@ type Feed struct {
 	SourceCount  int       `json:"source_count,omitempty"`
 }
 
-// FeedRef is the compact feed identity attached to a session item so the card
-// can lead with "which feed is this". Populated only when the item's source
-// belongs to a feed; a feedless source (e.g. a YouTube channel with no feed) gets
+// InterestRef is the compact interest identity attached to a session item so the card
+// can lead with "which interest is this". Populated only when the item's source
+// belongs to a interest; a interestless source (e.g. a YouTube channel with no interest) gets
 // a nil ref and the card renders source-only.
-type FeedRef struct {
+type InterestRef struct {
 	Name  string `json:"name"`
 	Slug  string `json:"slug"`
 	Color string `json:"color"`
 	Icon  string `json:"icon"`
 }
 
-// Mix is a user-created overlay gathering several feeds under one name (#86):
-// "News" = Local + International. Many-to-many - a feed can be in several mixes.
-// FeedCount is the denormalized membership size for the management list.
+// Mix is a user-created overlay gathering several interests under one name (#86):
+// "News" = Local + International. Many-to-many - a interest can be in several mixes.
+// InterestCount is the denormalized membership size for the management list.
 type Mix struct {
-	ID        int64     `json:"id"`
-	UserID    int64     `json:"-"`
-	Name      string    `json:"name"`
-	Slug      string    `json:"slug"`
-	Icon      string    `json:"icon"`
-	Sort      int       `json:"sort"`
-	CreatedAt time.Time `json:"created_at"`
-	FeedCount int       `json:"feed_count"`
+	ID            int64     `json:"id"`
+	UserID        int64     `json:"-"`
+	Name          string    `json:"name"`
+	Slug          string    `json:"slug"`
+	Icon          string    `json:"icon"`
+	Sort          int       `json:"sort"`
+	CreatedAt     time.Time `json:"created_at"`
+	InterestCount int       `json:"interest_count"`
 }
 
 // Collection is a named list of saved items (#57). Builtins (Saved, Watch
 // Later, Liked) are seeded per user and protected from rename/delete; the rest
-// are user-created. Unlike a feed (a grouping of sources), a collection mixes
+// are user-created. Unlike a interest (a grouping of sources), a collection mixes
 // items the user deliberately set aside.
 type Collection struct {
 	ID        int64     `json:"id"`
@@ -193,12 +193,12 @@ type Candidate struct {
 	// 0 means "unset" and the ranker treats it as 1 (no boost).
 	RarityBoost float64
 	// SourceHalfLifeDays is the source's own freshness half-life override (#76),
-	// resolved by the store. 0 = inherit; it takes precedence over the feed
-	// half-life in the ranker (source override > feed > global).
+	// resolved by the store. 0 = inherit; it takes precedence over the interest
+	// half-life in the ranker (source override > interest > global).
 	SourceHalfLifeDays float64
-	// FeedHalfLifeDays / FeedDiversity are the item's feed ranker overrides (#17),
-	// resolved from the source's one feed (#86). 0 means "use the global default"
+	// InterestHalfLifeDays / InterestDiversity are the item's interest ranker overrides (#17),
+	// resolved from the source's one interest (#86). 0 means "use the global default"
 	// (freshness half-life) / "use the source's own per-session cap".
-	FeedHalfLifeDays float64
-	FeedDiversity    int
+	InterestHalfLifeDays float64
+	InterestDiversity    int
 }

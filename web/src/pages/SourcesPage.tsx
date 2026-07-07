@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { api, type Feed, type Source } from "@/api/client";
+import { api, type Interest, type Source } from "@/api/client";
 import { feedIcon } from "@/lib/feedIcons";
 import { WeightIndicator } from "@/components/WeightIndicator";
 import { FeedIconPicker } from "@/components/FeedIconPicker";
@@ -17,11 +17,11 @@ const SIG_LABEL: Record<SigKey, string> = {
   dormant: "dormant",
 };
 
-type SortKey = "weight" | "alpha" | "feed" | "skipped" | "noisy";
+type SortKey = "weight" | "alpha" | "interest" | "skipped" | "noisy";
 const SORTS: { k: SortKey; label: string }[] = [
   { k: "weight", label: "weight" },
   { k: "alpha", label: "a-z" },
-  { k: "feed", label: "feed" },
+  { k: "interest", label: "interest" },
   { k: "skipped", label: "skipped" },
   { k: "noisy", label: "noisy" },
 ];
@@ -36,8 +36,8 @@ function pctl(vals: number[], p: number): number {
 export default function SourcesPage() {
   const nav = useNavigate();
   const [sources, setSources] = useState<Source[]>([]);
-  const [feeds, setFeeds] = useState<Feed[]>([]);
-  const [ffeed, setFfeed] = useState<string | null>(null);
+  const [interests, setInterests] = useState<Interest[]>([]);
+  const [finterest, setFinterest] = useState<string | null>(null);
   const [fstate, setFstate] = useState<"followed" | "archived" | "all">("followed");
   const [fsignal, setFsignal] = useState<SigKey | null>(null);
   const [sort, setSort] = useState<SortKey>("weight");
@@ -51,9 +51,9 @@ export default function SourcesPage() {
   const [fetching, setFetching] = useState(false);
   const [iconsOpen, setIconsOpen] = useState(false);
   // #55: signal / sort / mix collapse into a bottom sheet so the always-on
-  // control stack is just feed chips + state and the list keeps the screen.
+  // control stack is just interest chips + state and the list keeps the screen.
   const [ctrlOpen, setCtrlOpen] = useState(false);
-  // #64: the secondary actions (import / add / refresh / feed insights / feed
+  // #64: the secondary actions (import / add / refresh / interest insights / interest
   // settings) collapse behind one "Manage" affordance so the list starts high.
   const [manageOpen, setManageOpen] = useState(false);
   const filtersActive = fsignal !== null || sort !== "weight" || mix;
@@ -61,12 +61,12 @@ export default function SourcesPage() {
   function reload() {
     api.sources().then(setSources).catch((e) => setErr(String(e.message ?? e)));
   }
-  function reloadFeeds() {
-    api.feeds().then(setFeeds).catch(() => {});
+  function reloadInterests() {
+    api.interests().then(setInterests).catch(() => {});
   }
   useEffect(() => {
     reload();
-    reloadFeeds();
+    reloadInterests();
   }, []);
 
   const median = useMemo(() => {
@@ -77,7 +77,7 @@ export default function SourcesPage() {
     return v.length ? v[Math.floor(v.length / 2)] : 0;
   }, [sources]);
 
-  // Feed + state filtered set. Signal thresholds are computed over THIS set so
+  // Interest + state filtered set. Signal thresholds are computed over THIS set so
   // they're relative to what you're currently looking at, then the signal
   // filter (if any) narrows further - all three axes AND together.
   const base = useMemo(
@@ -85,10 +85,10 @@ export default function SourcesPage() {
       sources.filter((s) => {
         if (fstate === "followed" && s.state === "archived") return false;
         if (fstate === "archived" && s.state !== "archived") return false;
-        if (ffeed && s.feed_slug !== ffeed) return false;
+        if (finterest && s.interest_slug !== finterest) return false;
         return true;
       }),
-    [sources, ffeed, fstate],
+    [sources, finterest, fstate],
   );
 
   const p75ppd = useMemo(() => pctl(base.map((s) => s.posts_per_day ?? 0), 0.75), [base]);
@@ -122,16 +122,16 @@ export default function SourcesPage() {
     [base, fsignal, p75ppd, p75skip, median],
   );
 
-  const feedBySlug = useMemo(() => {
-    const m = new Map<string, Feed>();
-    feeds.forEach((f) => m.set(f.slug, f));
+  const interestBySlug = useMemo(() => {
+    const m = new Map<string, Interest>();
+    interests.forEach((f) => m.set(f.slug, f));
     return m;
-  }, [feeds]);
+  }, [interests]);
 
-  // A source belongs to exactly one feed (#86); this resolves it for feed-sort
-  // and grouping. Feedless sources return null (the trailing "No feed" bucket).
-  function primaryFeed(s: Source): Feed | null {
-    return s.feed_slug ? feedBySlug.get(s.feed_slug) ?? null : null;
+  // A source belongs to exactly one interest (#86); this resolves it for interest-sort
+  // and grouping. Interestless sources return null (the trailing "No interest" bucket).
+  function primaryInterest(s: Source): Interest | null {
+    return s.interest_slug ? interestBySlug.get(s.interest_slug) ?? null : null;
   }
 
   const sorted = useMemo(() => {
@@ -145,9 +145,9 @@ export default function SourcesPage() {
           return (b.skip_pct ?? 0) - (a.skip_pct ?? 0) || byTitle(a, b);
         case "noisy":
           return (b.posts_per_day ?? 0) - (a.posts_per_day ?? 0) || byTitle(a, b);
-        case "feed": {
-          const fa = primaryFeed(a);
-          const fb = primaryFeed(b);
+        case "interest": {
+          const fa = primaryInterest(a);
+          const fb = primaryInterest(b);
           const ra = fa ? fa.sort : Infinity;
           const rb = fb ? fb.sort : Infinity;
           return ra - rb || (fa?.name ?? "~").localeCompare(fb?.name ?? "~") || byTitle(a, b);
@@ -159,26 +159,26 @@ export default function SourcesPage() {
     });
     return arr;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [shown, sort, feedBySlug]);
+  }, [shown, sort, interestBySlug]);
 
-  // When grouping, bucket the already-sorted list by primary feed; feedless
-  // sources fall into a trailing "No feed" mix.
+  // When grouping, bucket the already-sorted list by primary interest; interestless
+  // sources fall into a trailing "No interest" mix.
   const mixes = useMemo(() => {
     if (!mix) return null;
-    const m = new Map<string, { feed: Feed | null; items: Source[] }>();
+    const m = new Map<string, { interest: Interest | null; items: Source[] }>();
     for (const s of sorted) {
-      const f = primaryFeed(s);
+      const f = primaryInterest(s);
       const key = f?.slug ?? "__none";
-      if (!m.has(key)) m.set(key, { feed: f, items: [] });
+      if (!m.has(key)) m.set(key, { interest: f, items: [] });
       m.get(key)!.items.push(s);
     }
     return [...m.values()].sort((a, b) => {
-      if (!a.feed) return 1;
-      if (!b.feed) return -1;
-      return a.feed.sort - b.feed.sort || a.feed.name.localeCompare(b.feed.name);
+      if (!a.interest) return 1;
+      if (!b.interest) return -1;
+      return a.interest.sort - b.interest.sort || a.interest.name.localeCompare(b.interest.name);
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mix, sorted, feedBySlug]);
+  }, [mix, sorted, interestBySlug]);
 
   async function add() {
     if (!url.trim()) return;
@@ -222,7 +222,7 @@ export default function SourcesPage() {
       {/* #64: compact top - title + one "Manage" affordance. The secondary
           actions live behind the Manage sheet so the list starts high. */}
       {/* #84 Model-A: the Library is just the library now. Collections + History
-          moved to the Saved tab; Import / Feed insights / Settings to the You tab. The
+          moved to the Saved tab; Import / Interest insights / Settings to the You tab. The
           header keeps only the source-level "Manage" affordance, so it no longer
           overflows at phone width. */}
       <div className="lib-topbar">
@@ -235,25 +235,25 @@ export default function SourcesPage() {
       </div>
       <p className="sub">The sources you follow. Weight = how often they surface; turn down instead of unfollowing.</p>
 
-      {/* filter by feed */}
+      {/* filter by interest */}
       <div className="lib-filter">
-        <button className={`lib-fchip ${!ffeed ? "on" : ""}`} onClick={() => setFfeed(null)}>All feeds</button>
-        {feeds.map((f) => {
+        <button className={`lib-fchip ${!finterest ? "on" : ""}`} onClick={() => setFinterest(null)}>All interests</button>
+        {interests.map((f) => {
           const Ic = feedIcon(f.icon);
           return (
-            <button key={f.slug} className={`lib-fchip ${ffeed === f.slug ? "on" : ""}`} onClick={() => setFfeed(f.slug)}>
+            <button key={f.slug} className={`lib-fchip ${finterest === f.slug ? "on" : ""}`} onClick={() => setFinterest(f.slug)}>
               {Ic && <Ic size={13} strokeWidth={1.75} aria-hidden />}
               {f.name}
             </button>
           );
         })}
       </div>
-      {/* #66: with a single feed in focus, offer an explicit, visible path to its
+      {/* #66: with a single interest in focus, offer an explicit, visible path to its
           dedicated page (settings + its sources + its posts). The chip still
           filters this list; this line is the browse-into affordance. */}
-      {ffeed && feedBySlug.get(ffeed) && (
-        <button className="lib-feedlink" onClick={() => nav(`/feeds/${ffeed}`)}>
-          Open {feedBySlug.get(ffeed)!.name} page <span aria-hidden>▸</span>
+      {finterest && interestBySlug.get(finterest) && (
+        <button className="lib-interestlink" onClick={() => nav(`/interests/${finterest}`)}>
+          Open {interestBySlug.get(finterest)!.name} page <span aria-hidden>▸</span>
         </button>
       )}
       {/* #55: state (primary axis) stays visible; signal / sort / mix collapse
@@ -272,22 +272,22 @@ export default function SourcesPage() {
         <span className="lib-count">{shown.length} of {sources.length}</span>
       </div>
 
-      {(mixes ?? [{ feed: null as Feed | null, items: sorted }]).map((g) => {
-        const GIc = g.feed ? feedIcon(g.feed.icon) : null;
+      {(mixes ?? [{ interest: null as Interest | null, items: sorted }]).map((g) => {
+        const GIc = g.interest ? feedIcon(g.interest.icon) : null;
         return (
-        <div key={g.feed ? g.feed.slug : "__flat"}>
+        <div key={g.interest ? g.interest.slug : "__flat"}>
           {mix &&
-            (g.feed ? (
-              // #66: grouped headers browse into the feed's dedicated page.
-              <button className="lib-mix as-link" onClick={() => nav(`/feeds/${g.feed!.slug}`)}>
+            (g.interest ? (
+              // #66: grouped headers browse into the interest's dedicated page.
+              <button className="lib-mix as-link" onClick={() => nav(`/interests/${g.interest!.slug}`)}>
                 {GIc && <GIc size={14} strokeWidth={1.75} aria-hidden />}
-                <span>{g.feed.name}</span>
+                <span>{g.interest.name}</span>
                 <span className="cnt">{g.items.length}</span>
                 <span className="chev" aria-hidden>▸</span>
               </button>
             ) : (
               <div className="lib-mix">
-                <span>No feed</span>
+                <span>No interest</span>
                 <span className="cnt">{g.items.length}</span>
               </div>
             ))}
@@ -313,8 +313,8 @@ export default function SourcesPage() {
 
       {/* #64/#84: the collapsed source-level actions - full behavior, just
           off-screen until asked for. Add-a-source form lives inside the sheet
-          too. Import / Feed insights / Settings moved to their own tabs (You), so
-          this sheet is now just add / refresh / feed settings. */}
+          too. Import / Interest insights / Settings moved to their own tabs (You), so
+          this sheet is now just add / refresh / interest settings. */}
       <BottomSheet open={manageOpen} onClose={() => setManageOpen(false)} kicker="Manage">
         <div className="lib-sheet">
           <div className="sheet-rows">
@@ -324,7 +324,7 @@ export default function SourcesPage() {
             </button>
             {adding && (
               <div className="lib-add">
-                <input className="field" placeholder="Feed URL (RSS / Atom / YouTube)" value={url} onChange={(e) => setUrl(e.target.value)} />
+                <input className="field" placeholder="Interest URL (RSS / Atom / YouTube)" value={url} onChange={(e) => setUrl(e.target.value)} />
                 <input className="field" placeholder="Title (optional)" value={title} onChange={(e) => setTitle(e.target.value)} />
                 <select className="field" value={kind} onChange={(e) => setKind(e.target.value)}>
                   <option value="rss">RSS / blog / news</option>
@@ -339,13 +339,13 @@ export default function SourcesPage() {
               <span>{fetching ? "Refreshing…" : "Refresh now"}</span>
               <span className="sheet-chev">↻</span>
             </button>
-            {feeds.length > 0 && (
+            {interests.length > 0 && (
               <button className="sheet-row" onClick={() => { setManageOpen(false); setIconsOpen(true); }}>
-                <span>Feed settings</span>
+                <span>Interest settings</span>
                 <span className="sheet-chev">▸</span>
               </button>
             )}
-            {/* #86: mixes gather feeds under one name. Managed on their own page
+            {/* #86: mixes gather interests under one name. Managed on their own page
                 so the library header stays uncluttered. */}
             <button className="sheet-row" onClick={() => { setManageOpen(false); nav("/mixes"); }}>
               <span>Mixes</span>
@@ -381,7 +381,7 @@ export default function SourcesPage() {
           <div className="ctl-label">Grouping</div>
           <div className="lib-sheet-row">
             <button className={`lib-seg ${mix ? "on" : ""}`} onClick={() => setMix((g) => !g)}>
-              mix by feed
+              mix by interest
             </button>
           </div>
 
@@ -399,10 +399,10 @@ export default function SourcesPage() {
       </BottomSheet>
 
       <FeedIconPicker
-        feeds={feeds}
+        interests={interests}
         open={iconsOpen}
         onClose={() => setIconsOpen(false)}
-        onChanged={reloadFeeds}
+        onChanged={reloadInterests}
       />
     </div>
   );

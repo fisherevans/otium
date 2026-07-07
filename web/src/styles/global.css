@@ -322,7 +322,7 @@ h1.display {
 /* --- intent page (#69) -----------------------------------------------------
    One dead-simple, no-scroll screen: a single native time slider, topic chips,
    one calm start button. The column fills the content area; only the chip list
-   scrolls internally if a user follows many feeds, so the page itself never
+   scrolls internally if a user follows many interests, so the page itself never
    scrolls (verified at 412px Palma width). Replaces the 2-axis pad + a11y
    sliders above (kept in CSS only for now; markup no longer references them). */
 .intent {
@@ -488,7 +488,7 @@ h1.display {
 }
 .intent .btn {
   flex: 0 0 auto;
-  /* auto keeps the CTA pinned to the bottom even when there are no feeds (no
+  /* auto keeps the CTA pinned to the bottom even when there are no interests (no
      flex:1 topics list to consume the free space). */
   margin-top: auto;
 }
@@ -758,7 +758,7 @@ h1.display {
   cursor: pointer; /* card body is tap-to-open (#47) */
 }
 
-/* --- card identity line (#44/#48): feed emphasized, source + age secondary --- */
+/* --- card identity line (#44/#48): interest emphasized, source + age secondary --- */
 .identity {
   display: flex;
   flex-wrap: wrap;
@@ -771,18 +771,18 @@ h1.display {
   margin-right: 7px;
   color: var(--ink-mute);
 }
-.id-feed {
+.id-interest {
   display: inline-flex;
   align-items: center;
   gap: 6px;
   font-family: var(--grot);
-  /* #81: feed-tag size is user-tunable; theme default 13px. */
-  font-size: var(--pref-card-feedtag-size, 13px);
+  /* #81: interest-tag size is user-tunable; theme default 13px. */
+  font-size: var(--pref-card-interesttag-size, 13px);
   /* #90: weight joins the shared card-meta control (default 600 when unset). */
   font-weight: var(--pref-card-meta-weight, 600);
   color: var(--ink);
 }
-.id-feed svg {
+.id-interest svg {
   display: block;
   color: var(--ink);
 }
@@ -809,7 +809,7 @@ h1.display {
   font-size: var(--pref-card-source-size, 11px);
 }
 .id-source.lead {
-  color: var(--ink-soft); /* source is the anchor when there's no feed */
+  color: var(--ink-soft); /* source is the anchor when there's no interest */
 }
 
 /* --- media previews (dithered e-ink) --- */
@@ -1052,7 +1052,7 @@ h1.display {
   padding: 14px 0 10px;
   -webkit-overflow-scrolling: touch;
 }
-/* #93 de-noise: feed filter chips lose the box - quiet muted words, active =
+/* #93 de-noise: interest filter chips lose the box - quiet muted words, active =
    ink + underline (rule 2: mark only the chosen one, don't cage every option). */
 .lib-fchip {
   flex: 0 0 auto;
@@ -1105,7 +1105,7 @@ h1.display {
   color: var(--ink-mute);
 }
 /* stacked control rows: drop the divider on all but the last so the
-   feed / state / signal / sort stack reads as one calm block */
+   interest / state / signal / sort stack reads as one calm block */
 .lib-sub.noline {
   border-bottom: none;
   padding-bottom: 2px;
@@ -1327,12 +1327,12 @@ h1.display {
   color: var(--ink-mute);
   margin: 5px 0 0;
 }
-.feed-assign {
+.interest-assign {
   display: flex;
   flex-wrap: wrap;
   gap: 14px;
 }
-/* #93 de-noise: feed-assign chips lose the box - muted words, active = ink +
+/* #93 de-noise: interest-assign chips lose the box - muted words, active = ink +
    underline, matching the library's filter chips. */
 .fa-chip {
   display: inline-flex;
@@ -1351,7 +1351,7 @@ h1.display {
   border-bottom-color: var(--ink);
 }
 
-/* feed-icon picker grid (#45) */
+/* interest-icon picker grid (#45) */
 .icon-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(46px, 1fr));
@@ -1734,7 +1734,7 @@ h1.display {
   color: var(--ink-soft);
 }
 
-/* ---- source detail + raw-feed drill-ins (#43) ---- */
+/* ---- source detail + raw-interest drill-ins (#43) ---- */
 .src-detail {
   flex: 1;
   min-height: 0;
@@ -1753,7 +1753,7 @@ h1.display {
   font-style: italic;
   padding: 20px 2px;
 }
-.feed-item {
+.interest-item {
   display: flex;
   flex-direction: column;
   gap: 3px;
@@ -1764,29 +1764,29 @@ h1.display {
   border-bottom: 1px solid var(--hair);
   padding: 12px 2px;
 }
-.feed-item:active {
+.interest-item:active {
   background: var(--paper-3);
 }
-.feed-item b {
+.interest-item b {
   font-family: var(--serif);
   font-weight: 600;
   font-size: 15px;
   line-height: 1.3;
   color: var(--ink);
 }
-.feed-item span {
+.interest-item span {
   font-family: var(--mono);
   font-size: 11px;
   text-transform: uppercase;
   letter-spacing: 0.03em;
   color: var(--ink-mute);
 }
-.feed-item.here {
+.interest-item.here {
   background: var(--paper-3);
   border-left: 2px solid var(--ink);
   padding-left: 8px;
 }
-.feed-item.here span {
+.interest-item.here span {
   color: var(--ink-soft);
 }
 
@@ -1806,7 +1806,7 @@ h1.display {
 }
 
 /* ============================================================
-   Feed mix / insights (#49) - donut + ranked share bars
+   Interest mix / insights (#49) - donut + ranked share bars
    ============================================================ */
 .mix-empty {
   font-family: var(--serif);
@@ -2197,7 +2197,7 @@ h1.display {
    #64/#65 library simplification (branch: library-simplify)
    Compact library top: title + one "Manage" affordance, list
    starts high. The add-a-source form now lives in the Manage
-   sheet. Kept in a labeled block to ease merge with content-feed.
+   sheet. Kept in a labeled block to ease merge with content-interest.
    ============================================================ */
 .lib-topbar {
   display: flex;
@@ -2287,15 +2287,15 @@ h1.display {
 }
 /* ===== end #57 ===== */
 
-/* ===== #66 feed-mgmt-pages: dedicated source/feed pages ===== */
+/* ===== #66 interest-mgmt-pages: dedicated source/interest pages ===== */
 /* Spacing between the stacked settings/sources/posts sections on a source or
-   feed page. Keeps them as distinct rooms without heavy dividers. */
+   interest page. Keeps them as distinct rooms without heavy dividers. */
 .page-section {
   margin-top: 26px;
 }
-/* The explicit "browse into this feed's page" affordance under the filter chips
-   when a single feed is in focus. Quiet, text-forward, thumb-height. */
-.lib-feedlink {
+/* The explicit "browse into this interest's page" affordance under the filter chips
+   when a single interest is in focus. Quiet, text-forward, thumb-height. */
+.lib-interestlink {
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -2308,10 +2308,10 @@ h1.display {
   letter-spacing: 0.04em;
   color: var(--ink-soft);
 }
-.lib-feedlink:active {
+.lib-interestlink:active {
   color: var(--ink);
 }
-/* A grouped-by-feed header rendered as a link to the feed page. Inherits the
+/* A grouped-by-interest header rendered as a link to the interest page. Inherits the
    .lib-mix look; resets the button chrome and adds a trailing chevron. */
 .lib-mix.as-link {
   width: 100%;
@@ -2594,7 +2594,7 @@ button.id-source:active {
   font-size: 20px;
   margin: 6px 0 2px;
 }
-/* #97: per-element mix label inside a tab panel (e.g. the Card tab's Feed pill /
+/* #97: per-element mix label inside a tab panel (e.g. the Card tab's Interest pill /
    Source / Author / Date mixes). Quieter than .ctl-heading - a mono eyebrow with a
    hairline above so the controls read as grouped, not one long flat list. */
 .ctl-mixhead {
@@ -2776,7 +2776,7 @@ button.id-source:active {
 
 /* ============================================================
    #96 session card (rebuilt) + #85/#87/#88/#92 reader page + share
-   Fixed order: FeedPill -> Source -> Title -> Byline -> Hero -> Blurb -> callout.
+   Fixed order: InterestPill -> Source -> Title -> Byline -> Hero -> Blurb -> callout.
    De-noised: reason loses its box, callout icons are frameless, one solid element.
    ============================================================ */
 
@@ -2798,8 +2798,8 @@ button.id-source:active {
   margin: 0;
 }
 
-/* feed pill: the one deliberately distinctive element on a quiet card */
-.feed-pill {
+/* interest pill: the one deliberately distinctive element on a quiet card */
+.interest-pill {
   align-self: flex-start;
   display: inline-flex;
   align-items: center;
@@ -2809,26 +2809,26 @@ button.id-source:active {
   margin-bottom: 9px;
   border-radius: 999px;
   background: var(--paper-3);
-  color: var(--feed-color, var(--ink));
+  color: var(--interest-color, var(--ink));
 }
-.feed-pill svg {
+.interest-pill svg {
   flex: 0 0 auto;
 }
-.feed-pill-dot {
+.interest-pill-dot {
   flex: 0 0 auto;
   width: 8px;
   height: 8px;
   border-radius: 50%;
-  background: var(--feed-color, var(--ink));
+  background: var(--interest-color, var(--ink));
 }
-.feed-pill-name {
+.interest-pill-name {
   font-family: var(--mono);
-  font-size: var(--pref-card-feedtag-size, 12px);
-  /* #97: per-element weight; default 600. Ink defaults to the feed's own color
-     tint (inherit from .feed-pill) and only overrides when the user picks a
+  font-size: var(--pref-card-interesttag-size, 12px);
+  /* #97: per-element weight; default 600. Ink defaults to the interest's own color
+     tint (inherit from .interest-pill) and only overrides when the user picks a
      grayscale shade (var emitted only then). */
-  font-weight: var(--pref-card-feed-weight, 600);
-  color: var(--pref-card-feed-ink, inherit);
+  font-weight: var(--pref-card-interest-weight, 600);
+  color: var(--pref-card-interest-ink, inherit);
   letter-spacing: 0.05em;
   text-transform: uppercase;
   white-space: nowrap;
@@ -2836,7 +2836,7 @@ button.id-source:active {
   text-overflow: ellipsis;
 }
 
-/* source name: tappable, secondary emphasis; leads when the source has no feed */
+/* source name: tappable, secondary emphasis; leads when the source has no interest */
 .card-source {
   align-self: flex-start;
   max-width: 100%;
@@ -2920,7 +2920,7 @@ button.id-source:active {
   margin-top: 14px;
 }
 
-/* #101: keep the whole card within the viewport so the feed pill (top) and the
+/* #101: keep the whole card within the viewport so the interest pill (top) and the
    callout buttons (bottom) are never clipped - no scroll-to-reach. Cap the hero
    and trim the card's vertical padding + the byline gap. */
 .snap {
@@ -2928,7 +2928,7 @@ button.id-source:active {
   padding-bottom: 12px;
 }
 /* Each card is exactly one viewport tall; the hero flex-shrinks to absorb the
-   space left after the (bounded) text, so the whole card - feed pill at the top,
+   space left after the (bounded) text, so the whole card - interest pill at the top,
    callout buttons at the bottom - always fits with no scroll, on any height. */
 .snap {
   height: 100%;

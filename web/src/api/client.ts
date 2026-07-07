@@ -9,22 +9,22 @@ export interface Me {
   name: string;
 }
 
-export interface Feed {
+export interface Interest {
   id: number;
   name: string;
   slug: string;
   color: string;
   icon: string; // flat glyph key (see lib/feedIcons); "" = unset
-  half_life_days: number; // per-feed freshness half-life in days; 0 = global default (#17)
-  diversity: number; // per-session per-source cap for this feed's sources; 0 = use source cap (#17)
+  half_life_days: number; // per-interest freshness half-life in days; 0 = global default (#17)
+  diversity: number; // per-session per-source cap for this interest's sources; 0 = use source cap (#17)
   sort: number;
   source_count?: number;
 }
 
-// Compact feed identity attached to a session item (#44). Null/absent when the
-// item's source belongs to no feed (e.g. a YouTube channel) - the card then
+// Compact interest identity attached to a session item (#44). Null/absent when the
+// item's source belongs to no interest (e.g. a YouTube channel) - the card then
 // renders source-only.
-export interface FeedRef {
+export interface InterestRef {
   name: string;
   slug: string;
   color: string;
@@ -41,14 +41,14 @@ export interface Source {
   weight: number;
   state: string;
   per_session_cap: number;
-  half_life_days: number; // per-source freshness half-life override; 0 = inherit feed/global (#76)
+  half_life_days: number; // per-source freshness half-life override; 0 = inherit interest/global (#76)
   added_at: string;
   last_fetch_at?: string;
   fetch_error?: string;
-  // The one feed this source belongs to (#86). feed_id is null/absent when
-  // feedless; feed_slug is the denormalized slug for the UI ("" when feedless).
-  feed_id?: number | null;
-  feed_slug?: string;
+  // The one interest this source belongs to (#86). interest_id is null/absent when
+  // interestless; interest_slug is the denormalized slug for the UI ("" when interestless).
+  interest_id?: number | null;
+  interest_slug?: string;
   item_count?: number;
   unseen_count?: number;
   skip_pct?: number;
@@ -111,7 +111,7 @@ export interface HistoryItem extends Item {
 // recommendation (#19), never a silent score cut (#109).
 export interface ScoreBreakdown {
   weight: number; // source weight multiplier (0.25..5, default 1)
-  rarity: number; // relative-rarity boost (1 = as common as your feed gets, up to 2 for the rarest)
+  rarity: number; // relative-rarity boost (1 = as common as your interest gets, up to 2 for the rarest)
   freshness: number; // age decay (1 = brand new → 0 as it ages)
   effective_score: number; // weight × rarity × freshness
   cadence_per_day: number; // source posts/day over the window (its rank among your sources drives rarity)
@@ -121,7 +121,7 @@ export interface ScoreBreakdown {
 export interface Selected {
   item: Item;
   source_title: string;
-  feed?: FeedRef | null; // primary feed identity; absent for a feedless source
+  interest?: InterestRef | null; // primary interest identity; absent for a interestless source
   score: number;
   est_duration_sec: number;
   reason: string;
@@ -171,18 +171,18 @@ export interface ParseResult {
 export interface CommitResult {
   created: number;
   already_had: number;
-  feeds_created: number;
+  interests_created: number;
   refreshing: boolean;
 }
 
-// Feed "insights" view (#49). Per source: its live effective share of the feed
+// Interest "insights" view (#49). Per source: its live effective share of the interest
 // (current freshness-decayed ranker score incl. skip penalty, normalized) paired
 // with intended_share (same, minus the skip penalty) and skip_pct. A big
 // intended slice you mostly skip is the inefficiency signal.
 export interface InsightsSource {
   source_id: number;
   source_title: string;
-  feed: FeedRef | null; // primary feed; null for a feedless source
+  interest: InterestRef | null; // primary interest; null for a interestless source
   effective_share: number; // 0..1, sums to 1 across sources
   intended_share: number; // 0..1, "wants to be" (no skip penalty)
   skip_pct: number; // 0..1
@@ -190,8 +190,8 @@ export interface InsightsSource {
   weight: number; // current multiplier (map via bucketOf for the control)
 }
 
-export interface InsightsFeed {
-  feed: FeedRef | null; // null = feedless bucket
+export interface InsightsInterest {
+  interest: InterestRef | null; // null = interestless bucket
   effective_share: number;
   intended_share: number;
   source_count: number;
@@ -199,10 +199,10 @@ export interface InsightsFeed {
 }
 
 export interface InsightsResponse {
-  scope: "all" | "feed";
-  feed?: string; // slug, when scope === "feed"
+  scope: "all" | "interest";
+  interest?: string; // slug, when scope === "interest"
   sources: InsightsSource[];
-  feeds: InsightsFeed[];
+  interests: InsightsInterest[];
   totals: { source_count: number; item_count: number };
 }
 
@@ -247,8 +247,8 @@ export interface CollectionItem extends Item {
 // "published" by its publish time. Both newest-first. Default saved.
 export type CollectionSort = "saved" | "published";
 
-// A mix (#86): a user-created overlay gathering several feeds (many-to-many).
-// feed_count is the denormalized membership size.
+// A mix (#86): a user-created overlay gathering several interests (many-to-many).
+// interest_count is the denormalized membership size.
 export interface Mix {
   id: number;
   name: string;
@@ -256,20 +256,20 @@ export interface Mix {
   icon: string; // flat glyph key (see lib/feedIcons); "" = unset
   sort: number;
   created_at: string;
-  feed_count: number;
+  interest_count: number;
 }
 
-// MixBrowse is GET /mixes/{id}: the mix's member feeds and the sources
-// aggregated across them (Mix -> Feed -> Source).
+// MixBrowse is GET /mixes/{id}: the mix's member interests and the sources
+// aggregated across them (Mix -> Interest -> Source).
 export interface MixBrowse {
-  feeds: Feed[];
+  interests: Interest[];
   sources: Source[];
 }
 
 // User settings (#68). fast_scroll_checkin gates the dwell/engagement
 // measurement + the fast-scroll check-in nudge. Off = the old explicit-only
-// behavior: no dwell measured, no nudge. (The #76 multi-feed half-life rule was
-// removed in #86 - a source now has exactly one feed, so there's nothing to pick.)
+// behavior: no dwell measured, no nudge. (The #76 multi-interest half-life rule was
+// removed in #86 - a source now has exactly one interest, so there's nothing to pick.)
 export interface Settings {
   fast_scroll_checkin: boolean;
 }
@@ -281,8 +281,8 @@ export interface Settings {
 // maps them to a system font stack / grayscale ink so styling stays on-theme.
 export type FontKey = "charter" | "book" | "didot" | "grotesk";
 export type InkKey = "ink" | "graphite" | "soft" | "mute";
-// #97: the feed pill ink can also be "feed" (keep the feed's own color tint).
-export type FeedInkKey = InkKey | "feed";
+// #97: the interest pill ink can also be "interest" (keep the interest's own color tint).
+export type InterestInkKey = InkKey | "interest";
 // #97: curated byline delimiter glyph keys.
 export type DelimKey = "dot" | "pipe" | "slash" | "space";
 export interface ReaderPrefs {
@@ -297,13 +297,13 @@ export interface ReaderPrefs {
 export interface CardPrefs {
   meta_size: number; // #97 author line size, px
   source_size: number; // source label, px
-  feed_tag_size: number; // feed pill name, px
+  interest_tag_size: number; // interest pill name, px
   date_size: number; // date, px
   hero_show: boolean; // show the hero/media block
   hero_color: boolean; // true = color; false = grayscale/dither
-  // #97 per-element weight (300-700) + ink. Feed ink allows "feed" (keep tint).
-  feed_weight: number;
-  feed_ink: FeedInkKey;
+  // #97 per-element weight (300-700) + ink. Interest ink allows "interest" (keep tint).
+  interest_weight: number;
+  interest_ink: InterestInkKey;
   source_weight: number;
   source_ink: InkKey;
   author_weight: number;
@@ -373,26 +373,26 @@ async function req<T>(method: string, path: string, body?: unknown): Promise<T> 
 export const api = {
   me: () => req<Me>("GET", "/users/me"),
 
-  feeds: () => req<Feed[]>("GET", "/feeds"),
-  createFeed: (name: string, color?: string) =>
-    req<Feed>("POST", "/feeds", { name, color: color ?? "" }),
-  updateFeed: (
+  interests: () => req<Interest[]>("GET", "/interests"),
+  createInterest: (name: string, color?: string) =>
+    req<Interest>("POST", "/interests", { name, color: color ?? "" }),
+  updateInterest: (
     id: number,
     patch: { name?: string; color?: string; icon?: string; half_life_days?: number; diversity?: number },
-  ) => req<{ ok: boolean }>("PATCH", `/feeds/${id}`, patch),
-  setFeedSources: (feedId: number, sourceIds: number[]) =>
-    req<{ ok: boolean }>("PUT", `/feeds/${feedId}/sources`, { source_ids: sourceIds }),
+  ) => req<{ ok: boolean }>("PATCH", `/interests/${id}`, patch),
+  setInterestSources: (interestId: number, sourceIds: number[]) =>
+    req<{ ok: boolean }>("PUT", `/interests/${interestId}/sources`, { source_ids: sourceIds }),
 
-  // Mixes (#86): a user-created overlay grouping feeds (many-to-many). CRUD +
-  // feed-assignment + a browse endpoint (its feeds + aggregated sources).
+  // Mixes (#86): a user-created overlay grouping interests (many-to-many). CRUD +
+  // interest-assignment + a browse endpoint (its interests + aggregated sources).
   mixes: () => req<Mix[]>("GET", "/mixes"),
   createMix: (name: string, icon?: string) =>
     req<Mix>("POST", "/mixes", { name, icon: icon ?? "" }),
   updateMix: (id: number, patch: { name?: string; icon?: string }) =>
     req<{ ok: boolean }>("PATCH", `/mixes/${id}`, patch),
   deleteMix: (id: number) => req<{ ok: boolean }>("DELETE", `/mixes/${id}`),
-  setMixFeeds: (id: number, feedIds: number[]) =>
-    req<{ ok: boolean }>("PUT", `/mixes/${id}/feeds`, { feed_ids: feedIds }),
+  setMixInterests: (id: number, interestIds: number[]) =>
+    req<{ ok: boolean }>("PUT", `/mixes/${id}/interests`, { interest_ids: interestIds }),
   mixBrowse: (id: number) => req<MixBrowse>("GET", `/mixes/${id}`),
 
   sources: () => req<Source[]>("GET", "/sources"),
@@ -403,16 +403,16 @@ export const api = {
     patch: { weight_bucket?: string; state?: string; per_session_cap?: number; half_life_days?: number; title?: string },
   ) => req<{ ok: boolean }>("PATCH", `/sources/${id}`, patch),
   deleteSource: (id: number) => req<{ ok: boolean }>("DELETE", `/sources/${id}`),
-  // Set the source's one feed (#86). Empty slug clears it (feedless).
-  setSourceFeed: (id: number, feedSlug: string) =>
-    req<{ ok: boolean }>("PUT", `/sources/${id}/feed`, { feed_slug: feedSlug }),
+  // Set the source's one interest (#86). Empty slug clears it (interestless).
+  setSourceInterest: (id: number, interestSlug: string) =>
+    req<{ ok: boolean }>("PUT", `/sources/${id}/interest`, { interest_slug: interestSlug }),
   sourceItems: (id: number) => req<Item[]>("GET", `/sources/${id}/items`),
-  // --- #66 feed-mgmt-pages block (feed page recent posts) ---
-  feedItems: (feedId: number) => req<Item[]>("GET", `/feeds/${feedId}/items`),
+  // --- #66 interest-mgmt-pages block (interest page recent posts) ---
+  feedItems: (interestId: number) => req<Item[]>("GET", `/interests/${interestId}/items`),
   // --- end #66 block ---
 
-  insights: (feedSlug?: string) =>
-    req<InsightsResponse>("GET", `/insights${feedSlug ? `?feed=${encodeURIComponent(feedSlug)}` : ""}`),
+  insights: (interestSlug?: string) =>
+    req<InsightsResponse>("GET", `/insights${interestSlug ? `?interest=${encodeURIComponent(interestSlug)}` : ""}`),
 
   // Durable sessions (#67 + #69). createSession builds + stores the queue for a
   // single duration; currentSession resumes the active one (204 -> undefined);
@@ -423,7 +423,7 @@ export const api = {
   updateSession: (id: string, patch: { cursor?: number; status?: "ended" }) =>
     req<{ ok: boolean }>("PATCH", `/sessions/${id}`, patch),
   // On-demand full-text (#98): the best reader body for an item, fetched +
-  // readability-extracted server-side for teaser-only feeds and cached. Returns
+  // readability-extracted server-side for teaser-only interests and cached. Returns
   // content_source=external (content "") when the item isn't extractable.
   itemContent: (id: number) => req<ItemContent>("GET", `/items/${id}/content`),
   itemEvent: (id: number, type: string, sessionId?: string) =>
@@ -481,9 +481,9 @@ export const api = {
     if (!res.ok) throw new Error((await res.json().catch(() => ({}))).message || `${res.status}`);
     return res.json();
   },
-  commitImport: (sources: ImportCandidate[], createFeedsFromFolders: boolean) =>
+  commitImport: (sources: ImportCandidate[], createInterestsFromFolders: boolean) =>
     req<CommitResult>("POST", "/import/commit", {
       sources,
-      create_feeds_from_folders: createFeedsFromFolders,
+      create_interests_from_folders: createInterestsFromFolders,
     }),
 };

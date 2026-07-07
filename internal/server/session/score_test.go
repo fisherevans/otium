@@ -56,48 +56,48 @@ func TestIntendedDecaysWithAge(t *testing.T) {
 	}
 }
 
-// TestPerFeedHalfLifeOverridesGlobal verifies a feed's half-life override
+// TestPerFeedHalfLifeOverridesGlobal verifies a interest's half-life override
 // changes the decay: a shorter half-life decays faster than the global default
 // for the same age, and 0 falls back to the global (#17).
 func TestPerFeedHalfLifeOverridesGlobal(t *testing.T) {
 	now := time.Date(2026, 7, 2, 12, 0, 0, 0, time.UTC)
 	ageDays := 7.0
 
-	c := cand(1, 1, ageDays, now) // FeedHalfLifeDays == 0 -> global
+	c := cand(1, 1, ageDays, now) // InterestHalfLifeDays == 0 -> global
 	global := ItemIntendedScore(c, now)
 
 	fast := c
-	fast.FeedHalfLifeDays = 7 // three weeks -> one week: decays faster
+	fast.InterestHalfLifeDays = 7 // three weeks -> one week: decays faster
 	if s := ItemIntendedScore(fast, now); !(s < global) {
 		t.Fatalf("shorter half-life should decay faster: fast=%v global=%v", s, global)
 	}
 
-	// At exactly the feed half-life, the score is ~half the fresh score.
+	// At exactly the interest half-life, the score is ~half the fresh score.
 	freshFast := cand(1, 1, 0, now)
-	freshFast.FeedHalfLifeDays = 7
+	freshFast.InterestHalfLifeDays = 7
 	atHalf := cand(1, 1, 7, now)
-	atHalf.FeedHalfLifeDays = 7
+	atHalf.InterestHalfLifeDays = 7
 	if got, want := ItemIntendedScore(atHalf, now), ItemIntendedScore(freshFast, now)/2; math.Abs(got-want) > 1e-9 {
-		t.Fatalf("at feed half-life score=%v, want ~%v", got, want)
+		t.Fatalf("at interest half-life score=%v, want ~%v", got, want)
 	}
 
 	// Zero override matches the global half-life exactly.
 	explicitGlobal := c
-	explicitGlobal.FeedHalfLifeDays = freshnessHalfLifeDays
+	explicitGlobal.InterestHalfLifeDays = freshnessHalfLifeDays
 	if got, want := ItemIntendedScore(c, now), ItemIntendedScore(explicitGlobal, now); math.Abs(got-want) > 1e-12 {
 		t.Fatalf("half-life 0 should equal explicit global: %v vs %v", got, want)
 	}
 }
 
 // TestEffectiveMatchesScoreOfWithPerFeedHalfLife keeps the insights-vs-session
-// invariant intact once per-feed half-life is in play: both paths must resolve
+// invariant intact once per-interest half-life is in play: both paths must resolve
 // the half-life identically (#17).
 func TestEffectiveMatchesScoreOfWithPerFeedHalfLife(t *testing.T) {
 	now := time.Date(2026, 7, 2, 12, 0, 0, 0, time.UTC)
 	c := cand(2, 1.5, 5, now)
-	c.FeedHalfLifeDays = 9 // a non-global feed override
+	c.InterestHalfLifeDays = 9 // a non-global interest override
 	if got, want := ItemEffectiveScore(c, now), scoreOf(c, now, 1); math.Abs(got-want) > 1e-12 {
-		t.Fatalf("per-feed half-life broke the invariant: effective=%v scoreOf(sel=1)=%v", got, want)
+		t.Fatalf("per-interest half-life broke the invariant: effective=%v scoreOf(sel=1)=%v", got, want)
 	}
 }
 
@@ -141,14 +141,14 @@ func TestScoreBreakdownMultipliesToEffective(t *testing.T) {
 }
 
 // TestSourceHalfLifeResolutionHierarchy verifies the #76 precedence
-// source override > feed (resolved) > global. A source override wins over the
-// feed half-life; with no source override the feed half-life applies; with
+// source override > interest (resolved) > global. A source override wins over the
+// interest half-life; with no source override the interest half-life applies; with
 // neither, the global default is used.
 func TestSourceHalfLifeResolutionHierarchy(t *testing.T) {
 	now := time.Date(2026, 7, 2, 12, 0, 0, 0, time.UTC)
 	ageDays := 7.0
 
-	// Global: no source, no feed override -> decays at freshnessHalfLifeDays.
+	// Global: no source, no interest override -> decays at freshnessHalfLifeDays.
 	global := cand(1, 1, ageDays, now)
 	if got, want := halfLifeOf(global), 0.0; got != want {
 		t.Fatalf("no override should resolve to 0 (global fallback), got %v", got)
@@ -158,28 +158,28 @@ func TestSourceHalfLifeResolutionHierarchy(t *testing.T) {
 		t.Fatalf("global freshness=%v, want %v", got, wantGlobal)
 	}
 
-	// Feed only: the resolved feed half-life applies.
-	feedOnly := cand(1, 1, ageDays, now)
-	feedOnly.FeedHalfLifeDays = 14
-	if got := halfLifeOf(feedOnly); got != 14 {
-		t.Fatalf("feed-only should resolve to feed half-life 14, got %v", got)
+	// Interest only: the resolved interest half-life applies.
+	interestOnly := cand(1, 1, ageDays, now)
+	interestOnly.InterestHalfLifeDays = 14
+	if got := halfLifeOf(interestOnly); got != 14 {
+		t.Fatalf("interest-only should resolve to interest half-life 14, got %v", got)
 	}
 
-	// Source override present: it wins over the feed half-life, even a shorter one.
+	// Source override present: it wins over the interest half-life, even a shorter one.
 	both := cand(1, 1, ageDays, now)
-	both.FeedHalfLifeDays = 14
+	both.InterestHalfLifeDays = 14
 	both.SourceHalfLifeDays = 7
 	if got := halfLifeOf(both); got != 7 {
-		t.Fatalf("source override should win over feed, got %v", got)
+		t.Fatalf("source override should win over interest, got %v", got)
 	}
 	wantSrc := math.Pow(0.5, ageDays/7)
 	if got := ScoreBreakdownFor(both, now).Freshness; math.Abs(got-wantSrc) > 1e-12 {
 		t.Fatalf("source-override freshness=%v, want %v", got, wantSrc)
 	}
-	// The source override (7d) decays faster than its feed (14d) would have.
-	feedWould := math.Pow(0.5, ageDays/14)
-	if !(wantSrc < feedWould) {
-		t.Fatalf("source override 7d should decay faster than feed 14d: %v vs %v", wantSrc, feedWould)
+	// The source override (7d) decays faster than its interest (14d) would have.
+	interestWould := math.Pow(0.5, ageDays/14)
+	if !(wantSrc < interestWould) {
+		t.Fatalf("source override 7d should decay faster than interest 14d: %v vs %v", wantSrc, interestWould)
 	}
 }
 
@@ -189,8 +189,8 @@ func TestSourceHalfLifeResolutionHierarchy(t *testing.T) {
 func TestEffectiveMatchesScoreOfWithSourceHalfLife(t *testing.T) {
 	now := time.Date(2026, 7, 2, 12, 0, 0, 0, time.UTC)
 	c := cand(2, 1.5, 5, now)
-	c.FeedHalfLifeDays = 30  // feed says slow
-	c.SourceHalfLifeDays = 5 // source override says fast; must win in BOTH paths
+	c.InterestHalfLifeDays = 30 // interest says slow
+	c.SourceHalfLifeDays = 5    // source override says fast; must win in BOTH paths
 	if got, want := ItemEffectiveScore(c, now), scoreOf(c, now, 1); math.Abs(got-want) > 1e-12 {
 		t.Fatalf("per-source half-life broke the invariant: effective=%v scoreOf(sel=1)=%v", got, want)
 	}

@@ -13,15 +13,15 @@ import (
 var ErrMixNotFound = errors.New("mix not found")
 
 // Mixes (#86) are a user-created overlay that gathers several FEEDS under one
-// name, many-to-many. This file owns their CRUD, feed-assignment, and the
-// mix->feeds->sources expansion the session builder can target.
+// name, many-to-many. This file owns their CRUD, interest-assignment, and the
+// mix->interests->sources expansion the session builder can target.
 
-// ListMixes returns the user's mixes with their feed counts, ordered by sort
+// ListMixes returns the user's mixes with their interest counts, ordered by sort
 // then name.
 func (db *DB) ListMixes(ctx context.Context, userID int64) ([]Mix, error) {
 	rows, err := db.sql.QueryContext(ctx,
 		`SELECT g.id, g.name, g.slug, g.icon, g.sort, g.created_at,
-		        (SELECT COUNT(*) FROM mix_feeds gf WHERE gf.mix_id = g.id) AS feed_count
+		        (SELECT COUNT(*) FROM mix_interests gf WHERE gf.mix_id = g.id) AS interest_count
 		 FROM mixes g WHERE g.user_id = ? ORDER BY g.sort, g.name`, userID)
 	if err != nil {
 		return nil, err
@@ -31,7 +31,7 @@ func (db *DB) ListMixes(ctx context.Context, userID int64) ([]Mix, error) {
 	for rows.Next() {
 		var g Mix
 		var created string
-		if err := rows.Scan(&g.ID, &g.Name, &g.Slug, &g.Icon, &g.Sort, &created, &g.FeedCount); err != nil {
+		if err := rows.Scan(&g.ID, &g.Name, &g.Slug, &g.Icon, &g.Sort, &created, &g.InterestCount); err != nil {
 			return nil, err
 		}
 		g.CreatedAt = parseTime(created)
@@ -40,7 +40,7 @@ func (db *DB) ListMixes(ctx context.Context, userID int64) ([]Mix, error) {
 	return out, rows.Err()
 }
 
-// GetMixBySlug returns a single mix (without feed count), scoped to the user.
+// GetMixBySlug returns a single mix (without interest count), scoped to the user.
 func (db *DB) GetMixBySlug(ctx context.Context, userID int64, slug string) (*Mix, error) {
 	var g Mix
 	var created string
@@ -127,10 +127,10 @@ func (db *DB) DeleteMix(ctx context.Context, userID, id int64) error {
 	return nil
 }
 
-// SetMixFeeds replaces the set of feeds in a mix with exactly feedIDs.
-// Unknown feed ids (or feeds not owned by the user) are ignored. Scoped: a mix
+// SetMixInterests replaces the set of interests in a mix with exactly interestIDs.
+// Unknown interest ids (or interests not owned by the user) are ignored. Scoped: a mix
 // the user doesn't own returns ErrMixNotFound before any write.
-func (db *DB) SetMixFeeds(ctx context.Context, userID, mixID int64, feedIDs []int64) error {
+func (db *DB) SetMixInterests(ctx context.Context, userID, mixID int64, interestIDs []int64) error {
 	var owner int64
 	err := db.sql.QueryRowContext(ctx, `SELECT user_id FROM mixes WHERE id = ?`, mixID).Scan(&owner)
 	if err == sql.ErrNoRows || (err == nil && owner != userID) {
@@ -144,15 +144,15 @@ func (db *DB) SetMixFeeds(ctx context.Context, userID, mixID int64, feedIDs []in
 		return err
 	}
 	defer tx.Rollback()
-	if _, err := tx.ExecContext(ctx, `DELETE FROM mix_feeds WHERE mix_id = ?`, mixID); err != nil {
+	if _, err := tx.ExecContext(ctx, `DELETE FROM mix_interests WHERE mix_id = ?`, mixID); err != nil {
 		return err
 	}
-	for _, fid := range feedIDs {
-		// The SELECT guard ensures the feed belongs to the user; a foreign feed id
+	for _, fid := range interestIDs {
+		// The SELECT guard ensures the interest belongs to the user; a foreign interest id
 		// inserts nothing.
 		if _, err := tx.ExecContext(ctx,
-			`INSERT OR IGNORE INTO mix_feeds (mix_id, feed_id)
-			 SELECT ?, id FROM feeds WHERE id = ? AND user_id = ?`,
+			`INSERT OR IGNORE INTO mix_interests (mix_id, interest_id)
+			 SELECT ?, id FROM interests WHERE id = ? AND user_id = ?`,
 			mixID, fid, userID); err != nil {
 			return err
 		}
@@ -160,22 +160,22 @@ func (db *DB) SetMixFeeds(ctx context.Context, userID, mixID int64, feedIDs []in
 	return tx.Commit()
 }
 
-// MixFeeds returns the feeds in a mix (full Feed rows with source counts),
-// ordered like ListFeeds. Scoped to the user.
-func (db *DB) MixFeeds(ctx context.Context, userID, mixID int64) ([]Feed, error) {
+// MixInterests returns the interests in a mix (full Interest rows with source counts),
+// ordered like ListInterests. Scoped to the user.
+func (db *DB) MixInterests(ctx context.Context, userID, mixID int64) ([]Interest, error) {
 	rows, err := db.sql.QueryContext(ctx,
 		`SELECT f.id, f.name, f.slug, f.color, f.icon, f.half_life_days, f.diversity, f.sort, f.created_at,
-		        (SELECT COUNT(*) FROM sources s WHERE s.feed_id = f.id) AS source_count
-		 FROM mix_feeds gf JOIN feeds f ON f.id = gf.feed_id
+		        (SELECT COUNT(*) FROM sources s WHERE s.interest_id = f.id) AS source_count
+		 FROM mix_interests gf JOIN interests f ON f.id = gf.interest_id
 		 WHERE gf.mix_id = ? AND f.user_id = ?
 		 ORDER BY f.sort, f.name`, mixID, userID)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var out []Feed
+	var out []Interest
 	for rows.Next() {
-		var f Feed
+		var f Interest
 		var created string
 		if err := rows.Scan(&f.ID, &f.Name, &f.Slug, &f.Color, &f.Icon, &f.HalfLifeDays, &f.Diversity, &f.Sort, &created, &f.SourceCount); err != nil {
 			return nil, err
@@ -187,16 +187,16 @@ func (db *DB) MixFeeds(ctx context.Context, userID, mixID int64) ([]Feed, error)
 }
 
 // SourceIDsForMixes resolves mix slugs to the set of source ids across all
-// their member feeds (#86). The session builder uses this to let a mix filter a
-// session (a mix = its feeds = their sources).
+// their member interests (#86). The session builder uses this to let a mix filter a
+// session (a mix = its interests = their sources).
 func (db *DB) SourceIDsForMixes(ctx context.Context, userID int64, slugs []string) ([]int64, error) {
 	if len(slugs) == 0 {
 		return nil, nil
 	}
 	q := `SELECT DISTINCT s.id
 	      FROM mixes g
-	      JOIN mix_feeds gf ON gf.mix_id = g.id
-	      JOIN sources s ON s.feed_id = gf.feed_id
+	      JOIN mix_interests gf ON gf.mix_id = g.id
+	      JOIN sources s ON s.interest_id = gf.interest_id
 	      WHERE g.user_id = ? AND g.slug IN (` + placeholders(len(slugs)) + `)`
 	args := []any{userID}
 	for _, s := range slugs {

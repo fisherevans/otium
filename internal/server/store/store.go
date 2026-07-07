@@ -33,6 +33,12 @@ func Open(path string) (*DB, error) {
 		return nil, fmt.Errorf("open sqlite: %w", err)
 	}
 	sdb.SetMaxOpenConns(1) // single writer; avoids SQLITE_BUSY under WAL for a homelab load
+	// #111 vocabulary rename must run BEFORE schema.sql, or its CREATE TABLE IF NOT
+	// EXISTS interests/mixes would make empty new-named tables beside the old data.
+	if err := renameLegacyConcepts(sdb); err != nil {
+		sdb.Close()
+		return nil, fmt.Errorf("rename legacy concepts: %w", err)
+	}
 	if _, err := sdb.ExecContext(context.Background(), schemaSQL); err != nil {
 		sdb.Close()
 		return nil, fmt.Errorf("apply schema: %w", err)
@@ -44,22 +50,104 @@ func Open(path string) (*DB, error) {
 	return &DB{sql: sdb}, nil
 }
 
+// renameLegacyConcepts performs the #111 vocabulary rename (feed->interest,
+// group->mix) on an EXISTING database, in place, BEFORE schema.sql runs. If it
+// ran after, schema.sql's CREATE TABLE IF NOT EXISTS interests/mixes would create
+// empty new-named tables beside the old data. Each step is guarded on the old
+// object existing and the new one not, so it runs exactly once per DB and no-ops
+// on a fresh DB (nothing to rename) and on every boot thereafter. The legacy
+// feed_sources table is intentionally left untouched (frozen rollback net, #86).
+func renameLegacyConcepts(sdb *sql.DB) error {
+	ctx := context.Background()
+	tableExists := func(name string) (bool, error) {
+		var n int
+		err := sdb.QueryRowContext(ctx, `SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name=?`, name).Scan(&n)
+		return n > 0, err
+	}
+	columnExists := func(table, col string) (bool, error) {
+		var n int
+		err := sdb.QueryRowContext(ctx, `SELECT COUNT(*) FROM pragma_table_info(?) WHERE name=?`, table, col).Scan(&n)
+		return n > 0, err
+	}
+	renameTable := func(from, to string) error {
+		o, err := tableExists(from)
+		if err != nil {
+			return err
+		}
+		n, err := tableExists(to)
+		if err != nil {
+			return err
+		}
+		if o && !n {
+			if _, err := sdb.ExecContext(ctx, `ALTER TABLE `+from+` RENAME TO `+to); err != nil {
+				return fmt.Errorf("rename table %s->%s: %w", from, to, err)
+			}
+		}
+		return nil
+	}
+	renameColumn := func(table, from, to string) error {
+		t, err := tableExists(table)
+		if err != nil || !t {
+			return err
+		}
+		has, err := columnExists(table, from)
+		if err != nil {
+			return err
+		}
+		hasNew, err := columnExists(table, to)
+		if err != nil {
+			return err
+		}
+		if has && !hasNew {
+			if _, err := sdb.ExecContext(ctx, `ALTER TABLE `+table+` RENAME COLUMN `+from+` TO `+to); err != nil {
+				return fmt.Errorf("rename %s.%s->%s: %w", table, from, to, err)
+			}
+		}
+		return nil
+	}
+	// Tables. group_feeds -> mix_interests (its columns are renamed after).
+	for _, r := range []struct{ from, to string }{
+		{"feeds", "interests"},
+		{"groups", "mixes"},
+		{"group_feeds", "mix_interests"},
+	} {
+		if err := renameTable(r.from, r.to); err != nil {
+			return err
+		}
+	}
+	// Columns.
+	if err := renameColumn("sources", "feed_id", "interest_id"); err != nil {
+		return err
+	}
+	if err := renameColumn("mix_interests", "group_id", "mix_id"); err != nil {
+		return err
+	}
+	if err := renameColumn("mix_interests", "feed_id", "interest_id"); err != nil {
+		return err
+	}
+	// The interest-named index is (re)created in migrate(); drop the old-named one.
+	if _, err := sdb.ExecContext(ctx, `DROP INDEX IF EXISTS idx_sources_feed`); err != nil {
+		return err
+	}
+	return nil
+}
+
 // migrate applies additive, idempotent schema changes for databases that
 // predate a column. schema.sql's CREATE TABLE statements are IF NOT EXISTS, so
 // they never touch an existing table - column adds have to run separately.
 // SQLite has no ADD COLUMN IF NOT EXISTS, so each add is guarded on
 // pragma_table_info. Every migration here must be safe to run on every boot.
 func migrate(sdb *sql.DB) error {
-	if err := ensureColumn(sdb, "feeds", "icon", `ALTER TABLE feeds ADD COLUMN icon TEXT NOT NULL DEFAULT ''`); err != nil {
+	if err := ensureColumn(sdb, "interests", "icon", `ALTER TABLE interests ADD COLUMN icon TEXT NOT NULL DEFAULT ''`); err != nil {
 		return err
 	}
-	if err := ensureColumn(sdb, "feeds", "half_life_days", `ALTER TABLE feeds ADD COLUMN half_life_days REAL NOT NULL DEFAULT 0`); err != nil {
+	if err := ensureColumn(sdb, "interests", "half_life_days", `ALTER TABLE interests ADD COLUMN half_life_days REAL NOT NULL DEFAULT 0`); err != nil {
 		return err
 	}
-	if err := ensureColumn(sdb, "feeds", "diversity", `ALTER TABLE feeds ADD COLUMN diversity INTEGER NOT NULL DEFAULT 0`); err != nil {
+	if err := ensureColumn(sdb, "interests", "diversity", `ALTER TABLE interests ADD COLUMN diversity INTEGER NOT NULL DEFAULT 0`); err != nil {
 		return err
 	}
-	// Per-source freshness half-life override (#76): source override > feed > global.
+	// Per-source freshness half-life override (#76): source override > interest > global.
 	if err := ensureColumn(sdb, "sources", "half_life_days", `ALTER TABLE sources ADD COLUMN half_life_days REAL NOT NULL DEFAULT 0`); err != nil {
 		return err
 	}
@@ -73,7 +161,7 @@ func migrate(sdb *sql.DB) error {
 	if err := ensureColumn(sdb, "items", "content_source", `ALTER TABLE items ADD COLUMN content_source TEXT NOT NULL DEFAULT ''`); err != nil {
 		return err
 	}
-	// One-time backfill (#98): an existing non-empty body came from the feed, so
+	// One-time backfill (#98): an existing non-empty body came from the interest, so
 	// mark it 'rss'. WHERE content_source = '' makes it idempotent - it only fills
 	// rows still at the default and never fights a later fetched/external marking.
 	if err := backfillContentSource(sdb); err != nil {
@@ -89,20 +177,20 @@ func migrate(sdb *sql.DB) error {
 	if err := ensureColumn(sdb, "sessions", "status", `ALTER TABLE sessions ADD COLUMN status TEXT NOT NULL DEFAULT 'active'`); err != nil {
 		return err
 	}
-	// One-feed model (#86): sources.feed_id. SQLite permits ADD COLUMN with a
+	// One-interest model (#86): sources.interest_id. SQLite permits ADD COLUMN with a
 	// REFERENCES clause only when the added column's default is NULL, which this is.
-	if err := ensureColumn(sdb, "sources", "feed_id", `ALTER TABLE sources ADD COLUMN feed_id INTEGER REFERENCES feeds(id) ON DELETE SET NULL`); err != nil {
+	if err := ensureColumn(sdb, "sources", "interest_id", `ALTER TABLE sources ADD COLUMN interest_id INTEGER REFERENCES interests(id) ON DELETE SET NULL`); err != nil {
 		return err
 	}
 	// Index created here (not schema.sql) so it runs AFTER the status column is
 	// ensured on a pre-existing sessions table. See schema.sql note. Guarded on
 	// the table existing so migrate() stays safe against a partial DB (e.g. a
-	// test that sets up only the feeds table), matching ensureColumn's contract.
+	// test that sets up only the interests table), matching ensureColumn's contract.
 	if err := ensureIndexIfTable(sdb, "sessions", `CREATE INDEX IF NOT EXISTS idx_sessions_user_status ON sessions(user_id, status)`); err != nil {
 		return err
 	}
-	// Mix tier (#86): mixes + mix_feeds. CREATE TABLE IF NOT EXISTS is safe on
-	// every boot; forward FK references (users/feeds) are resolved at write time, so
+	// Mix tier (#86): mixes + mix_interests. CREATE TABLE IF NOT EXISTS is safe on
+	// every boot; forward FK references (users/interests) are resolved at write time, so
 	// creating these before those tables exist (a partial test DB) is fine.
 	if _, err := sdb.Exec(`CREATE TABLE IF NOT EXISTS mixes (
 		id         INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -116,22 +204,22 @@ func migrate(sdb *sql.DB) error {
 	)`); err != nil {
 		return err
 	}
-	if _, err := sdb.Exec(`CREATE TABLE IF NOT EXISTS mix_feeds (
+	if _, err := sdb.Exec(`CREATE TABLE IF NOT EXISTS mix_interests (
 		mix_id INTEGER NOT NULL REFERENCES mixes(id) ON DELETE CASCADE,
-		feed_id  INTEGER NOT NULL REFERENCES feeds(id) ON DELETE CASCADE,
-		PRIMARY KEY (mix_id, feed_id)
+		interest_id  INTEGER NOT NULL REFERENCES interests(id) ON DELETE CASCADE,
+		PRIMARY KEY (mix_id, interest_id)
 	)`); err != nil {
 		return err
 	}
-	// Back-populate sources.feed_id from the single legacy feed_sources membership
+	// Back-populate sources.interest_id from the single legacy feed_sources membership
 	// (#86). Idempotent: only fills rows still NULL, so it never fights a later
 	// picker change. Guarded on both tables existing (a partial test DB may have
 	// neither). feed_sources is left intact for rollback; this is its last reader.
-	if err := populateSourceFeedID(sdb); err != nil {
+	if err := populateSourceInterestID(sdb); err != nil {
 		return err
 	}
 	// Index on the migrated column, created after the column is guaranteed present.
-	return ensureIndexIfTable(sdb, "sources", `CREATE INDEX IF NOT EXISTS idx_sources_feed ON sources(feed_id)`)
+	return ensureIndexIfTable(sdb, "sources", `CREATE INDEX IF NOT EXISTS idx_sources_interest ON sources(interest_id)`)
 }
 
 // ensureIndexIfTable creates an index only when its table exists, so migrate()
@@ -150,12 +238,12 @@ func ensureIndexIfTable(sdb *sql.DB, table, ddl string) error {
 	return err
 }
 
-// populateSourceFeedID back-fills sources.feed_id from the legacy feed_sources
-// table (#86): each source's single membership becomes its one feed. WHERE
-// feed_id IS NULL makes it idempotent (a re-run touches nothing) and non-
+// populateSourceInterestID back-fills sources.interest_id from the legacy feed_sources
+// table (#86): each source's single membership becomes its one interest. WHERE
+// interest_id IS NULL makes it idempotent (a re-run touches nothing) and non-
 // destructive to any assignment made through the new picker. Guarded on both
 // tables so it no-ops on a partial DB.
-func populateSourceFeedID(sdb *sql.DB) error {
+func populateSourceInterestID(sdb *sql.DB) error {
 	for _, t := range []string{"sources", "feed_sources"} {
 		var n int
 		if err := sdb.QueryRowContext(context.Background(),
@@ -166,15 +254,17 @@ func populateSourceFeedID(sdb *sql.DB) error {
 			return nil
 		}
 	}
+	// feed_sources is a frozen legacy table (#86) - its column stays feed_id even
+	// though the target sources.interest_id was renamed. Read the legacy column.
 	_, err := sdb.Exec(`UPDATE sources
-		SET feed_id = (SELECT fs.feed_id FROM feed_sources fs WHERE fs.source_id = sources.id LIMIT 1)
-		WHERE feed_id IS NULL`)
+		SET interest_id = (SELECT fs.feed_id FROM feed_sources fs WHERE fs.source_id = sources.id LIMIT 1)
+		WHERE interest_id IS NULL`)
 	return err
 }
 
 // backfillContentSource marks every existing item that already has a body as
 // 'rss' (#98): before this column existed, a non-empty content came from the
-// feed. WHERE content_source = ” makes it idempotent and non-destructive - it
+// interest. WHERE content_source = ” makes it idempotent and non-destructive - it
 // only touches rows still at the default, so a later fetched/external marking is
 // never clobbered. Guarded on the items table existing so it no-ops on a partial
 // DB. Runs after the items.content and items.content_source columns are ensured.
@@ -243,20 +333,20 @@ func (db *DB) UpsertUserByUsername(ctx context.Context, username, email string) 
 	return &u, nil
 }
 
-// --- feeds ---
+// --- interests ---
 
-func (db *DB) ListFeeds(ctx context.Context, userID int64) ([]Feed, error) {
+func (db *DB) ListInterests(ctx context.Context, userID int64) ([]Interest, error) {
 	rows, err := db.sql.QueryContext(ctx,
 		`SELECT f.id, f.name, f.slug, f.color, f.icon, f.half_life_days, f.diversity, f.sort, f.created_at,
-		        (SELECT COUNT(*) FROM sources s WHERE s.feed_id = f.id) AS source_count
-		 FROM feeds f WHERE f.user_id = ? ORDER BY f.sort, f.name`, userID)
+		        (SELECT COUNT(*) FROM sources s WHERE s.interest_id = f.id) AS source_count
+		 FROM interests f WHERE f.user_id = ? ORDER BY f.sort, f.name`, userID)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var out []Feed
+	var out []Interest
 	for rows.Next() {
-		var f Feed
+		var f Interest
 		var created string
 		if err := rows.Scan(&f.ID, &f.Name, &f.Slug, &f.Color, &f.Icon, &f.HalfLifeDays, &f.Diversity, &f.Sort, &created, &f.SourceCount); err != nil {
 			return nil, err
@@ -267,23 +357,23 @@ func (db *DB) ListFeeds(ctx context.Context, userID int64) ([]Feed, error) {
 	return out, rows.Err()
 }
 
-func (db *DB) CreateFeed(ctx context.Context, userID int64, name, slug, color string) (*Feed, error) {
+func (db *DB) CreateInterest(ctx context.Context, userID int64, name, slug, color string) (*Interest, error) {
 	res, err := db.sql.ExecContext(ctx,
-		`INSERT INTO feeds (user_id, name, slug, color) VALUES (?, ?, ?, ?)`,
+		`INSERT INTO interests (user_id, name, slug, color) VALUES (?, ?, ?, ?)`,
 		userID, name, slug, color)
 	if err != nil {
 		return nil, err
 	}
 	id, _ := res.LastInsertId()
-	return &Feed{ID: id, UserID: userID, Name: name, Slug: slug, Color: color}, nil
+	return &Interest{ID: id, UserID: userID, Name: name, Slug: slug, Color: color}, nil
 }
 
-// GetOrCreateFeed returns the feed with this slug, creating it if absent. Used
-// by import to turn OPML folders into feeds without duplicating.
-func (db *DB) GetOrCreateFeed(ctx context.Context, userID int64, name, slug, color string) (*Feed, error) {
-	var f Feed
+// GetOrCreateInterest returns the interest with this slug, creating it if absent. Used
+// by import to turn OPML folders into interests without duplicating.
+func (db *DB) GetOrCreateInterest(ctx context.Context, userID int64, name, slug, color string) (*Interest, error) {
+	var f Interest
 	err := db.sql.QueryRowContext(ctx,
-		`SELECT id, name, slug, color FROM feeds WHERE user_id = ? AND slug = ?`, userID, slug).
+		`SELECT id, name, slug, color FROM interests WHERE user_id = ? AND slug = ?`, userID, slug).
 		Scan(&f.ID, &f.Name, &f.Slug, &f.Color)
 	if err == nil {
 		return &f, nil
@@ -291,34 +381,34 @@ func (db *DB) GetOrCreateFeed(ctx context.Context, userID int64, name, slug, col
 	if err != sql.ErrNoRows {
 		return nil, err
 	}
-	return db.CreateFeed(ctx, userID, name, slug, color)
+	return db.CreateInterest(ctx, userID, name, slug, color)
 }
 
-// Videos feed (#53): the auto-grouping bucket for untagged YouTube sources.
+// Videos interest (#53): the auto-grouping bucket for untagged YouTube sources.
 const (
-	videosFeedName = "Videos"
-	videosFeedSlug = "videos"
-	videosFeedIcon = "film" // Clapperboard glyph; see web/src/lib/feedIcons.ts
+	videosInterestName = "Videos"
+	videosInterestSlug = "videos"
+	videosInterestIcon = "film" // Clapperboard glyph; see web/src/lib/feedIcons.ts
 	// videosBackfillKey gates the one-time untagged-YouTube grouping so it runs
 	// exactly once and never re-mixes sources Fisher later pulls out by hand.
 	videosBackfillKey = "videos_backfill_done"
 )
 
-// GetOrCreateVideosFeed returns the user's Videos feed, creating it (with the
+// GetOrCreateVideosInterest returns the user's Videos interest, creating it (with the
 // film icon) if absent. Idempotent via the (user_id, slug) unique constraint;
-// if the feed already exists its name/icon are left untouched so a later manual
+// if the interest already exists its name/icon are left untouched so a later manual
 // rename or re-icon survives.
-func (db *DB) GetOrCreateVideosFeed(ctx context.Context, userID int64) (*Feed, error) {
+func (db *DB) GetOrCreateVideosInterest(ctx context.Context, userID int64) (*Interest, error) {
 	if _, err := db.sql.ExecContext(ctx,
-		`INSERT INTO feeds (user_id, name, slug, icon) VALUES (?, ?, ?, ?)
+		`INSERT INTO interests (user_id, name, slug, icon) VALUES (?, ?, ?, ?)
 		 ON CONFLICT(user_id, slug) DO NOTHING`,
-		userID, videosFeedName, videosFeedSlug, videosFeedIcon); err != nil {
+		userID, videosInterestName, videosInterestSlug, videosInterestIcon); err != nil {
 		return nil, err
 	}
-	var f Feed
+	var f Interest
 	err := db.sql.QueryRowContext(ctx,
-		`SELECT id, name, slug, color, icon FROM feeds WHERE user_id = ? AND slug = ?`,
-		userID, videosFeedSlug).Scan(&f.ID, &f.Name, &f.Slug, &f.Color, &f.Icon)
+		`SELECT id, name, slug, color, icon FROM interests WHERE user_id = ? AND slug = ?`,
+		userID, videosInterestSlug).Scan(&f.ID, &f.Name, &f.Slug, &f.Color, &f.Icon)
 	if err != nil {
 		return nil, err
 	}
@@ -326,24 +416,24 @@ func (db *DB) GetOrCreateVideosFeed(ctx context.Context, userID int64) (*Feed, e
 	return &f, nil
 }
 
-// BackfillVideosFeed is a one-time, marker-guarded migration (#53): it ensures
-// the Videos feed exists and assigns every youtube-kind source that currently
-// belongs to NO feed to it. Guarded by the kv 'videos_backfill_done' flag so it
+// BackfillVideosInterest is a one-time, marker-guarded migration (#53): it ensures
+// the Videos interest exists and assigns every youtube-kind source that currently
+// belongs to NO interest to it. Guarded by the kv 'videos_backfill_done' flag so it
 // runs exactly once per user and never re-mixes sources later pulled out.
 // Returns the number of sources assigned (0 on every run after the first).
-func (db *DB) BackfillVideosFeed(ctx context.Context, userID int64) (int, error) {
+func (db *DB) BackfillVideosInterest(ctx context.Context, userID int64) (int, error) {
 	if _, done, err := db.kvGet(ctx, userID, videosBackfillKey); err != nil {
 		return 0, err
 	} else if done {
 		return 0, nil
 	}
-	f, err := db.GetOrCreateVideosFeed(ctx, userID)
+	f, err := db.GetOrCreateVideosInterest(ctx, userID)
 	if err != nil {
 		return 0, err
 	}
 	res, err := db.sql.ExecContext(ctx,
-		`UPDATE sources SET feed_id = ?
-		 WHERE user_id = ? AND kind = 'youtube' AND feed_id IS NULL`,
+		`UPDATE sources SET interest_id = ?
+		 WHERE user_id = ? AND kind = 'youtube' AND interest_id IS NULL`,
 		f.ID, userID)
 	if err != nil {
 		return 0, err
@@ -394,9 +484,9 @@ const (
 // dwell/engagement measurement + the fast-scroll check-in nudge (#68). Default
 // on; off = the old explicit-signals-only behavior (no dwell measured, no nudge).
 //
-// The #76 multi-feed half-life rule was deleted in #86: a source now belongs to
-// exactly one feed, so half-life resolution is simply source override > that one
-// feed > global - there is no "which feed" ambiguity left to configure.
+// The #76 multi-interest half-life rule was deleted in #86: a source now belongs to
+// exactly one interest, so half-life resolution is simply source override > that one
+// interest > global - there is no "which interest" ambiguity left to configure.
 type Settings struct {
 	FastScrollCheckin bool `json:"fast_scroll_checkin"`
 }
@@ -424,10 +514,10 @@ func (db *DB) SetFastScrollCheckin(ctx context.Context, userID int64, on bool) e
 	return db.kvSet(ctx, userID, settingFastScrollCheckin, v)
 }
 
-// UpdateFeed patches a feed's presentation fields (name, color, icon) and the
-// per-feed ranker overrides (half-life, diversity). Only non-nil fields are
+// UpdateInterest patches a interest's presentation fields (name, color, icon) and the
+// per-interest ranker overrides (half-life, diversity). Only non-nil fields are
 // applied. Scoped to the owning user.
-func (db *DB) UpdateFeed(ctx context.Context, userID, id int64, name, color, icon *string, halfLifeDays *float64, diversity *int) error {
+func (db *DB) UpdateInterest(ctx context.Context, userID, id int64, name, color, icon *string, halfLifeDays *float64, diversity *int) error {
 	var sets []string
 	var args []any
 	if name != nil {
@@ -455,21 +545,21 @@ func (db *DB) UpdateFeed(ctx context.Context, userID, id int64, name, color, ico
 	}
 	args = append(args, id, userID)
 	_, err := db.sql.ExecContext(ctx,
-		`UPDATE feeds SET `+strings.Join(sets, ", ")+` WHERE id = ? AND user_id = ?`, args...)
+		`UPDATE interests SET `+strings.Join(sets, ", ")+` WHERE id = ? AND user_id = ?`, args...)
 	return err
 }
 
-// FeedsForSources resolves the one feed each of the given sources belongs to
+// InterestsForSources resolves the one interest each of the given sources belongs to
 // (#86), for the session card's identity line and the insights rollup. A source with
-// a feed maps to that feed's FeedRef; a feedless source (feed_id NULL) is absent
+// a interest maps to that interest's InterestRef; a interestless source (interest_id NULL) is absent
 // from the map (the card then renders source-only).
-func (db *DB) FeedsForSources(ctx context.Context, userID int64, sourceIDs []int64) (map[int64]FeedRef, error) {
-	out := map[int64]FeedRef{}
+func (db *DB) InterestsForSources(ctx context.Context, userID int64, sourceIDs []int64) (map[int64]InterestRef, error) {
+	out := map[int64]InterestRef{}
 	if len(sourceIDs) == 0 {
 		return out, nil
 	}
 	q := `SELECT s.id, f.name, f.slug, f.color, f.icon
-	      FROM sources s JOIN feeds f ON f.id = s.feed_id
+	      FROM sources s JOIN interests f ON f.id = s.interest_id
 	      WHERE s.user_id = ? AND s.id IN (` + placeholders(len(sourceIDs)) + `)`
 	args := []any{userID}
 	for _, id := range sourceIDs {
@@ -482,7 +572,7 @@ func (db *DB) FeedsForSources(ctx context.Context, userID int64, sourceIDs []int
 	defer rows.Close()
 	for rows.Next() {
 		var sid int64
-		var f FeedRef
+		var f InterestRef
 		if err := rows.Scan(&sid, &f.Name, &f.Slug, &f.Color, &f.Icon); err != nil {
 			return nil, err
 		}
@@ -491,10 +581,10 @@ func (db *DB) FeedsForSources(ctx context.Context, userID int64, sourceIDs []int
 	return out, rows.Err()
 }
 
-// SetSourceFeed sets the one feed a source belongs to (#86), by slug. An empty
-// slug clears the feed (feedless). An unknown slug is a no-op that leaves the
+// SetSourceInterest sets the one interest a source belongs to (#86), by slug. An empty
+// slug clears the interest (interestless). An unknown slug is a no-op that leaves the
 // source unchanged. Scoped to the owning user.
-func (db *DB) SetSourceFeed(ctx context.Context, userID, sourceID int64, slug string) error {
+func (db *DB) SetSourceInterest(ctx context.Context, userID, sourceID int64, slug string) error {
 	var owner int64
 	if err := db.sql.QueryRowContext(ctx, `SELECT user_id FROM sources WHERE id = ?`, sourceID).Scan(&owner); err != nil {
 		return err
@@ -504,12 +594,12 @@ func (db *DB) SetSourceFeed(ctx context.Context, userID, sourceID int64, slug st
 	}
 	if slug == "" {
 		_, err := db.sql.ExecContext(ctx,
-			`UPDATE sources SET feed_id = NULL WHERE id = ? AND user_id = ?`, sourceID, userID)
+			`UPDATE sources SET interest_id = NULL WHERE id = ? AND user_id = ?`, sourceID, userID)
 		return err
 	}
-	var feedID int64
+	var interestID int64
 	err := db.sql.QueryRowContext(ctx,
-		`SELECT id FROM feeds WHERE user_id = ? AND slug = ?`, userID, slug).Scan(&feedID)
+		`SELECT id FROM interests WHERE user_id = ? AND slug = ?`, userID, slug).Scan(&interestID)
 	if err == sql.ErrNoRows {
 		return nil // unknown slug: leave the source as-is
 	}
@@ -517,16 +607,16 @@ func (db *DB) SetSourceFeed(ctx context.Context, userID, sourceID int64, slug st
 		return err
 	}
 	_, err = db.sql.ExecContext(ctx,
-		`UPDATE sources SET feed_id = ? WHERE id = ? AND user_id = ?`, feedID, sourceID, userID)
+		`UPDATE sources SET interest_id = ? WHERE id = ? AND user_id = ?`, interestID, sourceID, userID)
 	return err
 }
 
-// AssignSourceFeed sets a source's one feed by feed id (#86). Used by import and
-// the Videos backfill, which already hold the feed id. No-op guards live in the
+// AssignSourceInterest sets a source's one interest by interest id (#86). Used by import and
+// the Videos backfill, which already hold the interest id. No-op guards live in the
 // callers; this is a plain scoped update.
-func (db *DB) AssignSourceFeed(ctx context.Context, sourceID, feedID int64) error {
+func (db *DB) AssignSourceInterest(ctx context.Context, sourceID, interestID int64) error {
 	_, err := db.sql.ExecContext(ctx,
-		`UPDATE sources SET feed_id = ? WHERE id = ?`, feedID, sourceID)
+		`UPDATE sources SET interest_id = ? WHERE id = ?`, interestID, sourceID)
 	return err
 }
 
@@ -546,31 +636,31 @@ func (db *DB) CreateSourceImport(ctx context.Context, s *Source) (id int64, crea
 		id, _ = res.LastInsertId()
 		return id, true, nil
 	}
-	// Already existed - fetch its id so it can still be added to a feed.
+	// Already existed - fetch its id so it can still be added to a interest.
 	err = db.sql.QueryRowContext(ctx,
 		`SELECT id FROM sources WHERE user_id = ? AND feed_url = ?`, s.UserID, s.FeedURL).Scan(&id)
 	return id, false, err
 }
 
-// SetFeedSources sets this feed as the one feed for exactly the given sources
-// (#86). Because a source belongs to a single feed, this both clears the feed's
-// previous members (feed_id -> NULL) and claims the listed ones - assigning a
-// source here removes it from whatever feed it was in before. Scoped to the user.
-func (db *DB) SetFeedSources(ctx context.Context, userID, feedID int64, sourceIDs []int64) error {
+// SetInterestSources sets this interest as the one interest for exactly the given sources
+// (#86). Because a source belongs to a single interest, this both clears the interest's
+// previous members (interest_id -> NULL) and claims the listed ones - assigning a
+// source here removes it from whatever interest it was in before. Scoped to the user.
+func (db *DB) SetInterestSources(ctx context.Context, userID, interestID int64, sourceIDs []int64) error {
 	tx, err := db.sql.BeginTx(ctx, nil)
 	if err != nil {
 		return err
 	}
 	defer tx.Rollback()
-	// Release the current members of this feed.
+	// Release the current members of this interest.
 	if _, err := tx.ExecContext(ctx,
-		`UPDATE sources SET feed_id = NULL WHERE feed_id = ? AND user_id = ?`, feedID, userID); err != nil {
+		`UPDATE sources SET interest_id = NULL WHERE interest_id = ? AND user_id = ?`, interestID, userID); err != nil {
 		return err
 	}
-	// Claim the listed sources for this feed.
+	// Claim the listed sources for this interest.
 	for _, sid := range sourceIDs {
 		if _, err := tx.ExecContext(ctx,
-			`UPDATE sources SET feed_id = ? WHERE id = ? AND user_id = ?`, feedID, sid, userID); err != nil {
+			`UPDATE sources SET interest_id = ? WHERE id = ? AND user_id = ?`, interestID, sid, userID); err != nil {
 			return err
 		}
 	}
@@ -583,7 +673,7 @@ func (db *DB) ListSources(ctx context.Context, userID int64) ([]Source, error) {
 	rows, err := db.sql.QueryContext(ctx,
 		`SELECT s.id, s.kind, s.title, s.feed_url, s.homepage_url, s.icon_url, s.weight,
 		        s.state, s.trial_until, s.per_session_cap, s.half_life_days, s.added_at, s.last_fetch_at, s.fetch_error,
-		        s.feed_id, f.slug,
+		        s.interest_id, f.slug,
 		        (SELECT COUNT(*) FROM items i WHERE i.source_id = s.id) AS item_count,
 		        (SELECT COUNT(*) FROM items i WHERE i.source_id = s.id
 		           AND NOT EXISTS (SELECT 1 FROM item_state st WHERE st.item_id = i.id AND st.user_id = ?)) AS unseen_count,
@@ -593,7 +683,7 @@ func (db *DB) ListSources(ctx context.Context, userID int64) ([]Source, error) {
 		         WHERE i2.source_id = s.id AND st.user_id = ?) AS skip_pct,
 		        (SELECT COUNT(*) / 30.0 FROM items i3
 		         WHERE i3.source_id = s.id AND i3.published_at >= datetime('now', '-30 days')) AS posts_per_day
-		 FROM sources s LEFT JOIN feeds f ON f.id = s.feed_id
+		 FROM sources s LEFT JOIN interests f ON f.id = s.interest_id
 		 WHERE s.user_id = ? ORDER BY s.title`, userID, userID, userID)
 	if err != nil {
 		return nil, err
@@ -617,18 +707,18 @@ type rowScanner interface {
 func scanSource(r rowScanner) (*Source, error) {
 	var s Source
 	var added string
-	var trialUntil, lastFetch, feedSlug sql.NullString
-	var feedID sql.NullInt64
+	var trialUntil, lastFetch, interestSlug sql.NullString
+	var interestID sql.NullInt64
 	if err := r.Scan(&s.ID, &s.Kind, &s.Title, &s.FeedURL, &s.HomepageURL, &s.IconURL, &s.Weight,
 		&s.State, &trialUntil, &s.PerSessionCap, &s.HalfLifeDays, &added, &lastFetch, &s.FetchError,
-		&feedID, &feedSlug,
+		&interestID, &interestSlug,
 		&s.ItemCount, &s.UnseenCount, &s.SkipPct, &s.PostsPerDay); err != nil {
 		return nil, err
 	}
-	if feedID.Valid {
-		s.FeedID = &feedID.Int64
+	if interestID.Valid {
+		s.InterestID = &interestID.Int64
 	}
-	s.FeedSlug = feedSlug.String
+	s.InterestSlug = interestSlug.String
 	s.AddedAt = parseTime(added)
 	if trialUntil.Valid {
 		t := parseTime(trialUntil.String)
@@ -723,9 +813,9 @@ func (db *DB) SourcesToFetch(ctx context.Context, userID int64) ([]Source, error
 // count stays accurate.
 //
 // For an item that already exists, it backfills content when the stored content
-// is empty (#58): pre-#58 items - and items ingested before a feed started
+// is empty (#58): pre-#58 items - and items ingested before a interest started
 // shipping content:encoded - gain their full body on the next re-fetch, without
-// clobbering an already-populated body or touching any other column. Feeds
+// clobbering an already-populated body or touching any other column. Interests
 // truncate to ~15 recent entries, so this reaches exactly the recent,
 // session-surfaced items; older ones age out still empty, which is fine.
 //
@@ -750,8 +840,8 @@ func (db *DB) UpsertItem(ctx context.Context, it *Item) (bool, error) {
 		return true, nil // genuinely new insert
 	}
 	// Existing row: backfill content only when it's empty and we actually have a
-	// body to write. The feed shipped it, so mark it 'rss' in the same update -
-	// this reclaims an item earlier resolved to 'external' if the feed later starts
+	// body to write. The interest shipped it, so mark it 'rss' in the same update -
+	// this reclaims an item earlier resolved to 'external' if the interest later starts
 	// carrying the body. Once content is non-empty the WHERE guard makes it a no-op.
 	if it.Content != "" {
 		if _, err := db.sql.ExecContext(ctx,
@@ -783,20 +873,20 @@ func (db *DB) ListRecentItemsBySource(ctx context.Context, userID, sourceID int6
 	return scanItems(rows)
 }
 
-// ListRecentItemsByFeed returns recent items across every source in a feed
-// (by id), newest first. Backs the feed page's "recent posts" section (#66):
+// ListRecentItemsByInterest returns recent items across every source in a interest
+// (by id), newest first. Backs the interest page's "recent posts" section (#66):
 // one query instead of fanning sourceItems per source. Read-only orientation -
-// no seen/skip events, like ListRecentItemsBySource. Feed id (not slug) so the
-// route param name stays consistent with the sibling /feeds/{id}/sources route
+// no seen/skip events, like ListRecentItemsBySource. Interest id (not slug) so the
+// route param name stays consistent with the sibling /interests/{id}/sources route
 // (chi conflicts on mismatched wildcard names).
-func (db *DB) ListRecentItemsByFeed(ctx context.Context, userID, feedID int64, limit int) ([]Item, error) {
+func (db *DB) ListRecentItemsByInterest(ctx context.Context, userID, interestID int64, limit int) ([]Item, error) {
 	rows, err := db.sql.QueryContext(ctx,
 		`SELECT i.id, i.source_id, i.url, i.title, i.summary, i.content, i.content_source, i.author, i.thumbnail_url,
 		        i.media_type, i.duration_sec, i.published_at, i.fetched_at
 		 FROM items i
 		 JOIN sources s ON s.id = i.source_id
-		 WHERE s.user_id = ? AND s.feed_id = ?
-		 ORDER BY i.published_at DESC LIMIT ?`, userID, feedID, limit)
+		 WHERE s.user_id = ? AND s.interest_id = ?
+		 ORDER BY i.published_at DESC LIMIT ?`, userID, interestID, limit)
 	if err != nil {
 		return nil, err
 	}
@@ -807,9 +897,9 @@ func (db *DB) ListRecentItemsByFeed(ctx context.Context, userID, feedID int64, l
 // candidateCols builds the shared projection for Candidates, InsightsItems, and
 // CandidatesByIDs: item + source facts, the source's own half-life override
 // (s.half_life_days, #76), the accumulated-history cadence inputs
-// (win_count/win_span), and the source's one-feed ranker overrides (half-life +
-// diversity, #86). Since a source belongs to exactly one feed, the resolution is
-// a direct lookup on s.feed_id - no multi-feed rule. A feedless source (feed_id
+// (win_count/win_span), and the source's one-interest ranker overrides (half-life +
+// diversity, #86). Since a source belongs to exactly one interest, the resolution is
+// a direct lookup on s.interest_id - no multi-interest rule. A interestless source (interest_id
 // NULL) COALESCEs to 0 (global defaults). All callers must select these in this
 // order so scanCandidates can read any result set. The two ? placeholders are the
 // cadence-window bound, twice; arg alignment is identical across callers.
@@ -822,8 +912,8 @@ func candidateCols() string {
 	             (SELECT COALESCE(julianday('now') - julianday(MIN(i2.published_at)), 0)
 	                FROM items i2 WHERE i2.source_id = s.id
 	                AND i2.published_at >= datetime('now', ?)) AS win_span,
-	             COALESCE((SELECT f.half_life_days FROM feeds f WHERE f.id = s.feed_id), 0) AS feed_half_life,
-	             COALESCE((SELECT f.diversity FROM feeds f WHERE f.id = s.feed_id), 0) AS feed_diversity`
+	             COALESCE((SELECT f.half_life_days FROM interests f WHERE f.id = s.interest_id), 0) AS interest_half_life,
+	             COALESCE((SELECT f.diversity FROM interests f WHERE f.id = s.interest_id), 0) AS interest_diversity`
 }
 
 // cadence-estimation + rarity constants. See cadencePerDay / rarityBoosts.
@@ -841,8 +931,8 @@ const (
 // cadencePerDay estimates a source's posting rate from its ACCUMULATED stored
 // items: count within the window over the observed span (now - earliest item in
 // the window), not the fixed window. otium stores every item it ever fetches, so
-// this history accrues past a feed's ~10-15 entry truncation. Dividing by the
-// observed span rather than the full window keeps a high-volume source whose feed
+// this history accrues past a interest's ~10-15 entry truncation. Dividing by the
+// observed span rather than the full window keeps a high-volume source whose interest
 // only exposes a recent slice from reading as rare once even a little history has
 // accumulated (the NPR-labeled-rare bug). No thin-history floor (#110): a source
 // we've seen little of reads at its actual low rate so it ranks as rare among the
@@ -867,7 +957,7 @@ func cadencePerDay(count int, spanDays float64, windowDays int) float64 {
 // more often than this one, so the rarest source (rank ~1) gets the full lift and
 // the most frequent (rank 0) gets none. Uniform-by-construction over rank, so
 // boosts spread across the population instead of collapsing to a narrow band the
-// way the old absolute 1/day threshold did on a feed-truncated, young library.
+// way the old absolute 1/day threshold did on a interest-truncated, young library.
 // Ties (identical cadence) share a rank.
 func rarityBoosts(cadence map[int64]float64) map[int64]float64 {
 	n := len(cadence)
@@ -904,7 +994,7 @@ func rarityBoosts(cadence map[int64]float64) map[int64]float64 {
 // source of a user, ranking each source's windowed cadence against the whole set.
 // It's run once per candidate fetch and overlaid onto the returned candidates, so
 // a source's rarity is a stable property of the population, not of whichever
-// subset (themed session, single feed) a given query returned.
+// subset (themed session, single interest) a given query returned.
 func (db *DB) sourceRarityBoosts(ctx context.Context, userID int64, windowDays int) (map[int64]float64, error) {
 	win := fmt.Sprintf("-%d days", windowDays)
 	q := `SELECT s.id,
@@ -945,7 +1035,7 @@ func applyRarity(cands []Candidate, boosts map[int64]float64) {
 
 // scanCandidates reads the candidateCols projection into Candidates, computing
 // each source's cadence from its accumulated stored history (windowDays sets the
-// rarity window) and carrying the resolved primary-feed overrides.
+// rarity window) and carrying the resolved primary-interest overrides.
 func scanCandidates(rows *sql.Rows, windowDays int) ([]Candidate, error) {
 	var out []Candidate
 	for rows.Next() {
@@ -963,8 +1053,8 @@ func scanCandidates(rows *sql.Rows, windowDays int) ([]Candidate, error) {
 		c.PublishedAt = parseTime(pub)
 		c.FetchedAt = parseTime(fetched)
 		c.SourceCadence = cadencePerDay(winCount, winSpan, windowDays)
-		c.FeedHalfLifeDays = halfLife
-		c.FeedDiversity = diversity
+		c.InterestHalfLifeDays = halfLife
+		c.InterestDiversity = diversity
 		out = append(out, c)
 	}
 	return out, rows.Err()
@@ -1046,14 +1136,14 @@ func (db *DB) InsightsItems(ctx context.Context, userID int64, sourceIDs []int64
 	return cands, nil
 }
 
-// SourceIDsForFeeds resolves feed slugs to the set of source ids in them (#86:
-// a source's one feed).
-func (db *DB) SourceIDsForFeeds(ctx context.Context, userID int64, slugs []string) ([]int64, error) {
+// SourceIDsForInterests resolves interest slugs to the set of source ids in them (#86:
+// a source's one interest).
+func (db *DB) SourceIDsForInterests(ctx context.Context, userID int64, slugs []string) ([]int64, error) {
 	if len(slugs) == 0 {
 		return nil, nil
 	}
 	q := `SELECT s.id FROM sources s
-	      JOIN feeds f ON f.id = s.feed_id
+	      JOIN interests f ON f.id = s.interest_id
 	      WHERE f.user_id = ? AND f.slug IN (` + placeholders(len(slugs)) + `)`
 	args := []any{userID}
 	for _, s := range slugs {
@@ -1153,7 +1243,7 @@ func scanItems(rows *sql.Rows) ([]Item, error) {
 }
 
 // SkipStat is a source's recent engagement: how many of its items the user has
-// been shown vs. how many they skipped. Feeds skip-rate downweighting.
+// been shown vs. how many they skipped. Interests skip-rate downweighting.
 type SkipStat struct {
 	Shown   int
 	Skipped int
@@ -1161,7 +1251,7 @@ type SkipStat struct {
 
 // SourceAvgDuration returns each source's average *content* duration (seconds)
 // over its most recent `window` items that carry a known duration. This is the
-// empirical "time per item" for a feed - a comedy-shorts channel averages ~90s,
+// empirical "time per item" for a interest - a comedy-shorts channel averages ~90s,
 // a longform channel ~20 min - used to predict how many items a time budget can
 // hold. Sources whose items carry no duration (articles) are absent from the
 // map; the caller supplies a read/skim default for those.

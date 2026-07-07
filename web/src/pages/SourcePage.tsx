@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { api, type Feed, type Item, type Source } from "@/api/client";
+import { api, type Interest, type Item, type Source } from "@/api/client";
 import { BLABEL, bucketOf, type Bucket } from "@/lib/weight";
 import { feedIcon } from "@/lib/feedIcons";
 import { PostsList } from "@/components/PostsList";
@@ -8,8 +8,8 @@ import { WeightControl } from "@/components/WeightControl";
 import { WeightIndicator } from "@/components/WeightIndicator";
 
 // Per-source freshness half-life presets (days). 0 = inherit (the source falls
-// back to its feed's half-life, then the global 21d). Mirrors the feed control's
-// row so the two read the same; the source override wins over the feed (#76).
+// back to its interest's half-life, then the global 21d). Mirrors the interest control's
+// row so the two read the same; the source override wins over the interest (#76).
 const HALF_LIVES: { days: number; label: string }[] = [
   { days: 0, label: "Default" },
   { days: 7, label: "7d" },
@@ -21,7 +21,7 @@ const HALF_LIVES: { days: number; label: string }[] = [
 
 // Dedicated source page (#66, supersedes the SourceDetail modal in the library).
 // One page carries every management control the old sheet had - weight, per-
-// session cap, feed membership, archive, visit, delete - AND the source's actual
+// session cap, interest membership, archive, visit, delete - AND the source's actual
 // recent posts, so you tune it and see what it produces together. Reached by
 // tapping a source in the library; also the target of the session's "Source
 // details" path.
@@ -31,7 +31,7 @@ export default function SourcePage() {
   const sourceId = Number(id);
 
   const [sources, setSources] = useState<Source[] | null>(null);
-  const [feeds, setFeeds] = useState<Feed[]>([]);
+  const [interests, setInterests] = useState<Interest[]>([]);
   const [posts, setPosts] = useState<Item[] | null>(null);
   const [loadingPosts, setLoadingPosts] = useState(true);
   const [err, setErr] = useState("");
@@ -42,7 +42,7 @@ export default function SourcePage() {
   const [cap, setCap] = useState(3);
   const [halfLife, setHalfLife] = useState(0);
   const [state, setState] = useState("followed");
-  const [feedSlug, setFeedSlug] = useState<string>(""); // #86: a source has one feed
+  const [interestSlug, setInterestSlug] = useState<string>(""); // #86: a source has one interest
   const [confirmDel, setConfirmDel] = useState(false);
 
   const source = useMemo(
@@ -55,7 +55,7 @@ export default function SourcePage() {
   }
   useEffect(() => {
     reload();
-    api.feeds().then(setFeeds).catch(() => {});
+    api.interests().then(setInterests).catch(() => {});
   }, []);
   useEffect(() => {
     if (!sourceId) return;
@@ -75,7 +75,7 @@ export default function SourcePage() {
     setCap(source.per_session_cap);
     setHalfLife(source.half_life_days ?? 0);
     setState(source.state);
-    setFeedSlug(source.feed_slug ?? "");
+    setInterestSlug(source.interest_slug ?? "");
     setConfirmDel(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [source?.id]);
@@ -122,12 +122,12 @@ export default function SourcePage() {
       });
     }
   }
-  async function chooseFeed(slug: string) {
-    // Single-feed pick (#86): tapping a feed makes it the source's one feed;
-    // re-tapping the current one clears it (feedless).
-    const next = feedSlug === slug ? "" : slug;
-    setFeedSlug(next);
-    await api.setSourceFeed(sourceId, next).catch(() => {});
+  async function chooseInterest(slug: string) {
+    // Single-interest pick (#86): tapping a interest makes it the source's one interest;
+    // re-tapping the current one clears it (interestless).
+    const next = interestSlug === slug ? "" : slug;
+    setInterestSlug(next);
+    await api.setSourceInterest(sourceId, next).catch(() => {});
     reload();
   }
   async function del() {
@@ -227,21 +227,21 @@ export default function SourcePage() {
         ))}
       </div>
       <p className="caphint">
-        How fast this source's items fade. Overrides the feed's half-life. Default inherits the feed, then the global 21
+        How fast this source's items fade. Overrides the interest's half-life. Default inherits the interest, then the global 21
         days.
       </p>
 
-      {feeds.length > 0 && (
+      {interests.length > 0 && (
         <>
-          <div className="ctl-label">Feed</div>
-          <div className="feed-assign">
-            {feeds.map((f) => {
+          <div className="ctl-label">Interest</div>
+          <div className="interest-assign">
+            {interests.map((f) => {
               const Ic = feedIcon(f.icon);
               return (
                 <button
                   key={f.slug}
-                  className={`fa-chip ${feedSlug === f.slug ? "on" : ""}`}
-                  onClick={() => chooseFeed(f.slug)}
+                  className={`fa-chip ${interestSlug === f.slug ? "on" : ""}`}
+                  onClick={() => chooseInterest(f.slug)}
                 >
                   {Ic && <Ic size={13} strokeWidth={1.75} aria-hidden />}
                   {f.name}
@@ -250,7 +250,7 @@ export default function SourcePage() {
             })}
           </div>
           <p className="caphint">
-            A source belongs to one feed. Tap a feed to move it here{feedSlug ? "; tap the current feed to clear it" : ""}.
+            A source belongs to one interest. Tap a interest to move it here{interestSlug ? "; tap the current interest to clear it" : ""}.
           </p>
         </>
       )}

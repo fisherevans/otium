@@ -1,25 +1,25 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { api, type Feed, type Mix } from "@/api/client";
+import { api, type Interest, type Mix } from "@/api/client";
 import { feedIcon } from "@/lib/feedIcons";
 
 // Mixes management (#86). A mix is a user-created overlay that gathers several
-// FEEDS under one name ("News" = Local + International); a feed can be in many
+// FEEDS under one name ("News" = Local + International); a interest can be in many
 // mixes. This page is the whole surface: create / rename / delete a mix,
-// toggle which feeds belong to it, and browse Mix -> Feed (each member feed
-// links to its page, which lists its sources - completing Mix -> Feed -> Source).
+// toggle which interests belong to it, and browse Mix -> Interest (each member interest
+// links to its page, which lists its sources - completing Mix -> Interest -> Source).
 //
 // It lives on its own route (reached from the Library's Manage sheet) rather than
 // in the library header, so the v0.21 four-tab nav stays uncluttered.
 export default function MixesPage() {
   const nav = useNavigate();
   const [mixes, setMixes] = useState<Mix[] | null>(null);
-  const [feeds, setFeeds] = useState<Feed[]>([]);
+  const [interests, setInterests] = useState<Interest[]>([]);
   const [err, setErr] = useState("");
   const [newName, setNewName] = useState("");
   const [creating, setCreating] = useState(false);
 
-  // The expanded mix + its current feed-id membership (seeded from the browse
+  // The expanded mix + its current interest-id membership (seeded from the browse
   // endpoint so the chips reflect the server, then updated optimistically).
   const [openId, setOpenId] = useState<number | null>(null);
   const [memberIds, setMemberIds] = useState<Set<number>>(new Set());
@@ -31,7 +31,7 @@ export default function MixesPage() {
   }
   useEffect(() => {
     reload();
-    api.feeds().then(setFeeds).catch(() => {});
+    api.interests().then(setInterests).catch(() => {});
   }, []);
 
   async function openMix(g: Mix) {
@@ -45,7 +45,7 @@ export default function MixesPage() {
     setMemberIds(new Set());
     try {
       const b = await api.mixBrowse(g.id);
-      setMemberIds(new Set(b.feeds.map((f) => f.id)));
+      setMemberIds(new Set(b.interests.map((f) => f.id)));
     } catch {
       /* leave empty on error */
     }
@@ -66,12 +66,12 @@ export default function MixesPage() {
     }
   }
 
-  async function toggleFeed(g: Mix, feedId: number) {
+  async function toggleInterest(g: Mix, interestId: number) {
     const next = new Set(memberIds);
-    next.has(feedId) ? next.delete(feedId) : next.add(feedId);
+    next.has(interestId) ? next.delete(interestId) : next.add(interestId);
     setMemberIds(next); // optimistic
-    await api.setMixFeeds(g.id, [...next]).catch(() => {});
-    reload(); // refresh feed_count
+    await api.setMixInterests(g.id, [...next]).catch(() => {});
+    reload(); // refresh interest_count
   }
 
   async function saveName(g: Mix) {
@@ -96,7 +96,7 @@ export default function MixesPage() {
         <h1 className="display">Mixes</h1>
       </div>
       <p className="sub">
-        Gather feeds under one name - "News" might hold Local and International. A feed can live in several mixes.
+        Gather interests under one name - "News" might hold Local and International. A interest can live in several mixes.
       </p>
       {err && <p className="err">{err}</p>}
 
@@ -122,14 +122,14 @@ export default function MixesPage() {
         mixes.map((g) => {
           const Ic = feedIcon(g.icon);
           const open = openId === g.id;
-          const memberFeeds = feeds.filter((f) => memberIds.has(f.id));
+          const memberInterests = interests.filter((f) => memberIds.has(f.id));
           return (
             <div className="lib-row" key={g.id}>
               <div className="lib-head" onClick={() => openMix(g)}>
                 {Ic && <Ic size={16} strokeWidth={1.75} aria-hidden />}
                 <div className="nm">
                   <b>{g.name}</b>
-                  <span>{g.feed_count} {g.feed_count === 1 ? "feed" : "feeds"}</span>
+                  <span>{g.interest_count} {g.interest_count === 1 ? "interest" : "interests"}</span>
                 </div>
                 <span className="chev">{open ? "▾" : "▸"}</span>
               </div>
@@ -148,19 +148,19 @@ export default function MixesPage() {
                     />
                   </div>
 
-                  {/* Feed membership */}
-                  <div className="ctl-label">Feeds in this mix</div>
-                  {feeds.length === 0 ? (
-                    <p className="caphint">No feeds yet.</p>
+                  {/* Interest membership */}
+                  <div className="ctl-label">Interests in this mix</div>
+                  {interests.length === 0 ? (
+                    <p className="caphint">No interests yet.</p>
                   ) : (
-                    <div className="feed-assign">
-                      {feeds.map((f) => {
+                    <div className="interest-assign">
+                      {interests.map((f) => {
                         const FIc = feedIcon(f.icon);
                         return (
                           <button
                             key={f.id}
                             className={`fa-chip ${memberIds.has(f.id) ? "on" : ""}`}
-                            onClick={() => toggleFeed(g, f.id)}
+                            onClick={() => toggleInterest(g, f.id)}
                           >
                             {FIc && <FIc size={13} strokeWidth={1.75} aria-hidden />}
                             {f.name}
@@ -169,19 +169,19 @@ export default function MixesPage() {
                       })}
                     </div>
                   )}
-                  <p className="caphint">Tap a feed to add or remove it from this mix.</p>
+                  <p className="caphint">Tap a interest to add or remove it from this mix.</p>
 
-                  {/* Browse into member feeds (Mix -> Feed -> Source) */}
-                  {memberFeeds.length > 0 && (
+                  {/* Browse into member interests (Mix -> Interest -> Source) */}
+                  {memberInterests.length > 0 && (
                     <>
                       <div className="ctl-label">Browse</div>
-                      {memberFeeds.map((f) => {
+                      {memberInterests.map((f) => {
                         const FIc = feedIcon(f.icon);
                         return (
                           <button
                             key={f.id}
                             className="lib-mix as-link"
-                            onClick={() => nav(`/feeds/${f.slug}`)}
+                            onClick={() => nav(`/interests/${f.slug}`)}
                           >
                             {FIc && <FIc size={14} strokeWidth={1.75} aria-hidden />}
                             <span>{f.name}</span>
@@ -196,7 +196,7 @@ export default function MixesPage() {
                   {/* Delete */}
                   {confirmDel ? (
                     <div className="confirm">
-                      Delete {g.name}? The feeds stay; only the grouping goes.
+                      Delete {g.name}? The interests stay; only the grouping goes.
                       <div className="lib-actions">
                         <button onClick={() => setConfirmDel(false)}>Cancel</button>
                         <button onClick={() => del(g)}>Delete</button>

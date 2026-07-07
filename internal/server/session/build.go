@@ -1,6 +1,6 @@
 // Package session builds a time-boxed, weighted, explainable consumption
 // session from a pool of candidate items. This is otium's core: not an infinite
-// ranked feed, but "given these sources, their weights, and how much time you
+// ranked interest, but "given these sources, their weights, and how much time you
 // want, here is a finite set worth your attention, and here is exactly why each
 // item is in it."
 //
@@ -22,8 +22,8 @@ import (
 )
 
 // Tunables. freshnessHalfLifeDays and the per-source cap are the global
-// defaults; a feed can override both per-feed (Candidate.FeedHalfLifeDays /
-// FeedDiversity, #17). Rarity has no tunable here anymore: it's a relative rank
+// defaults; a interest can override both per-interest (Candidate.InterestHalfLifeDays /
+// InterestDiversity, #17). Rarity has no tunable here anymore: it's a relative rank
 // the store computes across the user's sources (store.RarityBoost, #110).
 const (
 	freshnessHalfLifeDays = 21.0 // default: an item's freshness score halves every 3 weeks
@@ -47,7 +47,7 @@ type SourceStat struct {
 	Skipped       int
 }
 
-// defaultDurationSec estimates how long an item takes to consume when the feed
+// defaultDurationSec estimates how long an item takes to consume when the interest
 // didn't tell us (RSS rarely carries duration). Rough, tunable.
 var defaultDurationSec = map[string]int{
 	"short":   60,
@@ -71,16 +71,16 @@ type Request struct {
 const defaultQueueSize = 30
 
 // Selected is one item chosen for the session, with the ranker's rationale.
-// Feed is the item's primary feed identity, filled by the handler after the
-// ranker runs (the ranker itself is feed-agnostic); nil for a feedless source.
+// Interest is the item's primary interest identity, filled by the handler after the
+// ranker runs (the ranker itself is interest-agnostic); nil for a interestless source.
 type Selected struct {
-	Item        store.Item     `json:"item"`
-	SourceTitle string         `json:"source_title"`
-	Feed        *store.FeedRef `json:"feed,omitempty"`
-	Score       float64        `json:"score"`
-	EstDuration int            `json:"est_duration_sec"`
-	Reason      string         `json:"reason"`
-	Breakdown   ScoreBreakdown `json:"breakdown"`
+	Item        store.Item         `json:"item"`
+	SourceTitle string             `json:"source_title"`
+	Interest    *store.InterestRef `json:"interest,omitempty"`
+	Score       float64            `json:"score"`
+	EstDuration int                `json:"est_duration_sec"`
+	Reason      string             `json:"reason"`
+	Breakdown   ScoreBreakdown     `json:"breakdown"`
 }
 
 // ScoreBreakdown is the per-factor decomposition of an item's score (#18): the
@@ -96,7 +96,7 @@ type Selected struct {
 // how big a session it landed in.
 type ScoreBreakdown struct {
 	Weight         float64 `json:"weight"`          // source weight multiplier (0.25..5, default 1)
-	Rarity         float64 `json:"rarity"`          // relative-rarity boost (1 = as common as your feed gets, up to 1+rareBoostMax for the rarest)
+	Rarity         float64 `json:"rarity"`          // relative-rarity boost (1 = as common as your interest gets, up to 1+rareBoostMax for the rarest)
 	Freshness      float64 `json:"freshness"`       // age decay (1 = brand new, → 0 as it ages past the half-life)
 	EffectiveScore float64 `json:"effective_score"` // weight × rarity × freshness
 	// Human-legible context for the plain-language lines - not factors, just the
@@ -195,15 +195,15 @@ func Build(req Request, pool []store.Candidate, now time.Time, stats map[int64]S
 			if r.taken {
 				continue
 			}
-			// Per-session cap: the item's feed diversity overrides the source's own
+			// Per-session cap: the item's interest diversity overrides the source's own
 			// cap when set (#17). Lower cap = each source contributes fewer items, so
-			// the session spreads across more of the feed's sources.
+			// the session spreads across more of the interest's sources.
 			cap := r.c.PerSessionCap
 			if cap <= 0 {
 				cap = 2
 			}
-			if r.c.FeedDiversity > 0 {
-				cap = r.c.FeedDiversity
+			if r.c.InterestDiversity > 0 {
+				cap = r.c.InterestDiversity
 			}
 			if pass == 0 {
 				if perSourceUsed[r.sourceID] >= cap {
@@ -258,7 +258,7 @@ func SelectFor(c store.Candidate, now time.Time) Selected {
 }
 
 // predictItems estimates how many items fit the time budget: budget divided by
-// the insights's effective time-per-item. Effective time blends the feed's empirical
+// the insights's effective time-per-item. Effective time blends the interest's empirical
 // content length (SourceStat.AvgContentSec) with the skim factor - because a
 // 20-minute video the user skims in two minutes costs two minutes, not twenty.
 func predictItems(req Request, pool []store.Candidate, stats map[int64]SourceStat) int {
@@ -328,7 +328,7 @@ func scoreOf(c store.Candidate, now time.Time, sel float64) float64 {
 // weightRarity is the user-controlled term of the score: the source's weight
 // lifted by its relative-rarity boost. It carries no time or behavior signal -
 // just "how much does the user favor this source, adjusted so a source that posts
-// rarely for their feed isn't buried." Shared by the session ranker and the insights.
+// rarely for their interest isn't buried." Shared by the session ranker and the insights.
 func weightRarity(c store.Candidate) float64 {
 	return sourceWeight(c) * rarityOf(c)
 }
@@ -357,7 +357,7 @@ func rarityOf(c store.Candidate) float64 {
 
 // ItemIntendedScore is the session-agnostic "intended" contribution of a single
 // item: weight × rarity × freshness, with selectivity fixed at 1. It answers "how
-// much does this item want to be in the feed" - the numerator of the insights view's
+// much does this item want to be in the interest" - the numerator of the insights view's
 // share.
 func ItemIntendedScore(c store.Candidate, now time.Time) float64 {
 	return weightRarity(c) * freshness(c.PublishedAt, now, halfLifeOf(c))
@@ -374,10 +374,10 @@ func ItemEffectiveScore(c store.Candidate, now time.Time) float64 {
 }
 
 // halfLifeOf resolves the freshness half-life for a candidate per the hierarchy
-// source override > feed (resolved) > global (#76). It returns the source's own
-// override when set, else the resolved feed half-life; a 0 result falls through to
-// the global default in freshness(). The store already applied the multi-feed rule
-// to FeedHalfLifeDays, so the "which feed" ambiguity is settled before this. Every
+// source override > interest (resolved) > global (#76). It returns the source's own
+// override when set, else the resolved interest half-life; a 0 result falls through to
+// the global default in freshness(). The store already applied the multi-interest rule
+// to InterestHalfLifeDays, so the "which interest" ambiguity is settled before this. Every
 // scoring path (ScoreBreakdownFor, scoreOf, ItemIntendedScore) funnels through
 // here so sessions, the insights, and the breakdown resolve identically - that shared
 // resolution is what keeps ItemEffectiveScore == scoreOf(sel=1) intact.
@@ -385,7 +385,7 @@ func halfLifeOf(c store.Candidate) float64 {
 	if c.SourceHalfLifeDays > 0 {
 		return c.SourceHalfLifeDays
 	}
-	return c.FeedHalfLifeDays
+	return c.InterestHalfLifeDays
 }
 
 // freshness decays an item by age. halfLifeDays is the resolved per-item override
@@ -421,7 +421,7 @@ func reasonOf(c store.Candidate, now time.Time) string {
 	case c.SourceWeight >= 5:
 		return "Favorite source"
 	case c.RarityBoost >= 1.6:
-		return "Rare - " + c.SourceTitle + " posts seldom for your feed, so it's surfaced"
+		return "Rare - " + c.SourceTitle + " posts seldom for your interest, so it's surfaced"
 	case ageDays < 1:
 		return "Fresh - posted today"
 	case c.SourceWeight >= 2:

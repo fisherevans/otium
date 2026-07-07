@@ -10,7 +10,7 @@ type Sub = null | "detail" | "items";
 // The "…" overflow container for the current session item (#43). Keeps the four
 // primary bar actions (Open/Like/Save/Next) calm by parking the deeper actions
 // here: read in app (#41), change the source's weighting inline (#14), open full
-// source details (#9), and see the item in its raw feed (#38). It owns the sub
+// source details (#9), and see the item in its raw interest (#38). It owns the sub
 // sheets so SessionPage only tracks one boolean. None of these surfaces emit
 // engagement events - the only signal produced here is an explicit weight change.
 export function ItemActions({

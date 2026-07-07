@@ -16,9 +16,9 @@ import SavedPage from "@/pages/SavedPage";
 import YouPage from "@/pages/YouPage";
 // --- end #84 ---
 import AppearancePage from "@/pages/AppearancePage";
-// --- #66 feed-mgmt-pages: dedicated source/feed pages ---
+// --- #66 interest-mgmt-pages: dedicated source/interest pages ---
 import SourcePage from "@/pages/SourcePage";
-import FeedPage from "@/pages/FeedPage";
+import InterestPage from "@/pages/InterestPage";
 // --- end #66 ---
 // --- #86 mixes management ---
 import MixesPage from "@/pages/MixesPage";
@@ -68,9 +68,9 @@ export default function App() {
           <Route path="/" element={<HomePage />} />
           <Route path="/session/:id" element={<SessionPage />} /> {/* #67: durable session by id */}
           <Route path="/sources" element={<SourcesPage />} />
-          {/* --- #66 feed-mgmt-pages: dedicated source/feed pages --- */}
+          {/* --- #66 interest-mgmt-pages: dedicated source/interest pages --- */}
           <Route path="/sources/:id" element={<SourcePage />} />
-          <Route path="/feeds/:slug" element={<FeedPage />} />
+          <Route path="/interests/:slug" element={<InterestPage />} />
           {/* --- end #66 --- */}
           <Route path="/mixes" element={<MixesPage />} /> {/* #86: mixes management */}
           {/* #84: Saved (Collections + History) and You (secondary destinations)

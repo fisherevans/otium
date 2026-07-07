@@ -1,15 +1,15 @@
-// Feed icon registry (#45, expanded #72). A feed's `icon` field stores a stable
+// Interest icon registry (#45, expanded #72). A interest's `icon` field stores a stable
 // *key* (e.g. "comedy"); this maps that key to a Lucide glyph. Lucide is MIT and
 // tree-shakeable, so only the icons imported here ship - no icon font, no CDN.
 //
-// The set is intentionally broad so a feed can pick something close to its topic
+// The set is intentionally broad so a interest can pick something close to its topic
 // without a bespoke asset. Locality/region gets extra coverage (Fisher's key
 // example - "an icon per state") using the closest lucide place glyphs; literal
 // per-state silhouettes are a custom-SVG art task and out of scope here. Where
 // Lucide has no exact match we use the closest clean single-ink glyph. Icons
 // render at currentColor so they inherit the card's ink - never a color fill.
 //
-// Keys are stable: existing feeds store them, so rename/remove is a migration.
+// Keys are stable: existing interests store them, so rename/remove is a migration.
 // Add freely; only reuse a glyph across keys when the topics truly overlap.
 //
 // This module is deliberately pure TS: it exports component *references* and a
@@ -146,7 +146,7 @@ import {
 } from "lucide-react";
 
 export interface FeedIconDef {
-  key: string; // stored in feeds.icon
+  key: string; // stored in interests.icon
   label: string; // shown in the picker + used for search
   Icon: LucideIcon;
 }
@@ -220,7 +220,7 @@ export const FEED_ICONS: FeedIconDef[] = [
   { key: "music", label: "Music", Icon: Music },
   { key: "guitar", label: "Guitar / instruments", Icon: Guitar },
   { key: "podcast", label: "Podcast / audio", Icon: Mic },
-  { key: "podcasts", label: "Podcasts (feed)", Icon: Podcast },
+  { key: "podcasts", label: "Podcasts (interest)", Icon: Podcast },
   { key: "radio", label: "Radio / broadcast", Icon: Radio },
   { key: "film", label: "Film / cinema", Icon: Clapperboard },
   { key: "video", label: "Video / YouTube", Icon: Video },
@@ -292,13 +292,13 @@ export const FEED_ICONS: FeedIconDef[] = [
   { key: "history", label: "History", Icon: Landmark },
 
   // --- generic ---
-  { key: "default", label: "Generic feed", Icon: Rss },
+  { key: "default", label: "Generic interest", Icon: Rss },
 ];
 
 const BY_KEY: Record<string, LucideIcon> = Object.fromEntries(FEED_ICONS.map((d) => [d.key, d.Icon]));
 
 // feedIcon resolves a stored key to its Lucide component, or null when the key
-// is unset/unknown (the caller then falls back to the feed's color swatch).
+// is unset/unknown (the caller then falls back to the interest's color swatch).
 export function feedIcon(key?: string | null): LucideIcon | null {
   if (!key) return null;
   return BY_KEY[key] ?? null;

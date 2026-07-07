@@ -7,10 +7,10 @@ import { clock, relTime } from "@/lib/format";
 // so the Appearance live preview (#80/#90) renders from the exact same markup as
 // the real card - no drift between preview and app.
 //
-// The card's fixed top->bottom order (#96): FeedPill -> CardSource -> Title ->
+// The card's fixed top->bottom order (#96): InterestPill -> CardSource -> Title ->
 // Byline (author · date) -> Media (hero) -> Blurb -> callout buttons. The pieces
 // here are that stack minus the title (a plain <h3>) and the interactive callout
-// row (SessionPage-only). #90 card prefs drive size/weight/ink of the feed tag,
+// row (SessionPage-only). #90 card prefs drive size/weight/ink of the interest tag,
 // source, and byline via CSS vars, so these components carry no styling props.
 //
 // Hero show/hide and grayscale-vs-color are driven by CSS vars
@@ -51,30 +51,30 @@ export function Media({ item }: { item: Item }) {
   return null; // quote / plain text: no media
 }
 
-// FeedPill (#96): the feed identity as a stylized pill at the top of the card -
+// InterestPill (#96): the interest identity as a stylized pill at the top of the card -
 // the one deliberately-distinctive element on an otherwise quiet surface. Icon
-// (or the feed's color swatch when it has no glyph) + name, faintly tinted by the
-// feed color. A feedless source (e.g. a YouTube channel) renders no pill; the
+// (or the interest's color swatch when it has no glyph) + name, faintly tinted by the
+// interest color. A interestless source (e.g. a YouTube channel) renders no pill; the
 // source name then leads (CardSource's `lead` styling).
-export function FeedPill({ feed }: { feed?: Selected["feed"] }) {
-  if (!feed) return null;
-  const Ic = feedIcon(feed.icon);
+export function InterestPill({ interest }: { interest?: Selected["interest"] }) {
+  if (!interest) return null;
+  const Ic = feedIcon(interest.icon);
   return (
-    <span className="feed-pill" style={{ "--feed-color": feed.color || "var(--ink)" } as CSSProperties}>
-      {Ic ? <Ic size={13} strokeWidth={1.9} aria-hidden /> : <span className="feed-pill-dot" aria-hidden />}
-      <span className="feed-pill-name">{feed.name}</span>
+    <span className="interest-pill" style={{ "--interest-color": interest.color || "var(--ink)" } as CSSProperties}>
+      {Ic ? <Ic size={13} strokeWidth={1.9} aria-hidden /> : <span className="interest-pill-dot" aria-hidden />}
+      <span className="interest-pill-name">{interest.name}</span>
     </span>
   );
 }
 
 // CardSource (#96/#75): the source name (e.g. "VTDigger"). Tappable - it opens
 // the source context menu and stops propagation so it doesn't also trigger the
-// card-body tap-to-open. `lead` styles it as the anchor when there's no feed.
+// card-body tap-to-open. `lead` styles it as the anchor when there's no interest.
 export function CardSource({ sel, onSource }: { sel: Selected; onSource: () => void }) {
   return (
     <button
       type="button"
-      className={`card-source ${sel.feed ? "" : "lead"}`}
+      className={`card-source ${sel.interest ? "" : "lead"}`}
       onPointerDown={(e) => e.stopPropagation()}
       onClick={(e) => {
         e.stopPropagation();

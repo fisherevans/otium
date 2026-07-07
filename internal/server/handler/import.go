@@ -38,13 +38,13 @@ func (h *Handler) ParseImport(w http.ResponseWriter, r *http.Request) {
 }
 
 // CommitImport creates the kept candidates as sources, optionally turning their
-// OPML folders into feeds. It returns immediately and refreshes the new feeds in
-// the background (fetching hundreds of feeds inline would block the request).
+// OPML folders into interests. It returns immediately and refreshes the new interests in
+// the background (fetching hundreds of interests inline would block the request).
 func (h *Handler) CommitImport(w http.ResponseWriter, r *http.Request) {
 	uid := userID(r)
 	var body struct {
-		Sources            []importer.Candidate `json:"sources"`
-		CreateFeedsFolders bool                 `json:"create_feeds_from_folders"`
+		Sources                []importer.Candidate `json:"sources"`
+		CreateInterestsFolders bool                 `json:"create_interests_from_folders"`
 	}
 	if !decode(w, r, &body) {
 		return
@@ -55,7 +55,7 @@ func (h *Handler) CommitImport(w http.ResponseWriter, r *http.Request) {
 	}
 
 	created, skipped := 0, 0
-	feedIDs := map[string]int64{}
+	interestIDs := map[string]int64{}
 	for _, c := range body.Sources {
 		if c.FeedURL == "" {
 			continue
@@ -76,30 +76,30 @@ func (h *Handler) CommitImport(w http.ResponseWriter, r *http.Request) {
 		} else {
 			skipped++
 		}
-		if body.CreateFeedsFolders && c.Category != "" {
-			fid, ok := feedIDs[c.Category]
+		if body.CreateInterestsFolders && c.Category != "" {
+			fid, ok := interestIDs[c.Category]
 			if !ok {
-				f, err := h.db.GetOrCreateFeed(r.Context(), uid, c.Category, slugify(c.Category), "")
+				f, err := h.db.GetOrCreateInterest(r.Context(), uid, c.Category, slugify(c.Category), "")
 				if err != nil {
-					h.log.Warn("import: feed create failed", "cat", c.Category, "err", err)
+					h.log.Warn("import: interest create failed", "cat", c.Category, "err", err)
 					continue
 				}
 				fid = f.ID
-				feedIDs[c.Category] = fid
+				interestIDs[c.Category] = fid
 			}
-			_ = h.db.AssignSourceFeed(r.Context(), id, fid)
+			_ = h.db.AssignSourceInterest(r.Context(), id, fid)
 			continue
 		}
-		// Auto-tag untagged YouTube sources into the Videos feed (#53) so future
+		// Auto-tag untagged YouTube sources into the Videos interest (#53) so future
 		// YouTube-Takeout imports land there instead of an untagged mass. Only when
 		// the candidate carries no folder/category of its own.
 		if c.Kind == "youtube" && c.Category == "" {
-			f, err := h.db.GetOrCreateVideosFeed(r.Context(), uid)
+			f, err := h.db.GetOrCreateVideosInterest(r.Context(), uid)
 			if err != nil {
-				h.log.Warn("import: videos feed create failed", "err", err)
+				h.log.Warn("import: videos interest create failed", "err", err)
 				continue
 			}
-			_ = h.db.AssignSourceFeed(r.Context(), id, f.ID)
+			_ = h.db.AssignSourceInterest(r.Context(), id, f.ID)
 		}
 	}
 
@@ -114,9 +114,9 @@ func (h *Handler) CommitImport(w http.ResponseWriter, r *http.Request) {
 	}()
 
 	writeJSON(w, http.StatusOK, map[string]any{
-		"created":       created,
-		"already_had":   skipped,
-		"feeds_created": len(feedIDs),
-		"refreshing":    true,
+		"created":           created,
+		"already_had":       skipped,
+		"interests_created": len(interestIDs),
+		"refreshing":        true,
 	})
 }

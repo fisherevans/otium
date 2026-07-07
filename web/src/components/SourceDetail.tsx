@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { api, type Source, type Feed } from "@/api/client";
+import { api, type Source, type Interest } from "@/api/client";
 import { BottomSheet } from "./BottomSheet";
 import { BLABEL, bucketOf, type Bucket } from "@/lib/weight";
 import { feedIcon } from "@/lib/feedIcons";
@@ -17,7 +17,7 @@ import { WeightIndicator } from "./WeightIndicator";
 // row-expansion), so it carries everything that form did. Optional props switch
 // on the library-only capabilities so the session's use of this sheet stays
 // lean:
-//   - `feeds`    → renders feed-membership chips (assign source to feeds).
+//   - `interests`    → renders interest-membership chips (assign source to interests).
 //   - `onToast`  → weight change / archive emit an undoable toast.
 //   - `onDelete` → renders a Delete action (with a confirm step); the parent
 //                  handles closing + reloading after the source is gone.
@@ -26,7 +26,7 @@ export function SourceDetail({
   open,
   onClose,
   onChanged,
-  feeds,
+  interests,
   onToast,
   onDelete,
 }: {
@@ -34,14 +34,14 @@ export function SourceDetail({
   open: boolean;
   onClose: () => void;
   onChanged?: () => void;
-  feeds?: Feed[];
+  interests?: Interest[];
   onToast?: (msg: string, undo?: () => void) => void;
   onDelete?: () => void;
 }) {
   const [bucket, setBucket] = useState<Bucket>("normal");
   const [cap, setCap] = useState(3);
   const [state, setState] = useState("followed");
-  const [feedSlug, setFeedSlug] = useState<string>(""); // #86: a source has one feed
+  const [interestSlug, setInterestSlug] = useState<string>(""); // #86: a source has one interest
   const [confirmDel, setConfirmDel] = useState(false);
 
   // Re-seed local state only when the source identity changes (opening a
@@ -52,7 +52,7 @@ export function SourceDetail({
     setBucket(bucketOf(source.weight));
     setCap(source.per_session_cap);
     setState(source.state);
-    setFeedSlug(source.feed_slug ?? "");
+    setInterestSlug(source.interest_slug ?? "");
     setConfirmDel(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [source?.id]);
@@ -91,10 +91,10 @@ export function SourceDetail({
       });
     }
   }
-  async function chooseFeed(slug: string) {
-    const next = feedSlug === slug ? "" : slug; // #86: single feed; re-tap clears
-    setFeedSlug(next);
-    await api.setSourceFeed(source!.id, next).catch(() => {});
+  async function chooseInterest(slug: string) {
+    const next = interestSlug === slug ? "" : slug; // #86: single interest; re-tap clears
+    setInterestSlug(next);
+    await api.setSourceInterest(source!.id, next).catch(() => {});
     onChanged?.();
   }
   async function del() {
@@ -160,17 +160,17 @@ export function SourceDetail({
         </div>
         <p className="caphint">Keeps the freshest {cap} per session.</p>
 
-        {feeds && feeds.length > 0 && (
+        {interests && interests.length > 0 && (
           <>
-            <div className="ctl-label">Feed</div>
-            <div className="feed-assign">
-              {feeds.map((f) => {
+            <div className="ctl-label">Interest</div>
+            <div className="interest-assign">
+              {interests.map((f) => {
                 const Ic = feedIcon(f.icon);
                 return (
                   <button
                     key={f.slug}
-                    className={`fa-chip ${feedSlug === f.slug ? "on" : ""}`}
-                    onClick={() => chooseFeed(f.slug)}
+                    className={`fa-chip ${interestSlug === f.slug ? "on" : ""}`}
+                    onClick={() => chooseInterest(f.slug)}
                   >
                     {Ic && <Ic size={13} strokeWidth={1.75} aria-hidden />}
                     {f.name}

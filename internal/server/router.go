@@ -42,25 +42,25 @@ func NewRouter(h *handler.Handler, authMiddleware func(http.Handler) http.Handle
 
 			r.Get("/users/me", h.GetMe)
 
-			r.Get("/feeds", h.ListFeeds)
-			r.Post("/feeds", h.CreateFeed)
-			r.Patch("/feeds/{id}", h.UpdateFeed)
-			r.Put("/feeds/{id}/sources", h.SetFeedSources)
-			r.Get("/feeds/{id}/items", h.FeedItems)
+			r.Get("/interests", h.ListInterests)
+			r.Post("/interests", h.CreateInterest)
+			r.Patch("/interests/{id}", h.UpdateInterest)
+			r.Put("/interests/{id}/sources", h.SetInterestSources)
+			r.Get("/interests/{id}/items", h.InterestItems)
 
-			// Mixes (#86): a user-created overlay grouping feeds (many-to-many).
+			// Mixes (#86): a user-created overlay grouping interests (many-to-many).
 			r.Get("/mixes", h.ListMixes)
 			r.Post("/mixes", h.CreateMix)
 			r.Get("/mixes/{id}", h.MixBrowse)
 			r.Patch("/mixes/{id}", h.UpdateMix)
 			r.Delete("/mixes/{id}", h.DeleteMix)
-			r.Put("/mixes/{id}/feeds", h.SetMixFeeds)
+			r.Put("/mixes/{id}/interests", h.SetMixInterests)
 
 			r.Get("/sources", h.ListSources)
 			r.Post("/sources", h.CreateSource)
 			r.Patch("/sources/{id}", h.UpdateSource)
 			r.Delete("/sources/{id}", h.DeleteSource)
-			r.Put("/sources/{id}/feed", h.SetSourceFeed)
+			r.Put("/sources/{id}/interest", h.SetSourceInterest)
 			r.Get("/sources/{id}/items", h.SourceItems)
 
 			r.Get("/insights", h.Insights)
@@ -81,7 +81,7 @@ func NewRouter(h *handler.Handler, authMiddleware func(http.Handler) http.Handle
 			r.Get("/sessions/current", h.CurrentSession)
 			r.Patch("/sessions/{id}", h.UpdateSession)
 			// On-demand full-text (#98): fetch + readability-extract the article body
-			// for teaser-only feeds, cached into items.content. Powers #96's actions.
+			// for teaser-only interests, cached into items.content. Powers #96's actions.
 			r.Get("/items/{id}/content", h.ItemContent)
 			r.Post("/items/{id}/event", h.ItemEvent)
 			// Dwell (#68): append-only engagement measurement, never into the ranker.

@@ -4,9 +4,9 @@ import { Reader } from "./Reader";
 import { Player } from "./Player";
 import { relTime } from "@/lib/format";
 
-// The posts section shared by the source page and feed page (#66). Lists an
+// The posts section shared by the source page and interest page (#66). Lists an
 // item set newest-first and opens each into the in-app reader/player (mirroring
-// CollectionsPage), so you can see a source/feed's actual content next to its
+// CollectionsPage), so you can see a source/interest's actual content next to its
 // settings. This is orientation, not consumption: opening here builds no session
 // and emits no engagement events.
 function contentKind(item: Item): "video" | "audio" | "read" {
