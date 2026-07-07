@@ -17,6 +17,10 @@ export interface Interest {
   icon: string; // flat glyph key (see lib/feedIcons); "" = unset
   half_life_days: number; // per-interest freshness half-life in days; 0 = global default (#17)
   diversity: number; // per-session per-source cap for this interest's sources; 0 = use source cap (#17)
+  // Default archival window for this interest's sources (#115): 0 = inherit the
+  // global default, -1 = evergreen (never archive), N = archive items older than N
+  // days. Not returned by the list endpoint yet, so treat absent as 0 (inherit).
+  archive_after_days?: number;
   sort: number;
   source_count?: number;
 }
@@ -53,6 +57,32 @@ export interface Source {
   unseen_count?: number;
   skip_pct?: number;
   posts_per_day?: number;
+  // Archive After (#115): 0 = inherit the interest/global default, -1 = evergreen,
+  // N = archive items older than N days. Auto-archive keywords (#118) is a
+  // comma-separated string ("a, b, c"). Neither is returned by the list endpoint
+  // yet, so treat absent archive_after_days as 0 (inherit) and keywords as "".
+  archive_after_days?: number;
+  archive_keywords?: string;
+}
+
+// Per-source transparency bundle (#116): supply, publishing rate, and the
+// engagement lifecycle for one source. GET /sources/stats returns these keyed by
+// source id. shown = presented at least once; invisible == unseen (never
+// presented); on_deck = unseen and still within the archive window; per_day is the
+// publishing rate over the observed span. skip_pct / open_pct are 0..1 over shown.
+export interface SourceStats {
+  source_id: number;
+  total: number;
+  unseen: number;
+  on_deck: number;
+  shown: number;
+  skipped: number;
+  opened: number;
+  liked: number;
+  per_day: number;
+  invisible: number;
+  skip_pct: number;
+  open_pct: number;
 }
 
 export interface Item {
@@ -378,7 +408,14 @@ export const api = {
     req<Interest>("POST", "/interests", { name, color: color ?? "" }),
   updateInterest: (
     id: number,
-    patch: { name?: string; color?: string; icon?: string; half_life_days?: number; diversity?: number },
+    patch: {
+      name?: string;
+      color?: string;
+      icon?: string;
+      half_life_days?: number;
+      diversity?: number;
+      archive_after_days?: number; // #115: 0 inherit-global, -1 evergreen, N days
+    },
   ) => req<{ ok: boolean }>("PATCH", `/interests/${id}`, patch),
   setInterestSources: (interestId: number, sourceIds: number[]) =>
     req<{ ok: boolean }>("PUT", `/interests/${interestId}/sources`, { source_ids: sourceIds }),
@@ -396,16 +433,35 @@ export const api = {
   mixBrowse: (id: number) => req<MixBrowse>("GET", `/mixes/${id}`),
 
   sources: () => req<Source[]>("GET", "/sources"),
+  // Per-source stats bundle (#116), keyed by source id. One call covers the whole
+  // library, so a page fetches it once and looks up by id.
+  sourceStats: () => req<Record<number, SourceStats>>("GET", "/sources/stats"),
   createSource: (s: { title: string; feed_url: string; kind?: string; weight?: number }) =>
     req<Source>("POST", "/sources", s),
   updateSource: (
     id: number,
-    patch: { weight_bucket?: string; state?: string; per_session_cap?: number; half_life_days?: number; title?: string },
+    patch: {
+      weight_bucket?: string;
+      state?: string;
+      per_session_cap?: number;
+      half_life_days?: number;
+      title?: string;
+      archive_after_days?: number; // #115: 0 inherit, -1 evergreen, N days
+      archive_keywords?: string; // #118: comma-separated keyword list
+    },
   ) => req<{ ok: boolean }>("PATCH", `/sources/${id}`, patch),
   deleteSource: (id: number) => req<{ ok: boolean }>("DELETE", `/sources/${id}`),
   // Set the source's one interest (#86). Empty slug clears it (interestless).
   setSourceInterest: (id: number, interestSlug: string) =>
     req<{ ok: boolean }>("PUT", `/sources/${id}/interest`, { interest_slug: interestSlug }),
+  // Clear the user's engagement state for a source (#119) - every item unread
+  // again. olderThan (RFC3339) resets only items published before it; omit to
+  // reset everything.
+  resetSourceMetadata: (id: number, olderThan?: string) =>
+    req<{ ok: boolean }>("POST", `/sources/${id}/reset`, olderThan ? { older_than: olderThan } : {}),
+  // Swap a source's feed URL and re-pull it (#119).
+  replaceSourceFeedURL: (id: number, feedUrl: string) =>
+    req<{ ok: boolean }>("PUT", `/sources/${id}/feed-url`, { feed_url: feedUrl }),
   sourceItems: (id: number) => req<Item[]>("GET", `/sources/${id}/items`),
   // --- #66 interest-mgmt-pages block (interest page recent posts) ---
   feedItems: (interestId: number) => req<Item[]>("GET", `/interests/${interestId}/items`),

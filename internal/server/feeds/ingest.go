@@ -127,6 +127,11 @@ func classify(s store.Source, e *gofeed.Item, dur int) string {
 		return "audio"
 	}
 	if s.Kind == "youtube" || hasEnclosureType(e, "video") {
+		// YouTube Shorts carry a /shorts/ URL - an exact type signal even though
+		// the RSS feed never ships a duration (#117).
+		if strings.Contains(e.Link, "/shorts/") {
+			return "short"
+		}
 		if dur > 0 && dur <= 90 {
 			return "short"
 		}
@@ -141,7 +146,7 @@ func durationSeconds(e *gofeed.Item) int {
 	}
 	// media:content duration lives in extensions
 	if m, ok := e.Extensions["media"]; ok {
-		if grp, ok := m["mix"]; ok {
+		if grp, ok := m["group"]; ok { // media:group (rename-bug fix)
 			for _, g := range grp {
 				if c, ok := g.Children["content"]; ok {
 					for _, ch := range c {
@@ -204,7 +209,7 @@ func thumbnail(e *gofeed.Item) string {
 		return e.Image.URL
 	}
 	if m, ok := e.Extensions["media"]; ok {
-		if grp, ok := m["mix"]; ok {
+		if grp, ok := m["group"]; ok { // media:group (rename-bug fix)
 			for _, g := range grp {
 				if th, ok := g.Children["thumbnail"]; ok {
 					for _, t := range th {

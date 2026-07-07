@@ -159,6 +159,13 @@ func migrate(sdb *sql.DB) error {
 	if err := ensureColumn(sdb, "sources", "archive_keywords", `ALTER TABLE sources ADD COLUMN archive_keywords TEXT NOT NULL DEFAULT ''`); err != nil {
 		return err
 	}
+	// Backfill YouTube Shorts classification from the URL (#117): items with a
+	// /shorts/ URL are shorts even though the RSS feed shipped no duration.
+	// Condition-idempotent (only touches mis-classified rows), cheap on each boot.
+	if _, err := sdb.ExecContext(context.Background(),
+		`UPDATE items SET media_type='short' WHERE url LIKE '%/shorts/%' AND media_type != 'short'`); err != nil {
+		return err
+	}
 	// Per-source freshness half-life override (#76): source override > interest > global.
 	if err := ensureColumn(sdb, "sources", "half_life_days", `ALTER TABLE sources ADD COLUMN half_life_days REAL NOT NULL DEFAULT 0`); err != nil {
 		return err
