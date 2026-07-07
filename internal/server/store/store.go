@@ -147,6 +147,13 @@ func migrate(sdb *sql.DB) error {
 	if err := ensureColumn(sdb, "interests", "diversity", `ALTER TABLE interests ADD COLUMN diversity INTEGER NOT NULL DEFAULT 0`); err != nil {
 		return err
 	}
+	// Archive After (session engine v2, #115): expiration window in days.
+	if err := ensureColumn(sdb, "interests", "archive_after_days", `ALTER TABLE interests ADD COLUMN archive_after_days INTEGER NOT NULL DEFAULT 0`); err != nil {
+		return err
+	}
+	if err := ensureColumn(sdb, "sources", "archive_after_days", `ALTER TABLE sources ADD COLUMN archive_after_days INTEGER NOT NULL DEFAULT 0`); err != nil {
+		return err
+	}
 	// Per-source freshness half-life override (#76): source override > interest > global.
 	if err := ensureColumn(sdb, "sources", "half_life_days", `ALTER TABLE sources ADD COLUMN half_life_days REAL NOT NULL DEFAULT 0`); err != nil {
 		return err
@@ -906,14 +913,15 @@ func (db *DB) ListRecentItemsByInterest(ctx context.Context, userID, interestID 
 func candidateCols() string {
 	return `i.id, i.source_id, i.url, i.title, i.summary, i.content, i.content_source, i.author, i.thumbnail_url,
 	             i.media_type, i.duration_sec, i.published_at, i.fetched_at,
-	             s.title, s.weight, s.per_session_cap, s.half_life_days,
+	             s.title, s.weight, s.per_session_cap, s.half_life_days, s.archive_after_days,
 	             (SELECT COUNT(*) FROM items i2 WHERE i2.source_id = s.id
 	                AND i2.published_at >= datetime('now', ?)) AS win_count,
 	             (SELECT COALESCE(julianday('now') - julianday(MIN(i2.published_at)), 0)
 	                FROM items i2 WHERE i2.source_id = s.id
 	                AND i2.published_at >= datetime('now', ?)) AS win_span,
 	             COALESCE((SELECT f.half_life_days FROM interests f WHERE f.id = s.interest_id), 0) AS interest_half_life,
-	             COALESCE((SELECT f.diversity FROM interests f WHERE f.id = s.interest_id), 0) AS interest_diversity`
+	             COALESCE((SELECT f.diversity FROM interests f WHERE f.id = s.interest_id), 0) AS interest_diversity,
+	             COALESCE((SELECT f.archive_after_days FROM interests f WHERE f.id = s.interest_id), 0) AS interest_archive_after`
 }
 
 // cadence-estimation + rarity constants. See cadencePerDay / rarityBoosts.
@@ -1046,8 +1054,8 @@ func scanCandidates(rows *sql.Rows, windowDays int) ([]Candidate, error) {
 		var diversity int
 		if err := rows.Scan(&c.ID, &c.SourceID, &c.URL, &c.Title, &c.Summary, &c.Content, &c.ContentSource, &c.Author, &c.ThumbnailURL,
 			&c.MediaType, &c.DurationSec, &pub, &fetched,
-			&c.SourceTitle, &c.SourceWeight, &c.PerSessionCap, &c.SourceHalfLifeDays,
-			&winCount, &winSpan, &halfLife, &diversity); err != nil {
+			&c.SourceTitle, &c.SourceWeight, &c.PerSessionCap, &c.SourceHalfLifeDays, &c.SourceArchiveAfterDays,
+			&winCount, &winSpan, &halfLife, &diversity, &c.InterestArchiveAfterDays); err != nil {
 			return nil, err
 		}
 		c.PublishedAt = parseTime(pub)

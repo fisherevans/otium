@@ -43,6 +43,11 @@ CREATE TABLE IF NOT EXISTS interests (
     -- own per_session_cap; N >= 1 caps every source in this interest to N items per
     -- session (lower N = more sources spread across the session).
     diversity   INTEGER NOT NULL DEFAULT 0,
+    -- Archive After (session engine v2, #115): the default expiration window in
+    -- days for this interest's sources. 0 = use the global default; -1 = evergreen
+    -- (never archive); N = archive articles older than N days. A source's own
+    -- archive_after_days overrides this. Replaces user-facing half-life.
+    archive_after_days INTEGER NOT NULL DEFAULT 0,
     sort        INTEGER NOT NULL DEFAULT 0,
     created_at  TEXT NOT NULL DEFAULT (datetime('now')),
     UNIQUE (user_id, slug)
@@ -81,6 +86,10 @@ CREATE TABLE IF NOT EXISTS sources (
     -- (session.freshnessHalfLifeDays). Added additively via migrate() for
     -- databases created before this column existed.
     half_life_days REAL NOT NULL DEFAULT 0,
+    -- Archive After (session engine v2, #115): expiration window in days. 0 =
+    -- inherit the interest default; -1 = evergreen (never archive); N = archive
+    -- articles older than N days. Source override > interest default > global.
+    archive_after_days INTEGER NOT NULL DEFAULT 0,
     added_at      TEXT NOT NULL DEFAULT (datetime('now')),
     last_fetch_at TEXT,
     fetch_error   TEXT NOT NULL DEFAULT '',

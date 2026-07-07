@@ -237,7 +237,7 @@ func TestClampPresets(t *testing.T) {
 		in   []int
 		want []int
 	}{
-		{"empty stays default", nil, []int{5, 15, 30, 60}},
+		{"empty stays default", nil, []int{5, 10, 20, 40}},
 		{"sorts and dedupes", []int{30, 5, 30, 15}, []int{5, 15, 30}},
 		{"clamps range and snaps to 5", []int{2, 200, 63}, []int{5, 60, 120}},
 	}

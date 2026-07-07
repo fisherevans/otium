@@ -199,6 +199,12 @@ type Candidate struct {
 	// InterestHalfLifeDays / InterestDiversity are the item's interest ranker overrides (#17),
 	// resolved from the source's one interest (#86). 0 means "use the global default"
 	// (freshness half-life) / "use the source's own per-session cap".
+	// DEPRECATED by session engine v2 (#115): the allocator no longer reads these.
 	InterestHalfLifeDays float64
 	InterestDiversity    int
+	// Archive After (session engine v2, #115): eligibility expiration window in
+	// days. Source override > interest default > global. 0 = inherit up the chain;
+	// -1 = evergreen (never archive); N = archive articles older than N days.
+	SourceArchiveAfterDays   int
+	InterestArchiveAfterDays int
 }
