@@ -11,6 +11,23 @@ follows the nottingham-cloud app contract (own repo, GHCR images, semver-tag
 release, deploy pinned from nottingham-cloud). It is **not** the ops repo - deploy
 manifests and the managed-repos registry live in nottingham-cloud.
 
+## Domain vocabulary (#111)
+
+- **source** - one content origin: an RSS feed, a YouTube channel, a podcast. Has
+  a `feed_url` (its RSS URL - "feed" stays here, it's genuinely RSS).
+- **interest** - a saved group of sources ("Comedy", "Local News"). A source
+  belongs to one interest (or none). *Was called `feed`.*
+- **mix** - a saved group of interests, many-to-many (an interest can be in
+  0..many mixes). The session builder targets interests and/or mixes. *Was called
+  `group`.*
+- **insights** - the read-only feed-composition/share view (`/api/v1/insights`,
+  InsightsPage, already UI-labeled "Insights"). *Was internally called `mix`.*
+- **collection** - a saved list of *items* (Saved / Watch Later / Liked).
+  Unchanged - a different axis (groups items, not sources).
+
+Only the RSS ingest keeps "feed": `internal/server/feeds`, `gofeed`, `feed_url`,
+and the frozen legacy `feed_sources` table (its column stays `feed_id`).
+
 ## Architecture
 
 Two processes, one repo:
