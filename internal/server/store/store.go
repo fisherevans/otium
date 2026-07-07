@@ -915,6 +915,44 @@ func (db *DB) ListRecentItemsBySource(ctx context.Context, userID, sourceID int6
 	return scanItems(rows)
 }
 
+// ItemWithState is an item plus the user's current engagement state on it, for the
+// source's article surfaces (#120): "" = unseen; else surfaced | opened | liked |
+// skipped | saved | dismissed. The displayed status (unread / presented / read /
+// skipped / auto-archived) is derived from this + eligibility client-side.
+type ItemWithState struct {
+	Item
+	State string `json:"state"`
+}
+
+// ListSourceItemsWithState returns a source's items newest-first, each carrying the
+// user's current item_state (empty = unseen). Backs the Source page article preview
+// and the View Articles page (#120).
+func (db *DB) ListSourceItemsWithState(ctx context.Context, userID, sourceID int64, limit int) ([]ItemWithState, error) {
+	rows, err := db.sql.QueryContext(ctx,
+		`SELECT i.id, i.source_id, i.url, i.title, i.summary, i.content, i.content_source, i.author, i.thumbnail_url,
+		        i.media_type, i.duration_sec, i.published_at, i.fetched_at, COALESCE(st.state,'')
+		 FROM items i
+		 LEFT JOIN item_state st ON st.item_id = i.id AND st.user_id = ?
+		 WHERE i.source_id = ? ORDER BY i.published_at DESC LIMIT ?`, userID, sourceID, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []ItemWithState
+	for rows.Next() {
+		var it ItemWithState
+		var pub, fetched string
+		if err := rows.Scan(&it.ID, &it.SourceID, &it.URL, &it.Title, &it.Summary, &it.Content, &it.ContentSource,
+			&it.Author, &it.ThumbnailURL, &it.MediaType, &it.DurationSec, &pub, &fetched, &it.State); err != nil {
+			return nil, err
+		}
+		it.PublishedAt = parseTime(pub)
+		it.FetchedAt = parseTime(fetched)
+		out = append(out, it)
+	}
+	return out, rows.Err()
+}
+
 // ListRecentItemsByInterest returns recent items across every source in a interest
 // (by id), newest first. Backs the interest page's "recent posts" section (#66):
 // one query instead of fanning sourceItems per source. Read-only orientation -

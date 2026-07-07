@@ -394,10 +394,13 @@ func (h *Handler) SourceItems(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	limit := intParam(r, "limit", 50)
-	items, err := h.db.ListRecentItemsBySource(r.Context(), uid, id, limit)
+	items, err := h.db.ListSourceItemsWithState(r.Context(), uid, id, limit)
 	if err != nil {
 		serverError(w, h.log, "source items", err)
 		return
+	}
+	if items == nil {
+		items = []store.ItemWithState{}
 	}
 	writeJSON(w, http.StatusOK, items)
 }

@@ -103,6 +103,14 @@ export interface Item {
   fetched_at: string;
 }
 
+// SourceItem is an item plus the user's current engagement state on it (#120):
+// "" = unseen; else surfaced | opened | liked | skipped | saved | dismissed. The
+// source's article surfaces derive the displayed status (unread / presented / read
+// / skipped / auto-archived) from this + eligibility.
+export interface SourceItem extends Item {
+  state: string;
+}
+
 // On-demand full-text (#98/#99): the /items/{id}/content response. content is the
 // best reader body ("" when external); content_source is the resolved provenance
 // (rss | fetched | external). `render` is the explicit engagement state #96
@@ -462,7 +470,7 @@ export const api = {
   // Swap a source's feed URL and re-pull it (#119).
   replaceSourceFeedURL: (id: number, feedUrl: string) =>
     req<{ ok: boolean }>("PUT", `/sources/${id}/feed-url`, { feed_url: feedUrl }),
-  sourceItems: (id: number) => req<Item[]>("GET", `/sources/${id}/items`),
+  sourceItems: (id: number) => req<SourceItem[]>("GET", `/sources/${id}/items`),
   // --- #66 interest-mgmt-pages block (interest page recent posts) ---
   feedItems: (interestId: number) => req<Item[]>("GET", `/interests/${interestId}/items`),
   // --- end #66 block ---

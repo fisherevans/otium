@@ -1,25 +1,46 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { api, type Interest, type Item, type Source, type SourceStats } from "@/api/client";
-import { bucketOf, type Bucket } from "@/lib/weight";
-import { archiveLabel } from "@/lib/archive";
-import { relTime } from "@/lib/format";
-import { feedIcon } from "@/lib/feedIcons";
-import { WeightControl } from "@/components/WeightControl";
-import { BottomSheet } from "@/components/BottomSheet";
-import { ArchivePicker } from "@/components/ArchivePicker";
+import { Pencil, Settings, Copy, Check } from "lucide-react";
+import { api, type Interest, type Source, type SourceItem, type SourceStats } from "@/api/client";
+import { bucketOf, BUCKETS, WFREQ, WHINT, WLEVEL, type Bucket } from "@/lib/weight";
+import { ARCHIVE_PRESETS } from "@/lib/archive";
+import { REP_PROSE, REP_LABEL, compareToAverage } from "@/lib/represent";
+import { relDate } from "@/lib/format";
+import { Dialog } from "@/components/Dialog";
 
-// The Source page (session engine v2). A dense single scroll: the transparency
-// stats block up top (plain English), the feed controls (archival period,
-// representation, auto-archive keywords, interest), a short article preview that
-// links to the full list, and the destructive/utility actions. Reached from the
-// interest page; management for one source lives entirely here.
+// The Source page (session engine v2, mockup #4). A dense single scroll of
+// read-only, plain-English transparency: publishing rate + engagement stats up
+// top, then the feed controls (archival, representation, keywords) shown as prose
+// and edited in a centered dialog, an article preview with per-item status, and
+// the destructive/utility actions. Nothing is edited inline - editing is always a
+// deliberate dialog.
+
 function parseKeywords(s?: string): string[] {
-  return (s ?? "")
-    .split(",")
-    .map((k) => k.trim())
-    .filter(Boolean);
+  return (s ?? "").split(",").map((k) => k.trim()).filter(Boolean);
 }
+function daysLabel(n: number): string {
+  if (n === -1) return "never";
+  if (n === 1) return "1 day";
+  if (n === 3) return "3 days";
+  if (n === 7) return "1 week";
+  if (n === 21) return "3 weeks";
+  if (n === 30) return "1 month";
+  return `${n} days`;
+}
+function pct(n: number): string {
+  return `${Math.round(n * 100)}%`;
+}
+function Dots({ level }: { level: number }) {
+  return (
+    <span className="rep-dots" aria-hidden>
+      {[1, 2, 3, 4, 5].map((i) => (
+        <span key={i} className={`rep-dot ${i <= level ? "on" : ""}`} />
+      ))}
+    </span>
+  );
+}
+
+const GLOBAL_ARCHIVE = 21;
 
 export default function SourcePage() {
   const nav = useNavigate();
@@ -29,34 +50,28 @@ export default function SourcePage() {
   const [sources, setSources] = useState<Source[] | null>(null);
   const [interests, setInterests] = useState<Interest[]>([]);
   const [stats, setStats] = useState<Record<number, SourceStats>>({});
-  const [posts, setPosts] = useState<Item[] | null>(null);
+  const [posts, setPosts] = useState<SourceItem[] | null>(null);
   const [err, setErr] = useState("");
   const [toast, setToast] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
 
-  // Local, optimistic control state (the list endpoint doesn't echo archival fields).
-  const [bucket, setBucket] = useState<Bucket>("normal");
-  const [archiveDays, setArchiveDays] = useState(0);
-  const [keywords, setKeywords] = useState<string[]>([]);
-  const [interestSlug, setInterestSlug] = useState("");
-
-  // modals / confirms
-  const [archiveOpen, setArchiveOpen] = useState(false);
-  const [kwOpen, setKwOpen] = useState(false);
+  // dialogs
+  const [renameOpen, setRenameOpen] = useState(false);
+  const [renameDraft, setRenameDraft] = useState("");
+  const [controlsOpen, setControlsOpen] = useState(false);
   const [kwDraft, setKwDraft] = useState("");
+  const [interestOpen, setInterestOpen] = useState(false);
+  const [resetOpen, setResetOpen] = useState(false);
   const [urlOpen, setUrlOpen] = useState(false);
   const [urlDraft, setUrlDraft] = useState("");
-  const [confirmDel, setConfirmDel] = useState(false);
-  const [confirmReset, setConfirmReset] = useState(false);
-  const [cloneOpen, setCloneOpen] = useState(false);
-  const [cloneUrl, setCloneUrl] = useState("");
-  const [cloneTitle, setCloneTitle] = useState("");
-  const [cloning, setCloning] = useState(false);
+  const [delOpen, setDelOpen] = useState(false);
 
-  const source = useMemo(
-    () => (sources ? sources.find((s) => s.id === sourceId) ?? null : null),
-    [sources, sourceId],
-  );
+  const source = useMemo(() => (sources ? sources.find((s) => s.id === sourceId) ?? null : null), [sources, sourceId]);
   const st = stats[sourceId];
+  const interest = useMemo(
+    () => interests.find((i) => i.slug === (source?.interest_slug ?? "")) ?? null,
+    [interests, source?.interest_slug],
+  );
 
   function reload() {
     api.sources().then(setSources).catch((e) => setErr(String(e.message ?? e)));
@@ -70,324 +85,382 @@ export default function SourcePage() {
     api.interests().then(setInterests).catch(() => {});
   }, []);
   useEffect(() => {
-    if (!sourceId) return;
-    api.sourceItems(sourceId).then(setPosts).catch(() => {});
+    if (sourceId) api.sourceItems(sourceId).then(setPosts).catch(() => {});
   }, [sourceId]);
-
-  useEffect(() => {
-    if (!source) return;
-    setBucket(bucketOf(source.weight));
-    setArchiveDays(source.archive_after_days ?? 0);
-    setKeywords(parseKeywords(source.archive_keywords));
-    setInterestSlug(source.interest_slug ?? "");
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [source?.id]);
 
   function showToast(msg: string) {
     setToast(msg);
-    window.setTimeout(() => setToast((t) => (t === msg ? null : t)), 3500);
+    window.setTimeout(() => setToast((t) => (t === msg ? null : t)), 3200);
   }
 
+  const bucket: Bucket = source ? bucketOf(source.weight) : "normal";
+  const keywords = parseKeywords(source?.archive_keywords);
+
+  // Resolve Archive-After: source override > interest default > global (21d).
+  const srcDays = source?.archive_after_days ?? 0;
+  const intDays = interest?.archive_after_days ?? 0;
+  const resolvedDays = srcDays !== 0 ? srcDays : intDays !== 0 ? intDays : GLOBAL_ARCHIVE;
+
+  // Averages across every source, for the "vs your average source" sublines.
+  const all = Object.values(stats);
+  const avg = (sel: (s: SourceStats) => number) => (all.length ? all.reduce((a, s) => a + sel(s), 0) / all.length : 0);
+  const avgPerDay = avg((s) => s.per_day);
+  const avgShown = avg((s) => s.shown);
+  const avgSkip = avg((s) => s.skip_pct);
+  const avgCov = avg((s) => (s.total ? s.shown / s.total : 0));
+  const coverage = st && st.total ? st.shown / st.total : 0;
+
+  function eligible(it: SourceItem): boolean {
+    const hay = (it.title + " " + it.summary).toLowerCase();
+    if (keywords.some((k) => k && hay.includes(k.toLowerCase()))) return false;
+    if (resolvedDays === -1) return true;
+    const ageDays = (Date.now() - new Date(it.published_at).getTime()) / 86400000;
+    return ageDays <= resolvedDays;
+  }
+  function statusOf(it: SourceItem): { label: string; cls: string } {
+    switch (it.state) {
+      case "opened":
+        return { label: "read", cls: "st-read" };
+      case "liked":
+        return { label: "liked", cls: "st-read" };
+      case "skipped":
+        return { label: "skipped", cls: "st-skip" };
+      case "surfaced":
+        return { label: "presented", cls: "st-pres" };
+      case "saved":
+        return { label: "saved", cls: "st-pres" };
+      default:
+        return eligible(it) ? { label: "unread", cls: "st-unread" } : { label: "auto archived", cls: "st-arch" };
+    }
+  }
+
+  // handlers
+  async function saveRename() {
+    const t = renameDraft.trim();
+    if (!t) return;
+    setRenameOpen(false);
+    await api.updateSource(sourceId, { title: t }).catch(() => {});
+    reload();
+  }
   async function setWeight(b: Bucket) {
-    setBucket(b);
     await api.updateSource(sourceId, { weight_bucket: b }).catch(() => {});
     reload();
   }
   async function pickArchive(days: number) {
-    setArchiveDays(days);
     await api.updateSource(sourceId, { archive_after_days: days }).catch(() => {});
+    reload();
   }
   async function saveKeywords() {
     const list = parseKeywords(kwDraft);
-    setKeywords(list);
-    setKwOpen(false);
     await api.updateSource(sourceId, { archive_keywords: list.join(", ") }).catch(() => {});
+    reload();
   }
   async function chooseInterest(slug: string) {
-    const next = interestSlug === slug ? "" : slug;
-    setInterestSlug(next);
-    await api.setSourceInterest(sourceId, next).catch(() => {});
+    setInterestOpen(false);
+    await api.setSourceInterest(sourceId, slug).catch(() => {});
     reload();
   }
   async function resetMeta() {
-    setConfirmReset(false);
+    setResetOpen(false);
     await api.resetSourceMetadata(sourceId).catch(() => {});
     reloadStats();
-    showToast("Metadata reset - every article is unread again");
+    api.sourceItems(sourceId).then(setPosts).catch(() => {});
+    showToast("Metadata reset - every article is unread again.");
   }
   async function replaceUrl() {
     if (!urlDraft.trim()) return;
     setUrlOpen(false);
     await api.replaceSourceFeedURL(sourceId, urlDraft.trim()).catch(() => {});
     reload();
-    showToast("Feed URL replaced");
+    showToast("Feed URL replaced.");
   }
   async function del() {
     await api.deleteSource(sourceId).catch(() => {});
-    nav(interestSlug ? `/interests/${interestSlug}` : "/sources");
+    nav(source?.interest_slug ? `/interests/${source.interest_slug}` : "/sources");
   }
-  async function clone() {
-    if (!cloneUrl.trim() || cloning) return;
-    setCloning(true);
-    try {
-      const created = await api.createSource({
-        title: cloneTitle.trim() || cloneUrl,
-        feed_url: cloneUrl.trim(),
-        kind: source?.kind,
-        weight: source?.weight,
-      });
-      // Carry over this source's settings.
-      await api.updateSource(created.id, {
-        weight_bucket: bucket,
-        archive_after_days: archiveDays,
-        archive_keywords: keywords.join(", "),
-      }).catch(() => {});
-      if (interestSlug) await api.setSourceInterest(created.id, interestSlug).catch(() => {});
-      setCloneOpen(false);
-      setCloneUrl("");
-      setCloneTitle("");
-      nav(`/sources/${created.id}`);
-    } catch (e: any) {
-      setErr(String(e.message ?? e));
-    } finally {
-      setCloning(false);
-    }
+  function copyUrl() {
+    if (source?.feed_url) navigator.clipboard?.writeText(source.feed_url).catch(() => {});
+    setCopied(true);
+    window.setTimeout(() => setCopied(false), 1500);
   }
-
-  const back = (
-    <button className="lib-back" onClick={() => nav(interestSlug ? `/interests/${interestSlug}` : "/sources")}>
-      <span aria-hidden>←</span> {interestSlug || "Library"}
-    </button>
-  );
 
   if (sources && !source) {
     return (
-      <div>
-        {back}
-        <p className="sub" style={{ padding: "16px 0" }}>That source isn't here anymore.</p>
+      <div className="mgmt">
+        <button className="mgmt-back" onClick={() => nav("/sources")}>
+          ← Library
+        </button>
+        <p className="lib2-empty">That source is gone.</p>
       </div>
     );
   }
-  if (!source) {
-    return (
-      <div>
-        {back}
-        {err ? <p className="err">{err}</p> : <p className="sub">Loading…</p>}
-      </div>
-    );
-  }
+  if (!source) return <p className="lib2-subtitle">Loading…</p>;
 
-  const pd = st?.per_day ?? source.posts_per_day ?? 0;
-  const skip = Math.round((st?.skip_pct ?? 0) * 100);
-  const preview = (posts ?? []).slice(0, 4);
+  const backTo = source.interest_slug ? `/interests/${source.interest_slug}` : "/sources";
+  const backLabel = interest?.name ?? "Library";
 
   return (
-    <div>
-      {back}
-      <div className="lib-topbar">
-        <h1 className="display">{source.title}</h1>
-      </div>
-
-      {/* Stats block - plain English transparency. */}
-      <div className="stat-block">
-        <p className="stat-lead">
-          {source.title} publishes about <b>{pd < 1 ? pd.toFixed(1) : Math.round(pd)}</b>{" "}
-          {pd === 1 ? "article" : "articles"} a day.
-        </p>
-        {st && (
-          <ul className="stat-list">
-            <li><b>{st.shown}</b> presented to you</li>
-            <li>you skipped <b>{skip}%</b> of those</li>
-            <li><b>{st.invisible}</b> never shown</li>
-            <li><b>{st.on_deck}</b> on deck now</li>
-          </ul>
-        )}
-      </div>
-      {source.fetch_error && <p className="err">Fetch error: {source.fetch_error}</p>}
-
-      {/* Feed controls. */}
-      <div className="page-section">
-        <div className="ctl-label">Archive after</div>
-        <button className="ctl-pickrow" onClick={() => setArchiveOpen(true)}>
-          <span className="ctl-pickval">{archiveLabel(archiveDays, "source").replace(/^its /, "")}</span>
-          <span className="sheet-chev" aria-hidden>▸</span>
+    <div className="mgmt src-page">
+      <button className="mgmt-back" onClick={() => nav(backTo)}>
+        ← {backLabel}
+      </button>
+      <div className="mgmt-kicker">Manage Source</div>
+      <div className="mgmt-titlerow">
+        <h1 className="mgmt-title">{source.title}</h1>
+        <button className="mgmt-edit" onClick={() => (setRenameDraft(source.title), setRenameOpen(true))}>
+          <Pencil size={13} strokeWidth={1.9} aria-hidden /> rename
         </button>
-        <p className="caphint">
-          {archiveDays === 0
-            ? "Follows this source's interest, then the global default."
-            : archiveDays === -1
-            ? "Evergreen - articles never expire from sessions."
-            : "Overrides the interest default for this source."}
+      </div>
+
+      <div className="src-rss">
+        <span className="src-rss-k">RSS Feed:</span>
+        <code className="src-rss-url">{source.feed_url}</code>
+        <button className="src-rss-copy" onClick={copyUrl} aria-label="Copy URL">
+          {copied ? <Check size={14} strokeWidth={2} /> : <Copy size={14} strokeWidth={1.75} />}
+        </button>
+      </div>
+      {err && <p className="err">{err}</p>}
+
+      {/* --- transparency stats --- */}
+      <div className="src-stats">
+        <p className="src-stat">
+          {source.title} publishes about <b>{st?.per_day ?? 0}</b> {(st?.per_day ?? 0) === 1 ? "article" : "articles"} a
+          day.
+        </p>
+        <p className="src-stat-sub">That's {compareToAverage(st?.per_day ?? 0, avgPerDay, "more content", "less content")}.</p>
+
+        <p className="src-stat">
+          <b>{st?.shown ?? 0}</b> {(st?.shown ?? 0) === 1 ? "article has" : "articles have"} been presented to you.
+        </p>
+        <p className="src-stat-sub">
+          That's {compareToAverage(st?.shown ?? 0, avgShown, "more representation", "less representation")}.
         </p>
 
-        <div className="ctl-label">Representation</div>
-        <WeightControl value={bucket} onChange={setWeight} />
+        <p className="src-stat">
+          You skipped <b>{pct(st?.skip_pct ?? 0)}</b> of those presented articles.
+        </p>
+        <p className="src-stat-sub">That rate is {compareToAverage(st?.skip_pct ?? 0, avgSkip, "higher", "lower")}.</p>
 
-        <div className="ctl-label">Auto-archive keywords</div>
-        {keywords.length === 0 ? (
-          <p className="caphint" style={{ margin: "2px 0 8px" }}>
-            None. Articles whose title matches a keyword are archived on arrival.
-          </p>
-        ) : (
-          <div className="kw-chips">
-            {keywords.map((k) => (
-              <span className="kw-chip" key={k}>{k}</span>
-            ))}
-          </div>
-        )}
-        <button
-          className="ctl-textbtn"
-          onClick={() => {
-            setKwDraft(keywords.join(", "));
-            setKwOpen(true);
-          }}
-        >
-          {keywords.length ? "Edit keywords" : "Add keywords"}
-        </button>
+        <p className="src-stat">
+          You've seen <b>{pct(coverage)}</b> of everything {source.title} has published.
+        </p>
+        <p className="src-stat-sub">That rate is {compareToAverage(coverage, avgCov, "higher", "lower")}.</p>
 
-        {interests.length > 0 && (
-          <>
-            <div className="ctl-label">Interest</div>
-            <div className="interest-assign">
-              {interests.map((f) => {
-                const Ic = feedIcon(f.icon);
-                return (
-                  <button
-                    key={f.slug}
-                    className={`fa-chip ${interestSlug === f.slug ? "on" : ""}`}
-                    onClick={() => chooseInterest(f.slug)}
-                  >
-                    {Ic && <Ic size={13} strokeWidth={1.75} aria-hidden />}
-                    {f.name}
-                  </button>
-                );
-              })}
-            </div>
-            <p className="caphint">
-              A source belongs to one interest. Tap a interest to move it{interestSlug ? "; tap the current one to clear it" : ""}.
-            </p>
-          </>
-        )}
+        <p className="src-stat">
+          There {(st?.on_deck ?? 0) === 1 ? "is" : "are"} <b>{st?.on_deck ?? 0}</b> unread{" "}
+          {(st?.on_deck ?? 0) === 1 ? "article" : "articles"} on deck from {source.title}.
+        </p>
       </div>
 
-      {/* Articles preview. */}
-      <div className="page-section">
-        <div className="lib-controls" style={{ marginBottom: 8 }}>
-          <span className="lib-lbl">Recent articles</span>
-          <button className="lib-fsbtn" onClick={() => nav(`/sources/${sourceId}/articles`)}>
-            View all
-          </button>
+      {/* --- feed controls (read-only, edited in a dialog) --- */}
+      <div className="mgmt-sechead">
+        <span className="mgmt-seclabel">Feed Controls</span>
+        <button className="mgmt-edit" onClick={() => (setKwDraft(keywords.join(", ")), setControlsOpen(true))}>
+          <Settings size={13} strokeWidth={1.9} aria-hidden /> edit
+        </button>
+      </div>
+      <div className="fc">
+        <p className="fc-line">
+          Articles are automatically <b>{resolvedDays === -1 ? "never archived" : `archived after ${daysLabel(resolvedDays)}`}</b>.
+        </p>
+        <p className="fc-sub">
+          {srcDays !== 0
+            ? "Set for this source."
+            : `Inherited from the ${interest?.name ?? "global"} default.`}
+        </p>
+
+        <p className="fc-line">
+          {source.title} is <b>{REP_PROSE[bucket]}</b>.
+        </p>
+        <div className="fc-rep">
+          <Dots level={WLEVEL[bucket]} />
+          <span className="fc-rep-label">{REP_LABEL[bucket]}</span>
         </div>
-        {preview.length === 0 ? (
-          <p className="sub" style={{ padding: "6px 0" }}>No articles fetched yet.</p>
+
+        {keywords.length > 0 ? (
+          <>
+            <p className="fc-line">Articles whose title matches any of these keywords are archived on arrival:</p>
+            <div className="fc-chips">
+              {keywords.map((k) => (
+                <span className="fc-chip" key={k}>
+                  {k}
+                </span>
+              ))}
+            </div>
+          </>
         ) : (
-          preview.map((it) => (
-            <div className="lib-row" key={it.id}>
-              <div className="lib-head" onClick={() => nav(`/sources/${sourceId}/articles`)}>
-                <div className="nm">
-                  <b>{it.title}</b>
-                  <span>{it.media_type}{it.published_at ? ` · ${relTime(it.published_at)}` : ""}</span>
+          <p className="fc-sub">No auto-archive keywords set.</p>
+        )}
+      </div>
+
+      {/* --- interest (read-only + change) --- */}
+      <div className="mgmt-sechead">
+        <span className="mgmt-seclabel">Interest</span>
+      </div>
+      <p className="fc-line">
+        This source is in <b>{interest?.name ?? "no interest"}</b>.{" "}
+        <button className="mgmt-inline" onClick={() => setInterestOpen(true)}>
+          change
+        </button>
+      </p>
+
+      {/* --- articles preview --- */}
+      <div className="mgmt-sechead">
+        <span className="mgmt-seclabel">Articles</span>
+        <button className="mgmt-edit" onClick={() => nav(`/sources/${sourceId}/articles`)}>
+          view all
+        </button>
+      </div>
+      <div className="art-list">
+        {posts === null ? (
+          <p className="lib2-subtitle">Loading…</p>
+        ) : posts.length === 0 ? (
+          <p className="fc-sub">No articles yet.</p>
+        ) : (
+          posts.slice(0, 4).map((it) => {
+            const s = statusOf(it);
+            return (
+              <div className={`art-row ${s.cls === "st-unread" ? "fresh" : ""}`} key={it.id}>
+                <div className="art-main">
+                  <span className="art-title">{it.title}</span>
+                  <span className={`art-badge ${s.cls}`}>{s.label}</span>
                 </div>
-                <span className="chev">▸</span>
+                <span className="art-date">{relDate(it.published_at)}</span>
               </div>
-            </div>
-          ))
+            );
+          })
+        )}
+        {posts && posts.length > 4 && (
+          <button className="art-more" onClick={() => nav(`/sources/${sourceId}/articles`)}>
+            see more →
+          </button>
         )}
       </div>
 
-      {/* Actions. */}
-      <div className="page-section">
-        <div className="ctl-label">Actions</div>
-        {confirmReset ? (
-          <div className="confirm">
-            Reset your engagement metadata for {source.title}? Every article becomes unread again.
-            <div className="lib-actions">
-              <button onClick={() => setConfirmReset(false)}>Cancel</button>
-              <button onClick={resetMeta}>Reset</button>
-            </div>
-          </div>
-        ) : confirmDel ? (
-          <div className="confirm">
-            Delete {source.title} for good? This can't be undone.
-            <div className="lib-actions">
-              <button onClick={() => setConfirmDel(false)}>Cancel</button>
-              <button onClick={del}>Delete</button>
-            </div>
-          </div>
-        ) : (
-          <>
-            <div className="lib-actions">
-              <button onClick={() => setConfirmReset(true)}>Reset metadata</button>
-              <button onClick={() => { setUrlDraft(source.feed_url); setUrlOpen(true); }}>Replace URL</button>
-            </div>
-            <div className="lib-actions">
-              <button onClick={() => { setCloneTitle(""); setCloneUrl(""); setCloneOpen(true); }}>
-                New source like this
-              </button>
-              <button onClick={() => setConfirmDel(true)}>Delete</button>
-            </div>
-            {source.homepage_url && (
-              <div className="lib-actions">
-                <button onClick={() => window.open(source.homepage_url, "_blank", "noopener")}>Visit site</button>
-              </div>
-            )}
-          </>
-        )}
+      {/* --- actions --- */}
+      <div className="mgmt-sechead">
+        <span className="mgmt-seclabel">Actions</span>
+      </div>
+      <div className="act-list">
+        <button className="act-item" onClick={() => setResetOpen(true)}>
+          Reset article metadata
+        </button>
+        <button className="act-item" onClick={() => (setUrlDraft(source.feed_url), setUrlOpen(true))}>
+          Replace RSS feed URL
+        </button>
+        <button className="act-item danger" onClick={() => setDelOpen(true)}>
+          Delete source
+        </button>
       </div>
 
-      {/* --- modals --- */}
-      <ArchivePicker
-        open={archiveOpen}
-        onClose={() => setArchiveOpen(false)}
-        value={archiveDays}
-        scope="source"
-        onPick={pickArchive}
-      />
+      {toast && <div className="mgmt-toast">{toast}</div>}
 
-      <BottomSheet open={kwOpen} onClose={() => setKwOpen(false)} kicker="Auto-archive keywords">
-        <div className="sheet-title">Keywords for {source.title}</div>
-        <div className="lib-add">
-          <input
-            className="field"
-            placeholder="e.g. sponsored, giveaway, live"
-            value={kwDraft}
-            autoFocus
-            onChange={(e) => setKwDraft(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && saveKeywords()}
-          />
-          <button className="btn" onClick={saveKeywords}>Save keywords</button>
-        </div>
-        <p className="caphint">Comma-separated. An article whose title contains any keyword is archived when it arrives.</p>
-      </BottomSheet>
-
-      <BottomSheet open={urlOpen} onClose={() => setUrlOpen(false)} kicker="Replace feed URL">
-        <div className="sheet-title">Replace the RSS URL</div>
-        <div className="lib-add">
-          <input className="field" value={urlDraft} autoFocus onChange={(e) => setUrlDraft(e.target.value)} />
-          <button className="btn" onClick={replaceUrl} disabled={!urlDraft.trim()}>Replace &amp; re-fetch</button>
-        </div>
-        <p className="caphint">Swaps the feed this source pulls from and re-fetches it once. Its history stays.</p>
-      </BottomSheet>
-
-      <BottomSheet open={cloneOpen} onClose={() => setCloneOpen(false)} kicker="New source like this">
-        <div className="sheet-title">Create a source based on {source.title}</div>
-        <div className="lib-add">
-          <input className="field" placeholder="Feed URL (RSS / Atom / YouTube)" value={cloneUrl} onChange={(e) => setCloneUrl(e.target.value)} />
-          <input className="field" placeholder="Title (optional)" value={cloneTitle} onChange={(e) => setCloneTitle(e.target.value)} />
-          <button className="btn" onClick={clone} disabled={cloning || !cloneUrl.trim()}>
-            {cloning ? "Creating…" : "Create source"}
+      {/* --- dialogs --- */}
+      <Dialog open={renameOpen} onClose={() => setRenameOpen(false)} kicker="Rename source">
+        <input className="field" value={renameDraft} autoFocus onChange={(e) => setRenameDraft(e.target.value)} onKeyDown={(e) => e.key === "Enter" && saveRename()} />
+        <div className="dlg-actions">
+          <button className="btn" onClick={saveRename} disabled={!renameDraft.trim()}>
+            Save
           </button>
         </div>
-        <p className="caphint">
-          Copies this source's representation, archival period, keywords, and interest onto a new feed URL.
-        </p>
-      </BottomSheet>
+      </Dialog>
 
-      {toast && (
-        <div className="toast">
-          <span>{toast}</span>
+      <Dialog open={controlsOpen} onClose={() => setControlsOpen(false)} kicker="Feed controls">
+        <div className="dlg-sub">Representation</div>
+        <div className="dlg-opts">
+          {BUCKETS.slice().reverse().map((b) => (
+            <button key={b} className={`dlg-opt ${bucket === b ? "on" : ""}`} onClick={() => setWeight(b)}>
+              <span className="dlg-radio" aria-hidden />
+              <span className="dlg-name">{WFREQ[b]}</span>
+              <span className="dlg-sub">{WHINT[b]}</span>
+            </button>
+          ))}
         </div>
-      )}
+        <div className="dlg-sub">Archive after</div>
+        <div className="dlg-opts">
+          <button className={`dlg-opt ${srcDays === 0 ? "on" : ""}`} onClick={() => pickArchive(0)}>
+            <span className="dlg-radio" aria-hidden />
+            <span className="dlg-name">Interest's default</span>
+            <span className="dlg-sub">{interest?.name ?? "global"}</span>
+          </button>
+          {ARCHIVE_PRESETS.map((p) => (
+            <button key={p.days} className={`dlg-opt ${srcDays === p.days ? "on" : ""}`} onClick={() => pickArchive(p.days)}>
+              <span className="dlg-radio" aria-hidden />
+              <span className="dlg-name">{p.label}</span>
+            </button>
+          ))}
+        </div>
+        <div className="dlg-sub">Auto-archive keywords</div>
+        <input
+          className="field"
+          placeholder="comma, separated, keywords"
+          value={kwDraft}
+          onChange={(e) => setKwDraft(e.target.value)}
+        />
+        <p className="caphint">An article whose title contains any of these is archived on arrival.</p>
+        <div className="dlg-actions">
+          <button className="btn" onClick={() => (saveKeywords(), setControlsOpen(false))}>
+            Done
+          </button>
+        </div>
+      </Dialog>
+
+      <Dialog open={interestOpen} onClose={() => setInterestOpen(false)} kicker="Move to interest">
+        <div className="dlg-opts">
+          {interests.map((i) => (
+            <button key={i.slug} className={`dlg-opt ${source.interest_slug === i.slug ? "on" : ""}`} onClick={() => chooseInterest(i.slug)}>
+              <span className="dlg-radio" aria-hidden />
+              <span className="dlg-name">{i.name}</span>
+            </button>
+          ))}
+          <button className={`dlg-opt ${!source.interest_slug ? "on" : ""}`} onClick={() => chooseInterest("")}>
+            <span className="dlg-radio" aria-hidden />
+            <span className="dlg-name">No interest</span>
+          </button>
+        </div>
+      </Dialog>
+
+      <Dialog open={resetOpen} onClose={() => setResetOpen(false)} kicker="Reset article metadata">
+        <p className="dlg-copy">
+          Marks every article from {source.title} unread again and clears its engagement (presented, skipped, read). The
+          articles themselves are kept.
+        </p>
+        <div className="dlg-actions">
+          <button className="btn ghost" onClick={() => setResetOpen(false)}>
+            Cancel
+          </button>
+          <button className="btn" onClick={resetMeta}>
+            Reset
+          </button>
+        </div>
+      </Dialog>
+
+      <Dialog open={urlOpen} onClose={() => setUrlOpen(false)} kicker="Replace RSS feed URL">
+        <p className="dlg-copy">Swap the feed URL, keeping this source's articles and settings.</p>
+        <input className="field" value={urlDraft} autoFocus onChange={(e) => setUrlDraft(e.target.value)} />
+        <div className="dlg-actions">
+          <button className="btn ghost" onClick={() => setUrlOpen(false)}>
+            Cancel
+          </button>
+          <button className="btn" onClick={replaceUrl} disabled={!urlDraft.trim()}>
+            Replace
+          </button>
+        </div>
+      </Dialog>
+
+      <Dialog open={delOpen} onClose={() => setDelOpen(false)} kicker="Delete source">
+        <p className="dlg-copy">
+          Permanently remove {source.title} and all of its stored articles. This can't be undone.
+        </p>
+        <div className="dlg-actions">
+          <button className="btn ghost" onClick={() => setDelOpen(false)}>
+            Cancel
+          </button>
+          <button className="btn danger" onClick={del}>
+            Delete
+          </button>
+        </div>
+      </Dialog>
     </div>
   );
 }
