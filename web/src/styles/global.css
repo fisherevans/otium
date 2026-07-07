@@ -1483,6 +1483,45 @@ h1.display {
 .dlg-opt.on .dlg-name {
   font-weight: 700;
 }
+/* Custom archive sub-form (number + unit, plus a None row) inside .dlg-opts. */
+.arch-custom {
+  display: flex;
+  flex-direction: column;
+  padding: 12px 2px 0 29px;
+}
+.arch-custom-row {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+.arch-num {
+  width: 72px;
+  font-family: var(--serif);
+  font-size: 16px;
+  padding: 8px 10px;
+  border: 1px solid var(--hair);
+  border-radius: 8px;
+  background: var(--paper);
+  color: var(--ink);
+}
+.arch-unit {
+  flex: 1;
+  font-family: var(--serif);
+  font-size: 16px;
+  padding: 8px 10px;
+  border: 1px solid var(--hair);
+  border-radius: 8px;
+  background: var(--paper);
+  color: var(--ink);
+}
+.arch-num:disabled,
+.arch-unit:disabled {
+  opacity: 0.4;
+}
+.arch-custom .dlg-opt {
+  border-bottom: 0;
+  padding: 10px 0 2px;
+}
 .dlg-sub {
   font-family: var(--grot);
   font-size: 10px;

@@ -3,9 +3,10 @@ import { useNavigate, useParams } from "react-router-dom";
 import { Pencil, Plus, Mail, Ban, EyeOff } from "lucide-react";
 import { api, type Interest, type Mix, type Source, type SourceStats } from "@/api/client";
 import { FEED_ICONS, feedIcon } from "@/lib/feedIcons";
-import { ARCHIVE_PRESETS, archiveLabel } from "@/lib/archive";
+import { archiveValue, resolveInterestArchive } from "@/lib/archive";
 import { cadencePhrase } from "@/lib/cadence";
 import { engagementBadge, type InsightKind } from "@/lib/stats";
+import { ArchiveChoice } from "@/components/ArchiveChoice";
 import { REP_LABEL } from "@/lib/represent";
 import { bucketOf, WLEVEL } from "@/lib/weight";
 import { Dialog } from "@/components/Dialog";
@@ -27,8 +28,7 @@ function Dots({ level }: { level: number }) {
 function archivalSuffix(srcDays: number): string {
   if (srcDays === 0) return "";
   if (srcDays === -1) return "EVERGREEN";
-  const preset = ARCHIVE_PRESETS.find((p) => p.days === srcDays);
-  return `${(preset?.label ?? `${srcDays} days`).toUpperCase()} ARCHIVAL`;
+  return `${archiveValue(srcDays).toUpperCase()} ARCHIVAL`;
 }
 function BadgeIcon({ kind }: { kind: InsightKind }) {
   if (kind === "open") return <Mail size={12} strokeWidth={1.9} aria-hidden />;
@@ -156,6 +156,7 @@ export default function InterestPage() {
   if (!interest) return <p className="lib2-subtitle">Loading…</p>;
 
   const Icon = feedIcon(interest.icon);
+  const intArch = resolveInterestArchive(interest.archive_after_days ?? 0);
   const memberMixes = mixes.filter((m) => memberMixIds.has(m.id));
   const mixLine =
     memberMixes.length === 0
@@ -187,9 +188,9 @@ export default function InterestPage() {
       <p className="int-prose">
         The default archival period for {interest.name} sources is{" "}
         <button className="mgmt-inline" onClick={() => setArchiveOpen(true)}>
-          {archiveLabel(interest.archive_after_days, "interest")}
+          {intArch.value}
         </button>
-        .
+        {intArch.inherited ? `, inherited from ${intArch.originLabel}.` : "."}
       </p>
 
       <div className="mgmt-sechead">
@@ -263,19 +264,7 @@ export default function InterestPage() {
 
       <Dialog open={archiveOpen} onClose={() => setArchiveOpen(false)} kicker="Default archival period">
         <p className="caphint">Sources in {interest.name} inherit this unless they set their own.</p>
-        <div className="dlg-opts">
-          <button className={`dlg-opt ${(interest.archive_after_days ?? 0) === 0 ? "on" : ""}`} onClick={() => pickArchive(0)}>
-            <span className="dlg-radio" aria-hidden />
-            <span className="dlg-name">The global default</span>
-            <span className="dlg-sub">3 weeks</span>
-          </button>
-          {ARCHIVE_PRESETS.map((p) => (
-            <button key={p.days} className={`dlg-opt ${(interest.archive_after_days ?? 0) === p.days ? "on" : ""}`} onClick={() => pickArchive(p.days)}>
-              <span className="dlg-radio" aria-hidden />
-              <span className="dlg-name">{p.label}</span>
-            </button>
-          ))}
-        </div>
+        <ArchiveChoice scope="interest" value={interest.archive_after_days ?? 0} onChange={pickArchive} />
       </Dialog>
 
       <Dialog open={addOpen} onClose={() => setAddOpen(false)} kicker="Add source">

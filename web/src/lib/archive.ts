@@ -7,15 +7,42 @@
 
 export type ArchiveScope = "interest" | "source";
 
-// The picker options, longest-lived last. `0` (inherit) is offered per-scope with
-// scope-specific copy, so it's added by the picker, not listed here.
+// The quick preset windows, longest-lived last (#120). `0` (inherit) and `-1`
+// (none/evergreen) are NOT listed here: inherit is added per-scope by the picker,
+// and none lives under Custom. Anything off this list is a Custom value (N days).
 export const ARCHIVE_PRESETS: { days: number; label: string }[] = [
-  { days: 1, label: "1 day" },
+  { days: 1, label: "24 hours" },
   { days: 3, label: "3 days" },
   { days: 7, label: "1 week" },
   { days: 30, label: "1 month" },
-  { days: -1, label: "Never" },
 ];
+
+// Custom-picker units. Stored as days (month≈30, year=365), so a custom value
+// round-trips through the same archive_after_days int - no schema change.
+export const ARCHIVE_UNITS: { key: string; label: string; days: number }[] = [
+  { key: "day", label: "day", days: 1 },
+  { key: "week", label: "week", days: 7 },
+  { key: "month", label: "month", days: 30 },
+  { key: "year", label: "year", days: 365 },
+];
+
+const PRESET_DAYS = new Set(ARCHIVE_PRESETS.map((p) => p.days));
+
+// isCustomArchive is true for a stored value that isn't inherit(0) or a quick
+// preset - i.e. none(-1) or an arbitrary N picked in the custom form.
+export function isCustomArchive(days: number): boolean {
+  return days === -1 || (days > 0 && !PRESET_DAYS.has(days));
+}
+
+// decomposeArchive turns a day count into the largest whole unit that divides it,
+// to pre-fill the custom form ("60" -> 2 months, "14" -> 2 weeks, "5" -> 5 days).
+export function decomposeArchive(days: number): { n: number; unit: string } {
+  for (let i = ARCHIVE_UNITS.length - 1; i >= 0; i--) {
+    const u = ARCHIVE_UNITS[i];
+    if (days > 0 && days % u.days === 0) return { n: days / u.days, unit: u.key };
+  }
+  return { n: Math.max(1, days), unit: "day" };
+}
 
 // The plain-English label for a stored value. `inherit` (0) reads differently
 // depending on scope: an interest with no override follows the global default; a
@@ -36,4 +63,59 @@ export function archiveShort(days: number | undefined): string {
   if (v === -1) return "Never";
   const preset = ARCHIVE_PRESETS.find((p) => p.days === v);
   return preset ? preset.label : `${v}d`;
+}
+
+// The global fallback window (days). Mirrors the backend's globalArchiveWindowDays.
+export const GLOBAL_ARCHIVE_DAYS = 21;
+
+// archiveValue is the plain value phrase for a concrete window - "3 weeks", "never",
+// "24 hours", "2 months". Unlike archiveLabel it never says "inherit"; it's the
+// resolved figure, best-fit to the largest whole unit.
+export function archiveValue(days: number): string {
+  if (days === -1) return "never";
+  if (days === 1) return "24 hours";
+  for (let i = ARCHIVE_UNITS.length - 1; i >= 0; i--) {
+    const u = ARCHIVE_UNITS[i];
+    if (days % u.days === 0) {
+      const n = days / u.days;
+      return `${n} ${u.label}${n > 1 ? "s" : ""}`;
+    }
+  }
+  return `${days} days`;
+}
+
+// A resolved archival window: the effective value plus where it came from. The
+// point (#120) is that any inherited display names BOTH - the origin and the value.
+export interface ResolvedArchive {
+  days: number; // effective window (-1 = evergreen)
+  value: string; // "3 weeks", "never"
+  origin: "source" | "interest" | "global";
+  originLabel: string; // "this source", "the Local default", "the global default"
+  inherited: boolean;
+}
+
+// resolveSourceArchive walks the source -> interest -> global chain. srcDays/intDays
+// are the raw stored values (0 = inherit, -1 = evergreen, N = days).
+export function resolveSourceArchive(srcDays: number, intDays: number, interestName?: string): ResolvedArchive {
+  if (srcDays !== 0) {
+    return { days: srcDays, value: archiveValue(srcDays), origin: "source", originLabel: "this source", inherited: false };
+  }
+  if (intDays !== 0) {
+    return {
+      days: intDays,
+      value: archiveValue(intDays),
+      origin: "interest",
+      originLabel: interestName ? `the ${interestName} default` : "the interest default",
+      inherited: true,
+    };
+  }
+  return { days: GLOBAL_ARCHIVE_DAYS, value: archiveValue(GLOBAL_ARCHIVE_DAYS), origin: "global", originLabel: "the global default", inherited: true };
+}
+
+// resolveInterestArchive walks the interest -> global chain.
+export function resolveInterestArchive(intDays: number): ResolvedArchive {
+  if (intDays !== 0) {
+    return { days: intDays, value: archiveValue(intDays), origin: "interest", originLabel: "this interest", inherited: false };
+  }
+  return { days: GLOBAL_ARCHIVE_DAYS, value: archiveValue(GLOBAL_ARCHIVE_DAYS), origin: "global", originLabel: "the global default", inherited: true };
 }

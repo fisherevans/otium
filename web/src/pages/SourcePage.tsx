@@ -3,12 +3,13 @@ import { useNavigate, useParams } from "react-router-dom";
 import { Pencil, Settings, Copy, Check, Mail, Ban, EyeOff } from "lucide-react";
 import { api, type Interest, type Source, type SourceItem, type SourceStats } from "@/api/client";
 import { bucketOf, BUCKETS, WFREQ, WHINT, WLEVEL, type Bucket } from "@/lib/weight";
-import { ARCHIVE_PRESETS } from "@/lib/archive";
+import { resolveSourceArchive } from "@/lib/archive";
 import { sourceInsight, type InsightKind } from "@/lib/stats";
 import { scaleCadence, cadenceCount } from "@/lib/cadence";
 import { REP_PROSE, REP_LABEL, compareToAverage } from "@/lib/represent";
 import { relDate } from "@/lib/format";
 import { Dialog } from "@/components/Dialog";
+import { ArchiveChoice } from "@/components/ArchiveChoice";
 
 // The Source page (session engine v2, mockup #4). A dense single scroll of
 // read-only, plain-English transparency: publishing rate + engagement stats up
@@ -19,15 +20,6 @@ import { Dialog } from "@/components/Dialog";
 
 function parseKeywords(s?: string): string[] {
   return (s ?? "").split(",").map((k) => k.trim()).filter(Boolean);
-}
-function daysLabel(n: number): string {
-  if (n === -1) return "never";
-  if (n === 1) return "1 day";
-  if (n === 3) return "3 days";
-  if (n === 7) return "1 week";
-  if (n === 21) return "3 weeks";
-  if (n === 30) return "1 month";
-  return `${n} days`;
 }
 function pct(n: number): string {
   return `${Math.round(n * 100)}%`;
@@ -42,7 +34,6 @@ function Dots({ level }: { level: number }) {
   );
 }
 
-const GLOBAL_ARCHIVE = 21;
 
 export default function SourcePage() {
   const nav = useNavigate();
@@ -101,7 +92,8 @@ export default function SourcePage() {
   // Resolve Archive-After: source override > interest default > global (21d).
   const srcDays = source?.archive_after_days ?? 0;
   const intDays = interest?.archive_after_days ?? 0;
-  const resolvedDays = srcDays !== 0 ? srcDays : intDays !== 0 ? intDays : GLOBAL_ARCHIVE;
+  const arch = resolveSourceArchive(srcDays, intDays, interest?.name);
+  const resolvedDays = arch.days;
 
   // Averages across every source, for the "vs your average source" sublines.
   const all = Object.values(stats);
@@ -298,12 +290,10 @@ export default function SourcePage() {
       </div>
       <div className="fc">
         <p className="fc-line">
-          Articles are automatically <b>{resolvedDays === -1 ? "never archived" : `archived after ${daysLabel(resolvedDays)}`}</b>.
+          Articles are automatically <b>{resolvedDays === -1 ? "never archived" : `archived after ${arch.value}`}</b>.
         </p>
         <p className="fc-sub">
-          {srcDays !== 0
-            ? "Set for this source."
-            : `Inherited from the ${interest?.name ?? "global"} default.`}
+          {arch.inherited ? `Inherited from ${arch.originLabel} (${arch.value}).` : "Set for this source."}
         </p>
 
         <p className="fc-line">
@@ -414,19 +404,7 @@ export default function SourcePage() {
           ))}
         </div>
         <div className="dlg-sub">Archive after</div>
-        <div className="dlg-opts">
-          <button className={`dlg-opt ${srcDays === 0 ? "on" : ""}`} onClick={() => pickArchive(0)}>
-            <span className="dlg-radio" aria-hidden />
-            <span className="dlg-name">Interest's default</span>
-            <span className="dlg-sub">{interest?.name ?? "global"}</span>
-          </button>
-          {ARCHIVE_PRESETS.map((p) => (
-            <button key={p.days} className={`dlg-opt ${srcDays === p.days ? "on" : ""}`} onClick={() => pickArchive(p.days)}>
-              <span className="dlg-radio" aria-hidden />
-              <span className="dlg-name">{p.label}</span>
-            </button>
-          ))}
-        </div>
+        <ArchiveChoice scope="source" value={srcDays} intDays={intDays} interestName={interest?.name} onChange={pickArchive} />
         <div className="dlg-sub">Auto-archive keywords</div>
         <input
           className="field"
