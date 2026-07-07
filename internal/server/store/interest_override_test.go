@@ -28,7 +28,7 @@ func TestCandidatesResolveOneFeedOverrides(t *testing.T) {
 		t.Fatal(err)
 	}
 	hl, div := 5.0, 1
-	if err := db.UpdateInterest(ctx, u.ID, interest.ID, nil, nil, nil, &hl, &div); err != nil {
+	if err := db.UpdateInterest(ctx, u.ID, interest.ID, nil, nil, nil, &hl, &div, nil); err != nil {
 		t.Fatal(err)
 	}
 

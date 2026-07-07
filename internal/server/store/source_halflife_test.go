@@ -34,7 +34,7 @@ func setSourceInterestWithHalfLife(t *testing.T, db *DB, ctx context.Context, ui
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := db.UpdateInterest(ctx, uid, f.ID, nil, nil, nil, &halfLife, nil); err != nil {
+	if err := db.UpdateInterest(ctx, uid, f.ID, nil, nil, nil, &halfLife, nil, nil); err != nil {
 		t.Fatal(err)
 	}
 	if err := db.AssignSourceInterest(ctx, sid, f.ID); err != nil {
@@ -104,7 +104,7 @@ func TestSourceHalfLifeOverridePlumbing(t *testing.T) {
 	}
 
 	hl := 9.0
-	if err := db.UpdateSource(ctx, uid, sid, nil, nil, nil, &hl, nil); err != nil {
+	if err := db.UpdateSource(ctx, uid, sid, nil, nil, nil, &hl, nil, nil, nil); err != nil {
 		t.Fatal(err)
 	}
 	pool, err = db.Candidates(ctx, uid, nil, 45, 500)

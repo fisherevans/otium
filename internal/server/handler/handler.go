@@ -90,14 +90,24 @@ func (h *Handler) UpdateInterest(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var body struct {
-		Name         *string  `json:"name"`
-		Color        *string  `json:"color"`
-		Icon         *string  `json:"icon"`
-		HalfLifeDays *float64 `json:"half_life_days"`
-		Diversity    *int     `json:"diversity"`
+		Name             *string  `json:"name"`
+		Color            *string  `json:"color"`
+		Icon             *string  `json:"icon"`
+		HalfLifeDays     *float64 `json:"half_life_days"`
+		Diversity        *int     `json:"diversity"`
+		ArchiveAfterDays *int     `json:"archive_after_days"` // #115: 0 inherit-global, -1 evergreen, N days
 	}
 	if !decode(w, r, &body) {
 		return
+	}
+	if body.ArchiveAfterDays != nil {
+		v := *body.ArchiveAfterDays
+		if v < -1 {
+			v = -1
+		} else if v > 3650 {
+			v = 3650
+		}
+		body.ArchiveAfterDays = &v
 	}
 	// Clamp the ranker overrides to sane bounds; 0 stays "use the global default".
 	if body.HalfLifeDays != nil {
@@ -118,7 +128,7 @@ func (h *Handler) UpdateInterest(w http.ResponseWriter, r *http.Request) {
 		}
 		body.Diversity = &v
 	}
-	if err := h.db.UpdateInterest(r.Context(), uid, id, body.Name, body.Color, body.Icon, body.HalfLifeDays, body.Diversity); err != nil {
+	if err := h.db.UpdateInterest(r.Context(), uid, id, body.Name, body.Color, body.Icon, body.HalfLifeDays, body.Diversity, body.ArchiveAfterDays); err != nil {
 		serverError(w, h.log, "update interest", err)
 		return
 	}
@@ -221,12 +231,14 @@ func (h *Handler) UpdateSource(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var body struct {
-		Weight       *float64 `json:"weight"`
-		Bucket       *string  `json:"weight_bucket"`
-		State        *string  `json:"state"`
-		Cap          *int     `json:"per_session_cap"`
-		HalfLifeDays *float64 `json:"half_life_days"`
-		Title        *string  `json:"title"`
+		Weight           *float64 `json:"weight"`
+		Bucket           *string  `json:"weight_bucket"`
+		State            *string  `json:"state"`
+		Cap              *int     `json:"per_session_cap"`
+		HalfLifeDays     *float64 `json:"half_life_days"`
+		Title            *string  `json:"title"`
+		ArchiveAfterDays *int     `json:"archive_after_days"` // #115: 0 inherit, -1 evergreen, N days
+		ArchiveKeywords  *string  `json:"archive_keywords"`   // #118: comma-separated
 	}
 	if !decode(w, r, &body) {
 		return
@@ -250,7 +262,17 @@ func (h *Handler) UpdateSource(w http.ResponseWriter, r *http.Request) {
 		}
 		body.HalfLifeDays = &v
 	}
-	if err := h.db.UpdateSource(r.Context(), uid, id, weight, body.State, body.Cap, body.HalfLifeDays, body.Title); err != nil {
+	// Archive After: -1 (evergreen) and 0 (inherit) pass through; clamp positives.
+	if body.ArchiveAfterDays != nil {
+		v := *body.ArchiveAfterDays
+		if v < -1 {
+			v = -1
+		} else if v > 3650 {
+			v = 3650
+		}
+		body.ArchiveAfterDays = &v
+	}
+	if err := h.db.UpdateSource(r.Context(), uid, id, weight, body.State, body.Cap, body.HalfLifeDays, body.Title, body.ArchiveAfterDays, body.ArchiveKeywords); err != nil {
 		serverError(w, h.log, "update source", err)
 		return
 	}

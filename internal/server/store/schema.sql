@@ -90,6 +90,9 @@ CREATE TABLE IF NOT EXISTS sources (
     -- inherit the interest default; -1 = evergreen (never archive); N = archive
     -- articles older than N days. Source override > interest default > global.
     archive_after_days INTEGER NOT NULL DEFAULT 0,
+    -- Auto-archive keywords (#118): comma-separated, case-insensitive. An item
+    -- whose title or summary contains any of these is ineligible (auto-archived).
+    archive_keywords TEXT NOT NULL DEFAULT '',
     added_at      TEXT NOT NULL DEFAULT (datetime('now')),
     last_fetch_at TEXT,
     fetch_error   TEXT NOT NULL DEFAULT '',

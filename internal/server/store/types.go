@@ -207,4 +207,7 @@ type Candidate struct {
 	// -1 = evergreen (never archive); N = archive articles older than N days.
 	SourceArchiveAfterDays   int
 	InterestArchiveAfterDays int
+	// SourceArchiveKeywords is the source's comma-separated auto-archive keyword
+	// list (#118): an item matching any keyword is ineligible.
+	SourceArchiveKeywords string
 }

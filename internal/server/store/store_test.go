@@ -57,7 +57,7 @@ func TestOpenAppliesSchemaAndMigration(t *testing.T) {
 		t.Fatal(err)
 	}
 	icon := "comedy"
-	if err := db.UpdateInterest(ctx, u.ID, f.ID, nil, nil, &icon, nil, nil); err != nil {
+	if err := db.UpdateInterest(ctx, u.ID, f.ID, nil, nil, &icon, nil, nil, nil); err != nil {
 		t.Fatal(err)
 	}
 	interests, err := db.ListInterests(ctx, u.ID)

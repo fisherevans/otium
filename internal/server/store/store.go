@@ -154,6 +154,10 @@ func migrate(sdb *sql.DB) error {
 	if err := ensureColumn(sdb, "sources", "archive_after_days", `ALTER TABLE sources ADD COLUMN archive_after_days INTEGER NOT NULL DEFAULT 0`); err != nil {
 		return err
 	}
+	// Auto-archive keywords (#118).
+	if err := ensureColumn(sdb, "sources", "archive_keywords", `ALTER TABLE sources ADD COLUMN archive_keywords TEXT NOT NULL DEFAULT ''`); err != nil {
+		return err
+	}
 	// Per-source freshness half-life override (#76): source override > interest > global.
 	if err := ensureColumn(sdb, "sources", "half_life_days", `ALTER TABLE sources ADD COLUMN half_life_days REAL NOT NULL DEFAULT 0`); err != nil {
 		return err
@@ -524,7 +528,7 @@ func (db *DB) SetFastScrollCheckin(ctx context.Context, userID int64, on bool) e
 // UpdateInterest patches a interest's presentation fields (name, color, icon) and the
 // per-interest ranker overrides (half-life, diversity). Only non-nil fields are
 // applied. Scoped to the owning user.
-func (db *DB) UpdateInterest(ctx context.Context, userID, id int64, name, color, icon *string, halfLifeDays *float64, diversity *int) error {
+func (db *DB) UpdateInterest(ctx context.Context, userID, id int64, name, color, icon *string, halfLifeDays *float64, diversity *int, archiveAfterDays *int) error {
 	var sets []string
 	var args []any
 	if name != nil {
@@ -546,6 +550,11 @@ func (db *DB) UpdateInterest(ctx context.Context, userID, id int64, name, color,
 	if diversity != nil {
 		sets = append(sets, "diversity = ?")
 		args = append(args, *diversity)
+	}
+	// Archive After default for this interest's sources (#115).
+	if archiveAfterDays != nil {
+		sets = append(sets, "archive_after_days = ?")
+		args = append(args, *archiveAfterDays)
 	}
 	if len(sets) == 0 {
 		return nil
@@ -754,7 +763,7 @@ func (db *DB) CreateSource(ctx context.Context, s *Source) (*Source, error) {
 
 // UpdateSource patches weight, state, per_session_cap, half_life_days, title.
 // Only non-nil fields are applied.
-func (db *DB) UpdateSource(ctx context.Context, userID, id int64, weight *float64, state *string, cap *int, halfLifeDays *float64, title *string) error {
+func (db *DB) UpdateSource(ctx context.Context, userID, id int64, weight *float64, state *string, cap *int, halfLifeDays *float64, title *string, archiveAfterDays *int, archiveKeywords *string) error {
 	var sets []string
 	var args []any
 	if weight != nil {
@@ -776,6 +785,15 @@ func (db *DB) UpdateSource(ctx context.Context, userID, id int64, weight *float6
 	if title != nil {
 		sets = append(sets, "title = ?")
 		args = append(args, *title)
+	}
+	// Session engine v2 (#115/#118): Archive-After window + auto-archive keywords.
+	if archiveAfterDays != nil {
+		sets = append(sets, "archive_after_days = ?")
+		args = append(args, *archiveAfterDays)
+	}
+	if archiveKeywords != nil {
+		sets = append(sets, "archive_keywords = ?")
+		args = append(args, *archiveKeywords)
 	}
 	if len(sets) == 0 {
 		return nil
@@ -913,7 +931,7 @@ func (db *DB) ListRecentItemsByInterest(ctx context.Context, userID, interestID 
 func candidateCols() string {
 	return `i.id, i.source_id, i.url, i.title, i.summary, i.content, i.content_source, i.author, i.thumbnail_url,
 	             i.media_type, i.duration_sec, i.published_at, i.fetched_at,
-	             s.title, s.weight, s.per_session_cap, s.half_life_days, s.archive_after_days,
+	             s.title, s.weight, s.per_session_cap, s.half_life_days, s.archive_after_days, s.archive_keywords,
 	             (SELECT COUNT(*) FROM items i2 WHERE i2.source_id = s.id
 	                AND i2.published_at >= datetime('now', ?)) AS win_count,
 	             (SELECT COALESCE(julianday('now') - julianday(MIN(i2.published_at)), 0)
@@ -1054,7 +1072,7 @@ func scanCandidates(rows *sql.Rows, windowDays int) ([]Candidate, error) {
 		var diversity int
 		if err := rows.Scan(&c.ID, &c.SourceID, &c.URL, &c.Title, &c.Summary, &c.Content, &c.ContentSource, &c.Author, &c.ThumbnailURL,
 			&c.MediaType, &c.DurationSec, &pub, &fetched,
-			&c.SourceTitle, &c.SourceWeight, &c.PerSessionCap, &c.SourceHalfLifeDays, &c.SourceArchiveAfterDays,
+			&c.SourceTitle, &c.SourceWeight, &c.PerSessionCap, &c.SourceHalfLifeDays, &c.SourceArchiveAfterDays, &c.SourceArchiveKeywords,
 			&winCount, &winSpan, &halfLife, &diversity, &c.InterestArchiveAfterDays); err != nil {
 			return nil, err
 		}

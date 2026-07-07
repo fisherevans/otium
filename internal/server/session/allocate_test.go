@@ -111,6 +111,20 @@ func TestAllocateRepresentationWeighting(t *testing.T) {
 	}
 }
 
+func TestKeywordArchive(t *testing.T) {
+	now := time.Date(2026, 7, 7, 12, 0, 0, 0, time.UTC)
+	c := acand(1, 1, 1, 0, 0, now)
+	c.Title = "Obituary: Jane Doe"
+	c.SourceArchiveKeywords = "obituary, memorial"
+	if eligible(c, now) {
+		t.Fatal("keyword match should make the item ineligible")
+	}
+	c.Title = "Election results"
+	if !eligible(c, now) {
+		t.Fatal("non-matching item should stay eligible")
+	}
+}
+
 func TestAllocateSkipsEmptySource(t *testing.T) {
 	now := time.Date(2026, 7, 7, 12, 0, 0, 0, time.UTC)
 	// Source 1 has 2 eligible; source 2 has huge representation but 0 eligible.

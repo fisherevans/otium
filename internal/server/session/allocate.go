@@ -3,6 +3,7 @@ package session
 import (
 	"math/rand"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/fisherevans/otium/internal/server/store"
@@ -38,15 +39,35 @@ func resolveArchiveAfter(c store.Candidate) int {
 	return globalArchiveAfterDays
 }
 
-// eligible reports whether a candidate is still within its Archive-After window.
-// Evergreen sources are always eligible.
+// eligible reports whether a candidate can appear in a session: within its
+// Archive-After window (evergreen sources always pass) and not matching any of the
+// source's auto-archive keywords (#118).
 func eligible(c store.Candidate, now time.Time) bool {
+	if keywordArchived(c) {
+		return false
+	}
 	win := resolveArchiveAfter(c)
 	if win == evergreen {
 		return true
 	}
 	ageDays := now.Sub(c.PublishedAt).Hours() / 24
 	return ageDays <= float64(win)
+}
+
+// keywordArchived reports whether the item's title or summary contains any of the
+// source's auto-archive keywords (#118), case-insensitively.
+func keywordArchived(c store.Candidate) bool {
+	if c.SourceArchiveKeywords == "" {
+		return false
+	}
+	hay := strings.ToLower(c.Title + " " + c.Summary)
+	for _, kw := range strings.Split(c.SourceArchiveKeywords, ",") {
+		kw = strings.TrimSpace(strings.ToLower(kw))
+		if kw != "" && strings.Contains(hay, kw) {
+			return true
+		}
+	}
+	return false
 }
 
 // representationOf is the source's session-occupancy multiplier (Representation,
