@@ -21,7 +21,7 @@ item made the cut.
 - **Sources** - creators/channels you follow (RSS, YouTube channel feeds,
   podcasts). Each carries a **weight** (very low → favorite) and a per-session
   cap.
-- **Feeds** - themes ("Comedy", "Local News") that group sources; a session
+- **Interests** - themes ("Comedy", "Local News") that group sources; a session
   targets one or more.
 - **Session** - the core object. A duration range + themes → a ranked, capped,
   time-boxed set. Score = `weight × freshness-decay × rarity-boost`, all

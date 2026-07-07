@@ -34,8 +34,8 @@ ranking black box.
 ## Freshness half-life resolves source > feed > global (#76, simplified by #86)
 
 The freshness-decay half-life is tunable at three levels, resolved in strict
-precedence: a per-source override wins, else the item's feed half-life, else the
-global default (21 days). Feed-level came first (#17); the per-source override
+precedence: a per-source override wins, else the item's feed half-life (a feed is
+now called an interest, #111), else the global default (21 days). Feed-level came first (#17); the per-source override
 (#76) sits on top so you can single out one noisy or one evergreen source without
 reshaping its whole feed. 0 means "inherit" at both the source and feed level, so
 the neutral setting reads as the middle, not as zero days.
@@ -48,7 +48,7 @@ half-life" is now just `sources.feed_id`'s feed, so the multi-feed rule (and its
 Settings preference) is gone. The three-level precedence itself is unchanged.
 
 The feed resolution runs in SQL (in `candidateCols`, shared by the session pool,
-the mix view, and resume-rehydration) as a direct `s.feed_id` lookup, so all three
+the insights view, and resume-rehydration) as a direct `s.feed_id` lookup, so all three
 surfaces decay identically, which is what keeps the `ItemEffectiveScore ==
 scoreOf(sel=1)` invariant intact. The one shared Go chokepoint is
 `session.halfLifeOf` - every scoring path funnels the source/feed pick through it,
@@ -57,7 +57,8 @@ approximation.
 
 ## Source → one feed → many groups (#86)
 
-The source↔feed many-to-many was replaced with a tree: a **source belongs to
+The source↔feed many-to-many was replaced with a tree (feeds are now called
+interests and groups are now mixes, renamed #111): a **source belongs to
 exactly one feed** (`sources.feed_id`, nullable for a feedless source), and feeds
 group into user-created **groups** (`groups` + `group_feeds`, many-to-many - a
 feed can be in several groups). This made sources easy to place and navigate, and

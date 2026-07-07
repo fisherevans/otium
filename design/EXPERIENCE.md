@@ -155,7 +155,7 @@ Purpose: see and tune what you follow.
   (very low → favorite) that's tappable to cycle. Weight is the primary knob and
   must be one tap from here.
 - Add-one and Refresh as secondary actions.
-- *(Later)* group by feed/theme; per-source feed assignment; trial-state review.
+- *(Later)* group by interest/theme; per-source interest assignment; trial-state review.
 
 ## The signature interaction: the intent pad
 

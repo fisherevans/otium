@@ -65,7 +65,7 @@ The two knobs that make it yours:
 ## Discovery (later milestone)
 
 Discovery is a review queue, not a feed, and it's contextual ("for your comedy
-feed, you might like…"). Adding a creator is a **trial**, not a commitment: you
+interest, you might like…"). Adding a creator is a **trial**, not a commitment: you
 evaluate them in-feed, and once you've seen enough (a threshold, surfaced during
 normal use - "you've seen 40 posts from X, keep them?") you decide to keep
 (with a weight), reduce, or drop.
@@ -77,10 +77,10 @@ box.
 ## Stats and the agent surface
 
 Capture generously, expose usefully: time per theme, most opened/liked/skipped,
-sources you've stopped returning to, feed "health" (how noisy, how much you skip).
+sources you've stopped returning to, interest "health" (how noisy, how much you skip).
 Surface it both as human insight and as a JSON/API for an LLM **operator** - not
-part of the core ranking, but a tool you converse with to retune weights, audit a
-feed, or drive discovery ("find more women stand-up comedians"). You stay in
+part of the core ranking, but a tool you converse with to retune weights, audit an
+interest, or drive discovery ("find more women stand-up comedians"). You stay in
 control; the LLM proposes, you approve.
 
 ## What this is not
@@ -88,5 +88,5 @@ control; the LLM proposes, you approve.
 Not "anti-algorithm" - that lane (Tapestry, Reeder) means *no ranking*. otium
 *is* an algorithm: one you own, audit, and rate-limit. The positioning is
 control and transparency, not the absence of ranking. Market scan found no
-shipping product that does the time-boxed-session-from-weighted-feeds mechanic;
+shipping product that does the time-boxed-session-from-weighted-interests mechanic;
 that's the wedge.

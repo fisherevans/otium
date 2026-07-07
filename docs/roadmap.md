@@ -25,12 +25,12 @@ awaiting a pick), or fleshed out on curation/discovery/intelligence.
 ## The milestones
 
 - **Session engine** - the core loop; mostly built, with refinements open
-  (behavioral pace, cadence fix, feed↔source UI, drill-in).
-- **Curation & controls** - weights, feed health, tuning, "why this item".
+  (behavioral pace, cadence fix, interest↔source UI, drill-in).
+- **Curation & controls** - weights, interest health, tuning, "why this item".
 - **Discovery & trials** - trial sources, like-based recs, the discovery queue,
   mapping locked-down platforms (TikTok/IG/Patreon) to real feeds.
 - **Intelligence & agent** - user-facing stats, a JSON/agent API, the LLM
-  operator that tunes feeds conversationally.
+  operator that tunes interests conversationally.
 - **Deploy to homelab** - stand it up gated at `otium.fisher.sh`, phone flow end
   to end. The original mandate.
 - **Design system** - pick a visual language and wire it in.
