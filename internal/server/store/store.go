@@ -9,6 +9,7 @@ import (
 	"database/sql"
 	_ "embed"
 	"fmt"
+	"math"
 	"sort"
 	"strconv"
 	"strings"
@@ -1313,6 +1314,110 @@ func (db *DB) SourceAvgDuration(ctx context.Context, userID int64, window int) (
 // row in item_state means the item reached the user (surfaced/acted); state
 // 'skipped' means they rejected it. This is the behavioral signal the ranker
 // uses to bubble down sources the user keeps passing on.
+// ResetSourceMetadata clears the user's engagement state for a source's items
+// (#119): every item becomes unread again. With olderThan set, only items
+// published before that instant are reset (e.g. "mark everything older than a
+// week unread"). Scoped to the owning user via the source check.
+func (db *DB) ResetSourceMetadata(ctx context.Context, userID, sourceID int64, olderThan *time.Time) error {
+	var owns int
+	if err := db.sql.QueryRowContext(ctx, `SELECT COUNT(*) FROM sources WHERE id=? AND user_id=?`, sourceID, userID).Scan(&owns); err != nil {
+		return err
+	}
+	if owns == 0 {
+		return nil
+	}
+	q := `DELETE FROM item_state WHERE user_id=? AND item_id IN (SELECT id FROM items WHERE source_id=?`
+	args := []any{userID, sourceID}
+	if olderThan != nil {
+		q += ` AND published_at < ?`
+		args = append(args, olderThan.UTC().Format("2006-01-02T15:04:05Z"))
+	}
+	q += `)`
+	_, err := db.sql.ExecContext(ctx, q, args...)
+	return err
+}
+
+// ReplaceSourceFeedURL swaps a source's RSS URL in place (#119), keeping all local
+// items/metadata. Naive by design: e.g. a Patreon upgrade to a private full-text
+// feed. Scoped to the owning user.
+func (db *DB) ReplaceSourceFeedURL(ctx context.Context, userID, sourceID int64, url string) error {
+	_, err := db.sql.ExecContext(ctx,
+		`UPDATE sources SET feed_url=? WHERE id=? AND user_id=?`, url, sourceID, userID)
+	return err
+}
+
+// SourceStatsView is the per-source transparency bundle the management UI reads
+// (#116): supply (total/unseen/on-deck), publishing rate, and the engagement
+// lifecycle (shown/skipped/opened/liked). Derived from items + item_state; the
+// events log remains the immutable audit trail behind these.
+type SourceStatsView struct {
+	SourceID  int64   `json:"source_id"`
+	Total     int     `json:"total"`     // all items ever fetched
+	Unseen    int     `json:"unseen"`    // no item_state row yet
+	OnDeck    int     `json:"on_deck"`   // unseen and within the global archive window (approx)
+	Shown     int     `json:"shown"`     // has any item_state (presented)
+	Skipped   int     `json:"skipped"`   // presented then skipped
+	Opened    int     `json:"opened"`    // presented then opened/read
+	Liked     int     `json:"liked"`     // liked
+	PerDay    float64 `json:"per_day"`   // publishing rate over accumulated history
+	Invisible int     `json:"invisible"` // items never presented (unseen); == Total - Shown
+	SkipPct   float64 `json:"skip_pct"`  // skipped / shown, 0 when nothing shown
+	OpenPct   float64 `json:"open_pct"`  // opened / shown
+}
+
+// SourceStatsAll returns the stats bundle for every one of the user's sources in a
+// single pass. on_deck approximates "eligible unseen" with the global Archive-After
+// window (per-source override + keyword filtering are applied by the ranker; this
+// is the cheap headline figure). per_day is items over the observed span.
+func (db *DB) SourceStatsAll(ctx context.Context, userID int64) (map[int64]SourceStatsView, error) {
+	rows, err := db.sql.QueryContext(ctx,
+		`SELECT i.source_id,
+		        COUNT(*) AS total,
+		        SUM(CASE WHEN st.item_id IS NULL THEN 1 ELSE 0 END) AS unseen,
+		        SUM(CASE WHEN st.item_id IS NOT NULL THEN 1 ELSE 0 END) AS shown,
+		        SUM(CASE WHEN st.state = 'skipped' THEN 1 ELSE 0 END) AS skipped,
+		        SUM(CASE WHEN st.state = 'opened' THEN 1 ELSE 0 END) AS opened,
+		        SUM(CASE WHEN st.state = 'liked' THEN 1 ELSE 0 END) AS liked,
+		        SUM(CASE WHEN st.item_id IS NULL AND i.published_at >= datetime('now', ?) THEN 1 ELSE 0 END) AS on_deck,
+		        COALESCE(julianday('now') - julianday(MIN(i.published_at)), 0) AS span_days
+		 FROM sources s
+		 JOIN items i ON i.source_id = s.id
+		 LEFT JOIN item_state st ON st.item_id = i.id AND st.user_id = ?
+		 WHERE s.user_id = ?
+		 GROUP BY i.source_id`,
+		fmt.Sprintf("-%d days", globalArchiveWindowDays), userID, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := map[int64]SourceStatsView{}
+	for rows.Next() {
+		var v SourceStatsView
+		var span float64
+		if err := rows.Scan(&v.SourceID, &v.Total, &v.Unseen, &v.Shown, &v.Skipped, &v.Opened, &v.Liked, &v.OnDeck, &span); err != nil {
+			return nil, err
+		}
+		v.Invisible = v.Unseen
+		if span < 1 {
+			span = 1
+		}
+		v.PerDay = round1(float64(v.Total) / span)
+		if v.Shown > 0 {
+			v.SkipPct = round2f(float64(v.Skipped) / float64(v.Shown))
+			v.OpenPct = round2f(float64(v.Opened) / float64(v.Shown))
+		}
+		out[v.SourceID] = v
+	}
+	return out, rows.Err()
+}
+
+// globalArchiveWindowDays mirrors session.globalArchiveAfterDays for the on-deck
+// headline figure (the store can't import session).
+const globalArchiveWindowDays = 21
+
+func round1(f float64) float64  { return math.Round(f*10) / 10 }
+func round2f(f float64) float64 { return math.Round(f*100) / 100 }
+
 func (db *DB) SourceSkipStats(ctx context.Context, userID int64) (map[int64]SkipStat, error) {
 	rows, err := db.sql.QueryContext(ctx,
 		`SELECT i.source_id,

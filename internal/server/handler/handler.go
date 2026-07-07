@@ -185,6 +185,18 @@ func (h *Handler) ListSources(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, sources)
 }
 
+// SourceStats returns the per-source transparency bundle for every source (#116):
+// supply, publishing rate, and the engagement lifecycle. Keyed by source id.
+func (h *Handler) SourceStats(w http.ResponseWriter, r *http.Request) {
+	uid := userID(r)
+	stats, err := h.db.SourceStatsAll(r.Context(), uid)
+	if err != nil {
+		serverError(w, h.log, "source stats", err)
+		return
+	}
+	writeJSON(w, http.StatusOK, stats)
+}
+
 func (h *Handler) CreateSource(w http.ResponseWriter, r *http.Request) {
 	uid := userID(r)
 	var body struct {
@@ -276,6 +288,65 @@ func (h *Handler) UpdateSource(w http.ResponseWriter, r *http.Request) {
 		serverError(w, h.log, "update source", err)
 		return
 	}
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
+}
+
+// ResetSourceMetadata clears the user's engagement state for a source (#119) -
+// every item unread again. Optional older_than (RFC3339) resets only items
+// published before it. The default falls back to the source's Archive-After when
+// the client sends nothing? No: an empty body resets everything.
+func (h *Handler) ResetSourceMetadata(w http.ResponseWriter, r *http.Request) {
+	uid := userID(r)
+	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	if err != nil {
+		badRequest(w, "bad source id")
+		return
+	}
+	var body struct {
+		OlderThan *string `json:"older_than"` // RFC3339; nil = reset all
+	}
+	if !decode(w, r, &body) {
+		return
+	}
+	var older *time.Time
+	if body.OlderThan != nil && *body.OlderThan != "" {
+		t, perr := time.Parse(time.RFC3339, *body.OlderThan)
+		if perr != nil {
+			badRequest(w, "older_than must be RFC3339")
+			return
+		}
+		older = &t
+	}
+	if err := h.db.ResetSourceMetadata(r.Context(), uid, id, older); err != nil {
+		serverError(w, h.log, "reset source metadata", err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
+}
+
+// ReplaceSourceFeedURL swaps a source's RSS URL and pulls the new feed once (#119).
+func (h *Handler) ReplaceSourceFeedURL(w http.ResponseWriter, r *http.Request) {
+	uid := userID(r)
+	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	if err != nil {
+		badRequest(w, "bad source id")
+		return
+	}
+	var body struct {
+		FeedURL string `json:"feed_url"`
+	}
+	if !decode(w, r, &body) {
+		return
+	}
+	if body.FeedURL == "" {
+		badRequest(w, "feed_url is required")
+		return
+	}
+	if err := h.db.ReplaceSourceFeedURL(r.Context(), uid, id, body.FeedURL); err != nil {
+		serverError(w, h.log, "replace feed url", err)
+		return
+	}
+	// The background ingest loop picks up the new URL on its next pass.
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
 }
 
