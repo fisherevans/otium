@@ -327,7 +327,7 @@ func (h *Handler) CreateSession(w http.ResponseWriter, r *http.Request) {
 	var body struct {
 		DurationMin int      `json:"duration_min"`
 		Themes      []string `json:"themes"` // feed slugs; empty = all followed sources
-		Groups      []string `json:"groups"` // group slugs; each expands to its member feeds (#86)
+		Mixes       []string `json:"mixes"`  // mix slugs; each expands to its member feeds (#86)
 	}
 	if !decode(w, r, &body) {
 		return
@@ -336,7 +336,7 @@ func (h *Handler) CreateSession(w http.ResponseWriter, r *http.Request) {
 		body.DurationMin = 15
 	}
 
-	items, err := h.buildSessionQueue(r.Context(), uid, body.DurationMin, body.Themes, body.Groups)
+	items, err := h.buildSessionQueue(r.Context(), uid, body.DurationMin, body.Themes, body.Mixes)
 	if err != nil {
 		serverError(w, h.log, "build session", err)
 		return
@@ -411,14 +411,14 @@ func (h *Handler) UpdateSession(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
 }
 
-// buildSessionQueue resolves themes (feed slugs) and groups (group slugs, each
+// buildSessionQueue resolves themes (feed slugs) and mixes (mix slugs, each
 // expanding to its member feeds' sources, #86), pulls the candidate pool +
 // behavioral stats, runs the ranker for the single duration (fed as both bounds
 // so the existing predict/selectivity path is unchanged), and attaches each
 // item's feed. Returns an empty slice when the selection resolves to no sources.
-func (h *Handler) buildSessionQueue(ctx context.Context, uid int64, durationMin int, themes, groups []string) ([]session.Selected, error) {
+func (h *Handler) buildSessionQueue(ctx context.Context, uid int64, durationMin int, themes, mixes []string) ([]session.Selected, error) {
 	var sourceIDs []int64
-	if len(themes) > 0 || len(groups) > 0 {
+	if len(themes) > 0 || len(mixes) > 0 {
 		set := map[int64]struct{}{}
 		if len(themes) > 0 {
 			ids, err := h.db.SourceIDsForFeeds(ctx, uid, themes)
@@ -429,8 +429,8 @@ func (h *Handler) buildSessionQueue(ctx context.Context, uid int64, durationMin 
 				set[id] = struct{}{}
 			}
 		}
-		if len(groups) > 0 {
-			ids, err := h.db.SourceIDsForGroups(ctx, uid, groups)
+		if len(mixes) > 0 {
+			ids, err := h.db.SourceIDsForMixes(ctx, uid, mixes)
 			if err != nil {
 				return nil, err
 			}

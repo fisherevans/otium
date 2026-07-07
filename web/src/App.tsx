@@ -20,8 +20,8 @@ import AppearancePage from "@/pages/AppearancePage";
 import SourcePage from "@/pages/SourcePage";
 import FeedPage from "@/pages/FeedPage";
 // --- end #66 ---
-// --- #86 groups management ---
-import GroupsPage from "@/pages/GroupsPage";
+// --- #86 mixes management ---
+import MixesPage from "@/pages/MixesPage";
 // --- end #86 ---
 
 export default function App() {
@@ -72,7 +72,7 @@ export default function App() {
           <Route path="/sources/:id" element={<SourcePage />} />
           <Route path="/feeds/:slug" element={<FeedPage />} />
           {/* --- end #66 --- */}
-          <Route path="/groups" element={<GroupsPage />} /> {/* #86: groups management */}
+          <Route path="/mixes" element={<MixesPage />} /> {/* #86: mixes management */}
           {/* #84: Saved (Collections + History) and You (secondary destinations)
               are the two new tab homes. Collections/History keep their own
               routes for deep links; Saved embeds their bodies. */}

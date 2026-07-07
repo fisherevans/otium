@@ -364,7 +364,7 @@ export default function AppearancePage() {
   const nav = useNavigate();
   const { prefs, update } = usePreferences();
 
-  // The Card/Reader split (#90): tabs group the controls by surface. The live
+  // The Card/Reader split (#90): tabs mix the controls by surface. The live
   // preview stays pinned above and shows BOTH surfaces; switching a tab scrolls
   // the preview to the one you're editing so the relevant surface leads.
   const [tab, setTab] = useState<Tab>("reader");
@@ -460,7 +460,7 @@ export default function AppearancePage() {
         ))}
       </div>
 
-      <div className="ctl-groups">
+      <div className="ctl-mixes">
         {/* Reader typography (#61/#90) */}
         {tab === "reader" && (
           <section className="ctl-section" role="tabpanel">
@@ -508,7 +508,7 @@ export default function AppearancePage() {
             the controls map 1:1 to what you see on the card above. */}
         {tab === "card" && (
           <section className="ctl-section" role="tabpanel">
-            <div className="ctl-grouphead">Feed pill</div>
+            <div className="ctl-mixhead">Feed pill</div>
             <Segmented
               label="Size"
               options={TAG_SIZE}
@@ -527,7 +527,7 @@ export default function AppearancePage() {
               onChange={(v) => update({ card: { feed_ink: v as FeedInkKey } })}
             />
 
-            <div className="ctl-grouphead">Source</div>
+            <div className="ctl-mixhead">Source</div>
             <Segmented
               label="Size"
               options={META_SIZE}
@@ -546,7 +546,7 @@ export default function AppearancePage() {
               onChange={(v) => update({ card: { source_ink: v as InkKey } })}
             />
 
-            <div className="ctl-grouphead">Author</div>
+            <div className="ctl-mixhead">Author</div>
             <Segmented
               label="Size"
               options={META_SIZE}
@@ -565,7 +565,7 @@ export default function AppearancePage() {
               onChange={(v) => update({ card: { author_ink: v as InkKey } })}
             />
 
-            <div className="ctl-grouphead">Date</div>
+            <div className="ctl-mixhead">Date</div>
             <Segmented
               label="Size"
               options={TAG_SIZE}
@@ -584,7 +584,7 @@ export default function AppearancePage() {
               onChange={(v) => update({ card: { date_ink: v as InkKey } })}
             />
 
-            <div className="ctl-grouphead">Delimiter</div>
+            <div className="ctl-mixhead">Delimiter</div>
             <p className="sub" style={{ marginTop: 0 }}>
               The separator between the author and date in the byline.
             </p>
@@ -601,7 +601,7 @@ export default function AppearancePage() {
               onChange={(v) => update({ card: { delim_gap: v } })}
             />
 
-            <div className="ctl-grouphead">Hero image</div>
+            <div className="ctl-mixhead">Hero image</div>
             <Segmented
               label="Color"
               options={HERO_COLOR}

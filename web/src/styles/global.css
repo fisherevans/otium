@@ -796,7 +796,7 @@ h1.display {
 .id-type,
 .id-age {
   font-family: var(--mono);
-  /* #81: sub-text size (the meta group). Source has its own override below. */
+  /* #81: sub-text size (the meta mix). Source has its own override below. */
   font-size: var(--pref-card-meta-size, 11px);
   /* #90: shared card-meta weight + ink (defaults match the theme when unset). */
   font-weight: var(--pref-card-meta-weight, 400);
@@ -1081,7 +1081,7 @@ h1.display {
   padding-bottom: 8px;
 }
 /* #93 de-noise: segmented controls (Followed/Archived/all, and the signal /
-   sort / group rows in the Filter & sort sheet) lose the caged bar - active =
+   sort / mix rows in the Filter & sort sheet) lose the caged bar - active =
    underline, not a filled/bordered cell. */
 .lib-seg {
   padding: 6px 1px 5px;
@@ -1122,13 +1122,13 @@ h1.display {
   color: var(--ink-mute);
   margin-right: 2px;
 }
-.lib-group {
+.lib-mix {
   display: flex;
   align-items: center;
   gap: 8px;
   margin: 18px 0 2px;
   padding-bottom: 7px;
-  /* #93 de-noise: group header keeps a rule (it's a real section break) but
+  /* #93 de-noise: mix header keeps a rule (it's a real section break) but
      softened off near-black. */
   border-bottom: 1px solid var(--rule);
   font-family: var(--grot);
@@ -1137,7 +1137,7 @@ h1.display {
   text-transform: uppercase;
   color: var(--ink-soft);
 }
-.lib-group .cnt {
+.lib-mix .cnt {
   margin-left: auto;
   font-family: var(--mono);
   font-size: 11px;
@@ -2312,8 +2312,8 @@ h1.display {
   color: var(--ink);
 }
 /* A grouped-by-feed header rendered as a link to the feed page. Inherits the
-   .lib-group look; resets the button chrome and adds a trailing chevron. */
-.lib-group.as-link {
+   .lib-mix look; resets the button chrome and adds a trailing chevron. */
+.lib-mix.as-link {
   width: 100%;
   border: none;
   border-bottom: 1.5px solid var(--rule-hard);
@@ -2321,12 +2321,12 @@ h1.display {
   text-align: left;
   cursor: pointer;
 }
-.lib-group.as-link .chev {
+.lib-mix.as-link .chev {
   margin-left: 8px;
   font-size: 11px;
   color: var(--ink-mute);
 }
-.lib-group.as-link:active {
+.lib-mix.as-link:active {
   color: var(--ink);
 }
 /* ===== end #66 ===== */
@@ -2579,8 +2579,8 @@ button.id-source:active {
   border-top: 1px solid var(--hair);
 }
 
-/* --- control groups --- */
-.ctl-groups {
+/* --- control mixes --- */
+.ctl-mixes {
   margin-top: 6px;
 }
 .ctl-section {
@@ -2594,10 +2594,10 @@ button.id-source:active {
   font-size: 20px;
   margin: 6px 0 2px;
 }
-/* #97: per-element group label inside a tab panel (e.g. the Card tab's Feed pill /
-   Source / Author / Date groups). Quieter than .ctl-heading - a mono eyebrow with a
+/* #97: per-element mix label inside a tab panel (e.g. the Card tab's Feed pill /
+   Source / Author / Date mixes). Quieter than .ctl-heading - a mono eyebrow with a
    hairline above so the controls read as grouped, not one long flat list. */
-.ctl-grouphead {
+.ctl-mixhead {
   font-family: var(--mono);
   font-size: 11px;
   font-weight: 600;
@@ -2608,7 +2608,7 @@ button.id-source:active {
   padding-top: 12px;
   border-top: 1px solid var(--hair);
 }
-.ctl-grouphead:first-child {
+.ctl-mixhead:first-child {
   margin-top: 4px;
   padding-top: 0;
   border-top: none;

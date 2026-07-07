@@ -41,7 +41,7 @@ export default function SourcesPage() {
   const [fstate, setFstate] = useState<"followed" | "archived" | "all">("followed");
   const [fsignal, setFsignal] = useState<SigKey | null>(null);
   const [sort, setSort] = useState<SortKey>("weight");
-  const [group, setGroup] = useState(false);
+  const [mix, setMix] = useState(false);
   // #66: rows navigate to a dedicated source page instead of a drill-in sheet.
   const [adding, setAdding] = useState(false);
   const [url, setUrl] = useState("");
@@ -50,13 +50,13 @@ export default function SourcesPage() {
   const [err, setErr] = useState("");
   const [fetching, setFetching] = useState(false);
   const [iconsOpen, setIconsOpen] = useState(false);
-  // #55: signal / sort / group collapse into a bottom sheet so the always-on
+  // #55: signal / sort / mix collapse into a bottom sheet so the always-on
   // control stack is just feed chips + state and the list keeps the screen.
   const [ctrlOpen, setCtrlOpen] = useState(false);
   // #64: the secondary actions (import / add / refresh / feed insights / feed
   // settings) collapse behind one "Manage" affordance so the list starts high.
   const [manageOpen, setManageOpen] = useState(false);
-  const filtersActive = fsignal !== null || sort !== "weight" || group;
+  const filtersActive = fsignal !== null || sort !== "weight" || mix;
 
   function reload() {
     api.sources().then(setSources).catch((e) => setErr(String(e.message ?? e)));
@@ -162,9 +162,9 @@ export default function SourcesPage() {
   }, [shown, sort, feedBySlug]);
 
   // When grouping, bucket the already-sorted list by primary feed; feedless
-  // sources fall into a trailing "No feed" group.
-  const groups = useMemo(() => {
-    if (!group) return null;
+  // sources fall into a trailing "No feed" mix.
+  const mixes = useMemo(() => {
+    if (!mix) return null;
     const m = new Map<string, { feed: Feed | null; items: Source[] }>();
     for (const s of sorted) {
       const f = primaryFeed(s);
@@ -178,7 +178,7 @@ export default function SourcesPage() {
       return a.feed.sort - b.feed.sort || a.feed.name.localeCompare(b.feed.name);
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [group, sorted, feedBySlug]);
+  }, [mix, sorted, feedBySlug]);
 
   async function add() {
     if (!url.trim()) return;
@@ -256,7 +256,7 @@ export default function SourcesPage() {
           Open {feedBySlug.get(ffeed)!.name} page <span aria-hidden>▸</span>
         </button>
       )}
-      {/* #55: state (primary axis) stays visible; signal / sort / group collapse
+      {/* #55: state (primary axis) stays visible; signal / sort / mix collapse
           behind the "Filter & sort" sheet trigger so the stack fits a phone. */}
       <div className="lib-controls">
         <div className="lib-segs">
@@ -272,21 +272,21 @@ export default function SourcesPage() {
         <span className="lib-count">{shown.length} of {sources.length}</span>
       </div>
 
-      {(groups ?? [{ feed: null as Feed | null, items: sorted }]).map((g) => {
+      {(mixes ?? [{ feed: null as Feed | null, items: sorted }]).map((g) => {
         const GIc = g.feed ? feedIcon(g.feed.icon) : null;
         return (
         <div key={g.feed ? g.feed.slug : "__flat"}>
-          {group &&
+          {mix &&
             (g.feed ? (
               // #66: grouped headers browse into the feed's dedicated page.
-              <button className="lib-group as-link" onClick={() => nav(`/feeds/${g.feed!.slug}`)}>
+              <button className="lib-mix as-link" onClick={() => nav(`/feeds/${g.feed!.slug}`)}>
                 {GIc && <GIc size={14} strokeWidth={1.75} aria-hidden />}
                 <span>{g.feed.name}</span>
                 <span className="cnt">{g.items.length}</span>
                 <span className="chev" aria-hidden>▸</span>
               </button>
             ) : (
-              <div className="lib-group">
+              <div className="lib-mix">
                 <span>No feed</span>
                 <span className="cnt">{g.items.length}</span>
               </div>
@@ -345,10 +345,10 @@ export default function SourcesPage() {
                 <span className="sheet-chev">▸</span>
               </button>
             )}
-            {/* #86: groups gather feeds under one name. Managed on their own page
+            {/* #86: mixes gather feeds under one name. Managed on their own page
                 so the library header stays uncluttered. */}
-            <button className="sheet-row" onClick={() => { setManageOpen(false); nav("/groups"); }}>
-              <span>Groups</span>
+            <button className="sheet-row" onClick={() => { setManageOpen(false); nav("/mixes"); }}>
+              <span>Mixes</span>
               <span className="sheet-chev">▸</span>
             </button>
           </div>
@@ -380,8 +380,8 @@ export default function SourcesPage() {
 
           <div className="ctl-label">Grouping</div>
           <div className="lib-sheet-row">
-            <button className={`lib-seg ${group ? "on" : ""}`} onClick={() => setGroup((g) => !g)}>
-              group by feed
+            <button className={`lib-seg ${mix ? "on" : ""}`} onClick={() => setMix((g) => !g)}>
+              mix by feed
             </button>
           </div>
 
@@ -389,7 +389,7 @@ export default function SourcesPage() {
             <button
               className="btn ghost"
               disabled={!filtersActive}
-              onClick={() => { setFsignal(null); setSort("weight"); setGroup(false); }}
+              onClick={() => { setFsignal(null); setSort("weight"); setMix(false); }}
             >
               Reset
             </button>

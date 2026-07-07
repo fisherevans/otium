@@ -247,9 +247,9 @@ export interface CollectionItem extends Item {
 // "published" by its publish time. Both newest-first. Default saved.
 export type CollectionSort = "saved" | "published";
 
-// A group (#86): a user-created overlay gathering several feeds (many-to-many).
+// A mix (#86): a user-created overlay gathering several feeds (many-to-many).
 // feed_count is the denormalized membership size.
-export interface Group {
+export interface Mix {
   id: number;
   name: string;
   slug: string;
@@ -259,9 +259,9 @@ export interface Group {
   feed_count: number;
 }
 
-// GroupBrowse is GET /groups/{id}: the group's member feeds and the sources
-// aggregated across them (Group -> Feed -> Source).
-export interface GroupBrowse {
+// MixBrowse is GET /mixes/{id}: the mix's member feeds and the sources
+// aggregated across them (Mix -> Feed -> Source).
+export interface MixBrowse {
   feeds: Feed[];
   sources: Source[];
 }
@@ -383,17 +383,17 @@ export const api = {
   setFeedSources: (feedId: number, sourceIds: number[]) =>
     req<{ ok: boolean }>("PUT", `/feeds/${feedId}/sources`, { source_ids: sourceIds }),
 
-  // Groups (#86): a user-created overlay grouping feeds (many-to-many). CRUD +
+  // Mixes (#86): a user-created overlay grouping feeds (many-to-many). CRUD +
   // feed-assignment + a browse endpoint (its feeds + aggregated sources).
-  groups: () => req<Group[]>("GET", "/groups"),
-  createGroup: (name: string, icon?: string) =>
-    req<Group>("POST", "/groups", { name, icon: icon ?? "" }),
-  updateGroup: (id: number, patch: { name?: string; icon?: string }) =>
-    req<{ ok: boolean }>("PATCH", `/groups/${id}`, patch),
-  deleteGroup: (id: number) => req<{ ok: boolean }>("DELETE", `/groups/${id}`),
-  setGroupFeeds: (id: number, feedIds: number[]) =>
-    req<{ ok: boolean }>("PUT", `/groups/${id}/feeds`, { feed_ids: feedIds }),
-  groupBrowse: (id: number) => req<GroupBrowse>("GET", `/groups/${id}`),
+  mixes: () => req<Mix[]>("GET", "/mixes"),
+  createMix: (name: string, icon?: string) =>
+    req<Mix>("POST", "/mixes", { name, icon: icon ?? "" }),
+  updateMix: (id: number, patch: { name?: string; icon?: string }) =>
+    req<{ ok: boolean }>("PATCH", `/mixes/${id}`, patch),
+  deleteMix: (id: number) => req<{ ok: boolean }>("DELETE", `/mixes/${id}`),
+  setMixFeeds: (id: number, feedIds: number[]) =>
+    req<{ ok: boolean }>("PUT", `/mixes/${id}/feeds`, { feed_ids: feedIds }),
+  mixBrowse: (id: number) => req<MixBrowse>("GET", `/mixes/${id}`),
 
   sources: () => req<Source[]>("GET", "/sources"),
   createSource: (s: { title: string; feed_url: string; kind?: string; weight?: number }) =>

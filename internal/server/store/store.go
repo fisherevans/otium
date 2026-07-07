@@ -101,10 +101,10 @@ func migrate(sdb *sql.DB) error {
 	if err := ensureIndexIfTable(sdb, "sessions", `CREATE INDEX IF NOT EXISTS idx_sessions_user_status ON sessions(user_id, status)`); err != nil {
 		return err
 	}
-	// Group tier (#86): groups + group_feeds. CREATE TABLE IF NOT EXISTS is safe on
+	// Mix tier (#86): mixes + mix_feeds. CREATE TABLE IF NOT EXISTS is safe on
 	// every boot; forward FK references (users/feeds) are resolved at write time, so
 	// creating these before those tables exist (a partial test DB) is fine.
-	if _, err := sdb.Exec(`CREATE TABLE IF NOT EXISTS groups (
+	if _, err := sdb.Exec(`CREATE TABLE IF NOT EXISTS mixes (
 		id         INTEGER PRIMARY KEY AUTOINCREMENT,
 		user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
 		name       TEXT NOT NULL,
@@ -116,10 +116,10 @@ func migrate(sdb *sql.DB) error {
 	)`); err != nil {
 		return err
 	}
-	if _, err := sdb.Exec(`CREATE TABLE IF NOT EXISTS group_feeds (
-		group_id INTEGER NOT NULL REFERENCES groups(id) ON DELETE CASCADE,
+	if _, err := sdb.Exec(`CREATE TABLE IF NOT EXISTS mix_feeds (
+		mix_id INTEGER NOT NULL REFERENCES mixes(id) ON DELETE CASCADE,
 		feed_id  INTEGER NOT NULL REFERENCES feeds(id) ON DELETE CASCADE,
-		PRIMARY KEY (group_id, feed_id)
+		PRIMARY KEY (mix_id, feed_id)
 	)`); err != nil {
 		return err
 	}
@@ -300,7 +300,7 @@ const (
 	videosFeedSlug = "videos"
 	videosFeedIcon = "film" // Clapperboard glyph; see web/src/lib/feedIcons.ts
 	// videosBackfillKey gates the one-time untagged-YouTube grouping so it runs
-	// exactly once and never re-groups sources Fisher later pulls out by hand.
+	// exactly once and never re-mixes sources Fisher later pulls out by hand.
 	videosBackfillKey = "videos_backfill_done"
 )
 
@@ -329,7 +329,7 @@ func (db *DB) GetOrCreateVideosFeed(ctx context.Context, userID int64) (*Feed, e
 // BackfillVideosFeed is a one-time, marker-guarded migration (#53): it ensures
 // the Videos feed exists and assigns every youtube-kind source that currently
 // belongs to NO feed to it. Guarded by the kv 'videos_backfill_done' flag so it
-// runs exactly once per user and never re-groups sources later pulled out.
+// runs exactly once per user and never re-mixes sources later pulled out.
 // Returns the number of sources assigned (0 on every run after the first).
 func (db *DB) BackfillVideosFeed(ctx context.Context, userID int64) (int, error) {
 	if _, done, err := db.kvGet(ctx, userID, videosBackfillKey); err != nil {

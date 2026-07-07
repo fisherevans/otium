@@ -71,10 +71,10 @@ type FeedRef struct {
 	Icon  string `json:"icon"`
 }
 
-// Group is a user-created overlay gathering several feeds under one name (#86):
-// "News" = Local + International. Many-to-many - a feed can be in several groups.
+// Mix is a user-created overlay gathering several feeds under one name (#86):
+// "News" = Local + International. Many-to-many - a feed can be in several mixes.
 // FeedCount is the denormalized membership size for the management list.
-type Group struct {
+type Mix struct {
 	ID        int64     `json:"id"`
 	UserID    int64     `json:"-"`
 	Name      string    `json:"name"`
@@ -87,7 +87,7 @@ type Group struct {
 
 // Collection is a named list of saved items (#57). Builtins (Saved, Watch
 // Later, Liked) are seeded per user and protected from rename/delete; the rest
-// are user-created. Unlike a feed (a grouping of sources), a collection groups
+// are user-created. Unlike a feed (a grouping of sources), a collection mixes
 // items the user deliberately set aside.
 type Collection struct {
 	ID        int64     `json:"id"`

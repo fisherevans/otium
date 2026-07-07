@@ -1,25 +1,25 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { api, type Feed, type Group } from "@/api/client";
+import { api, type Feed, type Mix } from "@/api/client";
 import { feedIcon } from "@/lib/feedIcons";
 
-// Groups management (#86). A group is a user-created overlay that gathers several
+// Mixes management (#86). A mix is a user-created overlay that gathers several
 // FEEDS under one name ("News" = Local + International); a feed can be in many
-// groups. This page is the whole surface: create / rename / delete a group,
-// toggle which feeds belong to it, and browse Group -> Feed (each member feed
-// links to its page, which lists its sources - completing Group -> Feed -> Source).
+// mixes. This page is the whole surface: create / rename / delete a mix,
+// toggle which feeds belong to it, and browse Mix -> Feed (each member feed
+// links to its page, which lists its sources - completing Mix -> Feed -> Source).
 //
 // It lives on its own route (reached from the Library's Manage sheet) rather than
 // in the library header, so the v0.21 four-tab nav stays uncluttered.
-export default function GroupsPage() {
+export default function MixesPage() {
   const nav = useNavigate();
-  const [groups, setGroups] = useState<Group[] | null>(null);
+  const [mixes, setMixes] = useState<Mix[] | null>(null);
   const [feeds, setFeeds] = useState<Feed[]>([]);
   const [err, setErr] = useState("");
   const [newName, setNewName] = useState("");
   const [creating, setCreating] = useState(false);
 
-  // The expanded group + its current feed-id membership (seeded from the browse
+  // The expanded mix + its current feed-id membership (seeded from the browse
   // endpoint so the chips reflect the server, then updated optimistically).
   const [openId, setOpenId] = useState<number | null>(null);
   const [memberIds, setMemberIds] = useState<Set<number>>(new Set());
@@ -27,14 +27,14 @@ export default function GroupsPage() {
   const [confirmDel, setConfirmDel] = useState(false);
 
   function reload() {
-    api.groups().then(setGroups).catch((e) => setErr(String(e.message ?? e)));
+    api.mixes().then(setMixes).catch((e) => setErr(String(e.message ?? e)));
   }
   useEffect(() => {
     reload();
     api.feeds().then(setFeeds).catch(() => {});
   }, []);
 
-  async function openGroup(g: Group) {
+  async function openMix(g: Mix) {
     if (openId === g.id) {
       setOpenId(null);
       return;
@@ -44,7 +44,7 @@ export default function GroupsPage() {
     setConfirmDel(false);
     setMemberIds(new Set());
     try {
-      const b = await api.groupBrowse(g.id);
+      const b = await api.mixBrowse(g.id);
       setMemberIds(new Set(b.feeds.map((f) => f.id)));
     } catch {
       /* leave empty on error */
@@ -56,7 +56,7 @@ export default function GroupsPage() {
     if (!name || creating) return;
     setCreating(true);
     try {
-      await api.createGroup(name);
+      await api.createMix(name);
       setNewName("");
       reload();
     } catch (e: any) {
@@ -66,23 +66,23 @@ export default function GroupsPage() {
     }
   }
 
-  async function toggleFeed(g: Group, feedId: number) {
+  async function toggleFeed(g: Mix, feedId: number) {
     const next = new Set(memberIds);
     next.has(feedId) ? next.delete(feedId) : next.add(feedId);
     setMemberIds(next); // optimistic
-    await api.setGroupFeeds(g.id, [...next]).catch(() => {});
+    await api.setMixFeeds(g.id, [...next]).catch(() => {});
     reload(); // refresh feed_count
   }
 
-  async function saveName(g: Group) {
+  async function saveName(g: Mix) {
     const name = renaming.trim();
     if (!name || name === g.name) return;
-    await api.updateGroup(g.id, { name }).catch(() => {});
+    await api.updateMix(g.id, { name }).catch(() => {});
     reload();
   }
 
-  async function del(g: Group) {
-    await api.deleteGroup(g.id).catch(() => {});
+  async function del(g: Mix) {
+    await api.deleteMix(g.id).catch(() => {});
     setOpenId(null);
     reload();
   }
@@ -93,10 +93,10 @@ export default function GroupsPage() {
         <span aria-hidden>←</span> Library
       </button>
       <div className="lib-topbar">
-        <h1 className="display">Groups</h1>
+        <h1 className="display">Mixes</h1>
       </div>
       <p className="sub">
-        Gather feeds under one name - "News" might hold Local and International. A feed can live in several groups.
+        Gather feeds under one name - "News" might hold Local and International. A feed can live in several mixes.
       </p>
       {err && <p className="err">{err}</p>}
 
@@ -104,28 +104,28 @@ export default function GroupsPage() {
       <div className="lib-add" style={{ marginBottom: 16 }}>
         <input
           className="field"
-          placeholder="New group name"
+          placeholder="New mix name"
           value={newName}
           onChange={(e) => setNewName(e.target.value)}
           onKeyDown={(e) => e.key === "Enter" && create()}
         />
         <button className="btn" onClick={create} disabled={creating || !newName.trim()}>
-          {creating ? "Adding…" : "Add group"}
+          {creating ? "Adding…" : "Add mix"}
         </button>
       </div>
 
-      {groups === null ? (
+      {mixes === null ? (
         <p className="sub">Loading…</p>
-      ) : groups.length === 0 ? (
-        <p className="sub" style={{ padding: "8px 0" }}>No groups yet. Create one above.</p>
+      ) : mixes.length === 0 ? (
+        <p className="sub" style={{ padding: "8px 0" }}>No mixes yet. Create one above.</p>
       ) : (
-        groups.map((g) => {
+        mixes.map((g) => {
           const Ic = feedIcon(g.icon);
           const open = openId === g.id;
           const memberFeeds = feeds.filter((f) => memberIds.has(f.id));
           return (
             <div className="lib-row" key={g.id}>
-              <div className="lib-head" onClick={() => openGroup(g)}>
+              <div className="lib-head" onClick={() => openMix(g)}>
                 {Ic && <Ic size={16} strokeWidth={1.75} aria-hidden />}
                 <div className="nm">
                   <b>{g.name}</b>
@@ -149,7 +149,7 @@ export default function GroupsPage() {
                   </div>
 
                   {/* Feed membership */}
-                  <div className="ctl-label">Feeds in this group</div>
+                  <div className="ctl-label">Feeds in this mix</div>
                   {feeds.length === 0 ? (
                     <p className="caphint">No feeds yet.</p>
                   ) : (
@@ -169,9 +169,9 @@ export default function GroupsPage() {
                       })}
                     </div>
                   )}
-                  <p className="caphint">Tap a feed to add or remove it from this group.</p>
+                  <p className="caphint">Tap a feed to add or remove it from this mix.</p>
 
-                  {/* Browse into member feeds (Group -> Feed -> Source) */}
+                  {/* Browse into member feeds (Mix -> Feed -> Source) */}
                   {memberFeeds.length > 0 && (
                     <>
                       <div className="ctl-label">Browse</div>
@@ -180,7 +180,7 @@ export default function GroupsPage() {
                         return (
                           <button
                             key={f.id}
-                            className="lib-group as-link"
+                            className="lib-mix as-link"
                             onClick={() => nav(`/feeds/${f.slug}`)}
                           >
                             {FIc && <FIc size={14} strokeWidth={1.75} aria-hidden />}
@@ -204,7 +204,7 @@ export default function GroupsPage() {
                     </div>
                   ) : (
                     <div className="lib-actions">
-                      <button onClick={() => setConfirmDel(true)}>Delete group</button>
+                      <button onClick={() => setConfirmDel(true)}>Delete mix</button>
                     </div>
                   )}
                 </div>
