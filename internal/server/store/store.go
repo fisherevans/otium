@@ -1314,6 +1314,16 @@ type SourceStatsView struct {
 	Invisible int     `json:"invisible"` // items never presented (unseen); == Total - Shown
 	SkipPct   float64 `json:"skip_pct"`  // skipped / shown, 0 when nothing shown
 	OpenPct   float64 `json:"open_pct"`  // opened / shown
+
+	// Time-based invisibility (#120). The raw Invisible count above is poisoned by
+	// the import backfill: adding a source ingests its whole historical feed, all
+	// unseen, so a fresh source reads as ~100% invisible instantly. These fields
+	// only count items published since the source was added (added_at), split into
+	// "presented" vs "aged out unseen" (auto-archived past the window without ever
+	// being shown). InvisiblePct = MissedSince / (ShownSince + MissedSince).
+	ShownSince   int     `json:"shown_since"`   // presented, published since added
+	MissedSince  int     `json:"missed_since"`  // aged out unseen, published since added
+	InvisiblePct float64 `json:"invisible_pct"` // MissedSince / (ShownSince + MissedSince)
 }
 
 // SourceStatsAll returns the stats bundle for every one of the user's sources in a
@@ -1330,13 +1340,15 @@ func (db *DB) SourceStatsAll(ctx context.Context, userID int64) (map[int64]Sourc
 		        SUM(CASE WHEN st.state = 'opened' THEN 1 ELSE 0 END) AS opened,
 		        SUM(CASE WHEN st.state = 'liked' THEN 1 ELSE 0 END) AS liked,
 		        SUM(CASE WHEN st.item_id IS NULL AND i.published_at >= datetime('now', ?) THEN 1 ELSE 0 END) AS on_deck,
+		        SUM(CASE WHEN st.item_id IS NOT NULL AND julianday(i.published_at) >= julianday(s.added_at) THEN 1 ELSE 0 END) AS shown_since,
+		        SUM(CASE WHEN st.item_id IS NULL AND julianday(i.published_at) >= julianday(s.added_at) AND julianday(i.published_at) < julianday('now') - ? THEN 1 ELSE 0 END) AS missed_since,
 		        COALESCE(julianday('now') - julianday(MIN(i.published_at)), 0) AS span_days
 		 FROM sources s
 		 JOIN items i ON i.source_id = s.id
 		 LEFT JOIN item_state st ON st.item_id = i.id AND st.user_id = ?
 		 WHERE s.user_id = ?
 		 GROUP BY i.source_id`,
-		fmt.Sprintf("-%d days", globalArchiveWindowDays), userID, userID)
+		fmt.Sprintf("-%d days", globalArchiveWindowDays), globalArchiveWindowDays, userID, userID)
 	if err != nil {
 		return nil, err
 	}
@@ -1345,7 +1357,7 @@ func (db *DB) SourceStatsAll(ctx context.Context, userID int64) (map[int64]Sourc
 	for rows.Next() {
 		var v SourceStatsView
 		var span float64
-		if err := rows.Scan(&v.SourceID, &v.Total, &v.Unseen, &v.Shown, &v.Skipped, &v.Opened, &v.Liked, &v.OnDeck, &span); err != nil {
+		if err := rows.Scan(&v.SourceID, &v.Total, &v.Unseen, &v.Shown, &v.Skipped, &v.Opened, &v.Liked, &v.OnDeck, &v.ShownSince, &v.MissedSince, &span); err != nil {
 			return nil, err
 		}
 		v.Invisible = v.Unseen
@@ -1356,6 +1368,9 @@ func (db *DB) SourceStatsAll(ctx context.Context, userID int64) (map[int64]Sourc
 		if v.Shown > 0 {
 			v.SkipPct = round2f(float64(v.Skipped) / float64(v.Shown))
 			v.OpenPct = round2f(float64(v.Opened) / float64(v.Shown))
+		}
+		if den := v.ShownSince + v.MissedSince; den > 0 {
+			v.InvisiblePct = round2f(float64(v.MissedSince) / float64(den))
 		}
 		out[v.SourceID] = v
 	}

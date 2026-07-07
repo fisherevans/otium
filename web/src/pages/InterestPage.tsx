@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { Pencil, Plus, Mail, Ban, Eye } from "lucide-react";
+import { Pencil, Plus, Mail, Ban, EyeOff } from "lucide-react";
 import { api, type Interest, type Mix, type Source, type SourceStats } from "@/api/client";
 import { FEED_ICONS, feedIcon } from "@/lib/feedIcons";
 import { ARCHIVE_PRESETS, archiveLabel } from "@/lib/archive";
-import { engagementBadge } from "@/lib/stats";
+import { engagementBadge, type InsightKind } from "@/lib/stats";
 import { REP_LABEL } from "@/lib/represent";
 import { bucketOf, WLEVEL } from "@/lib/weight";
 import { Dialog } from "@/components/Dialog";
@@ -29,10 +29,10 @@ function archivalSuffix(srcDays: number): string {
   const preset = ARCHIVE_PRESETS.find((p) => p.days === srcDays);
   return `${(preset?.label ?? `${srcDays} days`).toUpperCase()} ARCHIVAL`;
 }
-function BadgeIcon({ tone }: { tone: string }) {
-  if (tone === "up") return <Mail size={12} strokeWidth={1.9} aria-hidden />;
-  if (tone === "down") return <Ban size={12} strokeWidth={1.9} aria-hidden />;
-  return <Eye size={12} strokeWidth={1.9} aria-hidden />;
+function BadgeIcon({ kind }: { kind: InsightKind }) {
+  if (kind === "open") return <Mail size={12} strokeWidth={1.9} aria-hidden />;
+  if (kind === "skip") return <Ban size={12} strokeWidth={1.9} aria-hidden />;
+  return <EyeOff size={12} strokeWidth={1.9} aria-hidden />;
 }
 
 export default function InterestPage() {
@@ -213,9 +213,11 @@ export default function InterestPage() {
               <button className="isrc-row" key={s.id} onClick={() => nav(`/sources/${s.id}`)}>
                 <div className="isrc-head">
                   <span className="isrc-name">{s.title}</span>
-                  <span className={`isrc-badge tone-${badge.tone}`}>
-                    <BadgeIcon tone={badge.tone} /> {badge.text}
-                  </span>
+                  {badge && (
+                    <span className={`isrc-badge tone-${badge.tone}`}>
+                      <BadgeIcon kind={badge.kind} /> {badge.text}
+                    </span>
+                  )}
                 </div>
                 <div className="isrc-sub">
                   {s.kind.toUpperCase()} · {pd < 1 ? pd.toFixed(1) : Math.round(pd)}{" "}

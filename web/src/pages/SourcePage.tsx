@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { Pencil, Settings, Copy, Check } from "lucide-react";
+import { Pencil, Settings, Copy, Check, Mail, Ban, EyeOff } from "lucide-react";
 import { api, type Interest, type Source, type SourceItem, type SourceStats } from "@/api/client";
 import { bucketOf, BUCKETS, WFREQ, WHINT, WLEVEL, type Bucket } from "@/lib/weight";
 import { ARCHIVE_PRESETS } from "@/lib/archive";
+import { sourceInsight, type InsightKind } from "@/lib/stats";
 import { REP_PROSE, REP_LABEL, compareToAverage } from "@/lib/represent";
 import { relDate } from "@/lib/format";
 import { Dialog } from "@/components/Dialog";
@@ -107,8 +108,10 @@ export default function SourcePage() {
   const avgPerDay = avg((s) => s.per_day);
   const avgShown = avg((s) => s.shown);
   const avgSkip = avg((s) => s.skip_pct);
-  const avgCov = avg((s) => (s.total ? s.shown / s.total : 0));
-  const coverage = st && st.total ? st.shown / st.total : 0;
+  // The one threshold-crossing insight for this source (matches the pill shown on
+  // the interest page); StatIcon marks the stat line the pill was derived from.
+  const insight = sourceInsight(st);
+  const resolvedSince = (st?.shown_since ?? 0) + (st?.missed_since ?? 0);
 
   function eligible(it: SourceItem): boolean {
     const hay = (it.title + " " + it.summary).toLowerCase();
@@ -132,6 +135,18 @@ export default function SourcePage() {
       default:
         return eligible(it) ? { label: "unread", cls: "st-unread" } : { label: "auto archived", cls: "st-arch" };
     }
+  }
+
+  // statIcon marks a stat line when it's the source of the active insight pill, so
+  // a user seeing "92% invisible" on the interest page finds the matching line here.
+  function statIcon(kind: InsightKind) {
+    if (!insight || insight.kind !== kind) return null;
+    const I = kind === "open" ? Mail : kind === "skip" ? Ban : EyeOff;
+    return (
+      <span className={`src-stat-ico ins-${kind}`} aria-hidden>
+        <I size={14} strokeWidth={1.9} />
+      </span>
+    );
   }
 
   // handlers
@@ -237,14 +252,29 @@ export default function SourcePage() {
         </p>
 
         <p className="src-stat">
+          {statIcon("open")}
+          You opened <b>{pct(st?.open_pct ?? 0)}</b> of the articles it showed you.
+        </p>
+        <p className="src-stat">
+          {statIcon("skip")}
           You skipped <b>{pct(st?.skip_pct ?? 0)}</b> of those presented articles.
         </p>
         <p className="src-stat-sub">That rate is {compareToAverage(st?.skip_pct ?? 0, avgSkip, "higher", "lower")}.</p>
 
-        <p className="src-stat">
-          You've seen <b>{pct(coverage)}</b> of everything {source.title} has published.
-        </p>
-        <p className="src-stat-sub">That rate is {compareToAverage(coverage, avgCov, "higher", "lower")}.</p>
+        {resolvedSince > 0 ? (
+          <>
+            <p className="src-stat">
+              {statIcon("invisible")}
+              Since you added {source.title}, <b>{pct(st?.invisible_pct ?? 0)}</b> of its articles aged out before you ever
+              saw them.
+            </p>
+            <p className="src-stat-sub">
+              {st?.shown_since ?? 0} reached you, {st?.missed_since ?? 0} archived unseen.
+            </p>
+          </>
+        ) : (
+          <p className="src-stat-sub">Too new to tell how much of {source.title} you're seeing yet.</p>
+        )}
 
         <p className="src-stat">
           There {(st?.on_deck ?? 0) === 1 ? "is" : "are"} <b>{st?.on_deck ?? 0}</b> unread{" "}

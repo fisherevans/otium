@@ -1656,6 +1656,19 @@ h1.display {
 .src-stat b {
   font-weight: 700;
 }
+/* Inline marker tying a stat line to the insight pill it drives (open/skip/invisible). */
+.src-stat-ico {
+  display: inline-flex;
+  vertical-align: -2px;
+  margin-right: 7px;
+  color: var(--ink-mute);
+}
+.src-stat-ico.ins-open {
+  color: #20603f;
+}
+.src-stat-ico.ins-skip {
+  color: #8a3a2f;
+}
 .src-stat-sub {
   font-family: var(--serif);
   font-style: italic;

@@ -83,6 +83,13 @@ export interface SourceStats {
   invisible: number;
   skip_pct: number;
   open_pct: number;
+  // Time-based invisibility (#120): counts only items published since the source
+  // was added, so the import backfill doesn't read as ~100% invisible. shown_since
+  // = presented; missed_since = aged out unseen; invisible_pct = missed / (shown +
+  // missed). This is the honest "am I ever actually seeing this source" signal.
+  shown_since: number;
+  missed_since: number;
+  invisible_pct: number;
 }
 
 export interface Item {

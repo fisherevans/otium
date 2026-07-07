@@ -1,37 +1,58 @@
 import type { SourceStats } from "@/api/client";
 
-// The single most salient engagement fact about a source (#116), for the badge on
-// a source row / header. Transparency is the value here: surface the number that
-// actually characterizes your relationship with the source right now.
+// Source insight badges (#120). These pills are THRESHOLDED, not per-source
+// labels: a source only earns a pill when one signal crosses a bar worth
+// interrupting the user for. Most sources show no pill - that's the point, it
+// keeps the pills as signal instead of noise. The three signals:
 //
-// tone drives the badge color: "up" = you engage (open rate), "down" = you pass
-// (skip rate), "mute" = neutral supply facts (invisible / on deck / cold). The
-// picker prefers a real engagement signal (open/skip) once a source has been
-// shown; before that it falls back to supply (on deck / never shown).
+//   open      - you open most of what this source shows you (a positive)
+//   skip      - you skip most of what it shows you ("you're passing on a lot")
+//   invisible - its content ages out before you ever see it ("you're missing this")
+//
+// invisible uses the time-based invisible_pct (items published since you added the
+// source), NOT the raw unseen count, so the import backfill doesn't trip it.
 export type BadgeTone = "up" | "down" | "mute";
+export type InsightKind = "open" | "skip" | "invisible";
 export interface EngagementBadge {
   text: string;
-  tone: BadgeTone;
+  tone: BadgeTone; // color
+  kind: InsightKind; // icon
 }
 
-export function engagementBadge(st?: SourceStats): EngagementBadge {
-  if (!st || st.total === 0) return { text: "no articles yet", tone: "mute" };
-  if (st.shown === 0) {
-    if (st.on_deck > 0) return { text: `${st.on_deck} on deck`, tone: "mute" };
-    return { text: "not yet shown", tone: "mute" };
+// Bars. "A lot" is >=80% (Fisher's threshold). Min samples keep a single skip off
+// two presentations, or a fresh source, from firing a pill.
+export const INSIGHT_HI = 0.8;
+const MIN_SHOWN = 5; // presentations before open/skip means anything
+const MIN_RESOLVED = 8; // since-added items resolved (shown or aged out) before invisibility means anything
+
+// sourceInsight picks the one salient, threshold-crossing signal for a source, or
+// null if nothing crosses. Invisibility leads: if you barely ever see a source,
+// its open/skip rates are computed off a handful of presentations and mislead.
+export function sourceInsight(st?: SourceStats): { kind: InsightKind; pct: number } | null {
+  if (!st) return null;
+  const resolved = (st.shown_since ?? 0) + (st.missed_since ?? 0);
+  if (resolved >= MIN_RESOLVED && (st.invisible_pct ?? 0) >= INSIGHT_HI) {
+    return { kind: "invisible", pct: st.invisible_pct };
   }
-  const open = Math.round(st.open_pct * 100);
-  const skip = Math.round(st.skip_pct * 100);
-  const invisible = st.total > 0 ? Math.round((st.invisible / st.total) * 100) : 0;
-  // A real engagement signal wins once it's meaningful (>=20%).
-  if (open >= skip && open >= 20) return { text: `${open}% open rate`, tone: "up" };
-  if (skip > open && skip >= 20) return { text: `${skip}% skip rate`, tone: "down" };
-  // Otherwise, if most of the supply never surfaces, that's the salient fact.
-  if (invisible >= 50) return { text: `${invisible}% invisible`, tone: "mute" };
-  // Low-signal fallback: lead with whichever engagement number is larger.
-  return open >= skip
-    ? { text: `${open}% open rate`, tone: "up" }
-    : { text: `${skip}% skip rate`, tone: "down" };
+  if (st.shown >= MIN_SHOWN) {
+    if (st.skip_pct >= INSIGHT_HI) return { kind: "skip", pct: st.skip_pct };
+    if (st.open_pct >= INSIGHT_HI) return { kind: "open", pct: st.open_pct };
+  }
+  return null;
+}
+
+export function engagementBadge(st?: SourceStats): EngagementBadge | null {
+  const ins = sourceInsight(st);
+  if (!ins) return null;
+  const p = Math.round(ins.pct * 100);
+  switch (ins.kind) {
+    case "open":
+      return { text: `${p}% open rate`, tone: "up", kind: "open" };
+    case "skip":
+      return { text: `${p}% skip rate`, tone: "down", kind: "skip" };
+    case "invisible":
+      return { text: `${p}% invisible`, tone: "mute", kind: "invisible" };
+  }
 }
 
 // The source subline used under the badge: "RSS · 2 articles/day · 9 on deck".
