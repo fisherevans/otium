@@ -141,7 +141,7 @@ func durationSeconds(e *gofeed.Item) int {
 	}
 	// media:content duration lives in extensions
 	if m, ok := e.Extensions["media"]; ok {
-		if grp, ok := m["mix"]; ok {
+		if grp, ok := m["group"]; ok {
 			for _, g := range grp {
 				if c, ok := g.Children["content"]; ok {
 					for _, ch := range c {
@@ -204,7 +204,7 @@ func thumbnail(e *gofeed.Item) string {
 		return e.Image.URL
 	}
 	if m, ok := e.Extensions["media"]; ok {
-		if grp, ok := m["mix"]; ok {
+		if grp, ok := m["group"]; ok {
 			for _, g := range grp {
 				if th, ok := g.Children["thumbnail"]; ok {
 					for _, t := range th {
