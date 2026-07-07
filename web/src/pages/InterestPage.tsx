@@ -105,7 +105,8 @@ export default function InterestPage() {
 
   async function pickArchive(days: number) {
     if (!interest) return;
-    setArchiveOpen(false);
+    // Don't close on pick: ArchiveChoice fires onChange live (e.g. while adjusting a
+    // custom window), so the dialog stays open and the user dismisses it with Done.
     await api.updateInterest(interest.id, { archive_after_days: days }).catch(() => {});
     reloadInterests();
   }
@@ -246,10 +247,16 @@ export default function InterestPage() {
           <button className={`icon-cell ${!interest.icon ? "on" : ""}`} onClick={() => chooseIcon("")} aria-label="No icon">
             <span className="introw-dot" />
           </button>
-          {Object.keys(FEED_ICONS).map((key) => {
-            const I = feedIcon(key);
+          {FEED_ICONS.map((def) => {
+            const I = def.Icon;
             return (
-              <button key={key} className={`icon-cell ${interest.icon === key ? "on" : ""}`} onClick={() => chooseIcon(key)} aria-label={key}>
+              <button
+                key={def.key}
+                className={`icon-cell ${interest.icon === def.key ? "on" : ""}`}
+                onClick={() => chooseIcon(def.key)}
+                aria-label={def.label}
+                title={def.label}
+              >
                 {I && <I size={20} strokeWidth={1.6} />}
               </button>
             );
@@ -265,6 +272,11 @@ export default function InterestPage() {
       <Dialog open={archiveOpen} onClose={() => setArchiveOpen(false)} kicker="Default archival period">
         <p className="caphint">Sources in {interest.name} inherit this unless they set their own.</p>
         <ArchiveChoice scope="interest" value={interest.archive_after_days ?? 0} onChange={pickArchive} />
+        <div className="dlg-actions">
+          <button className="btn" onClick={() => setArchiveOpen(false)}>
+            Done
+          </button>
+        </div>
       </Dialog>
 
       <Dialog open={addOpen} onClose={() => setAddOpen(false)} kicker="Add source">
