@@ -460,7 +460,7 @@ func (db *DB) UpdateFeed(ctx context.Context, userID, id int64, name, color, ico
 }
 
 // FeedsForSources resolves the one feed each of the given sources belongs to
-// (#86), for the session card's identity line and the mix rollup. A source with
+// (#86), for the session card's identity line and the insights rollup. A source with
 // a feed maps to that feed's FeedRef; a feedless source (feed_id NULL) is absent
 // from the map (the card then renders source-only).
 func (db *DB) FeedsForSources(ctx context.Context, userID int64, sourceIDs []int64) (map[int64]FeedRef, error) {
@@ -804,7 +804,7 @@ func (db *DB) ListRecentItemsByFeed(ctx context.Context, userID, feedID int64, l
 	return scanItems(rows)
 }
 
-// candidateCols builds the shared projection for Candidates, MixItems, and
+// candidateCols builds the shared projection for Candidates, InsightsItems, and
 // CandidatesByIDs: item + source facts, the source's own half-life override
 // (s.half_life_days, #76), the accumulated-history cadence inputs
 // (win_count/win_span), and the source's one-feed ranker overrides (half-life +
@@ -1007,14 +1007,14 @@ func (db *DB) Candidates(ctx context.Context, userID int64, sourceIDs []int64, s
 	return cands, nil
 }
 
-// MixItems returns every item belonging to the user's followed/trial sources
+// InsightsItems returns every item belonging to the user's followed/trial sources
 // (optionally restricted to sourceIDs), each carrying the source facts the
 // scorer needs (title, weight, recent cadence). Unlike Candidates it does NOT
-// filter to unseen items and applies no row limit: the mix view sums the current
+// filter to unseen items and applies no row limit: the insights view sums the current
 // freshness-decayed score of ALL known items, so stale items fall out through
 // decay, not a WHERE clause. cadenceDays sets the rarity-boost cadence window, to
 // match the session builder's rarity semantics. Rows are ordered deterministically.
-func (db *DB) MixItems(ctx context.Context, userID int64, sourceIDs []int64, cadenceDays int) ([]Candidate, error) {
+func (db *DB) InsightsItems(ctx context.Context, userID int64, sourceIDs []int64, cadenceDays int) ([]Candidate, error) {
 	q := `SELECT ` + candidateCols() + `
 	      FROM items i
 	      JOIN sources s ON s.id = i.source_id

@@ -33,12 +33,12 @@ const (
 	// item is a fraction of the content length.
 	skimFactor       = 0.4   // user typically spends ~40% of an item's length
 	articleEffSec    = 40.0  // effective time for a duration-less item (an article)
-	defaultAvgEffSec = 120.0 // fallback when we know nothing about the mix
+	defaultAvgEffSec = 120.0 // fallback when we know nothing about the insights
 )
 
 // SourceStat is the per-source behavioral + content signal the ranker folds in.
 // AvgContentSec (empirical time-per-item) drives session-size prediction. Shown/
-// Skipped are carried for the mix view and the future skip recommendation (#19);
+// Skipped are carried for the insights view and the future skip recommendation (#19);
 // they no longer touch scoring - a skip is a signal the user acts on, not a
 // silent downweight (#109).
 type SourceStat struct {
@@ -92,7 +92,7 @@ type Selected struct {
 // Selectivity is deliberately absent: it's a per-session budget adjustment (an
 // exponent on weight×rarity that sharpens scarce sessions), not a property of the
 // item. The breakdown reports the item's standalone effective score - the same
-// value the mix view shares out - so "why this item" reads the same regardless of
+// value the insights view shares out - so "why this item" reads the same regardless of
 // how big a session it landed in.
 type ScoreBreakdown struct {
 	Weight         float64 `json:"weight"`          // source weight multiplier (0.25..5, default 1)
@@ -156,7 +156,7 @@ type scored struct {
 // prediction; the score itself is behavior-free.
 func Build(req Request, pool []store.Candidate, now time.Time, stats map[int64]SourceStat) Result {
 	// Predict how many items the user will actually get through this session, from
-	// their time budget and the mix's empirical time-per-item. Scarcer sessions
+	// their time budget and the insights's empirical time-per-item. Scarcer sessions
 	// sharpen selectivity so the few slots they'll see go to the best items.
 	predicted := predictItems(req, pool, stats)
 	sel := selectivity(predicted)
@@ -244,7 +244,7 @@ func Build(req Request, pool []store.Candidate, now time.Time, stats map[int64]S
 // the session-agnostic effective score. It's used to rehydrate a stored session
 // queue on resume (#67): the queue order is fixed at build time, so resume only
 // needs each item's current score/reason/breakdown, not a re-rank. Score equals
-// round2(ItemEffectiveScore), so the on-card cue, the breakdown, and the mix all
+// round2(ItemEffectiveScore), so the on-card cue, the breakdown, and the insights all
 // agree and the ItemEffectiveScore == scoreOf(sel=1) invariant is preserved.
 func SelectFor(c store.Candidate, now time.Time) Selected {
 	return Selected{
@@ -258,7 +258,7 @@ func SelectFor(c store.Candidate, now time.Time) Selected {
 }
 
 // predictItems estimates how many items fit the time budget: budget divided by
-// the mix's effective time-per-item. Effective time blends the feed's empirical
+// the insights's effective time-per-item. Effective time blends the feed's empirical
 // content length (SourceStat.AvgContentSec) with the skim factor - because a
 // 20-minute video the user skims in two minutes costs two minutes, not twenty.
 func predictItems(req Request, pool []store.Candidate, stats map[int64]SourceStat) int {
@@ -328,7 +328,7 @@ func scoreOf(c store.Candidate, now time.Time, sel float64) float64 {
 // weightRarity is the user-controlled term of the score: the source's weight
 // lifted by its relative-rarity boost. It carries no time or behavior signal -
 // just "how much does the user favor this source, adjusted so a source that posts
-// rarely for their feed isn't buried." Shared by the session ranker and the mix.
+// rarely for their feed isn't buried." Shared by the session ranker and the insights.
 func weightRarity(c store.Candidate) float64 {
 	return sourceWeight(c) * rarityOf(c)
 }
@@ -347,7 +347,7 @@ func sourceWeight(c store.Candidate) float64 {
 // defaulting to 1 (no boost) when unset. The store ranks each source's posting
 // cadence against the user's other sources and hands the boost down on the
 // candidate, so the ranker itself stays population-agnostic and the same value
-// flows into sessions, the mix, and the breakdown.
+// flows into sessions, the insights, and the breakdown.
 func rarityOf(c store.Candidate) float64 {
 	if c.RarityBoost <= 0 {
 		return 1
@@ -357,7 +357,7 @@ func rarityOf(c store.Candidate) float64 {
 
 // ItemIntendedScore is the session-agnostic "intended" contribution of a single
 // item: weight × rarity × freshness, with selectivity fixed at 1. It answers "how
-// much does this item want to be in the feed" - the numerator of the mix view's
+// much does this item want to be in the feed" - the numerator of the insights view's
 // share.
 func ItemIntendedScore(c store.Candidate, now time.Time) float64 {
 	return weightRarity(c) * freshness(c.PublishedAt, now, halfLifeOf(c))
@@ -366,8 +366,8 @@ func ItemIntendedScore(c store.Candidate, now time.Time) float64 {
 // ItemEffectiveScore is the session-agnostic contribution at selectivity 1 - what
 // the item is actually worth to the ranker "if you browsed everything." Since the
 // skip penalty was removed (#109), this is identical to ItemIntendedScore; both
-// are retained so the mix's share basis and the intended/effective split still
-// compile while the mix view is simplified separately. Equivalent to
+// are retained so the insights's share basis and the intended/effective split still
+// compile while the insights view is simplified separately. Equivalent to
 // scoreOf(c, now, 1).
 func ItemEffectiveScore(c store.Candidate, now time.Time) float64 {
 	return ItemIntendedScore(c, now)
@@ -379,7 +379,7 @@ func ItemEffectiveScore(c store.Candidate, now time.Time) float64 {
 // the global default in freshness(). The store already applied the multi-feed rule
 // to FeedHalfLifeDays, so the "which feed" ambiguity is settled before this. Every
 // scoring path (ScoreBreakdownFor, scoreOf, ItemIntendedScore) funnels through
-// here so sessions, the mix, and the breakdown resolve identically - that shared
+// here so sessions, the insights, and the breakdown resolve identically - that shared
 // resolution is what keeps ItemEffectiveScore == scoreOf(sel=1) intact.
 func halfLifeOf(c store.Candidate) float64 {
 	if c.SourceHalfLifeDays > 0 {
@@ -390,7 +390,7 @@ func halfLifeOf(c store.Candidate) float64 {
 
 // freshness decays an item by age. halfLifeDays is the resolved per-item override
 // when > 0, else the global freshnessHalfLifeDays. Both scoring paths pass
-// halfLifeOf(c) so sessions and the mix decay identically.
+// halfLifeOf(c) so sessions and the insights decay identically.
 func freshness(published, now time.Time, halfLifeDays float64) float64 {
 	if halfLifeDays <= 0 {
 		halfLifeDays = freshnessHalfLifeDays

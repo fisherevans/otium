@@ -6,11 +6,11 @@ import (
 	"time"
 )
 
-// TestMixItemsScopeAndSeenState verifies the query contract the mix view relies
+// TestInsightsItemsScopeAndSeenState verifies the query contract the insights view relies
 // on: every item from followed/trial sources is returned regardless of seen
 // state (unlike Candidates), archived sources are excluded, and the per-source
 // cadence is computed over the given window.
-func TestMixItemsScopeAndSeenState(t *testing.T) {
+func TestInsightsItemsScopeAndSeenState(t *testing.T) {
 	db, err := Open(":memory:")
 	if err != nil {
 		t.Fatal(err)
@@ -51,13 +51,13 @@ func TestMixItemsScopeAndSeenState(t *testing.T) {
 	mkItem(trial, "t-1", 2)
 	mkItem(archived, "a-1", 1) // must be excluded
 
-	// Mark one followed item as skipped - it must STILL appear in the mix (the
-	// mix scores all known items, not just unseen ones).
+	// Mark one followed item as skipped - it must STILL appear in the insights (the
+	// insights scores all known items, not just unseen ones).
 	if err := db.SetItemState(ctx, u.ID, fSeen, "skipped"); err != nil {
 		t.Fatal(err)
 	}
 
-	items, err := db.MixItems(ctx, u.ID, nil, 45)
+	items, err := db.InsightsItems(ctx, u.ID, nil, 45)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -66,7 +66,7 @@ func TestMixItemsScopeAndSeenState(t *testing.T) {
 	for _, c := range items {
 		bySource[c.SourceID]++
 		if c.SourceID == archived {
-			t.Fatalf("archived source leaked into mix: %+v", c)
+			t.Fatalf("archived source leaked into insights: %+v", c)
 		}
 	}
 	if bySource[followed] != 2 {
@@ -80,12 +80,12 @@ func TestMixItemsScopeAndSeenState(t *testing.T) {
 	}
 
 	// Scoping to a subset restricts the rows.
-	scoped, err := db.MixItems(ctx, u.ID, []int64{trial}, 45)
+	scoped, err := db.InsightsItems(ctx, u.ID, []int64{trial}, 45)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if len(scoped) != 1 || scoped[0].SourceID != trial {
-		t.Fatalf("scoped mix should be just the trial source, got %+v", scoped)
+		t.Fatalf("scoped insights should be just the trial source, got %+v", scoped)
 	}
 	// Source facts the scorer needs are populated.
 	if scoped[0].SourceWeight != 1 || scoped[0].SourceTitle != "Trial" {

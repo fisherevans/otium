@@ -63,7 +63,7 @@ func NewRouter(h *handler.Handler, authMiddleware func(http.Handler) http.Handle
 			r.Put("/sources/{id}/feed", h.SetSourceFeed)
 			r.Get("/sources/{id}/items", h.SourceItems)
 
-			r.Get("/mix", h.Mix)
+			r.Get("/insights", h.Insights)
 
 			// Collections (#57): named lists of saved items + builtins.
 			r.Get("/collections", h.ListCollections)

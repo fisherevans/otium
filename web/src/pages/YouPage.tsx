@@ -3,7 +3,7 @@ import { Settings, Palette, PieChart, Download, ChevronRight } from "lucide-reac
 
 // The You tab (#84, Model A). A calm launcher for the secondary destinations
 // that used to be buried in the Library's Manage sheet: Settings, Appearance,
-// Insights (the mix view), and Import. Just rows that navigate to the existing
+// Insights (the insights view), and Import. Just rows that navigate to the existing
 // pages - nothing here rebuilds them. A quiet About line closes the list.
 type Dest = {
   icon: typeof Settings;
@@ -15,7 +15,7 @@ type Dest = {
 const DESTS: Dest[] = [
   { icon: Settings, label: "Settings", desc: "Preferences and ranking behavior.", to: "/settings" },
   { icon: Palette, label: "Appearance", desc: "Reader typography, cards, and session presets.", to: "/settings/appearance" },
-  { icon: PieChart, label: "Insights", desc: "What each source actually is in your feed.", to: "/mix" },
+  { icon: PieChart, label: "Insights", desc: "What each source actually is in your feed.", to: "/insights" },
   { icon: Download, label: "Import", desc: "Bring your follows in from OPML or Takeout.", to: "/import" },
 ];
 

@@ -9,17 +9,17 @@ import (
 	"github.com/fisherevans/otium/internal/server/store"
 )
 
-// mixCadenceDays is the window used to compute each source's posting cadence for
-// the rarity boost in the mix score. Matches the session builder's default
-// candidate window so the mix's rarity semantics line up with what sessions do.
-const mixCadenceDays = 45
+// insightsCadenceDays is the window used to compute each source's posting cadence for
+// the rarity boost in the insights score. Matches the session builder's default
+// candidate window so the insights's rarity semantics line up with what sessions do.
+const insightsCadenceDays = 45
 
-// MixSource is one source's live slice of the feed. EffectiveShare is its share
+// InsightsSource is one source's live slice of the feed. EffectiveShare is its share
 // of the full ranker score (incl. skip penalty) - "what you actually see".
 // IntendedShare drops the skip penalty - "what it wants to be" - so the gap
 // between the two, read next to SkipPct, is the inefficiency signal: a big
 // intended slice you mostly skip is a prune candidate.
-type MixSource struct {
+type InsightsSource struct {
 	SourceID       int64          `json:"source_id"`
 	SourceTitle    string         `json:"source_title"`
 	Feed           *store.FeedRef `json:"feed"` // the source's one feed (#86); null for a feedless source
@@ -30,9 +30,9 @@ type MixSource struct {
 	Weight         float64        `json:"weight"`
 }
 
-// MixFeed is a per-feed rollup: the summed shares of its member sources. A nil
+// InsightsFeed is a per-feed rollup: the summed shares of its member sources. A nil
 // Feed is the feedless bucket (sources belonging to no feed).
-type MixFeed struct {
+type InsightsFeed struct {
 	Feed           *store.FeedRef `json:"feed"`
 	EffectiveShare float64        `json:"effective_share"`
 	IntendedShare  float64        `json:"intended_share"`
@@ -40,27 +40,27 @@ type MixFeed struct {
 	ItemCount      int            `json:"item_count"`
 }
 
-type MixTotals struct {
+type InsightsTotals struct {
 	SourceCount int `json:"source_count"`
 	ItemCount   int `json:"item_count"`
 }
 
-// MixResponse is the /mix payload. Shares are normalized so the source list (and
+// InsightsResponse is the /insights payload. Shares are normalized so the source list (and
 // the feed rollup) each sum to 1 over the scope; when scope=="feed" everything is
 // renormalized within that feed's sources.
-type MixResponse struct {
-	Scope   string      `json:"scope"`          // "all" | "feed"
-	Feed    string      `json:"feed,omitempty"` // slug, when scope=="feed"
-	Sources []MixSource `json:"sources"`
-	Feeds   []MixFeed   `json:"feeds"`
-	Totals  MixTotals   `json:"totals"`
+type InsightsResponse struct {
+	Scope   string           `json:"scope"`          // "all" | "feed"
+	Feed    string           `json:"feed,omitempty"` // slug, when scope=="feed"
+	Sources []InsightsSource `json:"sources"`
+	Feeds   []InsightsFeed   `json:"feeds"`
+	Totals  InsightsTotals   `json:"totals"`
 }
 
-// Mix computes the live effective share of each source: sum the current
+// Insights computes the live effective share of each source: sum the current
 // freshness-decayed ranker score of all its known items, normalized against the
 // grand total. Just-in-time - the half-life is evaluated now, so old items decay
-// to ~0 and the mix drifts as content ages. Read-only: emits no engagement events.
-func (h *Handler) Mix(w http.ResponseWriter, r *http.Request) {
+// to ~0 and the insights drifts as content ages. Read-only: emits no engagement events.
+func (h *Handler) Insights(w http.ResponseWriter, r *http.Request) {
 	uid := userID(r)
 	feedSlug := r.URL.Query().Get("feed")
 	scope := "all"
@@ -69,25 +69,25 @@ func (h *Handler) Mix(w http.ResponseWriter, r *http.Request) {
 		scope = "feed"
 		ids, err := h.db.SourceIDsForFeeds(r.Context(), uid, []string{feedSlug})
 		if err != nil {
-			serverError(w, h.log, "mix resolve feed", err)
+			serverError(w, h.log, "insights resolve feed", err)
 			return
 		}
 		sourceIDs = ids
 		if len(sourceIDs) == 0 {
-			// A feed with no sources yields an empty mix, not "all".
-			writeJSON(w, http.StatusOK, MixResponse{Scope: scope, Feed: feedSlug, Sources: []MixSource{}, Feeds: []MixFeed{}})
+			// A feed with no sources yields an empty insights, not "all".
+			writeJSON(w, http.StatusOK, InsightsResponse{Scope: scope, Feed: feedSlug, Sources: []InsightsSource{}, Feeds: []InsightsFeed{}})
 			return
 		}
 	}
 
-	items, err := h.db.MixItems(r.Context(), uid, sourceIDs, mixCadenceDays)
+	items, err := h.db.InsightsItems(r.Context(), uid, sourceIDs, insightsCadenceDays)
 	if err != nil {
-		serverError(w, h.log, "mix items", err)
+		serverError(w, h.log, "insights items", err)
 		return
 	}
 	skips, err := h.db.SourceSkipStats(r.Context(), uid)
 	if err != nil {
-		serverError(w, h.log, "mix skip stats", err)
+		serverError(w, h.log, "insights skip stats", err)
 		return
 	}
 	stats := map[int64]session.SourceStat{}
@@ -125,7 +125,7 @@ func (h *Handler) Mix(w http.ResponseWriter, r *http.Request) {
 	feedOf := map[int64]store.FeedRef{}
 	if len(order) > 0 {
 		if m, err := h.db.FeedsForSources(r.Context(), uid, order); err != nil {
-			h.log.Warn("mix feeds", "err", err)
+			h.log.Warn("insights feeds", "err", err)
 		} else {
 			feedOf = m
 		}
@@ -144,8 +144,8 @@ func (h *Handler) Mix(w http.ResponseWriter, r *http.Request) {
 		return v / grandInt
 	}
 
-	sources := make([]MixSource, 0, len(order))
-	feedAgg := map[string]*MixFeed{}
+	sources := make([]InsightsSource, 0, len(order))
+	feedAgg := map[string]*InsightsFeed{}
 	var feedKeys []string
 	totalItems := 0
 	for _, sid := range order {
@@ -162,7 +162,7 @@ func (h *Handler) Mix(w http.ResponseWriter, r *http.Request) {
 		}
 		es := shareEff(a.effSum)
 		is := shareInt(a.intSum)
-		sources = append(sources, MixSource{
+		sources = append(sources, InsightsSource{
 			SourceID:       sid,
 			SourceTitle:    a.title,
 			Feed:           fref,
@@ -180,7 +180,7 @@ func (h *Handler) Mix(w http.ResponseWriter, r *http.Request) {
 		}
 		mf := feedAgg[key]
 		if mf == nil {
-			mf = &MixFeed{Feed: fref}
+			mf = &InsightsFeed{Feed: fref}
 			feedAgg[key] = mf
 			feedKeys = append(feedKeys, key)
 		}
@@ -197,17 +197,17 @@ func (h *Handler) Mix(w http.ResponseWriter, r *http.Request) {
 		return sources[i].SourceID < sources[j].SourceID
 	})
 
-	feeds := make([]MixFeed, 0, len(feedKeys))
+	feeds := make([]InsightsFeed, 0, len(feedKeys))
 	for _, k := range feedKeys {
 		feeds = append(feeds, *feedAgg[k])
 	}
 	sort.SliceStable(feeds, func(i, j int) bool { return feeds[i].EffectiveShare > feeds[j].EffectiveShare })
 
-	writeJSON(w, http.StatusOK, MixResponse{
+	writeJSON(w, http.StatusOK, InsightsResponse{
 		Scope:   scope,
 		Feed:    feedSlug,
 		Sources: sources,
 		Feeds:   feeds,
-		Totals:  MixTotals{SourceCount: len(sources), ItemCount: totalItems},
+		Totals:  InsightsTotals{SourceCount: len(sources), ItemCount: totalItems},
 	})
 }

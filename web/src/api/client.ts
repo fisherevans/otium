@@ -175,11 +175,11 @@ export interface CommitResult {
   refreshing: boolean;
 }
 
-// Feed "mix" view (#49). Per source: its live effective share of the feed
+// Feed "insights" view (#49). Per source: its live effective share of the feed
 // (current freshness-decayed ranker score incl. skip penalty, normalized) paired
 // with intended_share (same, minus the skip penalty) and skip_pct. A big
 // intended slice you mostly skip is the inefficiency signal.
-export interface MixSource {
+export interface InsightsSource {
   source_id: number;
   source_title: string;
   feed: FeedRef | null; // primary feed; null for a feedless source
@@ -190,7 +190,7 @@ export interface MixSource {
   weight: number; // current multiplier (map via bucketOf for the control)
 }
 
-export interface MixFeed {
+export interface InsightsFeed {
   feed: FeedRef | null; // null = feedless bucket
   effective_share: number;
   intended_share: number;
@@ -198,11 +198,11 @@ export interface MixFeed {
   item_count: number;
 }
 
-export interface MixResponse {
+export interface InsightsResponse {
   scope: "all" | "feed";
   feed?: string; // slug, when scope === "feed"
-  sources: MixSource[];
-  feeds: MixFeed[];
+  sources: InsightsSource[];
+  feeds: InsightsFeed[];
   totals: { source_count: number; item_count: number };
 }
 
@@ -411,8 +411,8 @@ export const api = {
   feedItems: (feedId: number) => req<Item[]>("GET", `/feeds/${feedId}/items`),
   // --- end #66 block ---
 
-  mix: (feedSlug?: string) =>
-    req<MixResponse>("GET", `/mix${feedSlug ? `?feed=${encodeURIComponent(feedSlug)}` : ""}`),
+  insights: (feedSlug?: string) =>
+    req<InsightsResponse>("GET", `/insights${feedSlug ? `?feed=${encodeURIComponent(feedSlug)}` : ""}`),
 
   // Durable sessions (#67 + #69). createSession builds + stores the queue for a
   // single duration; currentSession resumes the active one (204 -> undefined);

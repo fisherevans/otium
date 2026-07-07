@@ -6,7 +6,7 @@ import SessionPage from "@/pages/SessionPage";
 import SourcesPage from "@/pages/SourcesPage";
 import CollectionsPage from "@/pages/CollectionsPage";
 import ImportPage from "@/pages/ImportPage";
-import MixPage from "@/pages/MixPage";
+import InsightsPage from "@/pages/InsightsPage";
 import SettingsPage from "@/pages/SettingsPage";
 // --- #83 personal-history page ---
 import HistoryPage from "@/pages/HistoryPage";
@@ -80,7 +80,7 @@ export default function App() {
           <Route path="/you" element={<YouPage />} />
           <Route path="/collections" element={<CollectionsPage />} />
           <Route path="/history" element={<HistoryPage />} /> {/* #83: personal shown-vs-engaged history */}
-          <Route path="/mix" element={<MixPage />} />
+          <Route path="/insights" element={<InsightsPage />} />
           <Route path="/settings" element={<SettingsPage />} /> {/* #68: preferences (fast-scroll check-in) */}
           <Route path="/settings/appearance" element={<AppearancePage />} /> {/* #80/#81/#82: appearance + live preview */}
           <Route path="/import" element={<ImportPage />} />

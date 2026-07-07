@@ -19,8 +19,8 @@ func cand(weight, rarityBoost float64, ageDays float64, now time.Time) store.Can
 func TestItemEffectiveScoreMatchesRankerSelectivityOne(t *testing.T) {
 	now := time.Date(2026, 7, 2, 12, 0, 0, 0, time.UTC)
 	c := cand(2, 1.5, 5, now)
-	// The mix's effective score must equal the ranker's score at selectivity 1 -
-	// this is what makes the mix "match what sessions surface."
+	// The insights's effective score must equal the ranker's score at selectivity 1 -
+	// this is what makes the insights "match what sessions surface."
 	if got, want := ItemEffectiveScore(c, now), scoreOf(c, now, 1); math.Abs(got-want) > 1e-12 {
 		t.Fatalf("effective=%v, scoreOf(sel=1)=%v", got, want)
 	}
@@ -89,7 +89,7 @@ func TestPerFeedHalfLifeOverridesGlobal(t *testing.T) {
 	}
 }
 
-// TestEffectiveMatchesScoreOfWithPerFeedHalfLife keeps the mix-vs-session
+// TestEffectiveMatchesScoreOfWithPerFeedHalfLife keeps the insights-vs-session
 // invariant intact once per-feed half-life is in play: both paths must resolve
 // the half-life identically (#17).
 func TestEffectiveMatchesScoreOfWithPerFeedHalfLife(t *testing.T) {
@@ -105,7 +105,7 @@ func TestEffectiveMatchesScoreOfWithPerFeedHalfLife(t *testing.T) {
 // breakdown the card exposes is the *actual* ranking, not an approximation. Its
 // three factors must multiply back to its own EffectiveScore, and that score must
 // equal both ItemEffectiveScore and scoreOf at selectivity 1 - the same invariant
-// the mix relies on. If any scorer helper changes, this fails until the breakdown
+// the insights relies on. If any scorer helper changes, this fails until the breakdown
 // tracks it.
 func TestScoreBreakdownMultipliesToEffective(t *testing.T) {
 	now := time.Date(2026, 7, 2, 12, 0, 0, 0, time.UTC)
@@ -129,7 +129,7 @@ func TestScoreBreakdownMultipliesToEffective(t *testing.T) {
 					b.Weight, b.Rarity, b.Freshness, product, b.EffectiveScore)
 			}
 			// And that effective score is the real ranker output at sel=1, which is
-			// also what the mix shares out. Never an approximation.
+			// also what the insights shares out. Never an approximation.
 			if want := ItemEffectiveScore(tt.c, now); math.Abs(b.EffectiveScore-want) > 1e-12 {
 				t.Fatalf("breakdown effective=%v != ItemEffectiveScore=%v", b.EffectiveScore, want)
 			}
@@ -183,7 +183,7 @@ func TestSourceHalfLifeResolutionHierarchy(t *testing.T) {
 	}
 }
 
-// TestEffectiveMatchesScoreOfWithSourceHalfLife keeps the mix-vs-session
+// TestEffectiveMatchesScoreOfWithSourceHalfLife keeps the insights-vs-session
 // invariant intact when a per-source override is in play: both scoring paths must
 // resolve the half-life through halfLifeOf identically (#76).
 func TestEffectiveMatchesScoreOfWithSourceHalfLife(t *testing.T) {

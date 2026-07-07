@@ -53,7 +53,7 @@ export default function SourcesPage() {
   // #55: signal / sort / group collapse into a bottom sheet so the always-on
   // control stack is just feed chips + state and the list keeps the screen.
   const [ctrlOpen, setCtrlOpen] = useState(false);
-  // #64: the secondary actions (import / add / refresh / feed mix / feed
+  // #64: the secondary actions (import / add / refresh / feed insights / feed
   // settings) collapse behind one "Manage" affordance so the list starts high.
   const [manageOpen, setManageOpen] = useState(false);
   const filtersActive = fsignal !== null || sort !== "weight" || group;
@@ -222,7 +222,7 @@ export default function SourcesPage() {
       {/* #64: compact top - title + one "Manage" affordance. The secondary
           actions live behind the Manage sheet so the list starts high. */}
       {/* #84 Model-A: the Library is just the library now. Collections + History
-          moved to the Saved tab; Import / Feed mix / Settings to the You tab. The
+          moved to the Saved tab; Import / Feed insights / Settings to the You tab. The
           header keeps only the source-level "Manage" affordance, so it no longer
           overflows at phone width. */}
       <div className="lib-topbar">
@@ -313,7 +313,7 @@ export default function SourcesPage() {
 
       {/* #64/#84: the collapsed source-level actions - full behavior, just
           off-screen until asked for. Add-a-source form lives inside the sheet
-          too. Import / Feed mix / Settings moved to their own tabs (You), so
+          too. Import / Feed insights / Settings moved to their own tabs (You), so
           this sheet is now just add / refresh / feed settings. */}
       <BottomSheet open={manageOpen} onClose={() => setManageOpen(false)} kicker="Manage">
         <div className="lib-sheet">

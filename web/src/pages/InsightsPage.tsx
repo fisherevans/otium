@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
-import { api, type Feed, type MixResponse, type MixSource } from "@/api/client";
+import { api, type Feed, type InsightsResponse, type InsightsSource } from "@/api/client";
 import { BUCKETS, BLABEL, bucketOf, type Bucket } from "@/lib/weight";
 import { feedIcon } from "@/lib/feedIcons";
 import { BottomSheet } from "@/components/BottomSheet";
 
-// The mix view (#49): each source's live effective share of the feed, paired
+// The insights view (#49): each source's live effective share of the feed, paired
 // with how much of it you skip. A source that is a big slice you mostly skip is
 // the prune candidate. Read-only insight - the only writes are the explicit
 // weight/archive actions from a row.
@@ -47,7 +47,7 @@ interface Slice {
   shade: string;
 }
 
-function Donut({ sources }: { sources: MixSource[] }) {
+function Donut({ sources }: { sources: InsightsSource[] }) {
   const top = sources.slice(0, 6);
   const rest = sources.slice(6);
   const slices: Slice[] = top.map((s, i) => ({
@@ -81,7 +81,7 @@ function Donut({ sources }: { sources: MixSource[] }) {
       });
 
   return (
-    <div className="mix-donut-wrap">
+    <div className="insights-donut-wrap">
       <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} role="img" aria-label="Feed share by source">
         {single ? (
           <circle cx={cx} cy={cy} r={(rO + rI) / 2} fill="none" stroke={slices[0].shade} strokeWidth={rO - rI} />
@@ -89,12 +89,12 @@ function Donut({ sources }: { sources: MixSource[] }) {
           paths.map((p, i) => <path key={i} d={p.d} fill={p.shade} stroke="var(--paper)" strokeWidth={1} />)
         )}
       </svg>
-      <ul className="mix-legend">
+      <ul className="insights-legend">
         {slices.map((s, i) => (
           <li key={i}>
-            <span className="mix-swatch" style={{ background: s.shade }} aria-hidden />
-            <span className="mix-legend-nm">{s.label}</span>
-            <span className="mix-legend-pct">{pct(s.share)}</span>
+            <span className="insights-swatch" style={{ background: s.shade }} aria-hidden />
+            <span className="insights-legend-nm">{s.label}</span>
+            <span className="insights-legend-pct">{pct(s.share)}</span>
           </li>
         ))}
       </ul>
@@ -102,18 +102,18 @@ function Donut({ sources }: { sources: MixSource[] }) {
   );
 }
 
-export default function MixPage() {
+export default function InsightsPage() {
   const [feeds, setFeeds] = useState<Feed[]>([]);
   const [scope, setScope] = useState<string | null>(null); // null = all feeds; else feed slug
-  const [data, setData] = useState<MixResponse | null>(null);
+  const [data, setData] = useState<InsightsResponse | null>(null);
   const [sort, setSort] = useState<Sort>("share");
   const [err, setErr] = useState("");
-  const [sheet, setSheet] = useState<MixSource | null>(null);
+  const [sheet, setSheet] = useState<InsightsSource | null>(null);
   const [toast, setToast] = useState<string | null>(null);
 
   function load() {
     api
-      .mix(scope ?? undefined)
+      .insights(scope ?? undefined)
       .then(setData)
       .catch((e) => setErr(String(e.message ?? e)));
   }
@@ -150,24 +150,24 @@ export default function MixPage() {
     window.setTimeout(() => setToast((t) => (t === msg ? null : t)), 3500);
   }
 
-  async function setWeight(s: MixSource, bucket: Bucket) {
+  async function setWeight(s: InsightsSource, bucket: Bucket) {
     await api.updateSource(s.source_id, { weight_bucket: bucket }).catch(() => {});
     setSheet(null);
     showToast(`${s.source_title} → ${BLABEL[bucket]}`);
     load();
   }
-  async function archive(s: MixSource) {
+  async function archive(s: InsightsSource) {
     await api.updateSource(s.source_id, { state: "archived" }).catch(() => {});
     setSheet(null);
     showToast(`${s.source_title} archived`);
     load();
   }
 
-  const isPrune = (s: MixSource) => s.effective_share >= PRUNE_SHARE && s.skip_pct >= PRUNE_SKIP;
+  const isPrune = (s: InsightsSource) => s.effective_share >= PRUNE_SHARE && s.skip_pct >= PRUNE_SKIP;
 
   return (
     <div>
-      <h1 className="display">Feed mix</h1>
+      <h1 className="display">Feed insights</h1>
       <p className="sub">
         What each source actually is in your feed right now, next to how much of it you skip. A big slice you mostly
         skip is worth turning down.
@@ -192,7 +192,7 @@ export default function MixPage() {
       {err && <p className="err">{err}</p>}
 
       {data && sources.length === 0 && (
-        <p className="mix-empty">No live content in this scope yet. Fetch some sources, then check back.</p>
+        <p className="insights-empty">No live content in this scope yet. Fetch some sources, then check back.</p>
       )}
 
       {sources.length > 0 && (
@@ -208,7 +208,7 @@ export default function MixPage() {
             <span className="lib-count">{data?.totals.source_count ?? 0} sources</span>
           </div>
 
-          <div className="mix-list">
+          <div className="insights-list">
             {sources.map((s) => {
               const Ic = feedIcon(s.feed?.icon);
               const prune = isPrune(s);
@@ -219,29 +219,29 @@ export default function MixPage() {
               const ghost = s.intended_share > s.effective_share * 1.15;
               const ghostW = ghost ? (Math.min(s.intended_share, maxShare) / maxShare) * 100 - fillW : 0;
               return (
-                <button className={`mix-row ${prune ? "prune" : ""}`} key={s.source_id} onClick={() => setSheet(s)}>
-                  <div className="mix-row-top">
-                    <span className="mix-ico" aria-hidden>
-                      {Ic ? <Ic size={15} strokeWidth={1.75} /> : <span className="mix-dot" />}
+                <button className={`insights-row ${prune ? "prune" : ""}`} key={s.source_id} onClick={() => setSheet(s)}>
+                  <div className="insights-row-top">
+                    <span className="insights-ico" aria-hidden>
+                      {Ic ? <Ic size={15} strokeWidth={1.75} /> : <span className="insights-dot" />}
                     </span>
-                    <span className="mix-name">{s.source_title}</span>
-                    <span className="mix-share">{pct(s.effective_share)}</span>
+                    <span className="insights-name">{s.source_title}</span>
+                    <span className="insights-share">{pct(s.effective_share)}</span>
                   </div>
-                  <div className="mix-bar">
-                    <div className="mix-fill" style={{ width: `${fillW}%` }} />
-                    {ghostW > 0.5 && <div className="mix-ghost" style={{ left: `${fillW}%`, width: `${ghostW}%` }} />}
+                  <div className="insights-bar">
+                    <div className="insights-fill" style={{ width: `${fillW}%` }} />
+                    {ghostW > 0.5 && <div className="insights-ghost" style={{ left: `${fillW}%`, width: `${ghostW}%` }} />}
                   </div>
-                  <div className="mix-meta">
+                  <div className="insights-meta">
                     <span>{s.item_count} items</span>
                     <span>·</span>
                     <span>{pct(s.skip_pct)} skip</span>
                     {ghost && (
                       <>
                         <span>·</span>
-                        <span className="mix-wants">wants {pct(s.intended_share)}</span>
+                        <span className="insights-wants">wants {pct(s.intended_share)}</span>
                       </>
                     )}
-                    {prune && <span className="mix-prune-tag">prune?</span>}
+                    {prune && <span className="insights-prune-tag">prune?</span>}
                   </div>
                 </button>
               );
@@ -252,7 +252,7 @@ export default function MixPage() {
 
       <BottomSheet open={!!sheet} onClose={() => setSheet(null)} kicker={sheet?.source_title}>
         {sheet && (
-          <div className="mix-sheet">
+          <div className="insights-sheet">
             <div className="insight">
               <b>{pct(sheet.effective_share)}</b> of your feed
               {sheet.intended_share > sheet.effective_share * 1.15 && (
