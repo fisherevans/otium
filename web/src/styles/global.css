@@ -1235,6 +1235,135 @@ h1.display {
   color: var(--ink);
   border-bottom-color: var(--ink);
 }
+
+/* --- Library home v2 (#120 mockup): Mixes section (pill chips) + Interests list.
+   Dedicated classes so the shared .lib-filter/.lib-fchip used elsewhere stay put. */
+.lib2 {
+  padding-top: 6px;
+}
+.lib2-head {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+}
+.lib2-head.interests {
+  margin-top: 34px;
+}
+.lib2-title {
+  font-family: var(--didot);
+  font-weight: 400;
+  font-size: 34px;
+  line-height: 1;
+  letter-spacing: 0.01em;
+  margin: 0;
+}
+.lib2-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background: none;
+  border: 0;
+  padding: 4px 0;
+  font-family: var(--grot);
+  font-size: 13px;
+  color: var(--ink-mute);
+}
+.lib2-action:active {
+  color: var(--ink);
+}
+.lib2-subtitle {
+  font-family: var(--serif);
+  font-style: italic;
+  font-size: 16px;
+  color: var(--ink-soft);
+  margin: 8px 0 16px;
+}
+.lib2-empty {
+  font-family: var(--serif);
+  font-style: italic;
+  color: var(--ink-mute);
+  padding: 16px 0;
+}
+.mixchips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin: 4px 0 2px;
+}
+.mixchip {
+  padding: 11px 24px;
+  border-radius: 999px;
+  border: 1.5px solid var(--rule-hard);
+  background: var(--paper);
+  font-family: var(--serif);
+  font-size: 17px;
+  color: var(--ink);
+  transition: background 0.15s steps(2), color 0.15s steps(2);
+}
+.mixchip.on {
+  background: var(--ink);
+  border-color: var(--ink);
+  color: var(--paper);
+}
+.mixchip.muted {
+  border-color: var(--hair);
+  color: var(--ink-mute);
+  font-style: italic;
+}
+.mixchip.muted.on {
+  color: var(--paper);
+  font-style: normal;
+}
+.introw {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+  width: 100%;
+  text-align: left;
+  background: none;
+  border: 0;
+  border-bottom: 1px solid var(--hair);
+  padding: 16px 2px;
+}
+.introw-glyph {
+  flex: 0 0 auto;
+  display: flex;
+  padding-top: 3px;
+  color: var(--ink);
+}
+.introw-dot {
+  display: block;
+  width: 15px;
+  height: 15px;
+  border: 1.5px solid var(--ink-mute);
+  border-radius: 999px;
+}
+.introw-body {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+.introw-name {
+  font-family: var(--serif);
+  font-weight: 700;
+  font-size: 22px;
+  line-height: 1.05;
+  color: var(--ink);
+}
+.introw-count {
+  font-family: var(--serif);
+  font-style: italic;
+  font-size: 14px;
+  color: var(--ink-mute);
+}
+.lib2-filtered {
+  font-family: var(--serif);
+  font-style: italic;
+  font-size: 14px;
+  color: var(--ink-mute);
+  margin: 20px 0 0;
+}
 .lib-sub {
   display: flex;
   align-items: center;

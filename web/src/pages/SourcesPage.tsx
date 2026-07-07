@@ -1,25 +1,23 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { Pencil, Plus } from "lucide-react";
 import { api, type Interest, type Mix } from "@/api/client";
 import { feedIcon } from "@/lib/feedIcons";
 import { BottomSheet } from "@/components/BottomSheet";
 
-// The Library home (session engine v2). Interest-centric: the top row filters the
-// interest list by mix, the list drills into each interest, and each interest drills
-// into its sources. This is the Library → Interest → Source → Articles spine; the
-// old flat source list moved under the interest pages.
-//
-// A "mix" is a group of interests (many-to-many). The chips filter which interests
-// show; "No mix" is the bucket of interests that belong to no mix. Mix membership is
-// read from mixBrowse (one call per mix - there are only a handful), which also
-// backs the "part of {mix}" line on the interest page.
+// The Library home (session engine v2). Two stacked sections, per the mockup:
+//   - Mixes: pill chips that filter the interest list ("All", each mix, "No Mix"),
+//     with a manage link into /mixes.
+//   - Interests: the primary list. Each interest drills into its sources
+//     (Library -> Interest -> Source -> Articles spine).
+// A mix is a group of interests (many-to-many); "No Mix" is the bucket of interests
+// in no mix. Membership is read from mixBrowse (a handful of calls).
 type MixFilter = number | "all" | "none";
 
 export default function SourcesPage() {
   const nav = useNavigate();
   const [interests, setInterests] = useState<Interest[] | null>(null);
   const [mixes, setMixes] = useState<Mix[]>([]);
-  // interestId -> set of mix ids it belongs to.
   const [membership, setMembership] = useState<Map<number, Set<number>>>(new Map());
   const [filter, setFilter] = useState<MixFilter>("all");
   const [err, setErr] = useState("");
@@ -35,7 +33,6 @@ export default function SourcesPage() {
     try {
       const ms = await api.mixes();
       setMixes(ms);
-      // Build interest -> mixes membership from each mix's browse payload.
       const m = new Map<number, Set<number>>();
       await Promise.all(
         ms.map(async (mix) => {
@@ -49,7 +46,7 @@ export default function SourcesPage() {
       );
       setMembership(m);
     } catch {
-      /* mixes are optional; leave empty */
+      /* mixes are optional */
     }
   }
 
@@ -64,6 +61,8 @@ export default function SourcesPage() {
     if (filter === "none") return interests.filter((f) => !(membership.get(f.id)?.size));
     return interests.filter((f) => membership.get(f.id)?.has(filter));
   }, [interests, filter, membership]);
+
+  const filteredOut = interests ? interests.length - shown.length : 0;
 
   async function create() {
     const name = newName.trim();
@@ -82,73 +81,69 @@ export default function SourcesPage() {
   }
 
   return (
-    <div>
-      <button className="lib-back" onClick={() => nav("/")}>
-        <span aria-hidden>←</span> Start a session
-      </button>
-
-      <div className="lib-topbar">
-        <h1 className="display">Library</h1>
-        <div className="lib-topbar-actions">
-          <button className="lib-fsbtn" onClick={() => nav("/mixes")}>
-            Manage mixes
-          </button>
-        </div>
+    <div className="lib2">
+      {/* --- Mixes --- */}
+      <div className="lib2-head">
+        <h1 className="lib2-title">Mixes</h1>
+        <button className="lib2-action" onClick={() => nav("/mixes")}>
+          <Pencil size={13} strokeWidth={1.9} aria-hidden /> manage
+        </button>
       </div>
-      <p className="sub">Your interests, grouped by mix. Open one to see its sources and how they behave.</p>
+      <p className="lib2-subtitle">Group your interests</p>
       {err && <p className="err">{err}</p>}
 
-      {/* Mix filter chips: All, each mix, then the "no mix" bucket. */}
-      <div className="lib-filter">
-        <button className={`lib-fchip ${filter === "all" ? "on" : ""}`} onClick={() => setFilter("all")}>
-          All interests
+      <div className="mixchips">
+        <button className={`mixchip ${filter === "all" ? "on" : ""}`} onClick={() => setFilter("all")}>
+          All
         </button>
-        {mixes.map((m) => {
-          const Ic = feedIcon(m.icon);
-          return (
-            <button key={m.id} className={`lib-fchip ${filter === m.id ? "on" : ""}`} onClick={() => setFilter(m.id)}>
-              {Ic && <Ic size={13} strokeWidth={1.75} aria-hidden />}
-              {m.name}
-            </button>
-          );
-        })}
-        <button className={`lib-fchip ${filter === "none" ? "on" : ""}`} onClick={() => setFilter("none")}>
-          No mix
+        {mixes.map((m) => (
+          <button key={m.id} className={`mixchip ${filter === m.id ? "on" : ""}`} onClick={() => setFilter(m.id)}>
+            {m.name}
+          </button>
+        ))}
+        <button className={`mixchip muted ${filter === "none" ? "on" : ""}`} onClick={() => setFilter("none")}>
+          No Mix
         </button>
       </div>
 
-      {/* Interests list. Count from the interest's own source_count. */}
-      {interests === null ? (
-        <p className="sub">Loading…</p>
-      ) : shown.length === 0 ? (
-        <p className="sub" style={{ padding: "12px 0" }}>
-          {filter === "all" ? "No interests yet. Add one below." : "No interests in this mix."}
-        </p>
-      ) : (
-        shown.map((f) => {
-          const Ic = feedIcon(f.icon);
-          const n = f.source_count ?? 0;
-          return (
-            <div className="lib-row" key={f.id}>
-              <div className="lib-head" onClick={() => nav(`/interests/${f.slug}`)}>
-                <span className="int-glyph" aria-hidden>
-                  {Ic ? <Ic size={18} strokeWidth={1.75} /> : <span className="int-dot" />}
-                </span>
-                <div className="nm">
-                  <b>{f.name}</b>
-                  <span>{n} {n === 1 ? "source" : "sources"}</span>
-                </div>
-                <span className="chev">▸</span>
-              </div>
-            </div>
-          );
-        })
-      )}
+      {/* --- Interests --- */}
+      <div className="lib2-head interests">
+        <h2 className="lib2-title">Interests</h2>
+        <button className="lib2-action" onClick={() => setAddOpen(true)}>
+          <Plus size={15} strokeWidth={1.9} aria-hidden /> Add interest
+        </button>
+      </div>
 
-      <button className="lib-addrow" onClick={() => setAddOpen(true)}>
-        <span className="int-glyph" aria-hidden>+</span>
-        <span>Add interest</span>
-      </button>
+      {interests === null ? (
+        <p className="lib2-subtitle">Loading…</p>
+      ) : shown.length === 0 ? (
+        <p className="lib2-empty">{filter === "all" ? "No interests yet - add one above." : "No interests in this mix."}</p>
+      ) : (
+        <>
+          {shown.map((f) => {
+            const Ic = feedIcon(f.icon);
+            const n = f.source_count ?? 0;
+            return (
+              <button className="introw" key={f.id} onClick={() => nav(`/interests/${f.slug}`)}>
+                <span className="introw-glyph" aria-hidden>
+                  {Ic ? <Ic size={22} strokeWidth={1.6} /> : <span className="introw-dot" />}
+                </span>
+                <span className="introw-body">
+                  <span className="introw-name">{f.name}</span>
+                  <span className="introw-count">
+                    {n} {n === 1 ? "source" : "sources"}
+                  </span>
+                </span>
+              </button>
+            );
+          })}
+          {filter !== "all" && filteredOut > 0 && (
+            <p className="lib2-filtered">
+              {filteredOut} {filteredOut === 1 ? "interest" : "interests"} filtered out
+            </p>
+          )}
+        </>
+      )}
 
       <BottomSheet open={addOpen} onClose={() => setAddOpen(false)} kicker="New interest">
         <div className="sheet-title">Name the interest</div>
