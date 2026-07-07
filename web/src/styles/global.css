@@ -1819,6 +1819,99 @@ h1.display {
 .act-item.danger {
   color: #8a3a2f;
 }
+.art-badge.st-skipped {
+  color: #8a3a2f;
+  background: #efe6e2;
+}
+.art-badge.st-liked {
+  color: #20603f;
+  background: #e6efe8;
+}
+.art-badge.st-auto-archived {
+  opacity: 0.7;
+}
+
+/* view articles page (#120, mockup #5) */
+.va-filter {
+  align-self: flex-start;
+  margin: 14px 0 6px;
+  padding: 8px 16px;
+  border-radius: 999px;
+  border: 1.5px solid var(--rule-hard);
+  background: var(--ink);
+  color: var(--paper);
+  font-family: var(--grot);
+  font-size: 12px;
+  letter-spacing: 0.04em;
+}
+.va-count {
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--ink-mute);
+}
+.va-row {
+  padding: 15px 0;
+  border-bottom: 1px solid var(--hair);
+}
+.va-title {
+  display: block;
+  text-align: left;
+  background: none;
+  border: 0;
+  padding: 0;
+  font-family: var(--serif);
+  font-style: italic;
+  font-size: 18px;
+  line-height: 1.25;
+  color: var(--ink);
+}
+.va-meta {
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.02em;
+  color: var(--ink-mute);
+  margin: 5px 0 8px;
+}
+.va-scoreline {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.va-bar {
+  flex: 0 0 auto;
+  width: 46px;
+  height: 6px;
+  background: var(--paper-3);
+  border-radius: 999px;
+  overflow: hidden;
+}
+.va-bar-fill {
+  display: block;
+  height: 100%;
+  background: var(--ink);
+}
+.va-score {
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+}
+.va-explore {
+  background: none;
+  border: 0;
+  padding: 0;
+  font-family: var(--grot);
+  font-size: 11px;
+  color: var(--ink-mute);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.va-badges {
+  display: inline-flex;
+  gap: 6px;
+  margin-left: auto;
+}
 .lib-sub {
   display: flex;
   align-items: center;
