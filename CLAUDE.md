@@ -25,11 +25,12 @@ Server layout:
 - `internal/server/feeds` - fetch + normalize a source's feed into items
   (gofeed; RSS/Atom, YouTube channel feeds, podcasts).
 - `internal/server/session` - the ranker. Score is
-  `(weight·rarity)^selectivity · freshness · skipPenalty`; it stages a
-  count-bounded ranked **queue** (not sized to summed duration - the client
-  paces it against elapsed wall-clock). Per-source caps, per-item reasons,
-  budget-driven selectivity, skip-rate downweighting. **This is the core; keep
-  it deterministic and explainable.**
+  `(weight·rarity)^selectivity · freshness`, where rarity is population-relative
+  (ranked by the store, #110) and there is no behavioral downweight (#109). It
+  stages a count-bounded ranked **queue** (not sized to summed duration - the
+  client paces it against elapsed wall-clock). Per-source caps, per-item reasons,
+  budget-driven selectivity. **This is the core; keep it deterministic and
+  explainable.**
 - `internal/server/handler` - thin HTTP handlers.
 - `internal/server/middleware` - auth gate (OIDC session or dev bypass).
 - `internal/oidc` - confidential OIDC client of auth.fisher.sh (copied from
@@ -114,14 +115,22 @@ git log --grep '#14' --oneline                    # every commit in issue 14
 
 - otium-server is **single-replica** (in-memory OIDC sessions). Don't scale it
   without adding a shared session store.
-- Rarity/cadence is computed from a source's **accumulated** stored `published_at`
-  history (`store.cadencePerDay`), not the current fetch batch, so a feed that
-  truncates to ~10-15 entries no longer reads as rare once history accrues (#7).
-  Rate = items in the ~45-day window / the *observed* span (now - earliest item),
-  floored at 1 day; fewer than `minCadenceItems` (3) in the window sits at the
-  rare threshold (no boost), so a brand-new source can't swing ultra-rare before
-  it has any history. Trade-off: a genuinely very-rare source (<~2 posts / 45d)
-  also gets no boost until it clears the floor.
+- Rarity is **population-relative** (#110), not an absolute posts/day threshold.
+  The store computes each followed/trial source's cadence from its **accumulated**
+  stored `published_at` history (`store.cadencePerDay`: items in the ~45-day window
+  / the *observed* span, floored at 1 day; no thin-history floor), then ranks every
+  source and hands each candidate a `RarityBoost` in `[1, 1+rareBoostMax]` set by
+  its rank - the rarest source for that user gets the full lift, the most frequent
+  gets none (`store.rarityBoosts`). The ranker just reads `c.RarityBoost`; it never
+  re-derives rarity, so sessions, the mix, and the breakdown all agree. Why
+  relative: the old absolute threshold + thin-history floor was degenerate on a
+  young, feed-truncated library (measured: 73/160 sources at x1, the rest clumped
+  at 1.8-1.9), so wildly different real rates got identical rarity.
+- **No skip penalty in scoring** (#109). Score is `weight × rarity × freshness`;
+  a source's skip rate never silently downweights it (that was the opaque loop
+  product principle #2 forbids). shown/skipped are still tracked for the mix and
+  the future explicit "you skip this a lot - reduce its weight?" recommendation
+  (#19). `ItemEffectiveScore` now equals `ItemIntendedScore`.
 - Content duration is unavailable from YouTube RSS (only podcasts carry it), so
   the "predicted items" math leans on a per-feed default. The truer signal is
   behavioral per-feed pace, measurable now via the single-item view - tracked in
