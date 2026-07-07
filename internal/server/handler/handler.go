@@ -16,6 +16,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"io"
 	"log/slog"
+	mrand "math/rand"
 	"net/http"
 	"strconv"
 	"strings"
@@ -448,7 +449,9 @@ func (h *Handler) buildSessionQueue(ctx context.Context, uid int64, durationMin 
 		}
 	}
 
-	pool, err := h.db.Candidates(ctx, uid, sourceIDs, 45, 500)
+	// Engine v2 (#115): pull a broad candidate window (the allocator does its own
+	// Archive-After eligibility, so `sinceDays` is just a generous fetch bound).
+	pool, err := h.db.Candidates(ctx, uid, sourceIDs, 400, 2000)
 	if err != nil {
 		return nil, err
 	}
@@ -456,11 +459,23 @@ func (h *Handler) buildSessionQueue(ctx context.Context, uid int64, durationMin 
 	if err != nil {
 		return nil, err
 	}
-	// Single duration (#69): pass it as both bounds. predictItems averages the two,
-	// so low==high just means "exactly this many minutes" - no range/variability.
-	result := session.Build(session.Request{MinLow: durationMin, MinHigh: durationMin}, pool, time.Now().UTC(), stats)
-	h.attachInterests(ctx, uid, result.Items)
-	return result.Items, nil
+	now := time.Now().UTC()
+	// Queue size = a modest buffer over the predicted item count for the budget.
+	// The consumed head is a representative sample; a big tail would over-sample
+	// high-volume sources as low-volume ones exhaust, so keep the buffer small.
+	target := session.PredictItems(durationMin, pool, stats)*2 + 4
+	if target < 15 {
+		target = 15
+	}
+	if target > 45 {
+		target = 45
+	}
+	// Weighted-random source allocation, seeded off the clock (a fresh session is
+	// a new sample; the stored queue makes resume stable).
+	rng := mrand.New(mrand.NewSource(time.Now().UnixNano()))
+	items := session.Allocate(pool, now, target, rng)
+	h.attachInterests(ctx, uid, items)
+	return items, nil
 }
 
 // rehydrateSession rebuilds the Selected view for a stored queue, preserving the

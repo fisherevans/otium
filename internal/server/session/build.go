@@ -1,54 +1,46 @@
-// Package session builds a time-boxed, weighted, explainable consumption
-// session from a pool of candidate items. This is otium's core: not an infinite
-// ranked interest, but "given these sources, their weights, and how much time you
-// want, here is a finite set worth your attention, and here is exactly why each
-// item is in it."
+// Package session builds a time-boxed consumption session from a pool of
+// candidate items. Session engine v2 (#114): source-selection and article-ranking
+// are separate concerns. The allocator (allocate.go) picks the next SOURCE by
+// Representation and returns its freshest ELIGIBLE article; eligibility is a hard
+// Archive-After cutoff. There is no rarity, no per-session cap, no selectivity and
+// no behavioral downweight - a session is a relaxing, representative sample of the
+// user's sources, not a backlog to clear.
 //
-// The scoring is deterministic - no black box. Every selected item carries a
-// human-readable Reason derived from the same factors the ranker used:
-// score = weight × rarity × freshness. Rarity is population-relative (the store
-// ranks a source's cadence against the user's other sources, #110); there is no
-// silent behavioral downweight - skipping drives an explicit, user-approved
-// recommendation, not an automatic score cut (#109).
+// This file holds the shared article-level helpers (freshness, read-time
+// prediction, the per-item Selected view + its breakdown). The article score is
+// recency-based freshness only for now, kept as a distinct subsystem so future
+// ranking signals (keyword boosts, topic relevance, quality) can slot in without
+// touching the allocator.
 package session
 
 import (
 	"fmt"
 	"math"
-	"sort"
 	"time"
 
 	"github.com/fisherevans/otium/internal/server/store"
 )
 
-// Tunables. freshnessHalfLifeDays and the per-source cap are the global
-// defaults; a interest can override both per-interest (Candidate.InterestHalfLifeDays /
-// InterestDiversity, #17). Rarity has no tunable here anymore: it's a relative rank
-// the store computes across the user's sources (store.RarityBoost, #110).
+// Tunables. freshnessHalfLifeDays shapes the recency score; the skim/read-time
+// constants feed the session-size prediction only.
 const (
-	freshnessHalfLifeDays = 21.0 // default: an item's freshness score halves every 3 weeks
+	freshnessHalfLifeDays = 21.0
 
-	// Prediction: how many items the user will actually get through. Content
-	// duration is only half of it - the user skims/skips, so effective time per
-	// item is a fraction of the content length.
 	skimFactor       = 0.4   // user typically spends ~40% of an item's length
 	articleEffSec    = 40.0  // effective time for a duration-less item (an article)
-	defaultAvgEffSec = 120.0 // fallback when we know nothing about the insights
+	defaultAvgEffSec = 120.0 // fallback when we know nothing about the mix
 )
 
-// SourceStat is the per-source behavioral + content signal the ranker folds in.
-// AvgContentSec (empirical time-per-item) drives session-size prediction. Shown/
-// Skipped are carried for the insights view and the future skip recommendation (#19);
-// they no longer touch scoring - a skip is a signal the user acts on, not a
-// silent downweight (#109).
+// SourceStat is the per-source content signal used for session-size prediction.
+// AvgContentSec is the empirical time-per-item; Shown/Skipped are carried for the
+// stats surfaces (#116), not the ranker.
 type SourceStat struct {
-	AvgContentSec float64 // avg known content duration over recent items (0 = none/article)
+	AvgContentSec float64
 	Shown         int
 	Skipped       int
 }
 
-// defaultDurationSec estimates how long an item takes to consume when the interest
-// didn't tell us (RSS rarely carries duration). Rough, tunable.
+// defaultDurationSec estimates consume time when the feed didn't tell us.
 var defaultDurationSec = map[string]int{
 	"short":   60,
 	"long":    600,
@@ -58,21 +50,9 @@ var defaultDurationSec = map[string]int{
 	"unknown": 180,
 }
 
-// Request is a session ask. MinLow/MinHigh are the user's wall-clock time budget
-// (minutes) - they are NOT used to size the item set. The session is a ranked
-// queue the client paces against elapsed time; QueueSize bounds how many items
-// to stage up front (the client refills as it goes).
-type Request struct {
-	MinLow    int // lower bound, minutes (client-side pacing budget)
-	MinHigh   int // upper bound, minutes (client-side pacing budget)
-	QueueSize int // max items to stage (0 -> default)
-}
-
-const defaultQueueSize = 30
-
 // Selected is one item chosen for the session, with the ranker's rationale.
-// Interest is the item's primary interest identity, filled by the handler after the
-// ranker runs (the ranker itself is interest-agnostic); nil for a interestless source.
+// Interest is the item's primary interest identity, filled by the handler after
+// the allocator runs; nil for an interestless source.
 type Selected struct {
 	Item        store.Item         `json:"item"`
 	SourceTitle string             `json:"source_title"`
@@ -83,36 +63,23 @@ type Selected struct {
 	Breakdown   ScoreBreakdown     `json:"breakdown"`
 }
 
-// ScoreBreakdown is the per-factor decomposition of an item's score (#18): the
-// individual multiplicative contributions the ranker actually used, so the
-// one-line Reason becomes legible as math. EffectiveScore is the product of the
-// three factors and equals ItemEffectiveScore - the invariant test locks that, so
-// this is never an approximation of the ranking, it *is* the ranking.
-//
-// Selectivity is deliberately absent: it's a per-session budget adjustment (an
-// exponent on weight×rarity that sharpens scarce sessions), not a property of the
-// item. The breakdown reports the item's standalone effective score - the same
-// value the insights view shares out - so "why this item" reads the same regardless of
-// how big a session it landed in.
+// ScoreBreakdown is the per-factor decomposition shown as "why this item" (#18).
+// Under engine v2 the article score is freshness only; Weight (a source's
+// representation) and Rarity are retained as fields for wire-compatibility while
+// the "explore score" surface (#120) replaces this UI - Rarity is always 1 now.
 type ScoreBreakdown struct {
-	Weight         float64 `json:"weight"`          // source weight multiplier (0.25..5, default 1)
-	Rarity         float64 `json:"rarity"`          // relative-rarity boost (1 = as common as your interest gets, up to 1+rareBoostMax for the rarest)
-	Freshness      float64 `json:"freshness"`       // age decay (1 = brand new, → 0 as it ages past the half-life)
-	EffectiveScore float64 `json:"effective_score"` // weight × rarity × freshness
-	// Human-legible context for the plain-language lines - not factors, just the
-	// raw inputs behind them.
-	CadencePerDay float64 `json:"cadence_per_day"` // source's posts/day over the window (its position among your sources drives Rarity)
-	AgeDays       float64 `json:"age_days"`        // item age in days at build time (drives Freshness)
+	Weight         float64 `json:"weight"`
+	Rarity         float64 `json:"rarity"`
+	Freshness      float64 `json:"freshness"`
+	EffectiveScore float64 `json:"effective_score"`
+	CadencePerDay  float64 `json:"cadence_per_day"`
+	AgeDays        float64 `json:"age_days"`
 }
 
-// ScoreBreakdownFor decomposes an item's effective score into the exact factors
-// the ranker used. It reuses the same scorer helpers as scoreOf /
-// ItemEffectiveScore - it does not re-derive the formula - so EffectiveScore is
-// guaranteed to equal ItemEffectiveScore(c, now). Keep it that way: the value
-// here is deterministic auditability, and an approximation would defeat the point.
+// ScoreBreakdownFor decomposes an item's score. Engine v2: freshness drives the
+// article score; Weight reports the source's representation, Rarity is inert (1).
 func ScoreBreakdownFor(c store.Candidate, now time.Time) ScoreBreakdown {
 	w := sourceWeight(c)
-	rarity := rarityOf(c)
 	fresh := freshness(c.PublishedAt, now, halfLifeOf(c))
 	ageDays := now.Sub(c.PublishedAt).Hours() / 24
 	if ageDays < 0 {
@@ -120,148 +87,24 @@ func ScoreBreakdownFor(c store.Candidate, now time.Time) ScoreBreakdown {
 	}
 	return ScoreBreakdown{
 		Weight:         w,
-		Rarity:         rarity,
+		Rarity:         1,
 		Freshness:      fresh,
-		EffectiveScore: w * rarity * fresh,
+		EffectiveScore: fresh,
 		CadencePerDay:  c.SourceCadence,
 		AgeDays:        ageDays,
 	}
 }
 
-// Result is a built session.
-type Result struct {
-	Items          []Selected `json:"items"`
-	TotalSeconds   int        `json:"total_seconds"`
-	TargetLow      int        `json:"target_low_min"`
-	TargetHigh     int        `json:"target_high_min"`
-	PoolSize       int        `json:"pool_size"`
-	PredictedItems int        `json:"predicted_items"` // how many we expect the user to get through
-}
-
-type scored struct {
-	c        store.Candidate
-	score    float64
-	dur      int
-	reason   string
-	sourceID int64
-	taken    bool
-}
-
-// Build ranks the candidate pool and stages a queue of the top items, capping
-// per-source volume and avoiding back-to-back items from the same source. It is
-// count-bounded, NOT duration-bounded: the client consumes this queue paced by
-// the user's elapsed wall-clock time (a skimmed article costs seconds, a watched
-// video costs minutes - only the user's clock knows), refilling as it goes. stats
-// carries the per-source content-duration signal used only for session-size
-// prediction; the score itself is behavior-free.
-func Build(req Request, pool []store.Candidate, now time.Time, stats map[int64]SourceStat) Result {
-	// Predict how many items the user will actually get through this session, from
-	// their time budget and the insights's empirical time-per-item. Scarcer sessions
-	// sharpen selectivity so the few slots they'll see go to the best items.
-	predicted := predictItems(req, pool, stats)
-	sel := selectivity(predicted)
-
-	k := req.QueueSize
-	if k <= 0 {
-		k = clampInt(predicted*3, 20, defaultQueueSize*2)
-	}
-
-	ranked := make([]scored, 0, len(pool))
-	for _, c := range pool {
-		ranked = append(ranked, scored{
-			c:        c,
-			score:    scoreOf(c, now, sel),
-			dur:      estDuration(c),
-			reason:   reasonOf(c, now),
-			sourceID: c.SourceID,
-		})
-	}
-	sort.SliceStable(ranked, func(i, j int) bool { return ranked[i].score > ranked[j].score })
-
-	perSourceUsed := map[int64]int{}
-	out := make([]Selected, 0, k) // never nil: an empty session must serialize as [] not null
-	total := 0
-	lastSource := int64(-1)
-
-	// Two passes. Pass 1 enforces the per-source cap and no-back-to-back
-	// diversity; pass 2 relaxes both slightly to fill the queue when the pool is
-	// thin, rather than returning a short list.
-	for pass := 0; pass < 2 && len(out) < k; pass++ {
-		for i := range ranked {
-			if len(out) >= k {
-				break
-			}
-			r := &ranked[i]
-			if r.taken {
-				continue
-			}
-			// Per-session cap: the item's interest diversity overrides the source's own
-			// cap when set (#17). Lower cap = each source contributes fewer items, so
-			// the session spreads across more of the interest's sources.
-			cap := r.c.PerSessionCap
-			if cap <= 0 {
-				cap = 2
-			}
-			if r.c.InterestDiversity > 0 {
-				cap = r.c.InterestDiversity
-			}
-			if pass == 0 {
-				if perSourceUsed[r.sourceID] >= cap {
-					continue
-				}
-				if r.sourceID == lastSource {
-					continue // diversity: no back-to-back on the first pass
-				}
-			} else if perSourceUsed[r.sourceID] >= cap+2 {
-				continue // pass 2 relaxes the cap a little to fill the queue
-			}
-			out = append(out, Selected{
-				Item:        r.c.Item,
-				SourceTitle: r.c.SourceTitle,
-				Score:       round2(r.score),
-				EstDuration: r.dur,
-				Reason:      r.reason,
-				Breakdown:   ScoreBreakdownFor(r.c, now),
-			})
-			total += r.dur
-			perSourceUsed[r.sourceID]++
-			lastSource = r.sourceID
-			r.taken = true
-		}
-	}
-
-	return Result{
-		Items:          out,
-		TotalSeconds:   total, // informational only; not a budget
-		TargetLow:      req.MinLow,
-		TargetHigh:     req.MinHigh,
-		PoolSize:       len(pool),
-		PredictedItems: predicted,
-	}
-}
-
-// SelectFor builds the Selected view for a single candidate at selectivity 1 -
-// the session-agnostic effective score. It's used to rehydrate a stored session
-// queue on resume (#67): the queue order is fixed at build time, so resume only
-// needs each item's current score/reason/breakdown, not a re-rank. Score equals
-// round2(ItemEffectiveScore), so the on-card cue, the breakdown, and the insights all
-// agree and the ItemEffectiveScore == scoreOf(sel=1) invariant is preserved.
+// SelectFor builds the Selected view for a single candidate - used to rehydrate a
+// stored session queue on resume (#67). Score is the item's current freshness.
 func SelectFor(c store.Candidate, now time.Time) Selected {
-	return Selected{
-		Item:        c.Item,
-		SourceTitle: c.SourceTitle,
-		Score:       round2(ItemEffectiveScore(c, now)),
-		EstDuration: estDuration(c),
-		Reason:      reasonOf(c, now),
-		Breakdown:   ScoreBreakdownFor(c, now),
-	}
+	return selectedFrom(c, now)
 }
 
-// predictItems estimates how many items fit the time budget: budget divided by
-// the insights's effective time-per-item. Effective time blends the interest's empirical
-// content length (SourceStat.AvgContentSec) with the skim factor - because a
-// 20-minute video the user skims in two minutes costs two minutes, not twenty.
-func predictItems(req Request, pool []store.Candidate, stats map[int64]SourceStat) int {
+// PredictItems estimates how many items fit the time budget: budget over the mix's
+// effective time-per-item (content length blended with the skim factor). Used to
+// size the allocator's queue, not to rank.
+func PredictItems(durationMin int, pool []store.Candidate, stats map[int64]SourceStat) int {
 	seen := map[int64]bool{}
 	var sum float64
 	var n int
@@ -270,8 +113,7 @@ func predictItems(req Request, pool []store.Candidate, stats map[int64]SourceSta
 			continue
 		}
 		seen[c.SourceID] = true
-		avg := stats[c.SourceID].AvgContentSec
-		if avg > 0 {
+		if avg := stats[c.SourceID].AvgContentSec; avg > 0 {
 			sum += avg * skimFactor
 		} else {
 			sum += articleEffSec
@@ -282,7 +124,7 @@ func predictItems(req Request, pool []store.Candidate, stats map[int64]SourceSta
 	if n > 0 {
 		avgEff = sum / float64(n)
 	}
-	budgetSec := float64((req.MinLow+req.MinHigh)/2) * 60
+	budgetSec := float64(durationMin) * 60
 	if budgetSec <= 0 {
 		budgetSec = 600
 	}
@@ -293,49 +135,19 @@ func predictItems(req Request, pool []store.Candidate, stats map[int64]SourceSta
 	return p
 }
 
-// selectivity sharpens (>1) or flattens (<1) the weight/rarity term. When only a
-// few items will be seen, sharpen so the scarce slots favor top sources; when
-// many will be seen, flatten to admit more variety.
-func selectivity(predicted int) float64 {
-	switch {
-	case predicted < 8:
-		return 1.2
-	case predicted > 25:
-		return 0.9
-	default:
-		return 1.0
-	}
+// ItemIntendedScore / ItemEffectiveScore are the per-item contributions the
+// insights/composition view shares out. Engine v2 drops rarity and the skip
+// penalty, so both are weight (representation) x freshness - "how much of your
+// feed this source's item represents." Kept separate pending the insights rework.
+func ItemIntendedScore(c store.Candidate, now time.Time) float64 {
+	return sourceWeight(c) * freshness(c.PublishedAt, now, halfLifeOf(c))
 }
 
-func clampInt(v, lo, hi int) int {
-	if v < lo {
-		return lo
-	}
-	if v > hi {
-		return hi
-	}
-	return v
+func ItemEffectiveScore(c store.Candidate, now time.Time) float64 {
+	return ItemIntendedScore(c, now)
 }
 
-// scoreOf = (weight * rarity)^selectivity * freshness. The user-controlled knobs
-// (weight directly; rarity via which sources they follow, ranked relative to the
-// rest) stay legible; selectivity is the only budget-driven adjustment. sel > 1
-// sharpens the favor toward high-weight sources when few items will be seen.
-func scoreOf(c store.Candidate, now time.Time, sel float64) float64 {
-	return math.Pow(weightRarity(c), sel) * freshness(c.PublishedAt, now, halfLifeOf(c))
-}
-
-// weightRarity is the user-controlled term of the score: the source's weight
-// lifted by its relative-rarity boost. It carries no time or behavior signal -
-// just "how much does the user favor this source, adjusted so a source that posts
-// rarely for their interest isn't buried." Shared by the session ranker and the insights.
-func weightRarity(c store.Candidate) float64 {
-	return sourceWeight(c) * rarityOf(c)
-}
-
-// sourceWeight is the item's source weight with the "unset -> 1" default applied,
-// the single place that default lives so weightRarity and ScoreBreakdownFor
-// report the same Weight factor.
+// sourceWeight is the source's representation with the "unset -> 1" default.
 func sourceWeight(c store.Candidate) float64 {
 	if c.SourceWeight <= 0 {
 		return 1
@@ -343,44 +155,9 @@ func sourceWeight(c store.Candidate) float64 {
 	return c.SourceWeight
 }
 
-// rarityOf reads the store-computed population-relative rarity boost (#110),
-// defaulting to 1 (no boost) when unset. The store ranks each source's posting
-// cadence against the user's other sources and hands the boost down on the
-// candidate, so the ranker itself stays population-agnostic and the same value
-// flows into sessions, the insights, and the breakdown.
-func rarityOf(c store.Candidate) float64 {
-	if c.RarityBoost <= 0 {
-		return 1
-	}
-	return c.RarityBoost
-}
-
-// ItemIntendedScore is the session-agnostic "intended" contribution of a single
-// item: weight × rarity × freshness, with selectivity fixed at 1. It answers "how
-// much does this item want to be in the interest" - the numerator of the insights view's
-// share.
-func ItemIntendedScore(c store.Candidate, now time.Time) float64 {
-	return weightRarity(c) * freshness(c.PublishedAt, now, halfLifeOf(c))
-}
-
-// ItemEffectiveScore is the session-agnostic contribution at selectivity 1 - what
-// the item is actually worth to the ranker "if you browsed everything." Since the
-// skip penalty was removed (#109), this is identical to ItemIntendedScore; both
-// are retained so the insights's share basis and the intended/effective split still
-// compile while the insights view is simplified separately. Equivalent to
-// scoreOf(c, now, 1).
-func ItemEffectiveScore(c store.Candidate, now time.Time) float64 {
-	return ItemIntendedScore(c, now)
-}
-
-// halfLifeOf resolves the freshness half-life for a candidate per the hierarchy
-// source override > interest (resolved) > global (#76). It returns the source's own
-// override when set, else the resolved interest half-life; a 0 result falls through to
-// the global default in freshness(). The store already applied the multi-interest rule
-// to InterestHalfLifeDays, so the "which interest" ambiguity is settled before this. Every
-// scoring path (ScoreBreakdownFor, scoreOf, ItemIntendedScore) funnels through
-// here so sessions, the insights, and the breakdown resolve identically - that shared
-// resolution is what keeps ItemEffectiveScore == scoreOf(sel=1) intact.
+// halfLifeOf resolves the freshness half-life for a candidate (source > interest >
+// global). Retained for the freshness score; Archive-After governs eligibility
+// separately (allocate.go).
 func halfLifeOf(c store.Candidate) float64 {
 	if c.SourceHalfLifeDays > 0 {
 		return c.SourceHalfLifeDays
@@ -388,9 +165,7 @@ func halfLifeOf(c store.Candidate) float64 {
 	return c.InterestHalfLifeDays
 }
 
-// freshness decays an item by age. halfLifeDays is the resolved per-item override
-// when > 0, else the global freshnessHalfLifeDays. Both scoring paths pass
-// halfLifeOf(c) so sessions and the insights decay identically.
+// freshness decays an item by age; halfLifeDays 0 falls back to the global default.
 func freshness(published, now time.Time, halfLifeDays float64) float64 {
 	if halfLifeDays <= 0 {
 		halfLifeDays = freshnessHalfLifeDays
@@ -412,20 +187,17 @@ func estDuration(c store.Candidate) int {
 	return defaultDurationSec["unknown"]
 }
 
-// reasonOf picks the single most salient factor to show the user, so the "why
-// am I seeing this" answer is honest and specific. The rare case keys off the
-// store's relative-rarity boost (#110), not an absolute cadence.
+// reasonOf picks the single most salient factor for the "why am I seeing this"
+// line. Engine v2: representation + recency (rarity is gone).
 func reasonOf(c store.Candidate, now time.Time) string {
 	ageDays := now.Sub(c.PublishedAt).Hours() / 24
 	switch {
-	case c.SourceWeight >= 5:
-		return "Favorite source"
-	case c.RarityBoost >= 1.6:
-		return "Rare - " + c.SourceTitle + " posts seldom for your interest, so it's surfaced"
+	case c.SourceWeight >= 4:
+		return "You weight " + c.SourceTitle + " way up"
 	case ageDays < 1:
 		return "Fresh - posted today"
 	case c.SourceWeight >= 2:
-		return "High-weight source"
+		return "You weight this source up"
 	case ageDays < 3:
 		return "Recent"
 	default:
@@ -435,7 +207,7 @@ func reasonOf(c store.Candidate, now time.Time) string {
 
 func round2(f float64) float64 { return math.Round(f*100) / 100 }
 
-// WeightForBucket maps the UI's human words to a multiplier.
+// WeightForBucket maps the UI's human words to a representation multiplier.
 func WeightForBucket(bucket string) (float64, error) {
 	switch bucket {
 	case "very_low":
@@ -447,7 +219,7 @@ func WeightForBucket(bucket string) (float64, error) {
 	case "high":
 		return 2, nil
 	case "favorite":
-		return 5, nil
+		return 4, nil
 	default:
 		return 0, fmt.Errorf("unknown weight bucket %q", bucket)
 	}
