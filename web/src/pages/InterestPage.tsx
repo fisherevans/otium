@@ -1,19 +1,40 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { Pencil } from "lucide-react";
+import { Pencil, Plus, Mail, Ban, Eye } from "lucide-react";
 import { api, type Interest, type Mix, type Source, type SourceStats } from "@/api/client";
 import { FEED_ICONS, feedIcon } from "@/lib/feedIcons";
-import { archiveLabel, archiveShort } from "@/lib/archive";
-import { engagementBadge, sourceSubline } from "@/lib/stats";
-import { WeightIndicator } from "@/components/WeightIndicator";
-import { BottomSheet } from "@/components/BottomSheet";
-import { ArchivePicker } from "@/components/ArchivePicker";
+import { ARCHIVE_PRESETS, archiveLabel } from "@/lib/archive";
+import { engagementBadge } from "@/lib/stats";
+import { REP_LABEL } from "@/lib/represent";
+import { bucketOf, WLEVEL } from "@/lib/weight";
+import { Dialog } from "@/components/Dialog";
 
-// The Interest page (session engine v2). One interest, shown plainly: its identity
-// (name + icon, editable), which mix it lives in, its default archival period, and
-// its sources with the engagement + representation facts that characterize each.
-// Sources drill into their own page; management that isn't rename/archival happens
-// there. Full page, not a modal - modals are reserved for rename + archival period.
+// The Interest page (session engine v2, mockup #3). One interest shown plainly:
+// identity (name + icon, edited in a dialog), which mix it lives in, its default
+// archival period (edited in a dialog), and its sources with the engagement +
+// representation facts that characterize each. Sources drill into their own page.
+
+function Dots({ level }: { level: number }) {
+  return (
+    <span className="rep-dots" aria-hidden>
+      {[1, 2, 3, 4, 5].map((i) => (
+        <span key={i} className={`rep-dot ${i <= level ? "on" : ""}`} />
+      ))}
+    </span>
+  );
+}
+function archivalSuffix(srcDays: number): string {
+  if (srcDays === 0) return "";
+  if (srcDays === -1) return "EVERGREEN";
+  const preset = ARCHIVE_PRESETS.find((p) => p.days === srcDays);
+  return `${(preset?.label ?? `${srcDays} days`).toUpperCase()} ARCHIVAL`;
+}
+function BadgeIcon({ tone }: { tone: string }) {
+  if (tone === "up") return <Mail size={12} strokeWidth={1.9} aria-hidden />;
+  if (tone === "down") return <Ban size={12} strokeWidth={1.9} aria-hidden />;
+  return <Eye size={12} strokeWidth={1.9} aria-hidden />;
+}
+
 export default function InterestPage() {
   const nav = useNavigate();
   const { slug } = useParams();
@@ -25,25 +46,16 @@ export default function InterestPage() {
   const [memberMixIds, setMemberMixIds] = useState<Set<number>>(new Set());
   const [err, setErr] = useState("");
 
-  // Archival period is not returned by the list endpoint yet, so track the current
-  // value locally (seeded from the interest, then optimistic on edit).
-  const [archiveDays, setArchiveDays] = useState(0);
   const [archiveOpen, setArchiveOpen] = useState(false);
-
   const [editOpen, setEditOpen] = useState(false);
   const [editName, setEditName] = useState("");
-  const [iconQ, setIconQ] = useState("");
-
   const [addOpen, setAddOpen] = useState(false);
   const [addUrl, setAddUrl] = useState("");
   const [addTitle, setAddTitle] = useState("");
   const [addKind, setAddKind] = useState("rss");
   const [adding, setAdding] = useState(false);
 
-  const interest = useMemo(
-    () => (interests ? interests.find((f) => f.slug === slug) ?? null : null),
-    [interests, slug],
-  );
+  const interest = useMemo(() => (interests ? interests.find((f) => f.slug === slug) ?? null : null), [interests, slug]);
 
   function reloadInterests() {
     api.interests().then(setInterests).catch((e) => setErr(String(e.message ?? e)));
@@ -51,18 +63,13 @@ export default function InterestPage() {
   function reloadSources() {
     api.sources().then(setSources).catch(() => {});
   }
-  async function reloadMixes() {
-    const ms = await api.mixes().catch(() => [] as Mix[]);
-    setMixes(ms);
-  }
   useEffect(() => {
     reloadInterests();
     reloadSources();
-    reloadMixes();
+    api.mixes().then(setMixes).catch(() => setMixes([]));
     api.sourceStats().then(setStats).catch(() => {});
   }, []);
 
-  // Which mixes contain this interest (for the "part of {mix}" line).
   useEffect(() => {
     if (!interest || mixes.length === 0) {
       setMemberMixIds(new Set());
@@ -85,34 +92,30 @@ export default function InterestPage() {
   }, [interest?.id, mixes]);
 
   useEffect(() => {
-    if (!interest) return;
-    setArchiveDays(interest.archive_after_days ?? 0);
-    setEditName(interest.name);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    if (interest) setEditName(interest.name);
   }, [interest?.id]);
 
   const interestSources = useMemo(() => {
     if (!slug) return [];
     return sources
       .filter((s) => s.interest_slug === slug)
-      .sort((a, b) => {
-        const aa = a.state === "archived" ? 1 : 0;
-        const ba = b.state === "archived" ? 1 : 0;
-        return aa - ba || b.weight - a.weight || a.title.localeCompare(b.title);
-      });
+      .sort((a, b) => b.weight - a.weight || a.title.localeCompare(b.title));
   }, [sources, slug]);
 
   async function pickArchive(days: number) {
     if (!interest) return;
-    setArchiveDays(days); // optimistic (list endpoint doesn't echo it back)
+    setArchiveOpen(false);
     await api.updateInterest(interest.id, { archive_after_days: days }).catch(() => {});
+    reloadInterests();
   }
-  async function saveName() {
+  async function saveEdit() {
     if (!interest) return;
     const name = editName.trim();
-    if (!name || name === interest.name) return;
-    await api.updateInterest(interest.id, { name }).catch(() => {});
-    reloadInterests();
+    setEditOpen(false);
+    if (name && name !== interest.name) {
+      await api.updateInterest(interest.id, { name }).catch(() => {});
+      reloadInterests();
+    }
   }
   async function chooseIcon(key: string) {
     if (!interest) return;
@@ -139,167 +142,160 @@ export default function InterestPage() {
     }
   }
 
-  const back = (
-    <button className="lib-back" onClick={() => nav("/sources")}>
-      <span aria-hidden>←</span> Library
-    </button>
-  );
-
   if (interests && !interest) {
     return (
-      <div>
-        {back}
-        <p className="sub" style={{ padding: "16px 0" }}>That interest doesn't exist.</p>
+      <div className="mgmt">
+        <button className="mgmt-back" onClick={() => nav("/sources")}>
+          ← Library
+        </button>
+        <p className="lib2-empty">That interest doesn't exist.</p>
       </div>
     );
   }
-  if (!interest) {
-    return (
-      <div>
-        {back}
-        {err ? <p className="err">{err}</p> : <p className="sub">Loading…</p>}
-      </div>
-    );
-  }
+  if (!interest) return <p className="lib2-subtitle">Loading…</p>;
 
-  const HeadIc = feedIcon(interest.icon);
+  const Icon = feedIcon(interest.icon);
   const memberMixes = mixes.filter((m) => memberMixIds.has(m.id));
-  const query = iconQ.trim().toLowerCase();
-  const shownIcons = query
-    ? FEED_ICONS.filter((d) => d.label.toLowerCase().includes(query) || d.key.includes(query))
-    : FEED_ICONS;
+  const mixLine =
+    memberMixes.length === 0
+      ? `${interest.name} is not in a mix.`
+      : `${interest.name} is a part of the ${memberMixes.map((m) => m.name).join(" and ")} ${memberMixes.length === 1 ? "mix" : "mixes"}.`;
 
   return (
-    <div>
-      {back}
-      <div className="lib-topbar">
-        <h1 className="display">
-          {HeadIc && <HeadIc size={22} strokeWidth={1.75} aria-hidden style={{ verticalAlign: "-3px", marginRight: 8 }} />}
+    <div className="mgmt">
+      <button className="mgmt-back" onClick={() => nav("/sources")}>
+        ← Library
+      </button>
+      <div className="mgmt-kicker">Manage Interest</div>
+      <div className="mgmt-titlerow">
+        <h1 className="mgmt-title int-title">
+          {Icon ? (
+            <span className="int-title-glyph" aria-hidden>
+              <Icon size={28} strokeWidth={1.6} />
+            </span>
+          ) : null}
           {interest.name}
         </h1>
-        <div className="lib-topbar-actions">
-          <button className="int-edit" onClick={() => setEditOpen(true)} aria-label="Edit interest">
-            <Pencil size={13} strokeWidth={1.75} aria-hidden /> Edit
-          </button>
-        </div>
+        <button className="mgmt-edit" onClick={() => (setEditName(interest.name), setEditOpen(true))}>
+          <Pencil size={13} strokeWidth={1.9} aria-hidden /> edit
+        </button>
       </div>
+      {err && <p className="err">{err}</p>}
 
-      {/* Plain-English facts up top (transparency). */}
-      <p className="int-fact">
-        {memberMixes.length > 0 ? (
-          <>Part of the <b>{memberMixes.map((m) => m.name).join(", ")}</b> {memberMixes.length === 1 ? "mix" : "mixes"}.</>
-        ) : (
-          <>Not in a mix.</>
-        )}
-      </p>
-      <p className="int-fact">
+      <p className="int-prose">{mixLine}</p>
+      <p className="int-prose">
         The default archival period for {interest.name} sources is{" "}
-        <button className="int-inline-edit" onClick={() => setArchiveOpen(true)}>
-          {archiveLabel(archiveDays, "interest")}
+        <button className="mgmt-inline" onClick={() => setArchiveOpen(true)}>
+          {archiveLabel(interest.archive_after_days, "interest")}
         </button>
         .
       </p>
-      {err && <p className="err">{err}</p>}
 
-      {/* Sources in this interest. */}
-      <div className="page-section">
-        <div className="lib-controls" style={{ marginBottom: 8 }}>
-          <span className="lib-lbl">Sources</span>
-          <span className="lib-count">{interestSources.length}</span>
-        </div>
-        {interestSources.length === 0 ? (
-          <p className="sub" style={{ padding: "6px 0" }}>No sources here yet. Add one below.</p>
-        ) : (
-          interestSources.map((s) => {
-            const st = stats[s.id];
-            const badge = engagementBadge(st);
-            const arch = s.archive_after_days ?? 0;
-            return (
-              <div className="lib-row" key={s.id}>
-                <div className="lib-head srcrow" onClick={() => nav(`/sources/${s.id}`)}>
-                  <div className="nm">
-                    <div className="srcrow-title">
-                      <b>{s.title}</b>
-                      <span className={`eng-badge ${badge.tone}`}>{badge.text}</span>
-                    </div>
-                    <span className="srcrow-sub">
-                      {sourceSubline(s.kind, st)}
-                      {s.state === "archived" ? " · archived" : ""}
-                    </span>
-                    <div className="srcrow-indi">
-                      <WeightIndicator weight={s.weight} />
-                      <span className="srcrow-arch">
-                        archive: {arch === 0 ? "default" : archiveShort(arch).toLowerCase()}
-                      </span>
-                    </div>
-                  </div>
-                  <span className="chev">▸</span>
-                </div>
-              </div>
-            );
-          })
-        )}
-        <button className="lib-addrow" onClick={() => setAddOpen(true)}>
-          <span className="int-glyph" aria-hidden>+</span>
-          <span>Add source</span>
+      <div className="mgmt-sechead">
+        <span className="mgmt-seclabel">Sources</span>
+        <button className="mgmt-edit" onClick={() => setAddOpen(true)}>
+          <Plus size={15} strokeWidth={1.9} aria-hidden /> Add source
         </button>
       </div>
 
-      {/* --- modals --- */}
-      <ArchivePicker
-        open={archiveOpen}
-        onClose={() => setArchiveOpen(false)}
-        value={archiveDays}
-        scope="interest"
-        onPick={pickArchive}
-      />
-
-      <BottomSheet open={editOpen} onClose={() => setEditOpen(false)} variant="tall" kicker="Edit interest">
-        <div className="sheet-title">Rename &amp; icon</div>
-        <div className="ctl-label">Name</div>
-        <div className="lib-add">
-          <input
-            className="field"
-            value={editName}
-            onChange={(e) => setEditName(e.target.value)}
-            onBlur={saveName}
-            onKeyDown={(e) => e.key === "Enter" && saveName()}
-          />
+      {interestSources.length === 0 ? (
+        <p className="fc-sub">No sources yet - add one above.</p>
+      ) : (
+        <div className="isrc-list">
+          {interestSources.map((s) => {
+            const st = stats[s.id];
+            const badge = engagementBadge(st);
+            const b = bucketOf(s.weight);
+            const pd = st?.per_day ?? 0;
+            const onDeck = st?.on_deck ?? 0;
+            const suffix = archivalSuffix(s.archive_after_days ?? 0);
+            return (
+              <button className="isrc-row" key={s.id} onClick={() => nav(`/sources/${s.id}`)}>
+                <div className="isrc-head">
+                  <span className="isrc-name">{s.title}</span>
+                  <span className={`isrc-badge tone-${badge.tone}`}>
+                    <BadgeIcon tone={badge.tone} /> {badge.text}
+                  </span>
+                </div>
+                <div className="isrc-sub">
+                  {s.kind.toUpperCase()} · {pd < 1 ? pd.toFixed(1) : Math.round(pd)}{" "}
+                  {pd === 1 ? "article" : "articles"} per day · {onDeck > 0 ? `${onDeck} on deck` : "caught up"}
+                </div>
+                <div className="isrc-rep">
+                  <Dots level={WLEVEL[b]} />
+                  <span className="isrc-rep-label">
+                    {REP_LABEL[b]}
+                    {suffix ? ` · ${suffix}` : ""}
+                  </span>
+                </div>
+              </button>
+            );
+          })}
         </div>
-        <div className="ctl-label">Icon</div>
-        <input className="field" placeholder="Search icons…" value={iconQ} onChange={(e) => setIconQ(e.target.value)} />
+      )}
+
+      {/* --- dialogs --- */}
+      <Dialog open={editOpen} onClose={() => setEditOpen(false)} kicker="Edit interest">
+        <div className="dlg-sub">Name</div>
+        <input className="field" value={editName} autoFocus onChange={(e) => setEditName(e.target.value)} onKeyDown={(e) => e.key === "Enter" && saveEdit()} />
+        <div className="dlg-sub">Icon</div>
         <div className="icon-grid">
-          {shownIcons.map((d) => (
-            <button
-              key={d.key}
-              className={`icon-cell ${interest.icon === d.key ? "on" : ""}`}
-              title={d.label}
-              aria-label={d.label}
-              onClick={() => chooseIcon(d.key)}
-            >
-              <d.Icon size={20} strokeWidth={1.75} aria-hidden />
+          <button className={`icon-cell ${!interest.icon ? "on" : ""}`} onClick={() => chooseIcon("")} aria-label="No icon">
+            <span className="introw-dot" />
+          </button>
+          {Object.keys(FEED_ICONS).map((key) => {
+            const I = feedIcon(key);
+            return (
+              <button key={key} className={`icon-cell ${interest.icon === key ? "on" : ""}`} onClick={() => chooseIcon(key)} aria-label={key}>
+                {I && <I size={20} strokeWidth={1.6} />}
+              </button>
+            );
+          })}
+        </div>
+        <div className="dlg-actions">
+          <button className="btn" onClick={saveEdit}>
+            Done
+          </button>
+        </div>
+      </Dialog>
+
+      <Dialog open={archiveOpen} onClose={() => setArchiveOpen(false)} kicker="Default archival period">
+        <p className="caphint">Sources in {interest.name} inherit this unless they set their own.</p>
+        <div className="dlg-opts">
+          <button className={`dlg-opt ${(interest.archive_after_days ?? 0) === 0 ? "on" : ""}`} onClick={() => pickArchive(0)}>
+            <span className="dlg-radio" aria-hidden />
+            <span className="dlg-name">The global default</span>
+            <span className="dlg-sub">3 weeks</span>
+          </button>
+          {ARCHIVE_PRESETS.map((p) => (
+            <button key={p.days} className={`dlg-opt ${(interest.archive_after_days ?? 0) === p.days ? "on" : ""}`} onClick={() => pickArchive(p.days)}>
+              <span className="dlg-radio" aria-hidden />
+              <span className="dlg-name">{p.label}</span>
             </button>
           ))}
-          {shownIcons.length === 0 && <p className="caphint">No icons match “{iconQ}”.</p>}
         </div>
-        <p className="caphint">Tap the current icon again to clear it (falls back to the color swatch).</p>
-      </BottomSheet>
+      </Dialog>
 
-      <BottomSheet open={addOpen} onClose={() => setAddOpen(false)} kicker="Add source">
-        <div className="sheet-title">Add a source to {interest.name}</div>
-        <div className="lib-add">
-          <input className="field" placeholder="Feed URL (RSS / Atom / YouTube)" value={addUrl} onChange={(e) => setAddUrl(e.target.value)} />
-          <input className="field" placeholder="Title (optional)" value={addTitle} onChange={(e) => setAddTitle(e.target.value)} />
-          <select className="field" value={addKind} onChange={(e) => setAddKind(e.target.value)}>
-            <option value="rss">RSS / blog / news</option>
-            <option value="youtube">YouTube channel</option>
-            <option value="podcast">Podcast</option>
-          </select>
+      <Dialog open={addOpen} onClose={() => setAddOpen(false)} kicker="Add source">
+        <div className="dlg-sub">Feed URL</div>
+        <input className="field" placeholder="https://example.com/feed" value={addUrl} autoFocus onChange={(e) => setAddUrl(e.target.value)} />
+        <div className="dlg-sub">Name (optional)</div>
+        <input className="field" placeholder="e.g. Seven Days" value={addTitle} onChange={(e) => setAddTitle(e.target.value)} />
+        <div className="dlg-sub">Kind</div>
+        <div className="dlg-opts">
+          {["rss", "youtube", "podcast"].map((k) => (
+            <button key={k} className={`dlg-opt ${addKind === k ? "on" : ""}`} onClick={() => setAddKind(k)}>
+              <span className="dlg-radio" aria-hidden />
+              <span className="dlg-name">{k}</span>
+            </button>
+          ))}
+        </div>
+        <div className="dlg-actions">
           <button className="btn" onClick={addSource} disabled={adding || !addUrl.trim()}>
             {adding ? "Adding…" : "Add source"}
           </button>
         </div>
-      </BottomSheet>
+      </Dialog>
     </div>
   );
 }
