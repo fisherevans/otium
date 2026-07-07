@@ -1,36 +1,44 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { api, type Interest, type Item, type Source } from "@/api/client";
-import { BLABEL, bucketOf } from "@/lib/weight";
+import { Pencil } from "lucide-react";
+import { api, type Interest, type Mix, type Source, type SourceStats } from "@/api/client";
 import { FEED_ICONS, feedIcon } from "@/lib/feedIcons";
-import { PostsList } from "@/components/PostsList";
+import { archiveLabel, archiveShort } from "@/lib/archive";
+import { engagementBadge, sourceSubline } from "@/lib/stats";
+import { WeightIndicator } from "@/components/WeightIndicator";
+import { BottomSheet } from "@/components/BottomSheet";
+import { ArchivePicker } from "@/components/ArchivePicker";
 
-// Freshness half-life presets (days). 0 = the global default (ranker uses 21d),
-// so that preset reads as the neutral middle. Mirrors FeedIconPicker.
-const HALF_LIVES: { days: number; label: string }[] = [
-  { days: 0, label: "Default" },
-  { days: 7, label: "7d" },
-  { days: 14, label: "14d" },
-  { days: 21, label: "21d" },
-  { days: 45, label: "45d" },
-  { days: 90, label: "90d" },
-];
-
-// Dedicated interest page (#66). One page shows a interest's sources, its settings
-// (freshness half-life / diversity / icon), and its recent posts together, so
-// "here are your interests, see the sources in it and the settings for it" happens
-// in one place with no hopping. Sources tap through to their own source pages
-// (a source belongs to exactly one interest - #86 - so interest→sources is a clean tree).
+// The Interest page (session engine v2). One interest, shown plainly: its identity
+// (name + icon, editable), which mix it lives in, its default archival period, and
+// its sources with the engagement + representation facts that characterize each.
+// Sources drill into their own page; management that isn't rename/archival happens
+// there. Full page, not a modal - modals are reserved for rename + archival period.
 export default function InterestPage() {
   const nav = useNavigate();
   const { slug } = useParams();
 
   const [interests, setInterests] = useState<Interest[] | null>(null);
   const [sources, setSources] = useState<Source[]>([]);
-  const [posts, setPosts] = useState<Item[] | null>(null);
-  const [loadingPosts, setLoadingPosts] = useState(true);
+  const [stats, setStats] = useState<Record<number, SourceStats>>({});
+  const [mixes, setMixes] = useState<Mix[]>([]);
+  const [memberMixIds, setMemberMixIds] = useState<Set<number>>(new Set());
   const [err, setErr] = useState("");
+
+  // Archival period is not returned by the list endpoint yet, so track the current
+  // value locally (seeded from the interest, then optimistic on edit).
+  const [archiveDays, setArchiveDays] = useState(0);
+  const [archiveOpen, setArchiveOpen] = useState(false);
+
+  const [editOpen, setEditOpen] = useState(false);
+  const [editName, setEditName] = useState("");
   const [iconQ, setIconQ] = useState("");
+
+  const [addOpen, setAddOpen] = useState(false);
+  const [addUrl, setAddUrl] = useState("");
+  const [addTitle, setAddTitle] = useState("");
+  const [addKind, setAddKind] = useState("rss");
+  const [adding, setAdding] = useState(false);
 
   const interest = useMemo(
     () => (interests ? interests.find((f) => f.slug === slug) ?? null : null),
@@ -40,23 +48,49 @@ export default function InterestPage() {
   function reloadInterests() {
     api.interests().then(setInterests).catch((e) => setErr(String(e.message ?? e)));
   }
+  function reloadSources() {
+    api.sources().then(setSources).catch(() => {});
+  }
+  async function reloadMixes() {
+    const ms = await api.mixes().catch(() => [] as Mix[]);
+    setMixes(ms);
+  }
   useEffect(() => {
     reloadInterests();
-    api.sources().then(setSources).catch(() => {});
+    reloadSources();
+    reloadMixes();
+    api.sourceStats().then(setStats).catch(() => {});
   }, []);
+
+  // Which mixes contain this interest (for the "part of {mix}" line).
+  useEffect(() => {
+    if (!interest || mixes.length === 0) {
+      setMemberMixIds(new Set());
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      const ids = new Set<number>();
+      await Promise.all(
+        mixes.map(async (m) => {
+          const b = await api.mixBrowse(m.id).catch(() => null);
+          if (b && b.interests.some((f) => f.id === interest.id)) ids.add(m.id);
+        }),
+      );
+      if (!cancelled) setMemberMixIds(ids);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [interest?.id, mixes]);
+
   useEffect(() => {
     if (!interest) return;
-    setLoadingPosts(true);
-    api
-      .feedItems(interest.id)
-      .then(setPosts)
-      .catch((e) => setErr(String(e.message ?? e)))
-      .finally(() => setLoadingPosts(false));
+    setArchiveDays(interest.archive_after_days ?? 0);
+    setEditName(interest.name);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [interest?.id]);
 
-  // Sources belonging to this interest, weightiest first (matches the library's
-  // default sort), archived last.
   const interestSources = useMemo(() => {
     if (!slug) return [];
     return sources
@@ -68,21 +102,41 @@ export default function InterestPage() {
       });
   }, [sources, slug]);
 
-  async function setHalfLife(days: number) {
+  async function pickArchive(days: number) {
     if (!interest) return;
-    await api.updateInterest(interest.id, { half_life_days: days }).catch(() => {});
-    reloadInterests();
+    setArchiveDays(days); // optimistic (list endpoint doesn't echo it back)
+    await api.updateInterest(interest.id, { archive_after_days: days }).catch(() => {});
   }
-  async function setDiversity(n: number) {
+  async function saveName() {
     if (!interest) return;
-    await api.updateInterest(interest.id, { diversity: Math.max(0, Math.min(5, n)) }).catch(() => {});
+    const name = editName.trim();
+    if (!name || name === interest.name) return;
+    await api.updateInterest(interest.id, { name }).catch(() => {});
     reloadInterests();
   }
   async function chooseIcon(key: string) {
     if (!interest) return;
-    const next = interest.icon === key ? "" : key; // re-tap current icon to clear
+    const next = interest.icon === key ? "" : key;
     await api.updateInterest(interest.id, { icon: next }).catch(() => {});
     reloadInterests();
+  }
+  async function addSource() {
+    if (!addUrl.trim() || !interest || adding) return;
+    setAdding(true);
+    try {
+      const s = await api.createSource({ title: addTitle.trim() || addUrl, feed_url: addUrl.trim(), kind: addKind });
+      await api.setSourceInterest(s.id, interest.slug).catch(() => {});
+      setAddUrl("");
+      setAddTitle("");
+      setAddOpen(false);
+      reloadSources();
+      reloadInterests();
+      api.sourceStats().then(setStats).catch(() => {});
+    } catch (e: any) {
+      setErr(String(e.message ?? e));
+    } finally {
+      setAdding(false);
+    }
   }
 
   const back = (
@@ -109,7 +163,7 @@ export default function InterestPage() {
   }
 
   const HeadIc = feedIcon(interest.icon);
-  const div = interest.diversity ?? 0;
+  const memberMixes = mixes.filter((m) => memberMixIds.has(m.id));
   const query = iconQ.trim().toLowerCase();
   const shownIcons = query
     ? FEED_ICONS.filter((d) => d.label.toLowerCase().includes(query) || d.key.includes(query))
@@ -123,75 +177,97 @@ export default function InterestPage() {
           {HeadIc && <HeadIc size={22} strokeWidth={1.75} aria-hidden style={{ verticalAlign: "-3px", marginRight: 8 }} />}
           {interest.name}
         </h1>
+        <div className="lib-topbar-actions">
+          <button className="int-edit" onClick={() => setEditOpen(true)} aria-label="Edit interest">
+            <Pencil size={13} strokeWidth={1.75} aria-hidden /> Edit
+          </button>
+        </div>
       </div>
-      <p className="sub">
-        {interestSources.length} {interestSources.length === 1 ? "source" : "sources"} in this interest.
+
+      {/* Plain-English facts up top (transparency). */}
+      <p className="int-fact">
+        {memberMixes.length > 0 ? (
+          <>Part of the <b>{memberMixes.map((m) => m.name).join(", ")}</b> {memberMixes.length === 1 ? "mix" : "mixes"}.</>
+        ) : (
+          <>Not in a mix.</>
+        )}
+      </p>
+      <p className="int-fact">
+        The default archival period for {interest.name} sources is{" "}
+        <button className="int-inline-edit" onClick={() => setArchiveOpen(true)}>
+          {archiveLabel(archiveDays, "interest")}
+        </button>
+        .
       </p>
       {err && <p className="err">{err}</p>}
 
-      {/* Sources in the interest - tap through to the source page. */}
+      {/* Sources in this interest. */}
       <div className="page-section">
-        <div className="ctl-label">Sources</div>
+        <div className="lib-controls" style={{ marginBottom: 8 }}>
+          <span className="lib-lbl">Sources</span>
+          <span className="lib-count">{interestSources.length}</span>
+        </div>
         {interestSources.length === 0 ? (
-          <p className="sub" style={{ padding: "12px 0" }}>
-            No sources here yet. Set a source's interest from its page's Interest control.
-          </p>
+          <p className="sub" style={{ padding: "6px 0" }}>No sources here yet. Add one below.</p>
         ) : (
-          interestSources.map((s) => (
-            <div className="lib-row" key={s.id}>
-              <div className="lib-head" onClick={() => nav(`/sources/${s.id}`)}>
-                <span className="wtag">{BLABEL[bucketOf(s.weight)]}</span>
-                <div className="nm">
-                  <b>{s.title}</b>
-                  <span>
-                    {s.kind} · {s.unseen_count ?? 0} unseen
-                    {s.state === "archived" ? " · archived" : ""}
-                  </span>
+          interestSources.map((s) => {
+            const st = stats[s.id];
+            const badge = engagementBadge(st);
+            const arch = s.archive_after_days ?? 0;
+            return (
+              <div className="lib-row" key={s.id}>
+                <div className="lib-head srcrow" onClick={() => nav(`/sources/${s.id}`)}>
+                  <div className="nm">
+                    <div className="srcrow-title">
+                      <b>{s.title}</b>
+                      <span className={`eng-badge ${badge.tone}`}>{badge.text}</span>
+                    </div>
+                    <span className="srcrow-sub">
+                      {sourceSubline(s.kind, st)}
+                      {s.state === "archived" ? " · archived" : ""}
+                    </span>
+                    <div className="srcrow-indi">
+                      <WeightIndicator weight={s.weight} />
+                      <span className="srcrow-arch">
+                        archive: {arch === 0 ? "default" : archiveShort(arch).toLowerCase()}
+                      </span>
+                    </div>
+                  </div>
+                  <span className="chev">▸</span>
                 </div>
-                <span className="chev">▸</span>
               </div>
-            </div>
-          ))
+            );
+          })
         )}
+        <button className="lib-addrow" onClick={() => setAddOpen(true)}>
+          <span className="int-glyph" aria-hidden>+</span>
+          <span>Add source</span>
+        </button>
       </div>
 
-      {/* Interest settings - the ranker overrides + identity glyph. */}
-      <div className="page-section">
-        <div className="ctl-label">Freshness half-life</div>
-        <div className="wbuckets">
-          {HALF_LIVES.map((h) => (
-            <button
-              key={h.days}
-              className={`wbucket ${(interest.half_life_days ?? 0) === h.days ? "on" : ""}`}
-              onClick={() => setHalfLife(h.days)}
-            >
-              {h.label}
-            </button>
-          ))}
-        </div>
-        <p className="caphint">
-          How fast this interest's items fade. Shorter = news; longer = evergreen. Default follows the global 21 days.
-        </p>
+      {/* --- modals --- */}
+      <ArchivePicker
+        open={archiveOpen}
+        onClose={() => setArchiveOpen(false)}
+        value={archiveDays}
+        scope="interest"
+        onPick={pickArchive}
+      />
 
-        <div className="ctl-label">Diversity</div>
-        <div className="capstep">
-          <button onClick={() => setDiversity(div - 1)} aria-label="Less">−</button>
-          <span className="val">{div === 0 ? "Default" : div}</span>
-          <button onClick={() => setDiversity(div + 1)} aria-label="More">+</button>
+      <BottomSheet open={editOpen} onClose={() => setEditOpen(false)} variant="tall" kicker="Edit interest">
+        <div className="sheet-title">Rename &amp; icon</div>
+        <div className="ctl-label">Name</div>
+        <div className="lib-add">
+          <input
+            className="field"
+            value={editName}
+            onChange={(e) => setEditName(e.target.value)}
+            onBlur={saveName}
+            onKeyDown={(e) => e.key === "Enter" && saveName()}
+          />
         </div>
-        <p className="caphint">
-          {div === 0
-            ? "Each source uses its own per-session cap."
-            : `At most ${div} item${div === 1 ? "" : "s"} per source each session — lower spreads across more sources.`}
-        </p>
-
         <div className="ctl-label">Icon</div>
-        <input
-          className="field"
-          placeholder="Search icons…"
-          value={iconQ}
-          onChange={(e) => setIconQ(e.target.value)}
-        />
+        <input className="field" placeholder="Search icons…" value={iconQ} onChange={(e) => setIconQ(e.target.value)} />
         <div className="icon-grid">
           {shownIcons.map((d) => (
             <button
@@ -207,13 +283,23 @@ export default function InterestPage() {
           {shownIcons.length === 0 && <p className="caphint">No icons match “{iconQ}”.</p>}
         </div>
         <p className="caphint">Tap the current icon again to clear it (falls back to the color swatch).</p>
-      </div>
+      </BottomSheet>
 
-      {/* Recent posts across the interest. */}
-      <div className="page-section">
-        <div className="ctl-label">Recent posts</div>
-        <PostsList items={posts} loading={loadingPosts} emptyText="No posts fetched yet." showSource />
-      </div>
+      <BottomSheet open={addOpen} onClose={() => setAddOpen(false)} kicker="Add source">
+        <div className="sheet-title">Add a source to {interest.name}</div>
+        <div className="lib-add">
+          <input className="field" placeholder="Feed URL (RSS / Atom / YouTube)" value={addUrl} onChange={(e) => setAddUrl(e.target.value)} />
+          <input className="field" placeholder="Title (optional)" value={addTitle} onChange={(e) => setAddTitle(e.target.value)} />
+          <select className="field" value={addKind} onChange={(e) => setAddKind(e.target.value)}>
+            <option value="rss">RSS / blog / news</option>
+            <option value="youtube">YouTube channel</option>
+            <option value="podcast">Podcast</option>
+          </select>
+          <button className="btn" onClick={addSource} disabled={adding || !addUrl.trim()}>
+            {adding ? "Adding…" : "Add source"}
+          </button>
+        </div>
+      </BottomSheet>
     </div>
   );
 }

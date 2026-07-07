@@ -356,7 +356,7 @@ func (db *DB) UpsertUserByUsername(ctx context.Context, username, email string) 
 
 func (db *DB) ListInterests(ctx context.Context, userID int64) ([]Interest, error) {
 	rows, err := db.sql.QueryContext(ctx,
-		`SELECT f.id, f.name, f.slug, f.color, f.icon, f.half_life_days, f.diversity, f.sort, f.created_at,
+		`SELECT f.id, f.name, f.slug, f.color, f.icon, f.half_life_days, f.diversity, f.archive_after_days, f.sort, f.created_at,
 		        (SELECT COUNT(*) FROM sources s WHERE s.interest_id = f.id) AS source_count
 		 FROM interests f WHERE f.user_id = ? ORDER BY f.sort, f.name`, userID)
 	if err != nil {
@@ -367,7 +367,7 @@ func (db *DB) ListInterests(ctx context.Context, userID int64) ([]Interest, erro
 	for rows.Next() {
 		var f Interest
 		var created string
-		if err := rows.Scan(&f.ID, &f.Name, &f.Slug, &f.Color, &f.Icon, &f.HalfLifeDays, &f.Diversity, &f.Sort, &created, &f.SourceCount); err != nil {
+		if err := rows.Scan(&f.ID, &f.Name, &f.Slug, &f.Color, &f.Icon, &f.HalfLifeDays, &f.Diversity, &f.ArchiveAfterDays, &f.Sort, &created, &f.SourceCount); err != nil {
 			return nil, err
 		}
 		f.CreatedAt = parseTime(created)
@@ -696,7 +696,7 @@ func (db *DB) SetInterestSources(ctx context.Context, userID, interestID int64, 
 func (db *DB) ListSources(ctx context.Context, userID int64) ([]Source, error) {
 	rows, err := db.sql.QueryContext(ctx,
 		`SELECT s.id, s.kind, s.title, s.feed_url, s.homepage_url, s.icon_url, s.weight,
-		        s.state, s.trial_until, s.per_session_cap, s.half_life_days, s.added_at, s.last_fetch_at, s.fetch_error,
+		        s.state, s.trial_until, s.per_session_cap, s.half_life_days, s.archive_after_days, s.archive_keywords, s.added_at, s.last_fetch_at, s.fetch_error,
 		        s.interest_id, f.slug,
 		        (SELECT COUNT(*) FROM items i WHERE i.source_id = s.id) AS item_count,
 		        (SELECT COUNT(*) FROM items i WHERE i.source_id = s.id
@@ -734,7 +734,7 @@ func scanSource(r rowScanner) (*Source, error) {
 	var trialUntil, lastFetch, interestSlug sql.NullString
 	var interestID sql.NullInt64
 	if err := r.Scan(&s.ID, &s.Kind, &s.Title, &s.FeedURL, &s.HomepageURL, &s.IconURL, &s.Weight,
-		&s.State, &trialUntil, &s.PerSessionCap, &s.HalfLifeDays, &added, &lastFetch, &s.FetchError,
+		&s.State, &trialUntil, &s.PerSessionCap, &s.HalfLifeDays, &s.ArchiveAfterDays, &s.ArchiveKeywords, &added, &lastFetch, &s.FetchError,
 		&interestID, &interestSlug,
 		&s.ItemCount, &s.UnseenCount, &s.SkipPct, &s.PostsPerDay); err != nil {
 		return nil, err

@@ -28,10 +28,14 @@ type Source struct {
 	PerSessionCap int        `json:"per_session_cap"`
 	// Per-source freshness half-life override (#76). 0 = inherit; the resolver
 	// applies source override > interest (resolved) > global default.
-	HalfLifeDays float64    `json:"half_life_days"`
-	AddedAt      time.Time  `json:"added_at"`
-	LastFetchAt  *time.Time `json:"last_fetch_at,omitempty"`
-	FetchError   string     `json:"fetch_error,omitempty"`
+	HalfLifeDays float64 `json:"half_life_days"`
+	// Archive After (#115): 0 = inherit interest default, -1 = evergreen, N = days.
+	ArchiveAfterDays int `json:"archive_after_days"`
+	// Auto-archive keywords (#118): comma-separated, case-insensitive.
+	ArchiveKeywords string     `json:"archive_keywords"`
+	AddedAt         time.Time  `json:"added_at"`
+	LastFetchAt     *time.Time `json:"last_fetch_at,omitempty"`
+	FetchError      string     `json:"fetch_error,omitempty"`
 	// The one interest this source belongs to (#86). InterestID is nil for a interestless
 	// source; InterestSlug is the denormalized slug for the UI ("" when interestless).
 	InterestID   *int64  `json:"interest_id,omitempty"`
@@ -53,11 +57,14 @@ type Interest struct {
 	Icon   string `json:"icon"` // flat glyph key; '' = unset (render color swatch)
 	// Per-interest ranker overrides (#17). HalfLifeDays 0 = use the global freshness
 	// half-life; Diversity 0 = use each source's own per-session cap.
-	HalfLifeDays float64   `json:"half_life_days"`
-	Diversity    int       `json:"diversity"`
-	Sort         int       `json:"sort"`
-	CreatedAt    time.Time `json:"created_at"`
-	SourceCount  int       `json:"source_count,omitempty"`
+	HalfLifeDays float64 `json:"half_life_days"`
+	Diversity    int     `json:"diversity"`
+	// Archive After default for this interest's sources (#115): 0 = global default,
+	// -1 = evergreen, N = days. A source's own archive_after_days overrides it.
+	ArchiveAfterDays int       `json:"archive_after_days"`
+	Sort             int       `json:"sort"`
+	CreatedAt        time.Time `json:"created_at"`
+	SourceCount      int       `json:"source_count,omitempty"`
 }
 
 // InterestRef is the compact interest identity attached to a session item so the card

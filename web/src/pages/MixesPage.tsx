@@ -1,54 +1,62 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { Pencil } from "lucide-react";
 import { api, type Interest, type Mix } from "@/api/client";
 import { feedIcon } from "@/lib/feedIcons";
+import { BottomSheet } from "@/components/BottomSheet";
 
-// Mixes management (#86). A mix is a user-created overlay that gathers several
-// FEEDS under one name ("News" = Local + International); a interest can be in many
-// mixes. This page is the whole surface: create / rename / delete a mix,
-// toggle which interests belong to it, and browse Mix -> Interest (each member interest
-// links to its page, which lists its sources - completing Mix -> Interest -> Source).
-//
-// It lives on its own route (reached from the Library's Manage sheet) rather than
-// in the library header, so the v0.21 four-tab nav stays uncluttered.
+// Manage Mixes (session engine v2). A mix groups interests (many-to-many). This page
+// is where you organize that grouping: add a mix, rename it, and move interests
+// between mixes. Each mix lists its member interests; tapping an interest opens a
+// membership sheet to add/remove it across mixes (that's how you "move" one). An
+// "Other interests" section collects interests that belong to no mix.
 export default function MixesPage() {
   const nav = useNavigate();
   const [mixes, setMixes] = useState<Mix[] | null>(null);
   const [interests, setInterests] = useState<Interest[]>([]);
+  // mixId -> set of interest ids in it (seeded from browse, updated optimistically).
+  const [members, setMembers] = useState<Map<number, Set<number>>>(new Map());
   const [err, setErr] = useState("");
+
   const [newName, setNewName] = useState("");
   const [creating, setCreating] = useState(false);
 
-  // The expanded mix + its current interest-id membership (seeded from the browse
-  // endpoint so the chips reflect the server, then updated optimistically).
-  const [openId, setOpenId] = useState<number | null>(null);
-  const [memberIds, setMemberIds] = useState<Set<number>>(new Set());
-  const [renaming, setRenaming] = useState("");
+  const [moveFor, setMoveFor] = useState<Interest | null>(null);
+  const [renameFor, setRenameFor] = useState<Mix | null>(null);
+  const [renameDraft, setRenameDraft] = useState("");
   const [confirmDel, setConfirmDel] = useState(false);
 
-  function reload() {
-    api.mixes().then(setMixes).catch((e) => setErr(String(e.message ?? e)));
+  async function reload() {
+    try {
+      const ms = await api.mixes();
+      setMixes(ms);
+      const m = new Map<number, Set<number>>();
+      await Promise.all(
+        ms.map(async (mix) => {
+          const b = await api.mixBrowse(mix.id).catch(() => null);
+          m.set(mix.id, new Set(b ? b.interests.map((f) => f.id) : []));
+        }),
+      );
+      setMembers(m);
+    } catch (e: any) {
+      setErr(String(e.message ?? e));
+    }
   }
   useEffect(() => {
     reload();
     api.interests().then(setInterests).catch(() => {});
   }, []);
 
-  async function openMix(g: Mix) {
-    if (openId === g.id) {
-      setOpenId(null);
-      return;
-    }
-    setOpenId(g.id);
-    setRenaming(g.name);
-    setConfirmDel(false);
-    setMemberIds(new Set());
-    try {
-      const b = await api.mixBrowse(g.id);
-      setMemberIds(new Set(b.interests.map((f) => f.id)));
-    } catch {
-      /* leave empty on error */
-    }
+  const noMix = useMemo(() => {
+    const inSome = new Set<number>();
+    members.forEach((set) => set.forEach((id) => inSome.add(id)));
+    return interests.filter((f) => !inSome.has(f.id));
+  }, [interests, members]);
+
+  function memberInterests(mix: Mix): Interest[] {
+    const set = members.get(mix.id);
+    if (!set) return [];
+    return interests.filter((f) => set.has(f.id));
   }
 
   async function create() {
@@ -58,7 +66,7 @@ export default function MixesPage() {
     try {
       await api.createMix(name);
       setNewName("");
-      reload();
+      await reload();
     } catch (e: any) {
       setErr(String(e.message ?? e));
     } finally {
@@ -66,24 +74,31 @@ export default function MixesPage() {
     }
   }
 
-  async function toggleInterest(g: Mix, interestId: number) {
-    const next = new Set(memberIds);
-    next.has(interestId) ? next.delete(interestId) : next.add(interestId);
-    setMemberIds(next); // optimistic
-    await api.setMixInterests(g.id, [...next]).catch(() => {});
-    reload(); // refresh interest_count
+  async function toggleMembership(mix: Mix, interestId: number) {
+    const set = new Set(members.get(mix.id) ?? []);
+    set.has(interestId) ? set.delete(interestId) : set.add(interestId);
+    const next = new Map(members);
+    next.set(mix.id, set);
+    setMembers(next); // optimistic
+    await api.setMixInterests(mix.id, [...set]).catch(() => {});
+    // refresh interest_count on the mix cards
+    api.mixes().then(setMixes).catch(() => {});
   }
 
-  async function saveName(g: Mix) {
-    const name = renaming.trim();
-    if (!name || name === g.name) return;
-    await api.updateMix(g.id, { name }).catch(() => {});
+  async function saveRename() {
+    if (!renameFor) return;
+    const name = renameDraft.trim();
+    if (name && name !== renameFor.name) {
+      await api.updateMix(renameFor.id, { name }).catch(() => {});
+    }
+    setRenameFor(null);
     reload();
   }
-
-  async function del(g: Mix) {
-    await api.deleteMix(g.id).catch(() => {});
-    setOpenId(null);
+  async function del() {
+    if (!renameFor) return;
+    await api.deleteMix(renameFor.id).catch(() => {});
+    setConfirmDel(false);
+    setRenameFor(null);
     reload();
   }
 
@@ -96,12 +111,12 @@ export default function MixesPage() {
         <h1 className="display">Mixes</h1>
       </div>
       <p className="sub">
-        Gather interests under one name - "News" might hold Local and International. A interest can live in several mixes.
+        A mix groups interests - "News" might hold Local and International. An interest can live in several mixes. Tap an
+        interest to move it.
       </p>
       {err && <p className="err">{err}</p>}
 
-      {/* Create */}
-      <div className="lib-add" style={{ marginBottom: 16 }}>
+      <div className="lib-add" style={{ marginBottom: 8 }}>
         <input
           className="field"
           placeholder="New mix name"
@@ -119,100 +134,123 @@ export default function MixesPage() {
       ) : mixes.length === 0 ? (
         <p className="sub" style={{ padding: "8px 0" }}>No mixes yet. Create one above.</p>
       ) : (
-        mixes.map((g) => {
-          const Ic = feedIcon(g.icon);
-          const open = openId === g.id;
-          const memberInterests = interests.filter((f) => memberIds.has(f.id));
+        mixes.map((mix) => {
+          const Ic = feedIcon(mix.icon);
+          const mem = memberInterests(mix);
           return (
-            <div className="lib-row" key={g.id}>
-              <div className="lib-head" onClick={() => openMix(g)}>
-                {Ic && <Ic size={16} strokeWidth={1.75} aria-hidden />}
-                <div className="nm">
-                  <b>{g.name}</b>
-                  <span>{g.interest_count} {g.interest_count === 1 ? "interest" : "interests"}</span>
-                </div>
-                <span className="chev">{open ? "▾" : "▸"}</span>
+            <div className="page-section" key={mix.id} style={{ marginTop: 20 }}>
+              <div className="mix-head">
+                {Ic && <Ic size={15} strokeWidth={1.75} aria-hidden />}
+                <span className="mix-head-nm">{mix.name}</span>
+                <span className="mix-head-cnt">{mem.length}</span>
+                <button
+                  className="int-edit"
+                  onClick={() => {
+                    setRenameFor(mix);
+                    setRenameDraft(mix.name);
+                    setConfirmDel(false);
+                  }}
+                  aria-label={`Rename ${mix.name}`}
+                >
+                  <Pencil size={12} strokeWidth={1.75} aria-hidden /> Edit
+                </button>
               </div>
-
-              {open && (
-                <div className="page-section" style={{ marginTop: 4 }}>
-                  {/* Rename */}
-                  <div className="ctl-label">Name</div>
-                  <div className="lib-add">
-                    <input
-                      className="field"
-                      value={renaming}
-                      onChange={(e) => setRenaming(e.target.value)}
-                      onBlur={() => saveName(g)}
-                      onKeyDown={(e) => e.key === "Enter" && saveName(g)}
-                    />
-                  </div>
-
-                  {/* Interest membership */}
-                  <div className="ctl-label">Interests in this mix</div>
-                  {interests.length === 0 ? (
-                    <p className="caphint">No interests yet.</p>
-                  ) : (
-                    <div className="interest-assign">
-                      {interests.map((f) => {
-                        const FIc = feedIcon(f.icon);
-                        return (
-                          <button
-                            key={f.id}
-                            className={`fa-chip ${memberIds.has(f.id) ? "on" : ""}`}
-                            onClick={() => toggleInterest(g, f.id)}
-                          >
-                            {FIc && <FIc size={13} strokeWidth={1.75} aria-hidden />}
-                            {f.name}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  )}
-                  <p className="caphint">Tap a interest to add or remove it from this mix.</p>
-
-                  {/* Browse into member interests (Mix -> Interest -> Source) */}
-                  {memberInterests.length > 0 && (
-                    <>
-                      <div className="ctl-label">Browse</div>
-                      {memberInterests.map((f) => {
-                        const FIc = feedIcon(f.icon);
-                        return (
-                          <button
-                            key={f.id}
-                            className="lib-mix as-link"
-                            onClick={() => nav(`/interests/${f.slug}`)}
-                          >
-                            {FIc && <FIc size={14} strokeWidth={1.75} aria-hidden />}
-                            <span>{f.name}</span>
-                            <span className="cnt">{f.source_count ?? 0}</span>
-                            <span className="chev" aria-hidden>▸</span>
-                          </button>
-                        );
-                      })}
-                    </>
-                  )}
-
-                  {/* Delete */}
-                  {confirmDel ? (
-                    <div className="confirm">
-                      Delete {g.name}? The interests stay; only the grouping goes.
-                      <div className="lib-actions">
-                        <button onClick={() => setConfirmDel(false)}>Cancel</button>
-                        <button onClick={() => del(g)}>Delete</button>
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="lib-actions">
-                      <button onClick={() => setConfirmDel(true)}>Delete mix</button>
-                    </div>
-                  )}
-                </div>
+              {mem.length === 0 ? (
+                <p className="caphint" style={{ padding: "4px 0" }}>No interests yet - tap one below to add it.</p>
+              ) : (
+                mem.map((f) => {
+                  const FIc = feedIcon(f.icon);
+                  return (
+                    <button className="mix-int-row" key={f.id} onClick={() => setMoveFor(f)}>
+                      <span className="int-glyph" aria-hidden>
+                        {FIc ? <FIc size={16} strokeWidth={1.75} /> : <span className="int-dot" />}
+                      </span>
+                      <span className="mix-int-nm">{f.name}</span>
+                      <span className="mix-int-move">Move</span>
+                    </button>
+                  );
+                })
               )}
             </div>
           );
         })
       )}
+
+      {/* Interests in no mix. */}
+      <div className="page-section" style={{ marginTop: 24 }}>
+        <div className="ctl-label">Other interests</div>
+        {noMix.length === 0 ? (
+          <p className="caphint" style={{ padding: "4px 0" }}>Every interest is in a mix.</p>
+        ) : (
+          noMix.map((f) => {
+            const FIc = feedIcon(f.icon);
+            return (
+              <button className="mix-int-row" key={f.id} onClick={() => setMoveFor(f)}>
+                <span className="int-glyph" aria-hidden>
+                  {FIc ? <FIc size={16} strokeWidth={1.75} /> : <span className="int-dot" />}
+                </span>
+                <span className="mix-int-nm">{f.name}</span>
+                <span className="mix-int-move">Add to mix</span>
+              </button>
+            );
+          })
+        )}
+      </div>
+
+      {/* Membership sheet: toggle this interest across mixes. */}
+      <BottomSheet open={moveFor !== null} onClose={() => setMoveFor(null)} kicker="Move interest">
+        {moveFor && (
+          <>
+            <div className="sheet-title">Which mixes hold {moveFor.name}?</div>
+            <div className="sheet-rows">
+              {(mixes ?? []).map((mix) => {
+                const on = members.get(mix.id)?.has(moveFor.id) ?? false;
+                return (
+                  <button key={mix.id} className="sheet-row" onClick={() => toggleMembership(mix, moveFor)}>
+                    <span>{mix.name}</span>
+                    <span className={`pick-check ${on ? "on" : ""}`} aria-hidden />
+                  </button>
+                );
+              })}
+            </div>
+            <p className="caphint" style={{ marginTop: 12 }}>
+              Toggle the mixes this interest belongs to. Uncheck all to leave it in no mix.
+            </p>
+          </>
+        )}
+      </BottomSheet>
+
+      {/* Rename / delete a mix. */}
+      <BottomSheet open={renameFor !== null} onClose={() => setRenameFor(null)} kicker="Edit mix">
+        {renameFor && (
+          <>
+            <div className="sheet-title">Rename {renameFor.name}</div>
+            <div className="lib-add">
+              <input
+                className="field"
+                value={renameDraft}
+                autoFocus
+                onChange={(e) => setRenameDraft(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && saveRename()}
+              />
+              <button className="btn" onClick={saveRename} disabled={!renameDraft.trim()}>Save</button>
+            </div>
+            {confirmDel ? (
+              <div className="confirm">
+                Delete {renameFor.name}? The interests stay; only the grouping goes.
+                <div className="lib-actions">
+                  <button onClick={() => setConfirmDel(false)}>Cancel</button>
+                  <button onClick={del}>Delete</button>
+                </div>
+              </div>
+            ) : (
+              <div className="lib-actions">
+                <button onClick={() => setConfirmDel(true)}>Delete mix</button>
+              </div>
+            )}
+          </>
+        )}
+      </BottomSheet>
     </div>
   );
 }
