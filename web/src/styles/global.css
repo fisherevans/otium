@@ -3230,3 +3230,162 @@ button.id-source:active {
   color: var(--ink-mute);
 }
 /* ===== end #96/#85/#87/#88/#92 ===== */
+
+/* ============================================================
+   Desktop / wide-viewport layout (#4). The app is mobile-first
+   everywhere above; this block adapts the shell, the reading
+   column, the session reel, and the reader for a real desktop
+   experience - not a 640px phone column marooned on a wide screen.
+   ============================================================ */
+
+/* The session reel is a scroll-snap container; Firefox (and any
+   browser without overlay scrollbars) draws a persistent scrollbar
+   whose thumb size leaks the whole batch length - which breaks the
+   "finite, no-backlog" feel. Hide it on every viewport: paging is by
+   snap, the arrow keys, and the Next button, never a dragged bar. */
+.stage {
+  scrollbar-width: none;
+}
+.stage::-webkit-scrollbar {
+  display: none;
+}
+
+/* Keyboard-hint chip: hidden on touch/mobile, revealed at the desktop
+   breakpoint (in the media query below). Quiet mono, sits in the session /
+   reader chrome. Defined before the media query so the desktop `display`
+   override wins on source order. */
+.kbd-hint {
+  display: none;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  color: var(--ink-mute);
+  white-space: nowrap;
+}
+.kbd-hint kbd {
+  font-family: var(--mono);
+  font-size: 10px;
+  border: 1px solid var(--rule);
+  border-radius: 3px;
+  padding: 1px 4px;
+  color: var(--ink-soft);
+  background: var(--paper-2);
+}
+
+@media (min-width: 900px) {
+  /* --- Shell: a persistent left rail + a centered reading column,
+     instead of a bottom tab bar under a narrow column. The focused
+     session route keeps its own full-screen mode (below). --- */
+  .app:not(.focused) {
+    max-width: 1160px;
+    display: grid;
+    grid-template-columns: 208px minmax(0, 1fr);
+    grid-template-rows: auto 1fr;
+    grid-template-areas:
+      "topbar topbar"
+      "nav    content";
+  }
+  .app:not(.focused) > .topbar {
+    grid-area: topbar;
+    padding: 20px 28px 12px;
+  }
+  .app:not(.focused) > .content {
+    grid-area: content;
+  }
+  .app:not(.focused) > .nav {
+    grid-area: nav;
+  }
+
+  /* Left rail: vertical, quiet. Static (not sticky) so it never rides up over
+     the top bar's wordmark on a long, scrollable page; it stretches to the row
+     height so the divider runs the full column. */
+  .app:not(.focused) > .nav {
+    position: static;
+    align-self: stretch;
+    flex-direction: column;
+    justify-content: flex-start;
+    border-top: none;
+    border-right: 1.5px solid var(--rule-hard);
+    padding: 16px 0;
+  }
+  .app:not(.focused) > .nav a {
+    flex: 0 0 auto;
+    flex-direction: row;
+    justify-content: flex-start;
+    gap: 13px;
+    padding: 13px 24px;
+    font-size: 11px;
+  }
+  .app:not(.focused) > .nav a + a {
+    border-left: none;
+  }
+  .app:not(.focused) > .nav a.active {
+    background: var(--paper-3);
+    box-shadow: inset 3px 0 0 var(--ink);
+  }
+
+  /* Centered reading column for the tab pages (library / saved / you /
+     mix / settings). Cap the measure so lists and forms don't sprawl
+     across the full width. */
+  .app:not(.focused) > .content {
+    width: 100%;
+    max-width: 780px;
+    margin: 0 auto;
+    padding: 30px 32px 72px;
+  }
+
+  /* --- Session route: full-bleed so the reel can center its own
+     column; the 640px cap is a phone constraint. --- */
+  .app.focused {
+    max-width: none;
+  }
+  .focus-session {
+    height: calc(100dvh - 61px);
+  }
+  /* One card, centered in a comfortable measure regardless of how wide
+     the window is. Padding-centering keeps the hero image full-column
+     width while capping the text column. */
+  .snap {
+    padding-top: 40px;
+    padding-bottom: 40px;
+    padding-left: max(24px, calc((100% - 660px) / 2));
+    padding-right: max(24px, calc((100% - 660px) / 2));
+  }
+  /* keep the ··· overflow button on the card's right edge, not the full-bleed
+     stage edge (it's absolutely positioned to the snap). */
+  .snap .item-more {
+    right: max(24px, calc((100% - 660px) / 2));
+    top: 24px;
+  }
+  /* Match the session chrome (progress strip, Like/Next bar) to the
+     same measure so nothing spans the full width above/below the card. */
+  .timestrip,
+  .actionbar {
+    width: 100%;
+    max-width: 708px;
+    margin-left: auto;
+    margin-right: auto;
+  }
+
+  /* --- Reader: center the article in a readable measure instead of
+     left-justified full width (#3). --- */
+  .readerpage-body {
+    padding-left: max(24px, calc((100% - 720px) / 2));
+    padding-right: max(24px, calc((100% - 720px) / 2));
+    padding-top: 40px;
+  }
+  .readerpage-head,
+  .rp-revealbar {
+    padding-left: max(12px, calc((100% - 744px) / 2));
+    padding-right: max(12px, calc((100% - 744px) / 2));
+  }
+  .rp-title {
+    font-size: 32px;
+  }
+  /* A hint that keys drive the reader/reel, shown only on desktop. */
+  .kbd-hint {
+    display: inline-flex;
+  }
+}

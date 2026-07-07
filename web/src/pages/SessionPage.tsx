@@ -457,6 +457,9 @@ export default function SessionPage() {
     if (current < visibleCount - 1) scrollTo(current + 1);
     else scrollTo(visibleCount);
   }
+  function prev() {
+    if (current > 0) scrollTo(current - 1);
+  }
   function dismissCheckin() {
     setCheckin(null);
     fastStreak.current = 0;
@@ -470,6 +473,51 @@ export default function SessionPage() {
     if (sel.item.media_type === "audio") return { label: "Listen", Icon: Play, onClick: () => openContent(sel) };
     return { label: "Open original", Icon: ExternalLink, onClick: () => openExternal(sel) };
   }
+
+  // Desktop keyboard navigation (#4): arrows page the reel, space/enter opens
+  // the focused item, L likes it, backspace returns to intent. Inert while a
+  // sheet or the reader is open (they own their own keys) or while typing.
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (content || menuOpen || breakdown || saveItem || sourceSel || checkin) return;
+      const t = e.target as HTMLElement | null;
+      if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable)) return;
+      switch (e.key) {
+        case "ArrowDown":
+        case "ArrowRight":
+        case "j":
+          e.preventDefault();
+          next();
+          break;
+        case "ArrowUp":
+        case "ArrowLeft":
+        case "k":
+          e.preventDefault();
+          prev();
+          break;
+        case " ":
+        case "Enter":
+          if (cur && !atEnd) {
+            e.preventDefault();
+            engage(cur);
+          }
+          break;
+        case "l":
+        case "L":
+          if (cur && !atEnd) {
+            e.preventDefault();
+            like();
+          }
+          break;
+        case "Backspace":
+          e.preventDefault();
+          goHome();
+          break;
+      }
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  });
 
   if (err) return <div className="err">Couldn't resume your session: {err}</div>;
   if (loading) return <div className="spinner">resuming…</div>;
@@ -491,6 +539,16 @@ export default function SessionPage() {
     <div className="focus-session">
       {flash > 0 && <span className="eink-flash" key={flash} />}
       <div className="timestrip">
+        {/* Desktop-only affordance (#4): CSS reveals it at the wide breakpoint. */}
+        <span className="kbd-hint" aria-hidden>
+          <kbd>↑</kbd>
+          <kbd>↓</kbd>
+          move
+          <kbd>space</kbd>
+          open
+          <kbd>⌫</kbd>
+          back
+        </span>
         <div className="timebar">
           <div className="timebar-fill" style={{ width: `${progress * 100}%` }} />
         </div>

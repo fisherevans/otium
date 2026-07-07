@@ -112,6 +112,39 @@ export function ReaderPage({
     };
   }, [open, itemId, preloaded, item]);
 
+  // Desktop keyboard controls (#4): backspace/escape closes back to the card,
+  // space / arrows page the article. Active only while the reader is open.
+  useEffect(() => {
+    if (!open) return;
+    function onKey(e: KeyboardEvent) {
+      const el = scrollRef.current;
+      switch (e.key) {
+        case "Escape":
+        case "Backspace":
+          e.preventDefault();
+          onClose();
+          break;
+        case " ":
+        case "ArrowDown":
+        case "PageDown":
+          if (el) {
+            e.preventDefault();
+            el.scrollBy({ top: el.clientHeight * 0.85, behavior: "smooth" });
+          }
+          break;
+        case "ArrowUp":
+        case "PageUp":
+          if (el) {
+            e.preventDefault();
+            el.scrollBy({ top: -el.clientHeight * 0.85, behavior: "smooth" });
+          }
+          break;
+      }
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [open, onClose]);
+
   const readEst = useMemo(() => (body ? readTime(body.html.replace(/<[^>]+>/g, " ")) : ""), [body]);
 
   function onScroll(e: UIEvent<HTMLDivElement>) {

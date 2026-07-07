@@ -43,7 +43,7 @@ export default function App() {
   }
 
   return (
-    <div className="app">
+    <div className={`app ${focused ? "focused" : ""}`}>
       <header className={`topbar ${focused ? "session" : ""}`}>
         {focused ? (
           <>
