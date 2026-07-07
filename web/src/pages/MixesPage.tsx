@@ -206,7 +206,7 @@ export default function MixesPage() {
               {(mixes ?? []).map((mix) => {
                 const on = members.get(mix.id)?.has(moveFor.id) ?? false;
                 return (
-                  <button key={mix.id} className="sheet-row" onClick={() => toggleMembership(mix, moveFor)}>
+                  <button key={mix.id} className="sheet-row" onClick={() => toggleMembership(mix, moveFor.id)}>
                     <span>{mix.name}</span>
                     <span className={`pick-check ${on ? "on" : ""}`} aria-hidden />
                   </button>

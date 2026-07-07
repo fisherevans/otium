@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { api, type Interest, type Item, type Source, type SourceStats } from "@/api/client";
-import { BLABEL, bucketOf, type Bucket } from "@/lib/weight";
+import { bucketOf, type Bucket } from "@/lib/weight";
 import { archiveLabel } from "@/lib/archive";
 import { relTime } from "@/lib/format";
 import { feedIcon } from "@/lib/feedIcons";
