@@ -1,30 +1,31 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Pencil } from "lucide-react";
+import { Pencil, Plus, GripVertical } from "lucide-react";
 import { api, type Interest, type Mix } from "@/api/client";
 import { feedIcon } from "@/lib/feedIcons";
-import { BottomSheet } from "@/components/BottomSheet";
+import { Dialog } from "@/components/Dialog";
 
-// Manage Mixes (session engine v2). A mix groups interests (many-to-many). This page
-// is where you organize that grouping: add a mix, rename it, and move interests
-// between mixes. Each mix lists its member interests; tapping an interest opens a
-// membership sheet to add/remove it across mixes (that's how you "move" one). An
-// "Other interests" section collects interests that belong to no mix.
+// Manage Mixes (session engine v2, mockup #2). A mix groups interests
+// (many-to-many). Each mix is a drop zone listing its member interests as
+// draggable cards; drag an interest from one mix to another to move it, or to
+// "Other interests" to drop it out. Add a mix + rename/delete happen in dialogs.
+// (HTML5 drag - desktop; a touch fallback is a follow-up.)
+type Zone = number | "other" | null;
+
 export default function MixesPage() {
   const nav = useNavigate();
   const [mixes, setMixes] = useState<Mix[] | null>(null);
   const [interests, setInterests] = useState<Interest[]>([]);
-  // mixId -> set of interest ids in it (seeded from browse, updated optimistically).
   const [members, setMembers] = useState<Map<number, Set<number>>>(new Map());
   const [err, setErr] = useState("");
 
-  const [newName, setNewName] = useState("");
-  const [creating, setCreating] = useState(false);
+  const [drag, setDrag] = useState<{ interestId: number; fromMix: number | null } | null>(null);
+  const [over, setOver] = useState<Zone>(null);
 
-  const [moveFor, setMoveFor] = useState<Interest | null>(null);
+  const [addOpen, setAddOpen] = useState(false);
+  const [newName, setNewName] = useState("");
   const [renameFor, setRenameFor] = useState<Mix | null>(null);
   const [renameDraft, setRenameDraft] = useState("");
-  const [confirmDel, setConfirmDel] = useState(false);
 
   async function reload() {
     try {
@@ -59,198 +60,156 @@ export default function MixesPage() {
     return interests.filter((f) => set.has(f.id));
   }
 
-  async function create() {
-    const name = newName.trim();
-    if (!name || creating) return;
-    setCreating(true);
-    try {
-      await api.createMix(name);
-      setNewName("");
-      await reload();
-    } catch (e: any) {
-      setErr(String(e.message ?? e));
-    } finally {
-      setCreating(false);
-    }
-  }
+  async function drop(zone: Zone) {
+    setOver(null);
+    const d = drag;
+    setDrag(null);
+    if (!d || zone === null) return;
+    const toMix = zone === "other" ? null : zone;
+    if (d.fromMix === toMix) return;
 
-  async function toggleMembership(mix: Mix, interestId: number) {
-    const set = new Set(members.get(mix.id) ?? []);
-    set.has(interestId) ? set.delete(interestId) : set.add(interestId);
-    const next = new Map(members);
-    next.set(mix.id, set);
+    const next = new Map([...members].map(([k, v]) => [k, new Set(v)] as const));
+    if (d.fromMix !== null) next.get(d.fromMix)?.delete(d.interestId);
+    if (toMix !== null) {
+      if (!next.has(toMix)) next.set(toMix, new Set());
+      next.get(toMix)!.add(d.interestId);
+    }
     setMembers(next); // optimistic
-    await api.setMixInterests(mix.id, [...set]).catch(() => {});
-    // refresh interest_count on the mix cards
+
+    const affected = new Set<number>();
+    if (d.fromMix !== null) affected.add(d.fromMix);
+    if (toMix !== null) affected.add(toMix);
+    for (const mid of affected) {
+      await api.setMixInterests(mid, [...(next.get(mid) ?? [])]).catch(() => {});
+    }
     api.mixes().then(setMixes).catch(() => {});
   }
 
+  async function create() {
+    const name = newName.trim();
+    if (!name) return;
+    setAddOpen(false);
+    setNewName("");
+    await api.createMix(name).catch((e: any) => setErr(String(e.message ?? e)));
+    reload();
+  }
   async function saveRename() {
     if (!renameFor) return;
     const name = renameDraft.trim();
-    if (name && name !== renameFor.name) {
-      await api.updateMix(renameFor.id, { name }).catch(() => {});
-    }
+    const m = renameFor;
     setRenameFor(null);
-    reload();
+    if (name && name !== m.name) {
+      await api.updateMix(m.id, { name }).catch(() => {});
+      reload();
+    }
   }
   async function del() {
     if (!renameFor) return;
-    await api.deleteMix(renameFor.id).catch(() => {});
-    setConfirmDel(false);
+    const m = renameFor;
     setRenameFor(null);
+    await api.deleteMix(m.id).catch(() => {});
     reload();
   }
 
-  return (
-    <div>
-      <button className="lib-back" onClick={() => nav("/sources")}>
-        <span aria-hidden>←</span> Library
-      </button>
-      <div className="lib-topbar">
-        <h1 className="display">Mixes</h1>
+  function Card(f: Interest, fromMix: number | null) {
+    const I = feedIcon(f.icon);
+    return (
+      <div
+        className={`mix-card ${drag?.interestId === f.id ? "dragging" : ""}`}
+        key={`${fromMix}-${f.id}`}
+        draggable
+        onDragStart={() => setDrag({ interestId: f.id, fromMix })}
+        onDragEnd={() => (setDrag(null), setOver(null))}
+      >
+        <span className="mix-card-glyph" aria-hidden>
+          {I ? <I size={18} strokeWidth={1.6} /> : <span className="introw-dot" />}
+        </span>
+        <span className="mix-card-name">{f.name}</span>
+        <span className="mix-card-grip" aria-hidden>
+          <GripVertical size={16} strokeWidth={1.75} />
+        </span>
       </div>
-      <p className="sub">
-        A mix groups interests - "News" might hold Local and International. An interest can live in several mixes. Tap an
-        interest to move it.
-      </p>
-      {err && <p className="err">{err}</p>}
+    );
+  }
 
-      <div className="lib-add" style={{ marginBottom: 8 }}>
-        <input
-          className="field"
-          placeholder="New mix name"
-          value={newName}
-          onChange={(e) => setNewName(e.target.value)}
-          onKeyDown={(e) => e.key === "Enter" && create()}
-        />
-        <button className="btn" onClick={create} disabled={creating || !newName.trim()}>
-          {creating ? "Adding…" : "Add mix"}
+  return (
+    <div className="mgmt">
+      <button className="mgmt-back" onClick={() => nav("/sources")}>
+        ← Library
+      </button>
+      <div className="mgmt-titlerow">
+        <h1 className="mgmt-title">Mixes</h1>
+        <button className="mgmt-edit" onClick={() => (setNewName(""), setAddOpen(true))}>
+          <Plus size={15} strokeWidth={1.9} aria-hidden /> Add mix
         </button>
       </div>
+      <p className="int-prose">Drag an interest between mixes to move it. An interest can live in several mixes.</p>
+      {err && <p className="err">{err}</p>}
 
       {mixes === null ? (
-        <p className="sub">Loading…</p>
-      ) : mixes.length === 0 ? (
-        <p className="sub" style={{ padding: "8px 0" }}>No mixes yet. Create one above.</p>
+        <p className="lib2-subtitle">Loading…</p>
       ) : (
-        mixes.map((mix) => {
-          const Ic = feedIcon(mix.icon);
-          const mem = memberInterests(mix);
-          return (
-            <div className="page-section" key={mix.id} style={{ marginTop: 20 }}>
-              <div className="mix-head">
-                {Ic && <Ic size={15} strokeWidth={1.75} aria-hidden />}
-                <span className="mix-head-nm">{mix.name}</span>
-                <span className="mix-head-cnt">{mem.length}</span>
-                <button
-                  className="int-edit"
-                  onClick={() => {
-                    setRenameFor(mix);
-                    setRenameDraft(mix.name);
-                    setConfirmDel(false);
-                  }}
-                  aria-label={`Rename ${mix.name}`}
-                >
-                  <Pencil size={12} strokeWidth={1.75} aria-hidden /> Edit
+        <>
+          {mixes.map((mix) => (
+            <div
+              className={`mix-zone ${over === mix.id ? "over" : ""}`}
+              key={mix.id}
+              onDragOver={(e) => (e.preventDefault(), setOver(mix.id))}
+              onDragLeave={() => setOver((o) => (o === mix.id ? null : o))}
+              onDrop={() => drop(mix.id)}
+            >
+              <div className="mix-zone-head">
+                <span className="mix-zone-name">{mix.name}</span>
+                <button className="mgmt-edit" onClick={() => (setRenameDraft(mix.name), setRenameFor(mix))}>
+                  <Pencil size={13} strokeWidth={1.9} aria-hidden /> rename
                 </button>
               </div>
-              {mem.length === 0 ? (
-                <p className="caphint" style={{ padding: "4px 0" }}>No interests yet - tap one below to add it.</p>
+              {memberInterests(mix).length === 0 ? (
+                <p className="mix-empty">No interests yet - drag one here.</p>
               ) : (
-                mem.map((f) => {
-                  const FIc = feedIcon(f.icon);
-                  return (
-                    <button className="mix-int-row" key={f.id} onClick={() => setMoveFor(f)}>
-                      <span className="int-glyph" aria-hidden>
-                        {FIc ? <FIc size={16} strokeWidth={1.75} /> : <span className="int-dot" />}
-                      </span>
-                      <span className="mix-int-nm">{f.name}</span>
-                      <span className="mix-int-move">Move</span>
-                    </button>
-                  );
-                })
+                <div className="mix-cards">{memberInterests(mix).map((f) => Card(f, mix.id))}</div>
               )}
             </div>
-          );
-        })
+          ))}
+
+          <div
+            className={`mix-zone ${over === "other" ? "over" : ""}`}
+            onDragOver={(e) => (e.preventDefault(), setOver("other"))}
+            onDragLeave={() => setOver((o) => (o === "other" ? null : o))}
+            onDrop={() => drop("other")}
+          >
+            <div className="mix-zone-head">
+              <span className="mgmt-seclabel">Other interests</span>
+            </div>
+            {noMix.length === 0 ? (
+              <p className="mix-empty">Every interest is in a mix.</p>
+            ) : (
+              <div className="mix-cards">{noMix.map((f) => Card(f, null))}</div>
+            )}
+          </div>
+        </>
       )}
 
-      {/* Interests in no mix. */}
-      <div className="page-section" style={{ marginTop: 24 }}>
-        <div className="ctl-label">Other interests</div>
-        {noMix.length === 0 ? (
-          <p className="caphint" style={{ padding: "4px 0" }}>Every interest is in a mix.</p>
-        ) : (
-          noMix.map((f) => {
-            const FIc = feedIcon(f.icon);
-            return (
-              <button className="mix-int-row" key={f.id} onClick={() => setMoveFor(f)}>
-                <span className="int-glyph" aria-hidden>
-                  {FIc ? <FIc size={16} strokeWidth={1.75} /> : <span className="int-dot" />}
-                </span>
-                <span className="mix-int-nm">{f.name}</span>
-                <span className="mix-int-move">Add to mix</span>
-              </button>
-            );
-          })
-        )}
-      </div>
+      <Dialog open={addOpen} onClose={() => setAddOpen(false)} kicker="Add mix">
+        <input className="field" placeholder="e.g. News" value={newName} autoFocus onChange={(e) => setNewName(e.target.value)} onKeyDown={(e) => e.key === "Enter" && create()} />
+        <div className="dlg-actions">
+          <button className="btn" onClick={create} disabled={!newName.trim()}>
+            Add mix
+          </button>
+        </div>
+      </Dialog>
 
-      {/* Membership sheet: toggle this interest across mixes. */}
-      <BottomSheet open={moveFor !== null} onClose={() => setMoveFor(null)} kicker="Move interest">
-        {moveFor && (
-          <>
-            <div className="sheet-title">Which mixes hold {moveFor.name}?</div>
-            <div className="sheet-rows">
-              {(mixes ?? []).map((mix) => {
-                const on = members.get(mix.id)?.has(moveFor.id) ?? false;
-                return (
-                  <button key={mix.id} className="sheet-row" onClick={() => toggleMembership(mix, moveFor.id)}>
-                    <span>{mix.name}</span>
-                    <span className={`pick-check ${on ? "on" : ""}`} aria-hidden />
-                  </button>
-                );
-              })}
-            </div>
-            <p className="caphint" style={{ marginTop: 12 }}>
-              Toggle the mixes this interest belongs to. Uncheck all to leave it in no mix.
-            </p>
-          </>
-        )}
-      </BottomSheet>
-
-      {/* Rename / delete a mix. */}
-      <BottomSheet open={renameFor !== null} onClose={() => setRenameFor(null)} kicker="Edit mix">
-        {renameFor && (
-          <>
-            <div className="sheet-title">Rename {renameFor.name}</div>
-            <div className="lib-add">
-              <input
-                className="field"
-                value={renameDraft}
-                autoFocus
-                onChange={(e) => setRenameDraft(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && saveRename()}
-              />
-              <button className="btn" onClick={saveRename} disabled={!renameDraft.trim()}>Save</button>
-            </div>
-            {confirmDel ? (
-              <div className="confirm">
-                Delete {renameFor.name}? The interests stay; only the grouping goes.
-                <div className="lib-actions">
-                  <button onClick={() => setConfirmDel(false)}>Cancel</button>
-                  <button onClick={del}>Delete</button>
-                </div>
-              </div>
-            ) : (
-              <div className="lib-actions">
-                <button onClick={() => setConfirmDel(true)}>Delete mix</button>
-              </div>
-            )}
-          </>
-        )}
-      </BottomSheet>
+      <Dialog open={renameFor !== null} onClose={() => setRenameFor(null)} kicker="Rename mix">
+        <input className="field" value={renameDraft} autoFocus onChange={(e) => setRenameDraft(e.target.value)} onKeyDown={(e) => e.key === "Enter" && saveRename()} />
+        <div className="dlg-actions">
+          <button className="btn danger" onClick={del}>
+            Delete
+          </button>
+          <button className="btn" onClick={saveRename} disabled={!renameDraft.trim()}>
+            Save
+          </button>
+        </div>
+      </Dialog>
     </div>
   );
 }

@@ -2014,6 +2014,79 @@ h1.display {
   border-color: var(--ink);
   color: var(--ink);
 }
+
+/* manage mixes (#120, mockup #2): drag-and-drop zones. */
+.mix-zone {
+  margin-top: 22px;
+  border: 1.5px solid transparent;
+  border-radius: 8px;
+  padding: 0 8px 8px;
+  transition: border-color 0.12s, background 0.12s;
+}
+.mix-zone.over {
+  border-color: var(--ink);
+  background: var(--paper-2);
+}
+.mix-zone-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 0 7px;
+  border-bottom: 1.5px solid var(--rule-hard);
+  margin-bottom: 8px;
+}
+.mix-zone-name {
+  font-family: var(--serif);
+  font-weight: 700;
+  font-size: 24px;
+  color: var(--ink);
+}
+.mix-empty {
+  font-family: var(--serif);
+  font-style: italic;
+  font-size: 14px;
+  color: var(--ink-mute);
+  padding: 6px 2px 4px;
+}
+.mix-cards {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.mix-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 12px;
+  border: 1.5px solid var(--rule);
+  background: var(--paper);
+  border-radius: 8px;
+  cursor: grab;
+}
+.mix-card:active {
+  cursor: grabbing;
+}
+.mix-card.dragging {
+  opacity: 0.4;
+}
+.mix-card-glyph {
+  flex: 0 0 auto;
+  display: flex;
+  color: var(--ink);
+}
+.mix-card-name {
+  font-family: var(--serif);
+  font-weight: 700;
+  font-size: 18px;
+  color: var(--ink);
+  min-width: 0;
+}
+.mix-card-grip {
+  margin-left: auto;
+  color: var(--ink-mute);
+  display: flex;
+}
 .lib-sub {
   display: flex;
   align-items: center;
