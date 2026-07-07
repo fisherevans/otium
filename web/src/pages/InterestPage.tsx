@@ -4,6 +4,7 @@ import { Pencil, Plus, Mail, Ban, EyeOff } from "lucide-react";
 import { api, type Interest, type Mix, type Source, type SourceStats } from "@/api/client";
 import { FEED_ICONS, feedIcon } from "@/lib/feedIcons";
 import { ARCHIVE_PRESETS, archiveLabel } from "@/lib/archive";
+import { cadencePhrase } from "@/lib/cadence";
 import { engagementBadge, type InsightKind } from "@/lib/stats";
 import { REP_LABEL } from "@/lib/represent";
 import { bucketOf, WLEVEL } from "@/lib/weight";
@@ -220,8 +221,7 @@ export default function InterestPage() {
                   )}
                 </div>
                 <div className="isrc-sub">
-                  {s.kind.toUpperCase()} · {pd < 1 ? pd.toFixed(1) : Math.round(pd)}{" "}
-                  {pd === 1 ? "article" : "articles"} per day · {onDeck > 0 ? `${onDeck} on deck` : "caught up"}
+                  {s.kind.toUpperCase()} · {cadencePhrase(pd)} · {onDeck > 0 ? `${onDeck} on deck` : "caught up"}
                 </div>
                 <div className="isrc-rep">
                   <Dots level={WLEVEL[b]} />

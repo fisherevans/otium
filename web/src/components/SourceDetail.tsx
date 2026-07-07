@@ -3,6 +3,7 @@ import { api, type Source, type Interest } from "@/api/client";
 import { BottomSheet } from "./BottomSheet";
 import { BLABEL, bucketOf, type Bucket } from "@/lib/weight";
 import { feedIcon } from "@/lib/feedIcons";
+import { scaleCadence, cadenceCount } from "@/lib/cadence";
 import { WeightControl } from "./WeightControl";
 import { WeightIndicator } from "./WeightIndicator";
 
@@ -129,7 +130,7 @@ export function SourceDetail({
             <b>{unseen}</b> unseen
             {ppd > 0 && (
               <>
-                {" "}· <b>{ppd < 1 ? ppd.toFixed(1) : Math.round(ppd)}</b>/day
+                {" "}· <b>{cadenceCount(scaleCadence(ppd).value)}</b>/{scaleCadence(ppd).unit}
               </>
             )}
             {skip > 0 && (

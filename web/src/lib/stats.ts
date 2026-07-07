@@ -1,4 +1,5 @@
 import type { SourceStats } from "@/api/client";
+import { cadencePhrase } from "@/lib/cadence";
 
 // Source insight badges (#120). These pills are THRESHOLDED, not per-source
 // labels: a source only earns a pill when one signal crosses a bar worth
@@ -55,12 +56,11 @@ export function engagementBadge(st?: SourceStats): EngagementBadge | null {
   }
 }
 
-// The source subline used under the badge: "RSS · 2 articles/day · 9 on deck".
+// The source subline used under the badge: "RSS · 3 articles a month · 9 on deck".
 export function sourceSubline(kind: string, st?: SourceStats): string {
   const parts: string[] = [kind.toUpperCase()];
   if (st) {
-    const pd = st.per_day;
-    if (pd > 0) parts.push(`${pd < 1 ? pd.toFixed(1) : Math.round(pd)} ${pd === 1 ? "article" : "articles"}/day`);
+    if (st.per_day > 0) parts.push(cadencePhrase(st.per_day));
     if (st.on_deck > 0) parts.push(`${st.on_deck} on deck`);
   }
   return parts.join(" · ");

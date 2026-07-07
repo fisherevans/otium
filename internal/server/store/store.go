@@ -1364,7 +1364,9 @@ func (db *DB) SourceStatsAll(ctx context.Context, userID int64) (map[int64]Sourc
 		if span < 1 {
 			span = 1
 		}
-		v.PerDay = round1(float64(v.Total) / span)
+		// Keep 3 decimals, not 1: a ~monthly source is ~0.033/day, which round1
+		// would flatten to 0.0 and destroy the signal the UI escalates to "N a month".
+		v.PerDay = round3(float64(v.Total) / span)
 		if v.Shown > 0 {
 			v.SkipPct = round2f(float64(v.Skipped) / float64(v.Shown))
 			v.OpenPct = round2f(float64(v.Opened) / float64(v.Shown))
@@ -1383,6 +1385,7 @@ const globalArchiveWindowDays = 21
 
 func round1(f float64) float64  { return math.Round(f*10) / 10 }
 func round2f(f float64) float64 { return math.Round(f*100) / 100 }
+func round3(f float64) float64  { return math.Round(f*1000) / 1000 }
 
 func (db *DB) SourceSkipStats(ctx context.Context, userID int64) (map[int64]SkipStat, error) {
 	rows, err := db.sql.QueryContext(ctx,

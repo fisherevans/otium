@@ -5,6 +5,7 @@ import { api, type Interest, type Source, type SourceItem, type SourceStats } fr
 import { bucketOf, BUCKETS, WFREQ, WHINT, WLEVEL, type Bucket } from "@/lib/weight";
 import { ARCHIVE_PRESETS } from "@/lib/archive";
 import { sourceInsight, type InsightKind } from "@/lib/stats";
+import { scaleCadence, cadenceCount } from "@/lib/cadence";
 import { REP_PROSE, REP_LABEL, compareToAverage } from "@/lib/represent";
 import { relDate } from "@/lib/format";
 import { Dialog } from "@/components/Dialog";
@@ -238,11 +239,17 @@ export default function SourcePage() {
 
       {/* --- transparency stats --- */}
       <div className="src-stats">
-        <p className="src-stat">
-          {source.title} publishes about <b>{st?.per_day ?? 0}</b> {(st?.per_day ?? 0) === 1 ? "article" : "articles"} a
-          day.
-        </p>
-        <p className="src-stat-sub">That's {compareToAverage(st?.per_day ?? 0, avgPerDay, "more content", "less content")}.</p>
+        {(st?.per_day ?? 0) > 0 ? (
+          <p className="src-stat">
+            {source.title} publishes about <b>{cadenceCount(scaleCadence(st!.per_day).value)}</b>{" "}
+            {cadenceCount(scaleCadence(st!.per_day).value) === "1" ? "article" : "articles"} a {scaleCadence(st!.per_day).unit}.
+          </p>
+        ) : (
+          <p className="src-stat">{source.title} hasn't published anything recently.</p>
+        )}
+        {(st?.per_day ?? 0) > 0 && (
+          <p className="src-stat-sub">That's {compareToAverage(st?.per_day ?? 0, avgPerDay, "more content", "less content")}.</p>
+        )}
 
         <p className="src-stat">
           <b>{st?.shown ?? 0}</b> {(st?.shown ?? 0) === 1 ? "article has" : "articles have"} been presented to you.
