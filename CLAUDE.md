@@ -41,13 +41,17 @@ Server layout:
   boot). All SQL lives here.
 - `internal/server/feeds` - fetch + normalize a source's feed into items
   (gofeed; RSS/Atom, YouTube channel feeds, podcasts).
-- `internal/server/session` - the ranker. Score is
-  `(weight·rarity)^selectivity · freshness`, where rarity is population-relative
-  (ranked by the store, #110) and there is no behavioral downweight (#109). It
-  stages a count-bounded ranked **queue** (not sized to summed duration - the
-  client paces it against elapsed wall-clock). Per-source caps, per-item reasons,
-  budget-driven selectivity. **This is the core; keep it deterministic and
-  explainable.**
+- `internal/server/session` - session engine v2 (#114). Source-selection and
+  article-ranking are **separate**: `allocate.go` picks the next SOURCE
+  weighted-random by **Representation** (`SourceWeight`, buckets 0.25/0.5/1/2/4),
+  then returns that source's freshest **eligible** article. Eligibility is a hard
+  **Archive-After** cutoff on age (source > interest > global; -1 = evergreen) plus
+  per-source auto-archive **keywords**. Article score is recency-freshness only,
+  kept as a distinct subsystem for future signals. **No rarity, no per-session cap,
+  no selectivity, no skip penalty** - representation alone shapes how much of a
+  session each source occupies, so a session is a relaxing, representative sample.
+  `build.go` holds the shared article helpers. **This is the core; keep source
+  allocation and article ranking independent.**
 - `internal/server/handler` - thin HTTP handlers.
 - `internal/server/middleware` - auth gate (OIDC session or dev bypass).
 - `internal/oidc` - confidential OIDC client of auth.fisher.sh (copied from
@@ -132,22 +136,20 @@ git log --grep '#14' --oneline                    # every commit in issue 14
 
 - otium-server is **single-replica** (in-memory OIDC sessions). Don't scale it
   without adding a shared session store.
-- Rarity is **population-relative** (#110), not an absolute posts/day threshold.
-  The store computes each followed/trial source's cadence from its **accumulated**
-  stored `published_at` history (`store.cadencePerDay`: items in the ~45-day window
-  / the *observed* span, floored at 1 day; no thin-history floor), then ranks every
-  source and hands each candidate a `RarityBoost` in `[1, 1+rareBoostMax]` set by
-  its rank - the rarest source for that user gets the full lift, the most frequent
-  gets none (`store.rarityBoosts`). The ranker just reads `c.RarityBoost`; it never
-  re-derives rarity, so sessions, the mix, and the breakdown all agree. Why
-  relative: the old absolute threshold + thin-history floor was degenerate on a
-  young, feed-truncated library (measured: 73/160 sources at x1, the rest clumped
-  at 1.8-1.9), so wildly different real rates got identical rarity.
-- **No skip penalty in scoring** (#109). Score is `weight × rarity × freshness`;
-  a source's skip rate never silently downweights it (that was the opaque loop
-  product principle #2 forbids). shown/skipped are still tracked for the mix and
-  the future explicit "you skip this a lot - reduce its weight?" recommendation
-  (#19). `ItemEffectiveScore` now equals `ItemIntendedScore`.
+- **Representation, not rarity** (engine v2, #114/#115). A source's `weight` is its
+  **Representation** - how much of a session it occupies, applied by the allocator
+  as a weighted-random source pick, NOT as an article-score multiplier. There is no
+  rarity, no per-session cap, no selectivity (all removed). High-volume feeds don't
+  drown low-volume ones because each source is picked by its representation, not its
+  supply. Cadence/`RarityBoost` fields still exist on Candidate but are inert.
+- **Archive After governs eligibility** (#115), not a user-facing half-life. Per
+  source (`sources.archive_after_days`) or interest default (0=inherit, -1=evergreen,
+  N=days); an item past the resolved window is ineligible. Plus per-source
+  auto-archive **keywords** (`sources.archive_keywords`, #118): a title/summary match
+  drops the item. Both live in `session.eligible()`.
+- **No skip penalty** (#109). shown/skipped are tracked for the stats surfaces and
+  the future "you skip this a lot" recommendation (#19), never for scoring.
+  `GET /sources/stats` exposes the per-source engagement bundle.
 - Content duration is unavailable from YouTube RSS (only podcasts carry it), so
   the "predicted items" math leans on a per-feed default. The truer signal is
   behavioral per-feed pace, measurable now via the single-item view - tracked in
