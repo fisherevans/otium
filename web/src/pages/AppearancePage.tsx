@@ -44,12 +44,10 @@ const SAMPLE: Selected = {
   reason: "Fresh - posted recently",
   breakdown: {
     weight: 1,
-    rarity: 1,
+    rarity: 1.4,
     freshness: 0.9,
-    skip_penalty: 1,
-    effective_score: 0.9,
+    effective_score: 1.26,
     cadence_per_day: 0.3,
-    skip_pct: 0,
     age_days: 2,
   },
 };

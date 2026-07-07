@@ -113,7 +113,7 @@ func (h *Handler) Mix(w http.ResponseWriter, r *http.Request) {
 			byID[c.SourceID] = a
 			order = append(order, c.SourceID)
 		}
-		eff := session.ItemEffectiveScore(c, now, stats[c.SourceID])
+		eff := session.ItemEffectiveScore(c, now)
 		intd := session.ItemIntendedScore(c, now)
 		a.effSum += eff
 		a.intSum += intd

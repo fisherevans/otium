@@ -475,10 +475,6 @@ func (h *Handler) rehydrateSession(ctx context.Context, uid int64, itemIDs []int
 	if err != nil {
 		return nil, err
 	}
-	stats, err := h.sourceStats(ctx, uid)
-	if err != nil {
-		return nil, err
-	}
 	byID := make(map[int64]store.Candidate, len(cands))
 	for _, c := range cands {
 		byID[c.ID] = c
@@ -489,7 +485,7 @@ func (h *Handler) rehydrateSession(ctx context.Context, uid int64, itemIDs []int
 		if !ok {
 			continue
 		}
-		out = append(out, session.SelectFor(c, now, stats[c.SourceID]))
+		out = append(out, session.SelectFor(c, now))
 	}
 	h.attachFeeds(ctx, uid, out)
 	return out, nil

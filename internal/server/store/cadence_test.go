@@ -8,8 +8,9 @@ import (
 )
 
 // TestCadencePerDay pins the accumulated-history cadence estimator: rate is
-// count over the observed span (not the fixed window), thin history yields the
-// rare floor (no boost), and the span is floored/capped.
+// count over the observed span (not the fixed window), the span is floored/capped,
+// and there is no thin-history floor (#110) - a source we've seen little of reads
+// at its actual low rate so it ranks as rare among the user's sources.
 func TestCadencePerDay(t *testing.T) {
 	tests := []struct {
 		name   string
@@ -18,11 +19,11 @@ func TestCadencePerDay(t *testing.T) {
 		window int
 		want   float64
 	}{
-		{"no items", 0, 0, 45, cadenceRareFloor},
-		{"below min items reads as not-rare", 2, 30, 45, cadenceRareFloor},
+		{"no items reads as zero", 0, 0, 45, 0},
+		{"thin history reads at actual low rate", 2, 30, 45, 2.0 / 30},
 		{"dense recent burst floors the span", 15, 0.05, 45, 15}, // span floored to 1 day
 		{"high volume over full window", 900, 45, 45, 20},        // 900/45
-		{"rare source spread over window", 3, 40, 45, 3.0 / 40},  // 0.075/day -> boosted
+		{"rare source spread over window", 3, 40, 45, 3.0 / 40},  // 0.075/day
 		{"span capped at window", 100, 90, 45, 100.0 / 45},       // observed span > window clamped
 	}
 	for _, tt := range tests {
@@ -35,10 +36,47 @@ func TestCadencePerDay(t *testing.T) {
 	}
 }
 
-// TestCandidatesCadenceFromAccumulatedHistory is the end-to-end contract for #7:
-// a high-volume source whose items are all recent must NOT read as rare, a
-// genuinely infrequent source must, and thin history sits at the rare floor.
-func TestCandidatesCadenceFromAccumulatedHistory(t *testing.T) {
+// TestRarityBoosts pins the population-relative rarity (#110): the rarest source
+// gets the full lift (1+rareBoostMax), the most frequent gets none (1), and a
+// mid-cadence source lands strictly between. Different real rates always separate,
+// which is the property the old absolute threshold lost on a young library.
+func TestRarityBoosts(t *testing.T) {
+	cad := map[int64]float64{
+		1: 5.0,  // most frequent
+		2: 1.0,  //
+		3: 0.2,  //
+		4: 0.02, // rarest
+	}
+	b := rarityBoosts(cad)
+	if b[1] != 1.0 {
+		t.Fatalf("most frequent should get no boost, got %v", b[1])
+	}
+	if b[4] != 1+rareBoostMax {
+		t.Fatalf("rarest should get full boost %v, got %v", 1+rareBoostMax, b[4])
+	}
+	// Monotonic: rarer -> larger boost, and all four distinct.
+	if !(b[4] > b[3] && b[3] > b[2] && b[2] > b[1]) {
+		t.Fatalf("boosts must increase with rarity: %v %v %v %v", b[1], b[2], b[3], b[4])
+	}
+}
+
+// TestRarityBoostsTiesShareRank verifies identical cadences get identical boosts.
+func TestRarityBoostsTiesShareRank(t *testing.T) {
+	cad := map[int64]float64{1: 1.0, 2: 1.0, 3: 0.1}
+	b := rarityBoosts(cad)
+	if b[1] != b[2] {
+		t.Fatalf("tied cadences should share a boost: %v vs %v", b[1], b[2])
+	}
+	if !(b[3] > b[1]) {
+		t.Fatalf("the rarer source should out-boost the tied pair: %v vs %v", b[3], b[1])
+	}
+}
+
+// TestCandidatesRarityFromAccumulatedHistory is the end-to-end contract: a
+// high-volume source whose items are all recent must NOT read as rare, and a
+// genuinely infrequent source must out-rank it on the relative rarity boost that
+// the store overlays onto candidates (#7 + #110).
+func TestCandidatesRarityFromAccumulatedHistory(t *testing.T) {
 	db, err := Open(":memory:")
 	if err != nil {
 		t.Fatal(err)
@@ -76,31 +114,25 @@ func TestCandidatesCadenceFromAccumulatedHistory(t *testing.T) {
 	for i, age := range []float64{10, 20, 30, 40} {
 		mkItem(rare, "r-"+strconv.Itoa(i), age*24)
 	}
-	// Thin: 2 items -> below the min-items floor, no boost.
-	thin := mkSource("Thin", "http://thin")
-	mkItem(thin, "t-0", 5*24)
-	mkItem(thin, "t-1", 20*24)
 
 	pool, err := db.Candidates(ctx, u.ID, nil, 45, 500)
 	if err != nil {
 		t.Fatal(err)
 	}
+	boost := map[int64]float64{}
 	cad := map[int64]float64{}
 	for _, c := range pool {
+		boost[c.SourceID] = c.RarityBoost
 		cad[c.SourceID] = c.SourceCadence
 	}
 
-	if cad[dense] < rareThresholdForTest {
-		t.Fatalf("dense source read as rare: cadence=%v (want >= %v)", cad[dense], rareThresholdForTest)
+	if cad[dense] <= cad[rare] {
+		t.Fatalf("dense cadence %v should exceed rare cadence %v", cad[dense], cad[rare])
 	}
-	if cad[rare] >= rareThresholdForTest {
-		t.Fatalf("rare source not rare: cadence=%v (want < %v)", cad[rare], rareThresholdForTest)
+	if !(boost[rare] > boost[dense]) {
+		t.Fatalf("rare source should get a larger rarity boost: rare=%v dense=%v", boost[rare], boost[dense])
 	}
-	if cad[thin] != cadenceRareFloor {
-		t.Fatalf("thin history should sit at rare floor %v, got %v", cadenceRareFloor, cad[thin])
+	if boost[dense] != 1.0 {
+		t.Fatalf("the most frequent source should get no boost, got %v", boost[dense])
 	}
 }
-
-// rareThresholdForTest mirrors session.rareThresholdPerDay (1.0/day); the store
-// can't import session, so the boundary is duplicated for the assertion.
-const rareThresholdForTest = 1.0

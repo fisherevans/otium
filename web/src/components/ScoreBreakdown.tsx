@@ -14,7 +14,6 @@ import { BottomSheet } from "./BottomSheet";
 
 const r2 = (n: number) => Math.round(n * 100) / 100;
 const mult = (n: number) => `×${r2(n)}`;
-const pct = (n: number) => `${Math.round(n * 100)}%`;
 
 // cadenceLabel turns posts/day into the human phrase the rarity line reads with.
 function cadenceLabel(perDay: number): string {
@@ -57,23 +56,21 @@ type Factor = {
   line: string;
 };
 
-// factorsOf maps the raw breakdown into the four display rows. Each fill is the
+// factorsOf maps the raw breakdown into the three display rows. Each fill is the
 // factor's position in its own plausible range, so a fuller bar always means "this
 // pushed the item up" regardless of which factor it is.
 function factorsOf(b: ScoreBreakdown): Factor[] {
-  const rarityLine =
-    b.rarity <= 1.001
-      ? `Posts ${cadenceLabel(b.cadence_per_day)} - common cadence, no boost`
-      : `Rare source: posts ${cadenceLabel(b.cadence_per_day)} → boosted`;
-
-  let skipLine: string;
-  if (b.skip_penalty >= 0.999) {
-    skipLine =
-      b.skip_pct >= 0.2
-        ? `Skipped ${pct(b.skip_pct)} so far - not enough history to act on yet`
-        : "You rarely skip this source - no downweight";
+  // Rarity is population-relative now (#110): the boost reflects where this
+  // source's posting cadence ranks among your other sources, not an absolute
+  // rate. Translate the multiplier back into that plain-language rank.
+  const rareShare = Math.round(Math.min(1, Math.max(0, b.rarity - 1)) * 100);
+  let rarityLine: string;
+  if (b.rarity <= 1.05) {
+    rarityLine = `Posts ${cadenceLabel(b.cadence_per_day)} - among your more frequent sources, no boost`;
+  } else if (b.rarity >= 1.66) {
+    rarityLine = `Posts ${cadenceLabel(b.cadence_per_day)} - rarer than most of your sources → boosted`;
   } else {
-    skipLine = `You skip this source ${pct(b.skip_pct)} of the time → downweighted`;
+    rarityLine = `Posts ${cadenceLabel(b.cadence_per_day)} - rarer than ~${rareShare}% of your sources → lifted`;
   }
 
   return [
@@ -94,12 +91,6 @@ function factorsOf(b: ScoreBreakdown): Factor[] {
       mult: mult(b.freshness),
       fill: Math.min(1, b.freshness),
       line: `Published ${ageLabel(b.age_days)} → ${freshWord(b.freshness)}`,
-    },
-    {
-      name: "Skip penalty",
-      mult: mult(b.skip_penalty),
-      fill: Math.min(1, b.skip_penalty),
-      line: skipLine,
     },
   ];
 }

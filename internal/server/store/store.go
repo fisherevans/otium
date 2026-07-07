@@ -9,6 +9,7 @@ import (
 	"database/sql"
 	_ "embed"
 	"fmt"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -825,21 +826,16 @@ func candidateCols() string {
 	             COALESCE((SELECT f.diversity FROM feeds f WHERE f.id = s.feed_id), 0) AS feed_diversity`
 }
 
-// cadence-estimation floors. See cadencePerDay.
+// cadence-estimation + rarity constants. See cadencePerDay / rarityBoosts.
 const (
-	// minCadenceItems is the number of stored publishes below which we won't
-	// estimate a source's cadence: with fewer than this in the window there isn't
-	// enough signal to call a source "rare", so it gets no boost.
-	minCadenceItems = 3
-	// cadenceRareFloor is the per-day rate returned for thin history. It sits at
-	// the ranker's rare threshold (session.rareThresholdPerDay = 1.0/day): a
-	// cadence >= that threshold makes rarityBoost() return 1, i.e. no boost. Kept
-	// in lockstep with that constant intentionally.
-	cadenceRareFloor = 1.0
 	// minObservationDays floors the divisor so a dense burst in a short window (a
 	// just-added high-volume source) reads as high-cadence, not rare, and we never
 	// divide by ~0.
 	minObservationDays = 1.0
+	// rareBoostMax is the maximum rarity lift: the rarest source in the user's
+	// population gets up to +100% score, the most frequent gets none. Rarity is
+	// RELATIVE now (#110), so this scales a rank, not an absolute-threshold gap.
+	rareBoostMax = 1.0
 )
 
 // cadencePerDay estimates a source's posting rate from its ACCUMULATED stored
@@ -848,11 +844,13 @@ const (
 // this history accrues past a feed's ~10-15 entry truncation. Dividing by the
 // observed span rather than the full window keeps a high-volume source whose feed
 // only exposes a recent slice from reading as rare once even a little history has
-// accumulated (the NPR-labeled-rare bug). Thin history (< minCadenceItems)
-// returns cadenceRareFloor: too little signal to justify a rarity boost.
+// accumulated (the NPR-labeled-rare bug). No thin-history floor (#110): a source
+// we've seen little of reads at its actual low rate so it ranks as rare among the
+// user's sources, which is the point. count 0 -> 0 (maximally rare, but inert:
+// such a source carries no candidates).
 func cadencePerDay(count int, spanDays float64, windowDays int) float64 {
-	if count < minCadenceItems {
-		return cadenceRareFloor
+	if count <= 0 {
+		return 0
 	}
 	span := spanDays
 	if w := float64(windowDays); span > w {
@@ -862,6 +860,87 @@ func cadencePerDay(count int, spanDays float64, windowDays int) float64 {
 		span = minObservationDays
 	}
 	return float64(count) / span
+}
+
+// rarityBoosts maps each source's cadence to a population-RELATIVE boost in
+// [1, 1+rareBoostMax] (#110). rareRank is the fraction of sources posting strictly
+// more often than this one, so the rarest source (rank ~1) gets the full lift and
+// the most frequent (rank 0) gets none. Uniform-by-construction over rank, so
+// boosts spread across the population instead of collapsing to a narrow band the
+// way the old absolute 1/day threshold did on a feed-truncated, young library.
+// Ties (identical cadence) share a rank.
+func rarityBoosts(cadence map[int64]float64) map[int64]float64 {
+	n := len(cadence)
+	out := make(map[int64]float64, n)
+	if n == 0 {
+		return out
+	}
+	sorted := make([]float64, 0, n)
+	for _, c := range cadence {
+		sorted = append(sorted, c)
+	}
+	if n == 1 {
+		for id := range cadence {
+			out[id] = 1 // a lone source has nothing to be rare relative to
+		}
+		return out
+	}
+	sort.Float64s(sorted) // ascending
+	for id, c := range cadence {
+		// index of the first value strictly greater than c; everything from there
+		// to the end posts more often than this source.
+		upper := sort.Search(len(sorted), func(i int) bool { return sorted[i] > c })
+		greater := len(sorted) - upper
+		// Normalize by n-1 so the extremes hit the full range: the most frequent
+		// source (nothing greater) gets rank 0 -> boost 1, the rarest (all others
+		// greater) gets rank 1 -> boost 1+rareBoostMax.
+		rareRank := float64(greater) / float64(n-1)
+		out[id] = 1 + rareBoostMax*rareRank
+	}
+	return out
+}
+
+// sourceRarityBoosts computes the relative rarity boost for every followed/trial
+// source of a user, ranking each source's windowed cadence against the whole set.
+// It's run once per candidate fetch and overlaid onto the returned candidates, so
+// a source's rarity is a stable property of the population, not of whichever
+// subset (themed session, single feed) a given query returned.
+func (db *DB) sourceRarityBoosts(ctx context.Context, userID int64, windowDays int) (map[int64]float64, error) {
+	win := fmt.Sprintf("-%d days", windowDays)
+	q := `SELECT s.id,
+	             (SELECT COUNT(*) FROM items i WHERE i.source_id = s.id
+	                AND i.published_at >= datetime('now', ?)) AS win_count,
+	             (SELECT COALESCE(julianday('now') - julianday(MIN(i.published_at)), 0)
+	                FROM items i WHERE i.source_id = s.id
+	                AND i.published_at >= datetime('now', ?)) AS win_span
+	      FROM sources s
+	      WHERE s.user_id = ? AND s.state IN ('followed','trial')`
+	rows, err := db.sql.QueryContext(ctx, q, win, win, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	cadence := map[int64]float64{}
+	for rows.Next() {
+		var id int64
+		var count int
+		var span float64
+		if err := rows.Scan(&id, &count, &span); err != nil {
+			return nil, err
+		}
+		cadence[id] = cadencePerDay(count, span, windowDays)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return rarityBoosts(cadence), nil
+}
+
+// applyRarity overlays the population-relative rarity boost onto each candidate.
+func applyRarity(cands []Candidate, boosts map[int64]float64) {
+	for i := range cands {
+		cands[i].RarityBoost = boosts[cands[i].SourceID]
+	}
 }
 
 // scanCandidates reads the candidateCols projection into Candidates, computing
@@ -916,7 +995,16 @@ func (db *DB) Candidates(ctx context.Context, userID int64, sourceIDs []int64, s
 		return nil, err
 	}
 	defer rows.Close()
-	return scanCandidates(rows, sinceDays)
+	cands, err := scanCandidates(rows, sinceDays)
+	if err != nil {
+		return nil, err
+	}
+	boosts, err := db.sourceRarityBoosts(ctx, userID, sinceDays)
+	if err != nil {
+		return nil, err
+	}
+	applyRarity(cands, boosts)
+	return cands, nil
 }
 
 // MixItems returns every item belonging to the user's followed/trial sources
@@ -946,7 +1034,16 @@ func (db *DB) MixItems(ctx context.Context, userID int64, sourceIDs []int64, cad
 		return nil, err
 	}
 	defer rows.Close()
-	return scanCandidates(rows, cadenceDays)
+	cands, err := scanCandidates(rows, cadenceDays)
+	if err != nil {
+		return nil, err
+	}
+	boosts, err := db.sourceRarityBoosts(ctx, userID, cadenceDays)
+	if err != nil {
+		return nil, err
+	}
+	applyRarity(cands, boosts)
+	return cands, nil
 }
 
 // SourceIDsForFeeds resolves feed slugs to the set of source ids in them (#86:
@@ -1328,7 +1425,16 @@ func (db *DB) CandidatesByIDs(ctx context.Context, userID int64, ids []int64) ([
 		return nil, err
 	}
 	defer rows.Close()
-	return scanCandidates(rows, 45)
+	cands, err := scanCandidates(rows, 45)
+	if err != nil {
+		return nil, err
+	}
+	boosts, err := db.sourceRarityBoosts(ctx, userID, 45)
+	if err != nil {
+		return nil, err
+	}
+	applyRarity(cands, boosts)
+	return cands, nil
 }
 
 // --- helpers ---

@@ -183,9 +183,15 @@ type Candidate struct {
 	SourceTitle   string
 	SourceWeight  float64
 	PerSessionCap int
-	// SourceCadence is the source's average items/day over the recent window;
-	// used to boost rare sources and cap noisy ones.
+	// SourceCadence is the source's average items/day over the recent window,
+	// computed from accumulated history. Informational (shown in the breakdown);
+	// its RANK among the user's sources - not its absolute value - drives rarity.
 	SourceCadence float64
+	// RarityBoost is the source's population-relative rarity multiplier (#110),
+	// in [1, 1+rareBoostMax]. The store ranks every followed/trial source's
+	// cadence and hands the boost down here, so the ranker never re-derives it.
+	// 0 means "unset" and the ranker treats it as 1 (no boost).
+	RarityBoost float64
 	// SourceHalfLifeDays is the source's own freshness half-life override (#76),
 	// resolved by the store. 0 = inherit; it takes precedence over the feed
 	// half-life in the ranker (source override > feed > global).

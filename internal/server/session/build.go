@@ -5,7 +5,11 @@
 // item is in it."
 //
 // The scoring is deterministic - no black box. Every selected item carries a
-// human-readable Reason derived from the same factors the ranker used.
+// human-readable Reason derived from the same factors the ranker used:
+// score = weight × rarity × freshness. Rarity is population-relative (the store
+// ranks a source's cadence against the user's other sources, #110); there is no
+// silent behavioral downweight - skipping drives an explicit, user-approved
+// recommendation, not an automatic score cut (#109).
 package session
 
 import (
@@ -19,11 +23,10 @@ import (
 
 // Tunables. freshnessHalfLifeDays and the per-source cap are the global
 // defaults; a feed can override both per-feed (Candidate.FeedHalfLifeDays /
-// FeedDiversity, #17).
+// FeedDiversity, #17). Rarity has no tunable here anymore: it's a relative rank
+// the store computes across the user's sources (store.RarityBoost, #110).
 const (
 	freshnessHalfLifeDays = 21.0 // default: an item's freshness score halves every 3 weeks
-	rareThresholdPerDay   = 1.0  // sources below this cadence are "rare" and get boosted
-	rareBoostMax          = 1.0  // a ~never-posting source gets up to +100% score
 
 	// Prediction: how many items the user will actually get through. Content
 	// duration is only half of it - the user skims/skips, so effective time per
@@ -31,14 +34,13 @@ const (
 	skimFactor       = 0.4   // user typically spends ~40% of an item's length
 	articleEffSec    = 40.0  // effective time for a duration-less item (an article)
 	defaultAvgEffSec = 120.0 // fallback when we know nothing about the mix
-
-	skipPenaltyMax = 0.5 // a source skipped 100% of the time loses up to 50% score
-	skipMinSample  = 5   // don't act on skip rate below this many shows
 )
 
-// SourceStat is the per-source behavioral + content signal the ranker folds in:
-// the empirical time-per-item (for prediction) and the shown/skipped history
-// (for downweighting sources the user keeps passing on).
+// SourceStat is the per-source behavioral + content signal the ranker folds in.
+// AvgContentSec (empirical time-per-item) drives session-size prediction. Shown/
+// Skipped are carried for the mix view and the future skip recommendation (#19);
+// they no longer touch scoring - a skip is a signal the user acts on, not a
+// silent downweight (#109).
 type SourceStat struct {
 	AvgContentSec float64 // avg known content duration over recent items (0 = none/article)
 	Shown         int
@@ -84,7 +86,7 @@ type Selected struct {
 // ScoreBreakdown is the per-factor decomposition of an item's score (#18): the
 // individual multiplicative contributions the ranker actually used, so the
 // one-line Reason becomes legible as math. EffectiveScore is the product of the
-// four factors and equals ItemEffectiveScore - the invariant test locks that, so
+// three factors and equals ItemEffectiveScore - the invariant test locks that, so
 // this is never an approximation of the ranking, it *is* the ranking.
 //
 // Selectivity is deliberately absent: it's a per-session budget adjustment (an
@@ -94,44 +96,34 @@ type Selected struct {
 // how big a session it landed in.
 type ScoreBreakdown struct {
 	Weight         float64 `json:"weight"`          // source weight multiplier (0.25..5, default 1)
-	Rarity         float64 `json:"rarity"`          // rarity boost for infrequent sources (1 = not rare, up to 1+rareBoostMax)
+	Rarity         float64 `json:"rarity"`          // relative-rarity boost (1 = as common as your feed gets, up to 1+rareBoostMax for the rarest)
 	Freshness      float64 `json:"freshness"`       // age decay (1 = brand new, → 0 as it ages past the half-life)
-	SkipPenalty    float64 `json:"skip_penalty"`    // behavior downweight (1 = never skipped, down to 1-skipPenaltyMax)
-	EffectiveScore float64 `json:"effective_score"` // weight × rarity × freshness × skip_penalty
+	EffectiveScore float64 `json:"effective_score"` // weight × rarity × freshness
 	// Human-legible context for the plain-language lines - not factors, just the
 	// raw inputs behind them.
-	CadencePerDay float64 `json:"cadence_per_day"` // source's posts/day over the window (drives Rarity)
-	SkipPct       float64 `json:"skip_pct"`        // 0..1 raw skip rate; the penalty only bites past skipMinSample shows
+	CadencePerDay float64 `json:"cadence_per_day"` // source's posts/day over the window (its position among your sources drives Rarity)
 	AgeDays       float64 `json:"age_days"`        // item age in days at build time (drives Freshness)
 }
 
 // ScoreBreakdownFor decomposes an item's effective score into the exact factors
 // the ranker used. It reuses the same scorer helpers as scoreOf /
 // ItemEffectiveScore - it does not re-derive the formula - so EffectiveScore is
-// guaranteed to equal ItemEffectiveScore(c, now, stat). Keep it that way: the
-// value here is deterministic auditability, and an approximation would defeat the
-// point.
-func ScoreBreakdownFor(c store.Candidate, now time.Time, stat SourceStat) ScoreBreakdown {
+// guaranteed to equal ItemEffectiveScore(c, now). Keep it that way: the value
+// here is deterministic auditability, and an approximation would defeat the point.
+func ScoreBreakdownFor(c store.Candidate, now time.Time) ScoreBreakdown {
 	w := sourceWeight(c)
-	rarity := rarityBoost(c.SourceCadence)
+	rarity := rarityOf(c)
 	fresh := freshness(c.PublishedAt, now, halfLifeOf(c))
-	skip := skipPenalty(stat)
 	ageDays := now.Sub(c.PublishedAt).Hours() / 24
 	if ageDays < 0 {
 		ageDays = 0
-	}
-	skipPct := 0.0
-	if stat.Shown > 0 {
-		skipPct = float64(stat.Skipped) / float64(stat.Shown)
 	}
 	return ScoreBreakdown{
 		Weight:         w,
 		Rarity:         rarity,
 		Freshness:      fresh,
-		SkipPenalty:    skip,
-		EffectiveScore: w * rarity * fresh * skip,
+		EffectiveScore: w * rarity * fresh,
 		CadencePerDay:  c.SourceCadence,
-		SkipPct:        skipPct,
 		AgeDays:        ageDays,
 	}
 }
@@ -159,7 +151,9 @@ type scored struct {
 // per-source volume and avoiding back-to-back items from the same source. It is
 // count-bounded, NOT duration-bounded: the client consumes this queue paced by
 // the user's elapsed wall-clock time (a skimmed article costs seconds, a watched
-// video costs minutes - only the user's clock knows), refilling as it goes.
+// video costs minutes - only the user's clock knows), refilling as it goes. stats
+// carries the per-source content-duration signal used only for session-size
+// prediction; the score itself is behavior-free.
 func Build(req Request, pool []store.Candidate, now time.Time, stats map[int64]SourceStat) Result {
 	// Predict how many items the user will actually get through this session, from
 	// their time budget and the mix's empirical time-per-item. Scarcer sessions
@@ -176,7 +170,7 @@ func Build(req Request, pool []store.Candidate, now time.Time, stats map[int64]S
 	for _, c := range pool {
 		ranked = append(ranked, scored{
 			c:        c,
-			score:    scoreOf(c, now, stats[c.SourceID], sel),
+			score:    scoreOf(c, now, sel),
 			dur:      estDuration(c),
 			reason:   reasonOf(c, now),
 			sourceID: c.SourceID,
@@ -227,7 +221,7 @@ func Build(req Request, pool []store.Candidate, now time.Time, stats map[int64]S
 				Score:       round2(r.score),
 				EstDuration: r.dur,
 				Reason:      r.reason,
-				Breakdown:   ScoreBreakdownFor(r.c, now, stats[r.sourceID]),
+				Breakdown:   ScoreBreakdownFor(r.c, now),
 			})
 			total += r.dur
 			perSourceUsed[r.sourceID]++
@@ -252,14 +246,14 @@ func Build(req Request, pool []store.Candidate, now time.Time, stats map[int64]S
 // needs each item's current score/reason/breakdown, not a re-rank. Score equals
 // round2(ItemEffectiveScore), so the on-card cue, the breakdown, and the mix all
 // agree and the ItemEffectiveScore == scoreOf(sel=1) invariant is preserved.
-func SelectFor(c store.Candidate, now time.Time, stat SourceStat) Selected {
+func SelectFor(c store.Candidate, now time.Time) Selected {
 	return Selected{
 		Item:        c.Item,
 		SourceTitle: c.SourceTitle,
-		Score:       round2(ItemEffectiveScore(c, now, stat)),
+		Score:       round2(ItemEffectiveScore(c, now)),
 		EstDuration: estDuration(c),
 		Reason:      reasonOf(c, now),
-		Breakdown:   ScoreBreakdownFor(c, now, stat),
+		Breakdown:   ScoreBreakdownFor(c, now),
 	}
 }
 
@@ -313,16 +307,6 @@ func selectivity(predicted int) float64 {
 	}
 }
 
-// skipPenalty downweights a source the more consistently the user skips it, once
-// there's enough of a sample to trust the rate.
-func skipPenalty(s SourceStat) float64 {
-	if s.Shown < skipMinSample {
-		return 1
-	}
-	rate := float64(s.Skipped) / float64(s.Shown)
-	return 1 - skipPenaltyMax*rate
-}
-
 func clampInt(v, lo, hi int) int {
 	if v < lo {
 		return lo
@@ -333,21 +317,20 @@ func clampInt(v, lo, hi int) int {
 	return v
 }
 
-// scoreOf = (weight * rarityBoost)^selectivity * freshness * skipPenalty. The
-// user-controlled knobs (weight directly; rarity/freshness via which sources
-// they follow) stay legible; selectivity and skipPenalty are the behavior- and
-// budget-driven adjustments. sel > 1 sharpens the favor toward high-weight
-// sources when few items will be seen.
-func scoreOf(c store.Candidate, now time.Time, stat SourceStat, sel float64) float64 {
-	return math.Pow(weightRarity(c), sel) * freshness(c.PublishedAt, now, halfLifeOf(c)) * skipPenalty(stat)
+// scoreOf = (weight * rarity)^selectivity * freshness. The user-controlled knobs
+// (weight directly; rarity via which sources they follow, ranked relative to the
+// rest) stay legible; selectivity is the only budget-driven adjustment. sel > 1
+// sharpens the favor toward high-weight sources when few items will be seen.
+func scoreOf(c store.Candidate, now time.Time, sel float64) float64 {
+	return math.Pow(weightRarity(c), sel) * freshness(c.PublishedAt, now, halfLifeOf(c))
 }
 
 // weightRarity is the user-controlled term of the score: the source's weight
-// lifted by the rarity boost for infrequent posters. It carries no time or
-// behavior signal - just "how much does the user favor this source, adjusted so
-// a rare poster isn't buried." Shared by the session ranker and the mix view.
+// lifted by its relative-rarity boost. It carries no time or behavior signal -
+// just "how much does the user favor this source, adjusted so a source that posts
+// rarely for their feed isn't buried." Shared by the session ranker and the mix.
 func weightRarity(c store.Candidate) float64 {
-	return sourceWeight(c) * rarityBoost(c.SourceCadence)
+	return sourceWeight(c) * rarityOf(c)
 }
 
 // sourceWeight is the item's source weight with the "unset -> 1" default applied,
@@ -360,21 +343,34 @@ func sourceWeight(c store.Candidate) float64 {
 	return c.SourceWeight
 }
 
+// rarityOf reads the store-computed population-relative rarity boost (#110),
+// defaulting to 1 (no boost) when unset. The store ranks each source's posting
+// cadence against the user's other sources and hands the boost down on the
+// candidate, so the ranker itself stays population-agnostic and the same value
+// flows into sessions, the mix, and the breakdown.
+func rarityOf(c store.Candidate) float64 {
+	if c.RarityBoost <= 0 {
+		return 1
+	}
+	return c.RarityBoost
+}
+
 // ItemIntendedScore is the session-agnostic "intended" contribution of a single
-// item: weight × rarity × freshness, with selectivity fixed at 1 and NO skip
-// penalty. It answers "how much does this item want to be in the feed" before
-// behavior is folded in - the numerator of the mix view's intended share.
+// item: weight × rarity × freshness, with selectivity fixed at 1. It answers "how
+// much does this item want to be in the feed" - the numerator of the mix view's
+// share.
 func ItemIntendedScore(c store.Candidate, now time.Time) float64 {
 	return weightRarity(c) * freshness(c.PublishedAt, now, halfLifeOf(c))
 }
 
-// ItemEffectiveScore is the session-agnostic "effective" contribution: the
-// intended score times the source's skip penalty. This is what the item is
-// actually worth to the ranker once chronic skipping is accounted for, with
-// selectivity fixed at 1 so it reflects "if you browsed everything," not one
-// session's budget-driven selectivity. Equivalent to scoreOf(c, now, stat, 1).
-func ItemEffectiveScore(c store.Candidate, now time.Time, stat SourceStat) float64 {
-	return ItemIntendedScore(c, now) * skipPenalty(stat)
+// ItemEffectiveScore is the session-agnostic contribution at selectivity 1 - what
+// the item is actually worth to the ranker "if you browsed everything." Since the
+// skip penalty was removed (#109), this is identical to ItemIntendedScore; both
+// are retained so the mix's share basis and the intended/effective split still
+// compile while the mix view is simplified separately. Equivalent to
+// scoreOf(c, now, 1).
+func ItemEffectiveScore(c store.Candidate, now time.Time) float64 {
+	return ItemIntendedScore(c, now)
 }
 
 // halfLifeOf resolves the freshness half-life for a candidate per the hierarchy
@@ -406,16 +402,6 @@ func freshness(published, now time.Time, halfLifeDays float64) float64 {
 	return math.Pow(0.5, ageDays/halfLifeDays)
 }
 
-// rarityBoost lifts items from sources that post rarely so a once-a-week creator
-// is never buried under a 30-a-day one. A source at/above rareThreshold gets 1x;
-// a near-silent source approaches 1+rareBoostMax.
-func rarityBoost(cadencePerDay float64) float64 {
-	if cadencePerDay >= rareThresholdPerDay {
-		return 1
-	}
-	return 1 + rareBoostMax*(rareThresholdPerDay-cadencePerDay)/rareThresholdPerDay
-}
-
 func estDuration(c store.Candidate) int {
 	if c.DurationSec > 0 {
 		return c.DurationSec
@@ -427,14 +413,15 @@ func estDuration(c store.Candidate) int {
 }
 
 // reasonOf picks the single most salient factor to show the user, so the "why
-// am I seeing this" answer is honest and specific.
+// am I seeing this" answer is honest and specific. The rare case keys off the
+// store's relative-rarity boost (#110), not an absolute cadence.
 func reasonOf(c store.Candidate, now time.Time) string {
 	ageDays := now.Sub(c.PublishedAt).Hours() / 24
 	switch {
 	case c.SourceWeight >= 5:
 		return "Favorite source"
-	case c.SourceCadence > 0 && c.SourceCadence < 0.25:
-		return "Rare - " + c.SourceTitle + " posts seldom, so it's surfaced"
+	case c.RarityBoost >= 1.6:
+		return "Rare - " + c.SourceTitle + " posts seldom for your feed, so it's surfaced"
 	case ageDays < 1:
 		return "Fresh - posted today"
 	case c.SourceWeight >= 2:

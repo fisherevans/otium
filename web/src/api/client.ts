@@ -104,18 +104,17 @@ export interface HistoryItem extends Item {
 // --- end #83 block ---
 
 // ScoreBreakdown decomposes an item's effective score into the exact factors the
-// ranker used (#18). The four multipliers multiply to effective_score, which is
+// ranker used (#18). The three multipliers multiply to effective_score, which is
 // the real ranker output (matches ItemEffectiveScore server-side) - never an
-// approximation. cadence_per_day / skip_pct / age_days are the raw inputs behind
-// the factors, for the plain-language lines.
+// approximation. cadence_per_day / age_days are the raw inputs behind the factors,
+// for the plain-language lines. No skip factor: skipping drives an explicit
+// recommendation (#19), never a silent score cut (#109).
 export interface ScoreBreakdown {
   weight: number; // source weight multiplier (0.25..5, default 1)
-  rarity: number; // rarity boost for infrequent sources (1 = not rare)
+  rarity: number; // relative-rarity boost (1 = as common as your feed gets, up to 2 for the rarest)
   freshness: number; // age decay (1 = brand new → 0 as it ages)
-  skip_penalty: number; // behavior downweight (1 = never skipped, down to 0.5)
-  effective_score: number; // weight × rarity × freshness × skip_penalty
-  cadence_per_day: number; // source posts/day over the window
-  skip_pct: number; // 0..1 raw skip rate
+  effective_score: number; // weight × rarity × freshness
+  cadence_per_day: number; // source posts/day over the window (its rank among your sources drives rarity)
   age_days: number; // item age in days at build time
 }
 
