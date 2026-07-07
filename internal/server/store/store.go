@@ -164,12 +164,12 @@ func migrate(sdb *sql.DB) error {
 	// Condition-idempotent (only touches mis-classified rows); guarded on the items
 	// table so it no-ops on a partial DB (a test that sets up only some tables).
 	{
-		var hasItems int
+		var cols int
 		if err := sdb.QueryRowContext(context.Background(),
-			`SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='items'`).Scan(&hasItems); err != nil {
+			`SELECT COUNT(*) FROM pragma_table_info('items') WHERE name IN ('url','media_type')`).Scan(&cols); err != nil {
 			return err
 		}
-		if hasItems > 0 {
+		if cols == 2 {
 			if _, err := sdb.ExecContext(context.Background(),
 				`UPDATE items SET media_type='short' WHERE url LIKE '%/shorts/%' AND media_type != 'short'`); err != nil {
 				return err
