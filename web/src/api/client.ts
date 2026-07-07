@@ -417,8 +417,8 @@ export const api = {
   // Durable sessions (#67 + #69). createSession builds + stores the queue for a
   // single duration; currentSession resumes the active one (204 -> undefined);
   // updateSession advances the cursor or ends it.
-  createSession: (durationMin: number, themes: string[]) =>
-    req<SessionResponse>("POST", "/sessions", { duration_min: durationMin, themes }),
+  createSession: (durationMin: number, themes: string[], mixes: string[] = []) =>
+    req<SessionResponse>("POST", "/sessions", { duration_min: durationMin, themes, mixes }),
   currentSession: () => req<SessionResponse | undefined>("GET", "/sessions/current"),
   updateSession: (id: string, patch: { cursor?: number; status?: "ended" }) =>
     req<{ ok: boolean }>("PATCH", `/sessions/${id}`, patch),

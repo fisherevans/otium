@@ -45,7 +45,7 @@ const DEFAULTS: Preferences = {
     meta_weight: 400,
     meta_ink: "mute",
   },
-  presets: [5, 15, 30, 60],
+  presets: [5, 10, 20, 40],
 };
 
 // #90: curated typography maps. Font keys resolve to system font stacks (the

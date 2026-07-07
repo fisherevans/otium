@@ -104,7 +104,7 @@ func DefaultPreferences() Preferences {
 			Delim: "dot", DelimGap: 7,
 			MetaWeight: 400, MetaInk: "mute",
 		},
-		Presets: []int{5, 15, 30, 60},
+		Presets: []int{5, 10, 20, 40},
 	}
 }
 
@@ -261,7 +261,7 @@ func clampPresets(in []int) []int {
 	}
 	sort.Ints(out)
 	if len(out) == 0 {
-		return []int{5, 15, 30, 60}
+		return []int{5, 10, 20, 40}
 	}
 	if len(out) > 8 {
 		out = out[:8]

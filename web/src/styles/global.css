@@ -328,7 +328,7 @@ h1.display {
 .intent {
   display: flex;
   flex-direction: column;
-  height: 100%;
+  min-height: 100%;
 }
 .intent-head {
   flex: 0 0 auto;
@@ -491,6 +491,169 @@ h1.display {
   /* auto keeps the CTA pinned to the bottom even when there are no interests (no
      flex:1 topics list to consume the free space). */
   margin-top: auto;
+}
+
+/* --- stepped intent flow (#112) --- */
+.intent-step {
+  display: flex;
+  flex-direction: column;
+  /* min-height (not height) so a tall step-2 list grows past the fold and the
+     .content 96px bottom padding keeps the CTA clear of the sticky nav, while a
+     short step still fills the viewport and pins the CTA to the bottom. */
+  min-height: 100%;
+}
+/* step 2 slides up into place - the "swipe up" transition. */
+.intent-step.slide-up {
+  animation: stepSlideUp 0.34s cubic-bezier(0.22, 0.61, 0.36, 1);
+}
+@keyframes stepSlideUp {
+  from {
+    opacity: 0;
+    transform: translateY(34px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.intent-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin: 2px 0 12px;
+  padding: 4px 0;
+  background: transparent;
+  border: 0;
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  color: var(--ink-mute);
+}
+.intent-back:active {
+  color: var(--ink);
+}
+/* time presets: roomy chips, the primary length control. */
+.time-presets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin: 18px 0 14px;
+}
+.time-chip {
+  flex: 1 1 calc(50% - 5px); /* clean 2x2 grid */
+  min-width: 84px;
+  padding: 18px 10px;
+  background: var(--paper-2);
+  border: 1.5px solid var(--rule);
+  font-family: var(--didot);
+  font-size: 22px;
+  color: var(--ink);
+  transition: background 0.15s steps(2), border-color 0.15s steps(2);
+}
+.time-chip.on {
+  background: var(--ink);
+  border-color: var(--ink);
+  color: var(--paper);
+}
+.intent-link {
+  align-self: flex-start;
+  padding: 6px 0;
+  background: transparent;
+  border: 0;
+  font-family: var(--grot);
+  font-size: 12px;
+  letter-spacing: 0.04em;
+  color: var(--ink-mute);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.intent-link:active {
+  color: var(--ink);
+}
+.time-custom {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  margin: 22px 0 8px;
+}
+.time-number {
+  width: 96px;
+  text-align: center;
+}
+/* step 2 selection list: mixes + interests as calm checkable rows. */
+.pick-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.pick-group {
+  margin-top: 18px;
+}
+.pick-group-label {
+  font-family: var(--grot);
+  font-size: 10px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--ink-mute);
+  border-bottom: 1px solid var(--hair);
+  padding-bottom: 6px;
+  margin-bottom: 4px;
+}
+.pick-row {
+  display: flex;
+  align-items: center;
+  gap: 13px;
+  width: 100%;
+  padding: 12px 0;
+  background: transparent;
+  border: 0;
+  text-align: left;
+}
+.pick-row.primary {
+  padding: 14px 0;
+}
+.pick-check {
+  flex: 0 0 auto;
+  position: relative;
+  width: 17px;
+  height: 17px;
+  border: 1.5px solid var(--ink-mute);
+  border-radius: 3px;
+}
+.pick-check.on {
+  background: var(--ink);
+  border-color: var(--ink);
+}
+.pick-check.on::after {
+  content: "";
+  position: absolute;
+  left: 5px;
+  top: 1.5px;
+  width: 4px;
+  height: 8.5px;
+  border: solid var(--paper);
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
+}
+.pick-name {
+  font-family: var(--serif);
+  font-size: 16px;
+  color: var(--ink);
+}
+.pick-row.primary .pick-name {
+  font-size: 18px;
+}
+.pick-meta {
+  margin-left: auto;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--ink-mute);
+}
+/* the step-2 list scrolls; the Begin button stays pinned by .intent .btn. */
+.intent-step .pick-list:last-of-type,
+.intent-step .pick-group:last-of-type {
+  margin-bottom: 8px;
 }
 
 /* --- theme chips --- */
