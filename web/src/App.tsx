@@ -18,6 +18,7 @@ import YouPage from "@/pages/YouPage";
 import AppearancePage from "@/pages/AppearancePage";
 // --- #66 interest-mgmt-pages: dedicated source/interest pages ---
 import SourcePage from "@/pages/SourcePage";
+import SourceArticlesPage from "@/pages/SourceArticlesPage";
 import InterestPage from "@/pages/InterestPage";
 // --- end #66 ---
 // --- #86 mixes management ---
@@ -70,6 +71,7 @@ export default function App() {
           <Route path="/sources" element={<SourcesPage />} />
           {/* --- #66 interest-mgmt-pages: dedicated source/interest pages --- */}
           <Route path="/sources/:id" element={<SourcePage />} />
+          <Route path="/sources/:id/articles" element={<SourceArticlesPage />} /> {/* per-source article list */}
           <Route path="/interests/:slug" element={<InterestPage />} />
           {/* --- end #66 --- */}
           <Route path="/mixes" element={<MixesPage />} /> {/* #86: mixes management */}
