@@ -7,8 +7,7 @@ import { archiveValue, resolveInterestArchive } from "@/lib/archive";
 import { cadencePhrase } from "@/lib/cadence";
 import { engagementBadge, type InsightKind } from "@/lib/stats";
 import { ArchiveChoice } from "@/components/ArchiveChoice";
-import { REP_LABEL } from "@/lib/represent";
-import { bucketOf, WLEVEL } from "@/lib/weight";
+import { bucketOf, REP_LEVEL, REP_LABEL } from "@/lib/represent";
 import { Dialog } from "@/components/Dialog";
 
 // The Interest page (session engine v2, mockup #3). One interest shown plainly:
@@ -226,7 +225,7 @@ export default function InterestPage() {
                   {s.kind.toUpperCase()} · {cadencePhrase(pd)} · {onDeck > 0 ? `${onDeck} on deck` : "caught up"}
                 </div>
                 <div className="isrc-rep">
-                  <Dots level={WLEVEL[b]} />
+                  <Dots level={REP_LEVEL[b]} />
                   <span className="isrc-rep-label">
                     {REP_LABEL[b]}
                     {suffix ? ` · ${suffix}` : ""}

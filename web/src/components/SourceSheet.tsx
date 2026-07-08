@@ -3,13 +3,13 @@ import { useNavigate } from "react-router-dom";
 import { api, type Source } from "@/api/client";
 import { BottomSheet } from "./BottomSheet";
 import { SourceItems } from "./SourceItems";
-import { bucketOf, type Bucket } from "@/lib/weight";
-import { WeightControl } from "./WeightControl";
+import { bucketOf, type Bucket } from "@/lib/represent";
+import { RepresentationControl } from "./RepresentationControl";
 
 // #75: the source context menu, reached by tapping the source name on a session
 // card. A calm bottom sheet that keeps you in the session while you dig into or
 // tune a source:
-//   - Quick weight change - the same 5-bucket selector the library uses, applied
+//   - Quick representation change - the same 5-bucket selector the library uses, applied
 //     inline via api.updateSource (an explicit curation signal).
 //   - View source history - the source's raw recent items (reuses SourceItems),
 //     so you can see what else it puts out without leaving the session.
@@ -67,11 +67,11 @@ export function SourceSheet({
       <BottomSheet open={open && !history} onClose={onClose} kicker="Source">
         <div className="sheet-title">{title}</div>
 
-        <div className="sheet-weight">
+        <div className="sheet-rep">
           <div className="ctl-label" style={{ margin: "0 0 6px" }}>
-            Quick weight
+            Quick representation
           </div>
-          <WeightControl value={bucket} onChange={setWeight} />
+          <RepresentationControl value={bucket} onChange={setWeight} />
         </div>
 
         <div className="sheet-rows">

@@ -35,13 +35,13 @@ function freshWord(f: number): string {
   return "old";
 }
 
-function weightLine(w: number): string {
-  if (w >= 5) return "A favorite source - weighted up";
-  if (w >= 2) return "You weight this source high";
-  if (w > 1) return "You weight this source above normal";
-  if (w >= 1) return "Standard weight";
-  if (w > 0.25) return "You've down-weighted this source";
-  return "Strongly down-weighted";
+function representationLine(w: number): string {
+  if (w >= 5) return "A favorite source - shown much more often";
+  if (w >= 2) return "Shown more often than most of your sources";
+  if (w > 1) return "Shown a bit more than normal";
+  if (w >= 1) return "Normal representation";
+  if (w > 0.25) return "Shown less often";
+  return "Shown only rarely";
 }
 
 type Factor = {
@@ -70,10 +70,10 @@ function factorsOf(b: ScoreBreakdown): Factor[] {
 
   return [
     {
-      name: "Weight",
+      name: "Representation",
       mult: mult(b.weight),
       fill: Math.min(1, b.weight / 5),
-      line: weightLine(b.weight),
+      line: representationLine(b.weight),
     },
     {
       name: "Rarity",

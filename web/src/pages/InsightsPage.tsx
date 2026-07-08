@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { api, type Interest, type InsightsResponse, type InsightsSource } from "@/api/client";
-import { BUCKETS, BLABEL, bucketOf, type Bucket } from "@/lib/weight";
+import { BUCKETS, REP_BLABEL, bucketOf, type Bucket } from "@/lib/represent";
 import { feedIcon } from "@/lib/feedIcons";
 import { BottomSheet } from "@/components/BottomSheet";
 
@@ -153,7 +153,7 @@ export default function InsightsPage() {
   async function setWeight(s: InsightsSource, bucket: Bucket) {
     await api.updateSource(s.source_id, { weight_bucket: bucket }).catch(() => {});
     setSheet(null);
-    showToast(`${s.source_title} → ${BLABEL[bucket]}`);
+    showToast(`${s.source_title} → ${REP_BLABEL[bucket]}`);
     load();
   }
   async function archive(s: InsightsSource) {
@@ -269,15 +269,15 @@ export default function InsightsPage() {
               )}
             </div>
 
-            <div className="ctl-label">Weight</div>
-            <div className="wbuckets">
+            <div className="ctl-label">Representation</div>
+            <div className="repbuckets">
               {BUCKETS.map((bk) => (
                 <button
                   key={bk}
-                  className={`wbucket ${bucketOf(sheet.weight) === bk ? "on" : ""}`}
+                  className={`repbucket ${bucketOf(sheet.weight) === bk ? "on" : ""}`}
                   onClick={() => setWeight(sheet, bk)}
                 >
-                  {BLABEL[bk]}
+                  {REP_BLABEL[bk]}
                 </button>
               ))}
             </div>

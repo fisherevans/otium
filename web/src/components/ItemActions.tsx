@@ -2,8 +2,7 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { api, type Item, type Selected, type Source } from "@/api/client";
 import { BottomSheet } from "./BottomSheet";
-import { bucketOf } from "@/lib/weight";
-import { REP_LABEL } from "@/lib/represent";
+import { bucketOf, REP_LABEL } from "@/lib/represent";
 import { RepDots } from "./RepDots";
 
 // The "…" overflow for the current session item (#43), restyled to match the

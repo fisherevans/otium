@@ -2,11 +2,10 @@ import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { Pencil, Settings, Copy, Check, Mail, Ban, EyeOff } from "lucide-react";
 import { api, type Interest, type Source, type SourceItem, type SourceStats } from "@/api/client";
-import { bucketOf, BUCKETS, WFREQ, WHINT, WLEVEL, type Bucket } from "@/lib/weight";
+import { bucketOf, BUCKETS, REP_FREQ, REP_HINT, REP_LEVEL, REP_PROSE, REP_LABEL, compareToAverage, type Bucket } from "@/lib/represent";
 import { resolveSourceArchive, itemEligible } from "@/lib/archive";
 import { sourceInsight, type InsightKind } from "@/lib/stats";
 import { scaleCadence, cadenceCount } from "@/lib/cadence";
-import { REP_PROSE, REP_LABEL, compareToAverage } from "@/lib/represent";
 import { relDate } from "@/lib/format";
 import { Dialog } from "@/components/Dialog";
 import { ArchiveChoice } from "@/components/ArchiveChoice";
@@ -296,7 +295,7 @@ export default function SourcePage() {
           {source.title} is <b>{REP_PROSE[bucket]}</b>.
         </p>
         <div className="fc-rep">
-          <Dots level={WLEVEL[bucket]} />
+          <Dots level={REP_LEVEL[bucket]} />
           <span className="fc-rep-label">{REP_LABEL[bucket]}</span>
         </div>
 
@@ -394,8 +393,8 @@ export default function SourcePage() {
           {BUCKETS.slice().reverse().map((b) => (
             <button key={b} className={`dlg-opt ${bucket === b ? "on" : ""}`} onClick={() => setWeight(b)}>
               <span className="dlg-radio" aria-hidden />
-              <span className="dlg-name">{WFREQ[b]}</span>
-              <span className="dlg-sub">{WHINT[b]}</span>
+              <span className="dlg-name">{REP_FREQ[b]}</span>
+              <span className="dlg-sub">{REP_HINT[b]}</span>
             </button>
           ))}
         </div>

@@ -2185,11 +2185,11 @@ h1.display {
   color: var(--ink-mute);
   margin: 16px 0 6px;
 }
-.wbuckets {
+.repbuckets {
   display: flex;
   border: 1.5px solid var(--rule-hard);
 }
-.wbucket {
+.repbucket {
   flex: 1;
   padding: 10px 2px;
   font-family: var(--grot);
@@ -2198,10 +2198,10 @@ h1.display {
   background: var(--paper);
   border-left: 1px solid var(--hair);
 }
-.wbucket:first-child {
+.repbucket:first-child {
   border-left: none;
 }
-.wbucket.on {
+.repbucket.on {
   background: var(--ink);
   color: var(--paper);
 }
@@ -2244,13 +2244,13 @@ h1.display {
 /* #93: the source-config weight control - roomy vertical word list. Replaces
    the cramped horizontal wbuckets (which truncated) for editing weight; the
    frequency word gets a full row, a hint, and its matching dot density. The
-   half-life picker still uses .wbuckets, so that class is unchanged. */
-.wctl {
+   half-life picker still uses .repbuckets, so that class is unchanged. */
+.repctl {
   display: flex;
   flex-direction: column;
   margin-top: 2px;
 }
-.wchoice {
+.repchoice {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -2264,35 +2264,35 @@ h1.display {
   text-align: left;
   cursor: pointer;
 }
-.wchoice:last-child {
+.repchoice:last-child {
   border-bottom: none;
 }
-.wchoice.on {
+.repchoice.on {
   background: var(--paper-2);
   border-left-color: var(--ink);
 }
-.wchoice-main {
+.repchoice-main {
   display: flex;
   flex-direction: column;
   gap: 2px;
   min-width: 0;
 }
-.wchoice-word {
+.repchoice-word {
   font-family: var(--grot);
   font-size: 15px;
   color: var(--ink-soft);
 }
-.wchoice-hint {
+.repchoice-hint {
   font-family: var(--serif);
   font-style: italic;
   font-size: 12px;
   color: var(--ink-mute);
 }
-.wchoice.on .wchoice-word {
+.repchoice.on .repchoice-word {
   color: var(--ink);
   font-weight: 600;
 }
-.wchoice .wdot {
+.repchoice .wdot {
   width: 6px;
   height: 6px;
 }
@@ -3637,9 +3637,9 @@ button.id-source:active {
   text-transform: none;
   color: var(--ink-soft);
 }
-/* the segmented .wbuckets already style the options; just space the label */
+/* the segmented .repbuckets already style the options; just space the label */
 
-/* #90: Card/Reader/Sessions tab bar. Same ink-on-paper language as .wbuckets
+/* #90: Card/Reader/Sessions tab bar. Same ink-on-paper language as .repbuckets
    but a hairline-underlined bar so it reads as navigation, not a picker. */
 .ap-tabs {
   display: flex;
