@@ -1327,10 +1327,16 @@ type SourceStatsView struct {
 }
 
 // SourceStatsAll returns the stats bundle for every one of the user's sources in a
-// single pass. on_deck approximates "eligible unseen" with the global Archive-After
-// window (per-source override + keyword filtering are applied by the ranker; this
-// is the cheap headline figure). per_day is items over the observed span.
+// single pass. on_deck and missed_since resolve the effective Archive-After window
+// per source (source override > interest default > global, -1 = evergreen), so the
+// "N on deck" figure tracks what a session would actually surface after a per-interest
+// archival change - not a fixed global window. (Keyword auto-archive is still applied
+// only by the ranker; it's a rare finer adjustment.) per_day is items over the span.
 func (db *DB) SourceStatsAll(ctx context.Context, userID int64) (map[int64]SourceStatsView, error) {
+	// Effective window in days for a row (-1 = evergreen). Mirrors session.resolveArchiveAfter.
+	effWin := fmt.Sprintf(
+		`CASE WHEN s.archive_after_days != 0 THEN s.archive_after_days WHEN fi.archive_after_days != 0 THEN fi.archive_after_days ELSE %d END`,
+		globalArchiveWindowDays)
 	rows, err := db.sql.QueryContext(ctx,
 		`SELECT i.source_id,
 		        COUNT(*) AS total,
@@ -1339,16 +1345,17 @@ func (db *DB) SourceStatsAll(ctx context.Context, userID int64) (map[int64]Sourc
 		        SUM(CASE WHEN st.state = 'skipped' THEN 1 ELSE 0 END) AS skipped,
 		        SUM(CASE WHEN st.state = 'opened' THEN 1 ELSE 0 END) AS opened,
 		        SUM(CASE WHEN st.state = 'liked' THEN 1 ELSE 0 END) AS liked,
-		        SUM(CASE WHEN st.item_id IS NULL AND i.published_at >= datetime('now', ?) THEN 1 ELSE 0 END) AS on_deck,
+		        SUM(CASE WHEN st.item_id IS NULL AND ((`+effWin+`) = -1 OR julianday(i.published_at) >= julianday('now') - (`+effWin+`)) THEN 1 ELSE 0 END) AS on_deck,
 		        SUM(CASE WHEN st.item_id IS NOT NULL AND julianday(i.published_at) >= julianday(s.added_at) THEN 1 ELSE 0 END) AS shown_since,
-		        SUM(CASE WHEN st.item_id IS NULL AND julianday(i.published_at) >= julianday(s.added_at) AND julianday(i.published_at) < julianday('now') - ? THEN 1 ELSE 0 END) AS missed_since,
+		        SUM(CASE WHEN st.item_id IS NULL AND julianday(i.published_at) >= julianday(s.added_at) AND (`+effWin+`) != -1 AND julianday(i.published_at) < julianday('now') - (`+effWin+`) THEN 1 ELSE 0 END) AS missed_since,
 		        COALESCE(julianday('now') - julianday(MIN(i.published_at)), 0) AS span_days
 		 FROM sources s
 		 JOIN items i ON i.source_id = s.id
 		 LEFT JOIN item_state st ON st.item_id = i.id AND st.user_id = ?
+		 LEFT JOIN interests fi ON fi.id = s.interest_id
 		 WHERE s.user_id = ?
 		 GROUP BY i.source_id`,
-		fmt.Sprintf("-%d days", globalArchiveWindowDays), globalArchiveWindowDays, userID, userID)
+		userID, userID)
 	if err != nil {
 		return nil, err
 	}
