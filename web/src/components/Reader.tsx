@@ -4,7 +4,7 @@ import type { Item } from "@/api/client";
 import { BottomSheet } from "./BottomSheet";
 import { ReaderHeaderActions } from "./ReaderActions";
 import { renderSummary } from "@/lib/html";
-import { fmtDate } from "@/lib/format";
+import { fmtDate, authorRedundant } from "@/lib/format";
 
 // In-app reader (#41). Renders the item's stored text inline so a session
 // doesn't have to bounce to a browser tab. Prefers the full body (`content`,
@@ -50,11 +50,19 @@ export function Reader({
         <div className="reader">
           <h3 className="reader-title">{item.title}</h3>
           <div className="reader-meta">
-            {sourceTitle && <span>{sourceTitle}</span>}
-            {sourceTitle && item.author && <span>·</span>}
-            {item.author && <span>{item.author}</span>}
-            {(sourceTitle || item.author) && item.published_at && <span>·</span>}
-            {item.published_at && <span>{fmtDate(item.published_at)}</span>}
+            {(() => {
+              // #2: omit the author when it just repeats the source.
+              const showAuthor = !!item.author && !authorRedundant(item.author, sourceTitle);
+              return (
+                <>
+                  {sourceTitle && <span>{sourceTitle}</span>}
+                  {sourceTitle && showAuthor && <span>·</span>}
+                  {showAuthor && <span>{item.author}</span>}
+                  {(sourceTitle || showAuthor) && item.published_at && <span>·</span>}
+                  {item.published_at && <span>{fmtDate(item.published_at)}</span>}
+                </>
+              );
+            })()}
           </div>
 
           {rendered.empty ? (

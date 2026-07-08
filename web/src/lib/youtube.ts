@@ -34,8 +34,20 @@ export function parseYouTubeId(rawUrl: string | undefined): string | null {
   return null;
 }
 
-export function embedUrl(id: string): string {
-  // rel=0 keeps end-screen suggestions to the same channel; nocookie host is the
-  // privacy-forward embed domain (no cookies until playback).
-  return `https://www.youtube-nocookie.com/embed/${id}?rel=0&modestbranding=1`;
+// embedUrl builds the nocookie embed src. rel=0 keeps end-screen suggestions to
+// the same channel; nocookie is the privacy-forward host (no cookies until
+// playback); playsinline=1 stops iOS from forcing native fullscreen.
+//
+// autoplay (#5): appends autoplay=1 so the player attempts to start the moment
+// the sheet opens ("one click to watch"). Browsers gate audible autoplay behind a
+// user gesture inside the iframe's own document - the click that opened the sheet
+// doesn't transfer - so Firefox (and the Palma e-ink browser) block the audible
+// start and show a play button (one tap). Chrome autoplays where site engagement
+// permits. We do NOT mute to force a guaranteed start: a muted video isn't
+// "watching," and a single tap-to-play beats a silent autostart. Flip to a muted
+// autoplay here if guaranteed motion is ever preferred over sound.
+export function embedUrl(id: string, opts?: { autoplay?: boolean }): string {
+  const p = new URLSearchParams({ rel: "0", modestbranding: "1", playsinline: "1" });
+  if (opts?.autoplay) p.set("autoplay", "1");
+  return `https://www.youtube-nocookie.com/embed/${id}?${p.toString()}`;
 }

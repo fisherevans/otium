@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState, type UIEvent, type PointerEvent a
 import { ChevronLeft, ExternalLink, Bookmark, Heart } from "lucide-react";
 import { api, type Item, type ItemContent } from "@/api/client";
 import { renderSummary } from "@/lib/html";
-import { fmtDate, readTime } from "@/lib/format";
+import { fmtDate, readTime, authorRedundant } from "@/lib/format";
 import { ShareActions } from "./ReaderActions";
 
 // The in-app reader as a PUSHED PAGE (#85), not a sheet. Opening full-text
@@ -258,11 +258,19 @@ export function ReaderPage({
       <div className="readerpage-body" ref={scrollRef} onScroll={onScroll}>
         <h1 className="rp-title">{item.title}</h1>
         <div className="rp-meta">
-          {sourceTitle && <span>{sourceTitle}</span>}
-          {sourceTitle && item.author && <span aria-hidden>·</span>}
-          {item.author && <span>{item.author}</span>}
-          {(sourceTitle || item.author) && item.published_at && <span aria-hidden>·</span>}
-          {item.published_at && <span>{fmtDate(item.published_at)}</span>}
+          {(() => {
+            // #2: omit the author when it just repeats the source.
+            const showAuthor = !!item.author && !authorRedundant(item.author, sourceTitle);
+            return (
+              <>
+                {sourceTitle && <span>{sourceTitle}</span>}
+                {sourceTitle && showAuthor && <span aria-hidden>·</span>}
+                {showAuthor && <span>{item.author}</span>}
+                {(sourceTitle || showAuthor) && item.published_at && <span aria-hidden>·</span>}
+                {item.published_at && <span>{fmtDate(item.published_at)}</span>}
+              </>
+            );
+          })()}
         </div>
 
         {state === "loading" ? (

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { ExternalLink, Bookmark, Link2, Share2, Check } from "lucide-react";
+import { ExternalLink, Bookmark, Link2, Share2, Check, Heart } from "lucide-react";
 import type { Item } from "@/api/client";
 import { canWebShare, copyText, shareOrCopy } from "@/lib/share";
 
@@ -89,13 +89,24 @@ export function ReaderHeaderActions({
   item,
   onSave,
   onOpen,
+  liked,
+  onLike,
 }: {
   item: Item;
   onSave?: () => void;
   onOpen: () => void;
+  // Like lives in the header too (#1) when the surface wires it (the video/audio
+  // Player). Omitted -> no heart, so the text Reader sheet is unchanged.
+  liked?: boolean;
+  onLike?: () => void;
 }) {
   return (
     <div className="head-actions">
+      {onLike && (
+        <button className={`head-act ${liked ? "on" : ""}`} onClick={onLike} aria-label={liked ? "Unlike" : "Like"}>
+          <Heart size={18} strokeWidth={1.75} fill={liked ? "currentColor" : "none"} aria-hidden />
+        </button>
+      )}
       {onSave && (
         <button className="head-act" onClick={onSave} aria-label="Save">
           <Bookmark size={18} strokeWidth={1.75} aria-hidden />

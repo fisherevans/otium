@@ -417,7 +417,7 @@ export default function AppearancePage() {
             <InterestPill interest={SAMPLE.interest} />
             <CardSource sel={SAMPLE} onSource={() => {}} />
             <h3 className="card-title">{SAMPLE.item.title}</h3>
-            <Byline item={SAMPLE.item} />
+            <Byline item={SAMPLE.item} sourceTitle={SAMPLE.source_title} />
             <Media item={SAMPLE.item} />
             <Blurb item={SAMPLE.item} />
           </div>

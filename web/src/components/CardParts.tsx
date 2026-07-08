@@ -1,7 +1,7 @@
 import type { CSSProperties } from "react";
 import type { Item, Selected } from "@/api/client";
 import { feedIcon } from "@/lib/feedIcons";
-import { clock, relTime } from "@/lib/format";
+import { clock, relTime, authorRedundant } from "@/lib/format";
 
 // CardParts holds the session card's building blocks, extracted from SessionPage
 // so the Appearance live preview (#80/#90) renders from the exact same markup as
@@ -92,9 +92,11 @@ export function CardSource({ sel, onSource }: { sel: Selected; onSource: () => v
 // #97: the separator glyph + spacing are user-tunable; the .card-dot span is empty
 // and its glyph comes from `--pref-card-delim` via CSS (::before), so the delimiter
 // control drives it without any prop drilling.
-export function Byline({ item }: { item: Item }) {
+export function Byline({ item, sourceTitle }: { item: Item; sourceTitle?: string }) {
   const age = relTime(item.published_at || item.fetched_at);
-  const author = item.author?.trim();
+  // #2: for YouTube the channel is both source and author, so the byline author
+  // just repeats the source name above it - omit it when redundant.
+  const author = authorRedundant(item.author, sourceTitle) ? "" : item.author?.trim();
   if (!author && !age) return null;
   return (
     <div className="card-byline">

@@ -604,7 +604,7 @@ export default function SessionPage() {
               <InterestPill interest={it.interest} />
               <CardSource sel={it} onSource={() => setSourceSel(it)} />
               <h3 className="card-title">{it.item.title}</h3>
-              <Byline item={it.item} />
+              <Byline item={it.item} sourceTitle={it.source_title} />
               <Media item={it.item} />
               <Blurb item={it.item} />
 
@@ -714,6 +714,8 @@ export default function SessionPage() {
         onClose={closeContent}
         onOpenOriginal={() => shown && openExternal(shown)}
         onSave={() => shown && setSaveItem(shown.item)}
+        liked={shown ? liked.has(shown.item.id) : false}
+        onLike={() => shown && likeItem(shown.item)}
       />
 
       {/* Source context menu (#75): tapping the source name on a card opens this -

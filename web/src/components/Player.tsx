@@ -1,9 +1,10 @@
 import { useMemo, type CSSProperties } from "react";
-import { ExternalLink, Bookmark } from "lucide-react";
+import { ExternalLink, Bookmark, Heart } from "lucide-react";
 import type { Item } from "@/api/client";
 import { BottomSheet } from "./BottomSheet";
 import { ReaderHeaderActions } from "./ReaderActions";
-import { fmtDate } from "@/lib/format";
+import { fmtDate, authorRedundant } from "@/lib/format";
+import { renderSummary } from "@/lib/html";
 import { parseYouTubeId, embedUrl } from "@/lib/youtube";
 
 // Inline media player (#51). A video/audio item is consumed IN the session -
@@ -14,24 +15,35 @@ import { parseYouTubeId, embedUrl } from "@/lib/youtube";
 // once invoked. "Open original" is the secondary path (source page / app).
 //
 // The open engagement signal is owned by SessionPage (recordOpen fires it once
-// when the surface is invoked); this component emits nothing itself.
+// when the surface is invoked); this component emits nothing itself. Liking IS
+// owned here now (#1): the heart in the header/foot mirrors the reader's.
 //
-// Frame styling is inline (not in global.css) on purpose: a parallel agent is
-// editing global.css, so #51 keeps its own small footprint out of the contended
-// file. Everything else reuses the existing .reader-* / .btn classes.
-
-const frameBase: CSSProperties = {
+// #4: video maximizes the viewing area. The sheet widens past the reading column
+// (wide) so a landscape frame gets far more width than the old 640px column; a
+// portrait frame goes as tall as fits. Audio stays compact (a short sheet, not the
+// tall video treatment).
+//
+// The frame stays inside the sheet's padding (no negative-margin bleed): .reader
+// is overflow-y:auto, which per the CSS overflow spec forces overflow-x to auto -
+// so a child wider than the container would spawn a horizontal scrollbar. Full
+// viewport width comes from the wider sheet instead.
+const frameH: CSSProperties = {
   position: "relative",
   overflow: "hidden",
   background: "var(--paper-3)",
   border: "1.5px solid var(--rule-hard)",
-  margin: "6px 0 16px",
+  width: "100%",
+  aspectRatio: "16 / 9",
+  margin: "2px 0 18px",
 };
-const frameH: CSSProperties = { ...frameBase, width: "100%", aspectRatio: "16 / 9" };
+// Portrait (shorts): a tall centered frame that takes most of the viewport height.
 const frameV: CSSProperties = {
-  ...frameBase,
+  position: "relative",
+  overflow: "hidden",
+  background: "var(--paper-3)",
+  border: "1.5px solid var(--rule-hard)",
   aspectRatio: "9 / 16",
-  height: "min(70dvh, 70vh)",
+  height: "min(78dvh, 78vh)",
   maxWidth: "100%",
   margin: "6px auto 16px",
 };
@@ -51,6 +63,8 @@ export function Player({
   onClose,
   onOpenOriginal,
   onSave,
+  liked,
+  onLike,
 }: {
   item: Item | null;
   sourceTitle?: string;
@@ -59,20 +73,46 @@ export function Player({
   onOpenOriginal: () => void;
   // When present, a "Save" affordance opens the collection picker (#57).
   onSave?: () => void;
+  // Like from within the player (#1); omitted on surfaces that don't wire it.
+  liked?: boolean;
+  onLike?: () => void;
 }) {
   const isVideo = item ? ["short", "long", "live"].includes(item.media_type) : false;
   const isAudio = item?.media_type === "audio";
   const vertical = item?.media_type === "short";
   const ytId = useMemo(() => (isVideo ? parseYouTubeId(item?.url) : null), [isVideo, item?.url]);
 
+  // The feed body (#3): audio (podcasts) usually ships a real description; video
+  // usually ships nothing (YouTube's media:description isn't ingested), so the
+  // text section is omitted entirely rather than leaving an empty double rule.
+  const desc = useMemo(
+    () => renderSummary(item?.content?.trim() ? item.content : item?.summary),
+    [item?.content, item?.summary],
+  );
+  const hasBody = !desc.empty;
+
+  // #2: drop the author when it just repeats the source (a YouTube channel is both).
+  const showAuthor = !!item?.author && !authorRedundant(item.author, sourceTitle);
+
   return (
     <BottomSheet
       open={open}
       onClose={onClose}
-      variant="tall"
+      variant={isVideo ? "tall" : undefined}
+      wide={isVideo && !vertical}
       swipeClose
       kicker={item?.media_type ?? ""}
-      headActions={item ? <ReaderHeaderActions item={item} onSave={onSave} onOpen={onOpenOriginal} /> : undefined}
+      headActions={
+        item ? (
+          <ReaderHeaderActions
+            item={item}
+            onSave={onSave}
+            onOpen={onOpenOriginal}
+            liked={onLike ? !!liked : undefined}
+            onLike={onLike}
+          />
+        ) : undefined
+      }
     >
       {item && (
         <div className="reader">
@@ -80,15 +120,14 @@ export function Player({
             <div style={vertical ? frameV : frameH}>
               <iframe
                 style={iframeStyle}
-                src={embedUrl(ytId)}
+                src={embedUrl(ytId, { autoplay: true })}
                 title={item.title}
                 allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
                 allowFullScreen
-                loading="lazy"
               />
             </div>
           ) : isAudio ? (
-            <audio style={{ width: "100%", margin: "8px 0 16px" }} src={item.url} controls preload="none" />
+            <audio style={{ width: "100%", margin: "8px 0 16px" }} src={item.url} controls preload="none" autoPlay />
           ) : (
             <div className="reader-empty">
               <p className="reader-empty-lead">Can't play this one in place.</p>
@@ -100,15 +139,25 @@ export function Player({
           )}
 
           <h3 className="reader-title">{item.title}</h3>
-          <div className="reader-meta">
+          {/* No body text -> drop the meta's bottom rule so the foot's top rule is
+              the single separator (avoids the empty double-rule, #3). */}
+          <div className="reader-meta" style={hasBody ? undefined : { borderBottom: "none", paddingBottom: 0, marginBottom: 8 }}>
             {sourceTitle && <span>{sourceTitle}</span>}
-            {sourceTitle && item.author && <span>·</span>}
-            {item.author && <span>{item.author}</span>}
-            {(sourceTitle || item.author) && item.published_at && <span>·</span>}
+            {sourceTitle && showAuthor && <span>·</span>}
+            {showAuthor && <span>{item.author}</span>}
+            {(sourceTitle || showAuthor) && item.published_at && <span>·</span>}
             {item.published_at && <span>{fmtDate(item.published_at)}</span>}
           </div>
 
+          {hasBody && <div className="reader-body" dangerouslySetInnerHTML={{ __html: desc.html }} />}
+
           <div className="reader-foot">
+            {onLike && (
+              <button className={`reader-open ${liked ? "on" : ""}`} onClick={onLike}>
+                <Heart size={15} strokeWidth={1.75} fill={liked ? "currentColor" : "none"} aria-hidden />
+                {liked ? "Liked" : "Like"}
+              </button>
+            )}
             {onSave && (
               <button className="reader-open" onClick={onSave}>
                 <Bookmark size={15} strokeWidth={1.75} aria-hidden />

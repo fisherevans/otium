@@ -798,6 +798,7 @@ h1.display {
    ink heart is the signal (#120). */
 .callout-act.on,
 .rp-act.on,
+.head-act.on,
 .reader-open.on {
   color: var(--ink);
 }
@@ -2169,6 +2170,11 @@ h1.display {
 .sheet-tall {
   height: 94dvh;
   max-height: 94dvh;
+}
+/* #4: the video Player widens past the reading column so a landscape frame can
+   use the full viewport. Capped so it never gets absurd on a desktop monitor. */
+.sheet-wide {
+  max-width: min(96vw, 1040px);
 }
 .sheet-head {
   flex: 0 0 auto;

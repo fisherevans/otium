@@ -25,6 +25,7 @@ export function BottomSheet({
   onClose,
   kicker,
   variant,
+  wide,
   swipeClose,
   headActions,
   children,
@@ -33,6 +34,9 @@ export function BottomSheet({
   onClose: () => void;
   kicker?: string;
   variant?: "tall";
+  // `wide` widens the sheet past the default 640px reading column - used by the
+  // video Player (#4) so a landscape frame gets the full viewport width.
+  wide?: boolean;
   swipeClose?: boolean;
   headActions?: ReactNode;
   children: ReactNode;
@@ -177,7 +181,7 @@ export function BottomSheet({
     <div className={`sheet-scrim ${up ? "up" : ""}`} onClick={onClose}>
       <div
         ref={sheetRef}
-        className={`sheet ${variant === "tall" ? "sheet-tall" : ""} ${up ? "up" : ""} ${exitUp ? "exit-up" : ""}`}
+        className={`sheet ${variant === "tall" ? "sheet-tall" : ""} ${wide ? "sheet-wide" : ""} ${up ? "up" : ""} ${exitUp ? "exit-up" : ""}`}
         role="dialog"
         aria-modal="true"
         onClick={(e) => e.stopPropagation()}

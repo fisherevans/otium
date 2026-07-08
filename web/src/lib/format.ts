@@ -78,6 +78,25 @@ export function readTime(text: string): string {
   return `~${m} min read`;
 }
 
+// authorRedundant reports whether an item's author duplicates its source title.
+// A YouTube channel is both the source and the author, so rendering both reads as
+// double-posted (#2). Case-insensitive; true when the names are equal or either
+// contains the other ("Veritasium" vs "Veritasium - Topic"). Callers omit the
+// author when this is true.
+export function authorRedundant(author?: string, sourceTitle?: string): boolean {
+  const a = author?.trim().toLowerCase();
+  const s = sourceTitle?.trim().toLowerCase();
+  if (!a || !s) return false;
+  if (a === s) return true;
+  // Containment covers the "Artist - Topic" / channel-suffix shapes, but a very
+  // short name substring-matching a longer one is likely a coincidence (an author
+  // "APlus" containing source "AP"), so only treat containment as redundant when
+  // the shorter, contained name is at least 3 chars.
+  if (s.includes(a) && a.length >= 3) return true;
+  if (a.includes(s) && s.length >= 3) return true;
+  return false;
+}
+
 export function relDate(iso?: string): string {
   if (!iso) return "";
   const d = new Date(iso);
