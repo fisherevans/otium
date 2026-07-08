@@ -2564,6 +2564,41 @@ h1.display {
   margin: 12px 0 6px;
   color: var(--ink);
 }
+/* ··· item menu (#120): management-style score + representation, then actions. */
+.ia-title {
+  font-family: var(--serif);
+  font-size: 20px;
+  line-height: 1.3;
+  color: var(--ink);
+  margin: 10px 0 14px;
+}
+.ia-scoreline {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0 0 6px;
+}
+.ia-sub {
+  font-family: var(--serif);
+  font-style: italic;
+  font-size: 13px;
+  color: var(--ink-mute);
+  margin: 0 0 16px;
+}
+.ia-rep {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 0 16px;
+  border-bottom: 1px solid var(--hair);
+  margin-bottom: 4px;
+}
+.ia-rep-label {
+  font-family: var(--grot);
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  color: var(--ink-mute);
+}
 .sheet-rows {
   display: flex;
   flex-direction: column;

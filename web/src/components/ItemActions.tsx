@@ -1,18 +1,17 @@
 import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { api, type Item, type Selected, type Source } from "@/api/client";
 import { BottomSheet } from "./BottomSheet";
-import { SourceDetail } from "./SourceDetail";
-import { SourceItems } from "./SourceItems";
-import { BUCKETS, BLABEL, bucketOf, type Bucket } from "@/lib/weight";
+import { bucketOf } from "@/lib/weight";
+import { REP_LABEL } from "@/lib/represent";
+import { RepDots } from "./RepDots";
 
-type Sub = null | "detail" | "items";
-
-// The "…" overflow container for the current session item (#43). Keeps the four
-// primary bar actions (Open/Like/Save/Next) calm by parking the deeper actions
-// here: read in app (#41), change the source's weighting inline (#14), open full
-// source details (#9), and see the item in its raw interest (#38). It owns the sub
-// sheets so SessionPage only tracks one boolean. None of these surfaces emit
-// engagement events - the only signal produced here is an explicit weight change.
+// The "…" overflow for the current session item (#43), restyled to match the
+// management surfaces (#120): the item's rank score with a chronological note (a
+// source's articles are surfaced newest-first), the source's representation shown
+// read-only exactly as the source page shows it, then the plain actions. Editing
+// representation now lives on the source page - "View source" jumps straight there
+// (the session is durable, so it resumes). Nothing here emits an engagement event.
 export function ItemActions({
   selected,
   open,
@@ -24,116 +23,66 @@ export function ItemActions({
   selected: Selected | null;
   open: boolean;
   onClose: () => void;
-  // Opens the in-app reader (the pushed ReaderPage, #85) for this item.
   onRead: () => void;
-  // Opens the collection Save picker for this item (#57).
   onSave?: (item: Item) => void;
   onWhy: () => void;
 }) {
+  const nav = useNavigate();
   const item = selected?.item ?? null;
   const sourceId = item?.source_id ?? 0;
-
   const [source, setSource] = useState<Source | null>(null);
-  const [bucket, setBucket] = useState<Bucket>("normal");
-  const [sub, setSub] = useState<Sub>(null);
 
   useEffect(() => {
     if (!open || !sourceId) return;
     api
       .sources()
-      .then((list) => {
-        const s = list.find((x) => x.id === sourceId) ?? null;
-        setSource(s);
-        if (s) setBucket(bucketOf(s.weight));
-      })
+      .then((list) => setSource(list.find((x) => x.id === sourceId) ?? null))
       .catch(() => {});
   }, [open, sourceId]);
 
-  // Reset drill-in state when the menu is fully dismissed.
-  useEffect(() => {
-    if (!open) setSub(null);
-  }, [open]);
-
-  function reloadSource() {
-    api
-      .sources()
-      .then((list) => setSource(list.find((x) => x.id === sourceId) ?? null))
-      .catch(() => {});
-  }
-
-  async function setWeight(b: Bucket) {
-    setBucket(b);
-    await api.updateSource(sourceId, { weight_bucket: b }).catch(() => {});
-    reloadSource();
-  }
-
   if (!item) return null;
 
+  const bucket = source ? bucketOf(source.weight) : "normal";
+  const score = selected?.score ?? 0;
+
   return (
-    <>
-      {/* The menu itself hides while a drill-in is up, then returns on back. */}
-      <BottomSheet open={open && sub === null} onClose={onClose} kicker={selected?.source_title ?? "Actions"}>
-        <div className="sheet-title">{item.title}</div>
+    <BottomSheet open={open} onClose={onClose} kicker={selected?.source_title ?? "Item"}>
+      <div className="ia-title">{item.title}</div>
 
-        <div className="sheet-rows">
-          <button className="sheet-row" onClick={onWhy}>
-            <span>Why this item?</span>
+      {/* Score + chronological note, mirroring the source drill-down. */}
+      <div className="ia-scoreline">
+        <span className="va-bar" aria-hidden>
+          <span className="va-bar-fill" style={{ width: `${Math.round(Math.min(1, score) * 100)}%` }} />
+        </span>
+        <span className="va-score">{score.toFixed(2)}</span>
+        <button className="va-explore" onClick={onWhy}>
+          explore score
+        </button>
+      </div>
+      <p className="ia-sub">Surfaced by recency - a source's articles come up newest first.</p>
+
+      {/* Representation, read-only, exactly as the source page renders it. */}
+      <div className="ia-rep">
+        <RepDots bucket={bucket} />
+        <span className="ia-rep-label">{REP_LABEL[bucket]}</span>
+      </div>
+
+      <div className="sheet-rows">
+        <button className="sheet-row" onClick={onRead}>
+          <span>Read in app</span>
+          <span className="sheet-chev">▸</span>
+        </button>
+        {onSave && (
+          <button className="sheet-row" onClick={() => onSave(item)}>
+            <span>Save to collection</span>
             <span className="sheet-chev">▸</span>
           </button>
-
-          <button className="sheet-row" onClick={onRead}>
-            <span>Read in app</span>
-            <span className="sheet-chev">▸</span>
-          </button>
-
-          {onSave && (
-            <button className="sheet-row" onClick={() => onSave(item)}>
-              <span>Save to collection</span>
-              <span className="sheet-chev">▸</span>
-            </button>
-          )}
-
-          <div className="sheet-weight">
-            <div className="ctl-label" style={{ margin: "0 0 6px" }}>
-              Source weighting
-            </div>
-            <div className="wbuckets">
-              {BUCKETS.map((b) => (
-                <button key={b} className={`wbucket ${bucket === b ? "on" : ""}`} onClick={() => setWeight(b)}>
-                  {BLABEL[b]}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          <button className="sheet-row" onClick={() => setSub("detail")}>
-            <span>Source details</span>
-            <span className="sheet-chev">▸</span>
-          </button>
-
-          <button className="sheet-row" onClick={() => setSub("items")}>
-            <span>See in context</span>
-            <span className="sheet-chev">▸</span>
-          </button>
-        </div>
-      </BottomSheet>
-
-      <SourceDetail
-        source={source}
-        open={open && sub === "detail"}
-        onClose={() => setSub(null)}
-        onChanged={() => {
-          reloadSource();
-        }}
-      />
-
-      <SourceItems
-        sourceId={sourceId}
-        currentItemId={item.id}
-        open={open && sub === "items"}
-        onClose={() => setSub(null)}
-        onOpen={(it: Item) => window.open(it.url, "_blank", "noopener")}
-      />
-    </>
+        )}
+        <button className="sheet-row" onClick={() => nav(`/sources/${sourceId}`)}>
+          <span>View source</span>
+          <span className="sheet-chev">▸</span>
+        </button>
+      </div>
+    </BottomSheet>
   );
 }
