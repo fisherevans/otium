@@ -1304,6 +1304,15 @@ type SourceStatsView struct {
 	ShownSince   int     `json:"shown_since"`   // presented, published since added
 	MissedSince  int     `json:"missed_since"`  // aged out unseen, published since added
 	InvisiblePct float64 `json:"invisible_pct"` // MissedSince / (ShownSince + MissedSince)
+
+	// Rolling 30-day engagement window (#120): absolute counts need a time range to
+	// mean anything. Windowed by last activity (item_state.acted_at). Shown30 is
+	// every state; the UI splits it into opened / skipped / (the rest = still
+	// pending) so the three read as a whole rather than two numbers that look like
+	// they should sum to 100% but don't.
+	Shown30   int `json:"shown_30"`
+	Opened30  int `json:"opened_30"`
+	Skipped30 int `json:"skipped_30"`
 }
 
 // SourceStatsAll returns the stats bundle for every one of the user's sources in a
@@ -1328,6 +1337,9 @@ func (db *DB) SourceStatsAll(ctx context.Context, userID int64) (map[int64]Sourc
 		        SUM(CASE WHEN st.item_id IS NULL AND ((`+effWin+`) = -1 OR julianday(i.published_at) >= julianday('now') - (`+effWin+`)) THEN 1 ELSE 0 END) AS on_deck,
 		        SUM(CASE WHEN st.item_id IS NOT NULL AND julianday(i.published_at) >= julianday(s.added_at) THEN 1 ELSE 0 END) AS shown_since,
 		        SUM(CASE WHEN st.item_id IS NULL AND julianday(i.published_at) >= julianday(s.added_at) AND (`+effWin+`) != -1 AND julianday(i.published_at) < julianday('now') - (`+effWin+`) THEN 1 ELSE 0 END) AS missed_since,
+		        SUM(CASE WHEN st.item_id IS NOT NULL AND st.acted_at >= datetime('now','-30 days') THEN 1 ELSE 0 END) AS shown_30,
+		        SUM(CASE WHEN st.state = 'opened' AND st.acted_at >= datetime('now','-30 days') THEN 1 ELSE 0 END) AS opened_30,
+		        SUM(CASE WHEN st.state = 'skipped' AND st.acted_at >= datetime('now','-30 days') THEN 1 ELSE 0 END) AS skipped_30,
 		        COALESCE(julianday('now') - julianday(MIN(i.published_at)), 0) AS span_days
 		 FROM sources s
 		 JOIN items i ON i.source_id = s.id
@@ -1344,7 +1356,7 @@ func (db *DB) SourceStatsAll(ctx context.Context, userID int64) (map[int64]Sourc
 	for rows.Next() {
 		var v SourceStatsView
 		var span float64
-		if err := rows.Scan(&v.SourceID, &v.Total, &v.Unseen, &v.Shown, &v.Skipped, &v.Opened, &v.Liked, &v.OnDeck, &v.ShownSince, &v.MissedSince, &span); err != nil {
+		if err := rows.Scan(&v.SourceID, &v.Total, &v.Unseen, &v.Shown, &v.Skipped, &v.Opened, &v.Liked, &v.OnDeck, &v.ShownSince, &v.MissedSince, &v.Shown30, &v.Opened30, &v.Skipped30, &span); err != nil {
 			return nil, err
 		}
 		v.Invisible = v.Unseen

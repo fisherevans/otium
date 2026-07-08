@@ -89,6 +89,12 @@ export interface SourceStats {
   shown_since: number;
   missed_since: number;
   invisible_pct: number;
+  // Rolling 30-day engagement window (#120): absolute counts need a time range.
+  // shown_30 = presented (any state) in the last 30 days; the UI splits it into
+  // opened / skipped / (remainder = pending) so the three sum to the whole.
+  shown_30: number;
+  opened_30: number;
+  skipped_30: number;
 }
 
 export interface Item {

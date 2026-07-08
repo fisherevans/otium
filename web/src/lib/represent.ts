@@ -75,10 +75,10 @@ export function compareToAverage(value: number, avg: number, more: string, less:
   if (avg <= 0) return "about average across your sources";
   const diff = (value - avg) / avg;
   if (Math.abs(diff) < 0.12) return "about the same as your average source";
+  // Show the real percentage (that's the useful number). Past ~2.5x a raw percent
+  // gets silly ("2954% more"), so express big outliers as a clean multiple instead.
+  if (diff >= 2.5) return `about ${Math.round(value / avg)}× your average source`;
   const word = diff > 0 ? more : less;
-  // Real libraries have volume outliers; a raw % against the mean explodes into
-  // silly figures ("2954% more"). Cap into calm language past ~2.5x.
-  if (Math.abs(diff) >= 2.5) return `far ${word} than your average source`;
   const pct = Math.round(Math.abs(diff) * 100);
   return `about ${pct}% ${word} than your average source`;
 }

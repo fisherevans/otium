@@ -94,12 +94,26 @@ export default function SourcePage() {
   const arch = resolveSourceArchive(srcDays, intDays, interest?.name);
   const resolvedDays = arch.days;
 
-  // Averages across every source, for the "vs your average source" sublines.
+  // Averages across every source, for the "vs your average source" sublines. The
+  // engagement figures use the rolling 30-day window (#120), so an absolute count
+  // always carries a time range and the comparison is like-for-like.
   const all = Object.values(stats);
   const avg = (sel: (s: SourceStats) => number) => (all.length ? all.reduce((a, s) => a + sel(s), 0) / all.length : 0);
   const avgPerDay = avg((s) => s.per_day);
-  const avgShown = avg((s) => s.shown);
-  const avgSkip = avg((s) => s.skip_pct);
+  // Compare against the sources you've ACTUALLY read in the window, not the whole
+  // library - otherwise ~90 sources with zero recent activity drag the mean to ~1
+  // and every active source reads as "15x your average". Like-for-like.
+  const active30 = all.filter((s) => (s.shown_30 ?? 0) > 0);
+  const avgShown30 = active30.length ? active30.reduce((a, s) => a + s.shown_30, 0) / active30.length : 0;
+  const avgSkip30 = active30.length ? active30.reduce((a, s) => a + s.skipped_30 / s.shown_30, 0) / active30.length : 0;
+
+  const shown30 = st?.shown_30 ?? 0;
+  const opened30 = st?.opened_30 ?? 0;
+  const skipped30 = st?.skipped_30 ?? 0;
+  const pending30 = Math.max(0, shown30 - opened30 - skipped30);
+  const openPct30 = shown30 ? opened30 / shown30 : 0;
+  const skipPct30 = shown30 ? skipped30 / shown30 : 0;
+  const pendPct30 = shown30 ? pending30 / shown30 : 0;
   // The one threshold-crossing insight for this source (matches the pill shown on
   // the interest page); StatIcon marks the stat line the pill was derived from.
   const insight = sourceInsight(st);
@@ -239,21 +253,30 @@ export default function SourcePage() {
         )}
 
         <p className="src-stat">
-          <b>{st?.shown ?? 0}</b> {(st?.shown ?? 0) === 1 ? "article has" : "articles have"} been presented to you.
+          In the last 30 days, <b>{shown30}</b> {shown30 === 1 ? "article was" : "articles were"} presented to you.
         </p>
-        <p className="src-stat-sub">
-          That's {compareToAverage(st?.shown ?? 0, avgShown, "more representation", "less representation")}.
-        </p>
-
-        <p className="src-stat">
-          {statIcon("open")}
-          You opened <b>{pct(st?.open_pct ?? 0)}</b> of the articles it showed you.
-        </p>
-        <p className="src-stat">
-          {statIcon("skip")}
-          You skipped <b>{pct(st?.skip_pct ?? 0)}</b> of those presented articles.
-        </p>
-        <p className="src-stat-sub">That rate is {compareToAverage(st?.skip_pct ?? 0, avgSkip, "higher", "lower")}.</p>
+        {shown30 > 0 ? (
+          <>
+            <p className="src-stat-sub">
+              That's {compareToAverage(shown30, avgShown30, "more representation", "less representation")}.
+            </p>
+            <p className="src-stat">
+              {statIcon("open")}
+              {statIcon("skip")}
+              Of those, you opened <b>{pct(openPct30)}</b>, skipped <b>{pct(skipPct30)}</b>
+              {pending30 > 0 ? (
+                <>
+                  , and <b>{pct(pendPct30)}</b> are still pending.
+                </>
+              ) : (
+                "."
+              )}
+            </p>
+            <p className="src-stat-sub">Your skip rate is {compareToAverage(skipPct30, avgSkip30, "higher", "lower")}.</p>
+          </>
+        ) : (
+          <p className="src-stat-sub">Nothing from {source.title} has come up in a session lately.</p>
+        )}
 
         {resolvedSince > 0 ? (
           <>
