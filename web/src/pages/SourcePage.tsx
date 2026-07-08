@@ -105,15 +105,12 @@ export default function SourcePage() {
   // and every active source reads as "15x your average". Like-for-like.
   const active30 = all.filter((s) => (s.shown_30 ?? 0) > 0);
   const avgShown30 = active30.length ? active30.reduce((a, s) => a + s.shown_30, 0) / active30.length : 0;
-  const avgSkip30 = active30.length ? active30.reduce((a, s) => a + s.skipped_30 / s.shown_30, 0) / active30.length : 0;
+  const avgOpen30 = active30.length ? active30.reduce((a, s) => a + s.opened_30 / s.shown_30, 0) / active30.length : 0;
 
+  // Open rate is the whole story (#120): a "presented" item is one actually scrolled
+  // into view; everything you didn't open (skipped or left on) is simply not-opened.
   const shown30 = st?.shown_30 ?? 0;
-  const opened30 = st?.opened_30 ?? 0;
-  const skipped30 = st?.skipped_30 ?? 0;
-  const pending30 = Math.max(0, shown30 - opened30 - skipped30);
-  const openPct30 = shown30 ? opened30 / shown30 : 0;
-  const skipPct30 = shown30 ? skipped30 / shown30 : 0;
-  const pendPct30 = shown30 ? pending30 / shown30 : 0;
+  const openPct30 = shown30 ? (st?.opened_30 ?? 0) / shown30 : 0;
   // The one threshold-crossing insight for this source (matches the pill shown on
   // the interest page); StatIcon marks the stat line the pill was derived from.
   const insight = sourceInsight(st);
@@ -262,17 +259,9 @@ export default function SourcePage() {
             </p>
             <p className="src-stat">
               {statIcon("open")}
-              {statIcon("skip")}
-              Of those, you opened <b>{pct(openPct30)}</b>, skipped <b>{pct(skipPct30)}</b>
-              {pending30 > 0 ? (
-                <>
-                  , and <b>{pct(pendPct30)}</b> are still pending.
-                </>
-              ) : (
-                "."
-              )}
+              You opened <b>{pct(openPct30)}</b> of them.
             </p>
-            <p className="src-stat-sub">Your skip rate is {compareToAverage(skipPct30, avgSkip30, "higher", "lower")}.</p>
+            <p className="src-stat-sub">That open rate is {compareToAverage(openPct30, avgOpen30, "higher", "lower")}.</p>
           </>
         ) : (
           <p className="src-stat-sub">Nothing from {source.title} has come up in a session lately.</p>
