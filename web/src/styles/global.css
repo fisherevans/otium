@@ -162,43 +162,6 @@ h1.display {
   padding-bottom: 6px;
   margin: 22px 0 12px;
 }
-
-/* --- intent pad --- */
-.pad-wrap {
-  margin: 6px 0;
-}
-.pad {
-  position: relative;
-  width: 100%;
-  aspect-ratio: 3 / 2;
-  background: var(--paper-2);
-  border: 1.5px solid var(--rule-hard);
-  overflow: hidden;
-  touch-action: none;
-  user-select: none;
-}
-.pad:focus-visible {
-  outline: 2px solid var(--ink);
-  outline-offset: 2px;
-}
-.pad-grid {
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  background-image: linear-gradient(var(--hair) 1px, transparent 1px),
-    linear-gradient(90deg, var(--hair) 1px, transparent 1px);
-  background-size: 50% 50%;
-  background-position: center;
-}
-.pad-edge {
-  position: absolute;
-  font-family: var(--mono);
-  font-size: 10px;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--ink-mute);
-  pointer-events: none;
-}
 .pad-edge.on {
   color: var(--ink);
   font-weight: 700;
@@ -223,51 +186,8 @@ h1.display {
   left: 50%;
   transform: translateX(-50%);
 }
-.pad-tether {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  pointer-events: none;
-}
-.pad-tether line {
-  stroke: var(--ink);
-  stroke-width: 1;
-  stroke-dasharray: 3 3;
-  vector-effect: non-scaling-stroke;
-}
-.pad-origin {
-  fill: var(--ink-mute);
-}
-.pad-knob {
-  position: absolute;
-  width: 42px;
-  height: 42px;
-  margin: -21px 0 0 -21px;
-  border-radius: 50%;
-  background: var(--ink);
-  border: 2px solid var(--paper);
-  box-shadow: 0 0 0 1.5px var(--ink);
-  pointer-events: none;
-  transition: transform 0.06s steps(2);
-}
 .pad.dragging .pad-knob {
   transform: scale(1.08);
-}
-.pad-descriptor {
-  text-align: center;
-  font-family: var(--serif);
-  font-style: italic;
-  font-size: 17px;
-  margin: 14px 0 2px;
-}
-.pad-readout {
-  display: flex;
-  align-items: baseline;
-  gap: 8px;
-  justify-content: center;
-  margin: 2px 0;
-  font-family: var(--mono);
 }
 .pad-readout .big {
   font-family: var(--didot);
@@ -278,44 +198,6 @@ h1.display {
   font-size: 12px;
   text-transform: uppercase;
   letter-spacing: 0.06em;
-}
-
-/* #3: non-gesture fallback controls beside the pad. */
-.pad-fallback {
-  margin-top: 14px;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-.pad-slider {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-.pad-slider-label {
-  flex: 0 0 80px;
-  font-family: var(--grot);
-  font-size: 10px;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  color: var(--ink-mute);
-}
-.pad-slider input[type="range"] {
-  flex: 1;
-  height: 24px;
-  accent-color: var(--ink);
-  background: transparent;
-}
-.pad-slider input[type="range"]:focus-visible {
-  outline: 2px solid var(--ink);
-  outline-offset: 3px;
-}
-.pad-slider-val {
-  flex: 0 0 56px;
-  text-align: right;
-  font-family: var(--mono);
-  font-size: 12px;
-  color: var(--ink-soft);
 }
 
 /* --- intent page (#69) -----------------------------------------------------
@@ -331,22 +213,6 @@ h1.display {
 }
 .intent-head {
   flex: 0 0 auto;
-}
-/* #95: time = big Didot numeral flanked by de-bordered -/+ steppers, with a
-   thin fine-tune slider under it. The steppers are the primary control; the
-   slider is optional polish. A single bottom hairline separates it from the
-   topics checklist below. */
-.time-pick {
-  flex: 0 0 auto;
-  margin: 6px 0 4px;
-  padding: 4px 0 16px;
-  border-bottom: 1px solid var(--hair);
-}
-.time-set {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 16px;
 }
 .step {
   flex: 0 0 auto;
@@ -401,64 +267,6 @@ h1.display {
   outline: 2px solid var(--ink);
   outline-offset: 4px;
 }
-
-/* #95: topics = quiet multi-select checklist. Fills the remaining column and
-   scrolls internally so the page itself never scrolls at 412px. */
-.intent-topics {
-  flex: 1 1 auto;
-  min-height: 0;
-  overflow-y: auto;
-  padding-top: 10px;
-}
-.topics-head {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  margin: 0 0 4px;
-}
-.topics-label {
-  font-family: var(--grot);
-  font-size: 10px;
-  letter-spacing: 0.16em;
-  text-transform: uppercase;
-  color: var(--ink-mute);
-}
-.topics-all {
-  background: transparent;
-  border: 0;
-  padding: 4px 0;
-  font-family: var(--grot);
-  font-size: 11px;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--ink-mute);
-}
-.topics-all:active {
-  color: var(--ink);
-}
-.topic-list {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-}
-.topic-row {
-  display: flex;
-  align-items: center;
-  gap: 13px;
-  width: 100%;
-  padding: 10px 0;
-  background: transparent;
-  border: 0;
-  text-align: left;
-}
-.topic-check {
-  flex: 0 0 auto;
-  position: relative;
-  width: 17px;
-  height: 17px;
-  border: 1.5px solid var(--ink-mute);
-  border-radius: 3px;
-}
 .topic-check.on {
   background: var(--ink);
   border-color: var(--ink);
@@ -473,11 +281,6 @@ h1.display {
   border: solid var(--paper);
   border-width: 0 2px 2px 0;
   transform: rotate(45deg);
-}
-.topic-name {
-  font-family: var(--serif);
-  font-size: 16px;
-  color: var(--ink);
 }
 .intent-hint {
   font-family: var(--grot);
@@ -826,14 +629,6 @@ h1.display {
 .snap.away {
   opacity: 0.35;
 }
-.reason-row {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  align-self: flex-start;
-  max-width: 100%;
-  margin-bottom: 12px;
-}
 .snap .reason {
   font-family: var(--mono);
   font-size: 10px;
@@ -842,35 +637,6 @@ h1.display {
   color: var(--ink-mute);
   border: 1px solid var(--rule);
   padding: 3px 7px;
-}
-
-/* --- score cue (#40): quiet hairline strength meter, tap for the breakdown --- */
-.score-cue {
-  flex: 0 0 auto;
-  display: inline-flex;
-  align-items: center;
-  padding: 6px 2px; /* enlarge the tap target without enlarging the mark */
-  background: transparent;
-  border: none;
-  cursor: pointer;
-}
-.score-cue-track {
-  position: relative;
-  display: block;
-  width: 34px;
-  height: 4px;
-  background: var(--paper-3);
-  border: 1px solid var(--hair);
-}
-.score-cue-fill {
-  position: absolute;
-  top: 0;
-  left: 0;
-  height: 100%;
-  background: var(--ink-mute);
-}
-.score-cue:active .score-cue-fill {
-  background: var(--ink);
 }
 .snap h3 {
   font-family: var(--serif);
@@ -917,43 +683,6 @@ h1.display {
   content: "·";
   margin-right: 7px;
   color: var(--ink-mute);
-}
-.id-interest {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  font-family: var(--grot);
-  /* #81: interest-tag size is user-tunable; theme default 13px. */
-  font-size: var(--pref-card-interesttag-size, 13px);
-  /* #90: weight joins the shared card-meta control (default 600 when unset). */
-  font-weight: var(--pref-card-meta-weight, 600);
-  color: var(--ink);
-}
-.id-interest svg {
-  display: block;
-  color: var(--ink);
-}
-.id-swatch {
-  width: 10px;
-  height: 10px;
-  border: 1px solid var(--rule-hard);
-  display: inline-block;
-}
-.id-source,
-.id-type,
-.id-age {
-  font-family: var(--mono);
-  /* #81: sub-text size (the meta mix). Source has its own override below. */
-  font-size: var(--pref-card-meta-size, 11px);
-  /* #90: shared card-meta weight + ink (defaults match the theme when unset). */
-  font-weight: var(--pref-card-meta-weight, 400);
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  color: var(--pref-card-meta-ink, var(--ink-mute));
-}
-.id-source {
-  /* #81: the source label is separately sizable. */
-  font-size: var(--pref-card-source-size, 11px);
 }
 .id-source.lead {
   color: var(--ink-soft); /* source is the anchor when there's no interest */
@@ -2110,35 +1839,6 @@ h1.display {
 .lib-sub {
   flex-wrap: wrap;
 }
-.lib-lbl {
-  font-family: var(--grot);
-  font-size: 10px;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  color: var(--ink-mute);
-  margin-right: 2px;
-}
-.lib-mix {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin: 18px 0 2px;
-  padding-bottom: 7px;
-  /* #93 de-noise: mix header keeps a rule (it's a real section break) but
-     softened off near-black. */
-  border-bottom: 1px solid var(--rule);
-  font-family: var(--grot);
-  font-size: 12px;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: var(--ink-soft);
-}
-.lib-mix .cnt {
-  margin-left: auto;
-  font-family: var(--mono);
-  font-size: 11px;
-  color: var(--ink-mute);
-}
 .lib-row {
   border-bottom: 1px solid var(--hair);
 }
@@ -2147,12 +1847,6 @@ h1.display {
   align-items: center;
   gap: 10px;
   padding: 13px 2px;
-}
-/* #93: the library row's weight cell now holds the gauge+dots indicator, not a
-   boxed word. Keep a stable min-width so names still line up column-clean. */
-.wtag {
-  flex: 0 0 auto;
-  min-width: 62px;
 }
 .lib-head .nm {
   flex: 1;
@@ -2173,9 +1867,6 @@ h1.display {
 .lib-head .chev {
   color: var(--ink-mute);
   font-size: 14px;
-}
-.lib-expand {
-  padding: 4px 2px 18px;
 }
 .ctl-label {
   font-family: var(--grot);
@@ -2205,40 +1896,9 @@ h1.display {
   background: var(--ink);
   color: var(--paper);
 }
-
-/* #93: weight visual language ---------------------------------------------
-   Compact indicator = gauge glyph + a 1-5 density scale. Used in library rows,
-   source-page meta, and the quick-weight sheet. The gauge signals "how often
-   this surfaces"; the dots quantify it at a glance where a bare word wouldn't. */
-.windi {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-}
-.windi-ic {
-  flex: 0 0 auto;
-  color: var(--ink-mute);
-}
-.wdots {
-  display: inline-flex;
-  align-items: center;
-  gap: 3px;
-}
-.wdot {
-  width: 5px;
-  height: 5px;
-  border-radius: 50%;
-  box-shadow: inset 0 0 0 1px var(--rule);
-}
 .wdot.on {
   background: var(--ink);
   box-shadow: inset 0 0 0 1px var(--ink);
-}
-.windi-word {
-  font-family: var(--grot);
-  font-size: 12px;
-  letter-spacing: 0.01em;
-  color: var(--ink-mute);
 }
 
 /* #93: the source-config weight control - roomy vertical word list. Replaces
@@ -2322,25 +1982,6 @@ h1.display {
   font-size: 12px;
   color: var(--ink-mute);
   margin: 5px 0 0;
-}
-.interest-assign {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 14px;
-}
-/* #93 de-noise: interest-assign chips lose the box - muted words, active = ink +
-   underline, matching the library's filter chips. */
-.fa-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  padding: 6px 2px 5px;
-  border: none;
-  border-bottom: 2px solid transparent;
-  background: none;
-  font-family: var(--grot);
-  font-size: 12px;
-  color: var(--ink-mute);
 }
 .fa-chip.on {
   color: var(--ink);
@@ -2624,10 +2265,6 @@ h1.display {
   color: var(--ink-mute);
   font-size: 13px;
 }
-.sheet-weight {
-  border-top: 1px solid var(--hair);
-  padding: 14px 2px 16px;
-}
 
 /* ---- in-app reader (#41) ---- */
 .reader {
@@ -2828,155 +2465,9 @@ h1.display {
   color: var(--ink-mute);
   margin: 24px 0;
 }
-
-/* donut header: compact grayscale pie (top-N + other) with a labelled legend */
-.mix-donut-wrap {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  padding: 12px 0 6px;
-  border-bottom: 1.5px solid var(--rule-hard);
-}
-.mix-donut-wrap svg {
-  flex: 0 0 auto;
-}
-.mix-legend {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  flex: 1;
-  min-width: 0;
-}
-.mix-legend li {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-family: var(--grot);
-  font-size: 12px;
-  padding: 2px 0;
-}
-.mix-swatch {
-  flex: 0 0 auto;
-  width: 11px;
-  height: 11px;
-  border: 1px solid var(--rule-hard);
-}
-.mix-legend-nm {
-  flex: 1;
-  min-width: 0;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  color: var(--ink-soft);
-}
-.mix-legend-pct {
-  font-family: var(--mono);
-  color: var(--ink);
-}
-
-/* ranked list */
-.mix-list {
-  margin-top: 4px;
-}
-.mix-row {
-  display: block;
-  width: 100%;
-  text-align: left;
-  background: none;
-  border: none;
-  border-bottom: 1px solid var(--hair);
-  padding: 12px 2px;
-}
-.mix-row:active {
-  background: var(--paper-3);
-}
 .mix-row.prune {
   border-left: 2px solid var(--ink);
   padding-left: 10px;
-}
-.mix-row-top {
-  display: flex;
-  align-items: center;
-  gap: 9px;
-}
-.mix-ico {
-  flex: 0 0 auto;
-  display: inline-flex;
-  color: var(--ink-soft);
-}
-.mix-dot {
-  display: inline-block;
-  width: 8px;
-  height: 8px;
-  border: 1.5px solid var(--ink-mute);
-  border-radius: 50%;
-}
-.mix-name {
-  flex: 1;
-  min-width: 0;
-  font-weight: 600;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.mix-share {
-  flex: 0 0 auto;
-  font-family: var(--didot);
-  font-size: 18px;
-}
-.mix-bar {
-  position: relative;
-  height: 10px;
-  margin: 8px 0 6px;
-  background: var(--paper-3);
-  border: 1px solid var(--hair);
-}
-.mix-fill {
-  position: absolute;
-  top: 0;
-  left: 0;
-  height: 100%;
-  background: var(--ink);
-}
-/* the "wants to be" extension: hollow, hatched - shows share lost to skipping */
-.mix-ghost {
-  position: absolute;
-  top: 0;
-  height: 100%;
-  border: 1px dashed var(--ink-mute);
-  border-left: none;
-  background-image: repeating-linear-gradient(
-    45deg,
-    transparent,
-    transparent 3px,
-    var(--rule) 3px,
-    var(--rule) 4px
-  );
-}
-.mix-meta {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  font-family: var(--mono);
-  font-size: 11px;
-  color: var(--ink-mute);
-}
-.mix-wants {
-  font-style: normal;
-  color: var(--ink-soft);
-}
-.mix-prune-tag {
-  margin-left: auto;
-  font-family: var(--grot);
-  font-size: 10px;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--ink);
-  border: 1px solid var(--rule-hard);
-  padding: 1px 6px;
-}
-.mix-sheet {
-  padding: 4px 2px 8px;
 }
 
 /* ============================================================
@@ -3060,7 +2551,6 @@ h1.display {
   color: var(--ink-soft);
 }
 
-
 /* ============================================================
    #54/#55 - Library nav + compact control layout
    (back-to-intent affordance; collapsed filter/sort sheet)
@@ -3084,27 +2574,6 @@ h1.display {
 }
 .lib-back:active {
   color: var(--ink);
-}
-
-/* #55: one compact row - state segments (primary) scroll horizontally if
-   needed; the sheet trigger and count pin to the right. No wrapping stack. */
-/* #93 de-noise: lighten the heavy near-black rule under the controls to a
-   faint hairline so it separates without chopping the page into slabs. */
-.lib-controls {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  margin: 4px 0 6px;
-  padding-bottom: 8px;
-  border-bottom: 1px solid var(--hair);
-}
-.lib-segs {
-  display: flex;
-  gap: 14px;
-  overflow-x: auto;
-  -webkit-overflow-scrolling: touch;
-  flex: 0 1 auto;
-  min-width: 0;
 }
 .lib-segs .lib-seg {
   flex: 0 0 auto;
@@ -3146,12 +2615,6 @@ h1.display {
    .ctl-label language so it reads as the same surface, just relocated. */
 .lib-sheet {
   padding: 4px 20px calc(20px + env(safe-area-inset-bottom));
-}
-.lib-sheet-row {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 14px;
-  margin-bottom: 4px;
 }
 .lib-sheet-foot {
   display: flex;
@@ -3231,18 +2694,6 @@ h1.display {
 .lib-add .btn {
   margin-top: 10px;
 }
-/* ===== end #64/#65 ===== */
-
-/* ============================================================
-   #57 collections - saved lists (Save picker + Collections view)
-   Reuses the sheet / lib-row language; only the bits those
-   don't cover live here. Kept in a labeled block for clean merges.
-   ============================================================ */
-.lib-topbar-actions {
-  display: flex;
-  gap: 8px;
-  flex: 0 0 auto;
-}
 
 /* Save picker rows: a membership marker, the name, then a quiet count. */
 .save-check {
@@ -3278,14 +2729,6 @@ h1.display {
   margin-top: 0;
 }
 
-/* Reader/Player foot can carry Save alongside Open. */
-.reader-foot-actions {
-  flex: 0 0 auto;
-  display: inline-flex;
-  gap: 16px;
-  align-items: center;
-}
-
 /* Remove-from-collection affordance on an item row. */
 .coll-x {
   flex: 0 0 auto;
@@ -3299,49 +2742,10 @@ h1.display {
 .coll-x:active {
   color: var(--ink);
 }
-/* ===== end #57 ===== */
-
-/* ===== #66 interest-mgmt-pages: dedicated source/interest pages ===== */
-/* Spacing between the stacked settings/sources/posts sections on a source or
-   interest page. Keeps them as distinct rooms without heavy dividers. */
-.page-section {
-  margin-top: 26px;
-}
-/* The explicit "browse into this interest's page" affordance under the filter chips
-   when a single interest is in focus. Quiet, text-forward, thumb-height. */
-.lib-interestlink {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  margin: 2px 0 10px;
-  padding: 7px 0;
-  background: none;
-  border: none;
-  font-family: var(--grot);
-  font-size: 12px;
-  letter-spacing: 0.04em;
-  color: var(--ink-soft);
-}
-.lib-interestlink:active {
-  color: var(--ink);
-}
-/* A grouped-by-interest header rendered as a link to the interest page. Inherits the
-   .lib-mix look; resets the button chrome and adds a trailing chevron. */
-.lib-mix.as-link {
-  width: 100%;
-  border: none;
-  border-bottom: 1.5px solid var(--rule-hard);
-  background: none;
-  text-align: left;
-  cursor: pointer;
-}
 .lib-mix.as-link .chev {
   margin-left: 8px;
   font-size: 11px;
   color: var(--ink-mute);
-}
-.lib-mix.as-link:active {
-  color: var(--ink);
 }
 /* ===== end #66 ===== */
 
@@ -3358,19 +2762,6 @@ h1.display {
 .act-btn .ic {
   display: block;
   color: currentColor;
-}
-/* ===== end #71 ===== */
-
-/* ===== #73 card-date: prominent age above the hero ===== */
-.card-date {
-  font-family: var(--grot);
-  /* #81: date size/prominence is user-tunable; theme default 13px. */
-  font-size: var(--pref-card-date-size, 13px);
-  /* #90: shares the card-meta weight + ink (defaults match the theme when unset). */
-  font-weight: var(--pref-card-meta-weight, 600);
-  letter-spacing: 0.02em;
-  color: var(--pref-card-meta-ink, var(--ink-soft));
-  margin: 2px 0 8px;
 }
 /* ===== end #73 ===== */
 
@@ -3394,30 +2785,8 @@ h1.display {
 .reader-open svg {
   display: block;
 }
-/* ===== end #74 ===== */
-
-/* ===== #75 source-tap: tappable source name on the card ===== */
-/* The source name is a button now; strip the UA chrome so it still reads as the
-   mono identity text, with a quiet dotted underline as the tap affordance. */
-button.id-source {
-  background: none;
-  border: none;
-  padding: 0;
-  margin: 0;
-  cursor: pointer;
-  font-family: var(--mono);
-  font-size: var(--pref-card-source-size, 11px);
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  color: var(--ink-mute);
-  text-decoration: underline dotted;
-  text-underline-offset: 3px;
-}
 button.id-source.lead {
   color: var(--ink-soft);
-}
-button.id-source:active {
-  color: var(--ink);
 }
 /* ===== end #75 ===== */
 
@@ -4404,97 +3773,6 @@ button.id-source:active {
   }
 }
 
-/* ============================================================
-   Session engine v2 - interest-centric library management
-   (#114/#120). Library → Interest → Source → Articles. Full
-   pages; modals only for rename / archival period / keywords.
-   Reuses the e-ink language: type + hairlines over boxes, mono
-   for small labels, serif for names.
-   ============================================================ */
-
-/* --- shared: interest/mix glyph, add row, edit affordance --- */
-.int-glyph {
-  flex: 0 0 auto;
-  width: 22px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--ink-soft);
-  font-family: var(--didot);
-  font-size: 20px;
-  line-height: 1;
-}
-.int-dot {
-  width: 10px;
-  height: 10px;
-  border: 1.5px solid var(--ink-mute);
-  border-radius: 50%;
-}
-.lib-addrow {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  width: 100%;
-  padding: 14px 2px;
-  background: none;
-  border: none;
-  border-bottom: 1px solid var(--hair);
-  font-family: var(--serif);
-  font-size: 16px;
-  color: var(--ink-soft);
-  text-align: left;
-}
-.lib-addrow:active {
-  color: var(--ink);
-  background: var(--paper-3);
-}
-.int-edit {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  padding: 5px 2px;
-  background: none;
-  border: none;
-  font-family: var(--grot);
-  font-size: 11px;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: var(--ink-mute);
-}
-.int-edit:active {
-  color: var(--ink);
-}
-.int-edit svg {
-  display: block;
-}
-
-/* --- interest page: plain-English facts + inline edit --- */
-.int-fact {
-  font-family: var(--serif);
-  font-size: 16px;
-  line-height: 1.5;
-  color: var(--ink-soft);
-  margin: 8px 0;
-}
-.int-fact b {
-  color: var(--ink);
-  font-weight: 600;
-}
-.int-inline-edit {
-  background: none;
-  border: none;
-  padding: 0;
-  font: inherit;
-  color: var(--ink);
-  font-weight: 600;
-  text-decoration: underline dotted;
-  text-underline-offset: 3px;
-  cursor: pointer;
-}
-.int-inline-edit:active {
-  color: var(--ink-soft);
-}
-
 /* --- source rows on the interest page: badge + subline + indicators --- */
 .lib-head.srcrow {
   align-items: flex-start;
@@ -4502,52 +3780,6 @@ button.id-source:active {
 }
 .lib-head.srcrow .chev {
   align-self: center;
-}
-.srcrow-title {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-.srcrow-title b {
-  flex: 1 1 auto;
-  min-width: 0;
-  font-weight: 600;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.srcrow-sub {
-  display: block;
-  margin-top: 3px;
-  font-family: var(--mono);
-  font-size: 11px;
-  letter-spacing: 0.02em;
-  color: var(--ink-mute);
-}
-.srcrow-indi {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  margin-top: 7px;
-}
-.srcrow-arch {
-  font-family: var(--mono);
-  font-size: 10px;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  color: var(--ink-mute);
-}
-
-/* engagement badge: the one salient stat, as a quiet e-ink pill. No color -
-   tone is carried by border/fill weight (up = solid rule, down = filled paper,
-   mute = faint hairline). */
-.eng-badge {
-  flex: 0 0 auto;
-  font-family: var(--mono);
-  font-size: 10.5px;
-  letter-spacing: 0.02em;
-  padding: 1px 6px;
-  white-space: nowrap;
 }
 .eng-badge.up {
   color: var(--ink);
@@ -4562,93 +3794,9 @@ button.id-source:active {
   color: var(--ink-mute);
   border: 1px solid var(--hair);
 }
-
-/* --- source page: transparency stat block --- */
-.stat-block {
-  margin: 6px 0 2px;
-}
-.stat-lead {
-  font-family: var(--serif);
-  font-size: 17px;
-  line-height: 1.4;
-  margin: 6px 0 12px;
-  color: var(--ink);
-}
-.stat-lead b {
-  font-weight: 600;
-}
-.stat-list {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 9px 16px;
-}
-.stat-list li {
-  font-family: var(--grot);
-  font-size: 13px;
-  color: var(--ink-soft);
-  border-left: 2px solid var(--rule);
-  padding-left: 10px;
-}
-.stat-list b {
-  color: var(--ink);
-  font-weight: 700;
-}
-
-/* --- source page: pick-row (archival period) + text button + keyword chips --- */
-.ctl-pickrow {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  width: 100%;
-  padding: 12px 2px;
-  background: none;
-  border: none;
-  border-bottom: 1px solid var(--hair);
-  text-align: left;
-}
-.ctl-pickrow:active {
-  background: var(--paper-3);
-}
-.ctl-pickval {
-  font-family: var(--serif);
-  font-size: 16px;
-  color: var(--ink);
-}
 .ctl-pickrow .sheet-chev {
   color: var(--ink-mute);
   font-size: 13px;
-}
-.ctl-textbtn {
-  margin-top: 8px;
-  padding: 6px 0;
-  background: none;
-  border: none;
-  font-family: var(--grot);
-  font-size: 12px;
-  letter-spacing: 0.04em;
-  color: var(--ink-soft);
-  text-decoration: underline;
-  text-underline-offset: 3px;
-}
-.ctl-textbtn:active {
-  color: var(--ink);
-}
-.kw-chips {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin: 4px 0 6px;
-}
-.kw-chip {
-  font-family: var(--mono);
-  font-size: 12px;
-  padding: 4px 9px;
-  background: var(--paper-2);
-  border: 1px solid var(--rule);
-  color: var(--ink-soft);
 }
 
 /* --- articles page: recency-barred item rows --- */
@@ -4689,80 +3837,6 @@ button.id-source:active {
   font-size: 11px;
   text-transform: uppercase;
   letter-spacing: 0.03em;
-  color: var(--ink-mute);
-}
-.art-bar {
-  flex: 0 0 46px;
-  position: relative;
-  height: 4px;
-  background: var(--paper-3);
-  border: 1px solid var(--hair);
-}
-.art-bar-fill {
-  position: absolute;
-  left: 0;
-  top: 0;
-  height: 100%;
-  background: var(--ink-mute);
-}
-
-/* --- mixes page: mix section head + interest move rows --- */
-.mix-head {
-  display: flex;
-  align-items: center;
-  gap: 9px;
-  padding-bottom: 8px;
-  margin-bottom: 2px;
-  border-bottom: 1.5px solid var(--rule-hard);
-}
-.mix-head svg {
-  flex: 0 0 auto;
-  color: var(--ink-soft);
-}
-.mix-head-nm {
-  font-family: var(--didot);
-  font-size: 20px;
-  color: var(--ink);
-}
-.mix-head-cnt {
-  font-family: var(--mono);
-  font-size: 12px;
-  color: var(--ink-mute);
-}
-.mix-head .int-edit {
-  margin-left: auto;
-}
-.mix-int-row {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  width: 100%;
-  padding: 12px 2px;
-  background: none;
-  border: none;
-  border-bottom: 1px solid var(--hair);
-  text-align: left;
-}
-.mix-int-row:active {
-  background: var(--paper-3);
-}
-.mix-int-nm {
-  flex: 1;
-  min-width: 0;
-  font-family: var(--serif);
-  font-size: 16px;
-  font-weight: 600;
-  color: var(--ink);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.mix-int-move {
-  flex: 0 0 auto;
-  font-family: var(--grot);
-  font-size: 10px;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
   color: var(--ink-mute);
 }
 /* ===== end session engine v2 library management ===== */
