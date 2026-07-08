@@ -579,24 +579,32 @@ h1.display {
   /* fill the viewport below the topbar (nav is hidden on this route) */
   height: calc(100dvh - 61px);
 }
+/* The top strip only carries the desktop keyboard hint now (time moved to the
+   bottom, #120), so it's hidden on mobile - reclaiming the top space - and shown
+   at the desktop breakpoint (which also reveals .kbd-hint). */
 .timestrip {
   flex: 0 0 auto;
-  display: flex;
+  display: none;
   align-items: center;
   gap: 10px;
   padding: 8px 16px;
   border-bottom: 1px solid var(--hair);
 }
-.timestrip .clock {
-  margin-left: auto;
+/* Progress + time-left, pinned at the very bottom (#120): the same spot the
+   reader keeps its reading progress, so "how far through" is always here. */
+.session-foot {
+  flex: 0 0 auto;
+}
+.session-time {
+  display: block;
+  text-align: right;
+  padding: 4px 16px 5px;
   font-family: var(--mono);
   font-size: 11px;
   color: var(--ink-mute);
   white-space: nowrap;
 }
-/* Session progress pinned at the bottom of the reel (#120). */
 .session-progress {
-  flex: 0 0 auto;
   height: 6px;
   background: var(--paper-3);
   overflow: hidden;
@@ -2481,28 +2489,46 @@ h1.display {
   margin: 12px 0 14px;
   color: var(--ink);
 }
-.bd-rows {
+/* Two-step "why this?" (#120): numbered source-step then article-step. */
+.bd-step {
   display: flex;
-  flex-direction: column;
-  gap: 16px;
+  gap: 12px;
+  padding: 16px 0;
+  border-top: 1px solid var(--hair);
 }
-.bd-row-head {
+.bd-step-num {
+  flex: 0 0 auto;
+  width: 22px;
+  height: 22px;
+  border-radius: 999px;
+  border: 1.5px solid var(--rule-hard);
   display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  margin-bottom: 6px;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--didot);
+  font-size: 13px;
+  color: var(--ink);
 }
-.bd-name {
+.bd-step-body {
+  flex: 1;
+}
+.bd-step-head {
   font-family: var(--grot);
   font-size: 11px;
-  letter-spacing: 0.1em;
+  letter-spacing: 0.12em;
   text-transform: uppercase;
   color: var(--ink-soft);
+  margin-bottom: 6px;
 }
-.bd-mult {
-  font-family: var(--didot);
-  font-size: 18px;
+.bd-step-line {
+  font-family: var(--serif);
+  font-size: 15px;
+  line-height: 1.5;
   color: var(--ink);
+  margin: 0 0 10px;
+}
+.bd-rep {
+  margin-bottom: 2px;
 }
 .bd-bar {
   position: relative;
@@ -2517,38 +2543,31 @@ h1.display {
   height: 100%;
   background: var(--ink);
 }
-.bd-line {
-  margin-top: 6px;
-  font-family: var(--mono);
-  font-size: 12px;
-  line-height: 1.4;
-  color: var(--ink-mute);
-}
-.bd-net {
+.bd-score {
   display: flex;
   align-items: baseline;
   justify-content: space-between;
-  margin-top: 18px;
-  padding-top: 14px;
-  border-top: 1.5px solid var(--rule-hard);
+  margin-top: 8px;
 }
-.bd-net-label {
+.bd-score-label {
   font-family: var(--grot);
   font-size: 11px;
   letter-spacing: 0.1em;
   text-transform: uppercase;
   color: var(--ink-soft);
 }
-.bd-net-val {
+.bd-score-val {
   font-family: var(--didot);
-  font-size: 26px;
+  font-size: 22px;
   color: var(--ink);
 }
-.bd-summary {
-  margin: 10px 0 2px;
-  font-size: 14px;
+.bd-note {
+  margin: 10px 0 0;
+  font-family: var(--serif);
+  font-style: italic;
+  font-size: 13px;
   line-height: 1.45;
-  color: var(--ink-soft);
+  color: var(--ink-mute);
 }
 
 /* ============================================================
@@ -3408,10 +3427,18 @@ button.id-source.lead {
   flex-direction: column;
   background: var(--paper);
   transform: translateX(100%);
+  /* Smooth slide for open/close + the swipe-away settle (#120). Vertical scroll
+     passes through (pan-y); horizontal drags are handled in JS. */
+  transition: transform 0.24s cubic-bezier(0.4, 0, 0.2, 1);
+  touch-action: pan-y;
   will-change: transform;
 }
 .readerpage.in {
   transform: translateX(0);
+}
+/* While the finger is tracking, drop the transition so the pane follows 1:1. */
+.readerpage.dragging {
+  transition: none;
 }
 .rp-topbar {
   position: relative;
@@ -3770,6 +3797,9 @@ button.id-source.lead {
   /* A hint that keys drive the reader/reel, shown only on desktop. */
   .kbd-hint {
     display: inline-flex;
+  }
+  .timestrip {
+    display: flex;
   }
 }
 

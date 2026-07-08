@@ -538,8 +538,8 @@ export default function SessionPage() {
 
   return (
     <div className="focus-session">
+      {/* Desktop-only keyboard hint (#4); hidden on mobile so the top is clean. */}
       <div className="timestrip">
-        {/* Desktop-only affordance (#4): CSS reveals it at the wide breakpoint. */}
         <span className="kbd-hint" aria-hidden>
           <kbd>↑</kbd>
           <kbd>↓</kbd>
@@ -548,9 +548,6 @@ export default function SessionPage() {
           open
           <kbd>⌫</kbd>
           back
-        </span>
-        <span className="clock">
-          {mins(elapsed)} / {duration}m
         </span>
       </div>
 
@@ -665,12 +662,16 @@ export default function SessionPage() {
         </div>
       </div>
 
-      {/* Session progress pinned at the bottom (#120): a thin elapsed-time bar
-          below the reel. The reader overlay covers it while reading (which has its
-          own progress bar). No fixed action bar - advance by scroll/swipe-left,
-          like via the heart button; the rest lives in the ··· overflow. */}
-      <div className="session-progress" aria-hidden>
-        <div className="session-progress-fill" style={{ width: `${progress * 100}%` }} />
+      {/* Progress + time-left pinned at the bottom (#120), the same spot the reader
+          keeps its reading progress - so "how far through" is always bottom-of-screen
+          in every context. The reader overlay covers this while reading. */}
+      <div className="session-foot">
+        <span className="session-time">
+          {mins(elapsed)} / {duration}m
+        </span>
+        <div className="session-progress" aria-hidden>
+          <div className="session-progress-fill" style={{ width: `${progress * 100}%` }} />
+        </div>
       </div>
 
       <ItemActions

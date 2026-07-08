@@ -51,9 +51,17 @@ export function ReaderPage({
   // Keep mounted through the slide-out so the page animates away cleanly.
   const [mounted, setMounted] = useState(open);
   const [inView, setInView] = useState(false);
+  // Interactive swipe-to-dismiss (#120): the pane follows the finger, then either
+  // animates off to the right past a threshold or springs back. drag = live
+  // translateX in px (null = resting, CSS class owns the transform); dragging
+  // disables the transition so it tracks 1:1.
+  const [drag, setDrag] = useState<number | null>(null);
+  const [dragging, setDragging] = useState(false);
   useEffect(() => {
     if (open) {
       setMounted(true);
+      setDrag(null);
+      setDragging(false);
       const id = requestAnimationFrame(() => setInView(true));
       return () => cancelAnimationFrame(id);
     }
@@ -149,19 +157,44 @@ export function ReaderPage({
     return () => window.removeEventListener("keydown", onKey);
   }, [open, onClose]);
 
-  // Swipe right anywhere on the page to go back to the feed (#120) - the primary
-  // dismiss gesture on touch e-ink, alongside the back chevron / hardware back.
-  const swipe = useRef<{ x: number; y: number } | null>(null);
+  // Swipe right anywhere to go back to the feed (#120): track the finger, then
+  // animate off past ~90px or spring back. touch-action:pan-y (CSS) lets vertical
+  // scroll pass through while horizontal drags come here.
+  const start = useRef<{ x: number; y: number } | null>(null);
+  const tracking = useRef(false);
   function onPointerDown(e: ReactPointerEvent) {
-    swipe.current = { x: e.clientX, y: e.clientY };
+    start.current = { x: e.clientX, y: e.clientY };
+    tracking.current = false;
   }
-  function onPointerUp(e: ReactPointerEvent) {
-    const s = swipe.current;
-    swipe.current = null;
+  function onPointerMove(e: ReactPointerEvent) {
+    const s = start.current;
     if (!s) return;
     const dx = e.clientX - s.x;
     const dy = e.clientY - s.y;
-    if (dx >= 80 && Math.abs(dx) >= Math.abs(dy) * 1.3) onClose();
+    if (!tracking.current) {
+      if (dx > 8 && Math.abs(dx) > Math.abs(dy) * 1.3) {
+        tracking.current = true;
+        setDragging(true);
+      } else if (Math.abs(dy) > 12) {
+        start.current = null; // it's a vertical scroll - let it be
+        return;
+      }
+    }
+    if (tracking.current) setDrag(Math.max(0, dx));
+  }
+  function onPointerUp() {
+    const wasTracking = tracking.current;
+    tracking.current = false;
+    start.current = null;
+    setDragging(false);
+    if (!wasTracking) return;
+    setDrag((d) => {
+      if (d != null && d > 90) {
+        window.setTimeout(onClose, 200); // let the slide-out play, then unmount
+        return window.innerWidth;
+      }
+      return null; // spring back to rest
+    });
   }
 
   const readEst = useMemo(() => (body ? readTime(body.html.replace(/<[^>]+>/g, " ")) : ""), [body]);
@@ -184,11 +217,14 @@ export function ReaderPage({
 
   return (
     <div
-      className={`readerpage ${inView ? "in" : ""}`}
+      className={`readerpage ${inView ? "in" : ""} ${dragging ? "dragging" : ""}`}
       role="dialog"
       aria-modal="true"
+      style={drag != null ? { transform: `translateX(${drag}px)` } : undefined}
       onPointerDown={onPointerDown}
+      onPointerMove={onPointerMove}
       onPointerUp={onPointerUp}
+      onPointerCancel={onPointerUp}
     >
       <div className="rp-topbar">
         <div className="readerpage-head">
