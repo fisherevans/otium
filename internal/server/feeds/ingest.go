@@ -6,6 +6,7 @@ package feeds
 
 import (
 	"context"
+	"html"
 	"log/slog"
 	"strconv"
 	"strings"
@@ -95,16 +96,21 @@ func normalize(s store.Source, e *gofeed.Item) *store.Item {
 	}
 
 	dur := durationSeconds(e)
+	// YouTube Atom entries carry no <content>/<summary>; the description lives in
+	// media:group>media:description, which gofeed doesn't map (#120). Fall back to
+	// it so video items get a body (the reader/player renders it). It's plain text,
+	// so wrap to HTML preserving line breaks for the reader.
+	mdesc := mediaGroupDescription(e)
 	it := &store.Item{
 		SourceID:   s.ID,
 		ExternalID: extID,
 		URL:        e.Link,
 		Title:      strings.TrimSpace(e.Title),
-		Summary:    clip(stripTags(firstNonEmpty(e.Description, e.Content)), 500),
+		Summary:    clip(stripTags(firstNonEmpty(e.Description, e.Content, mdesc)), 500),
 		// Full body as raw HTML for the in-app reader (#58): prefer content:encoded
-		// (e.Content) over the teaser (e.Description). Not stripped or clipped - the
-		// reader sanitizes it client-side via DOMPurify.
-		Content:      firstNonEmpty(e.Content, e.Description),
+		// (e.Content) over the teaser (e.Description), then the media description for
+		// videos. Not stripped or clipped - the reader sanitizes it via DOMPurify.
+		Content:      firstNonEmpty(e.Content, e.Description, plainToHTML(mdesc)),
 		Author:       authorName(e),
 		ThumbnailURL: thumbnail(e),
 		DurationSec:  dur,
@@ -234,6 +240,38 @@ func thumbnail(e *gofeed.Item) string {
 		}
 	}
 	return ""
+}
+
+// mediaGroupDescription pulls media:group>media:description (the YouTube video
+// description), which gofeed doesn't surface via Content/Description. Plain text.
+func mediaGroupDescription(e *gofeed.Item) string {
+	m, ok := e.Extensions["media"]
+	if !ok {
+		return ""
+	}
+	grp, ok := m["group"]
+	if !ok {
+		return ""
+	}
+	for _, g := range grp {
+		for _, d := range g.Children["description"] {
+			if v := strings.TrimSpace(d.Value); v != "" {
+				return v
+			}
+		}
+	}
+	return ""
+}
+
+// plainToHTML turns a plain-text block (e.g. a YouTube description) into safe HTML
+// for the reader: HTML-escaped, with line breaks preserved as <br>. Empty in, empty
+// out (so it stays a clean fallback in firstNonEmpty).
+func plainToHTML(s string) string {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return ""
+	}
+	return "<p>" + strings.ReplaceAll(html.EscapeString(s), "\n", "<br>") + "</p>"
 }
 
 func firstNonEmpty(vals ...string) string {
