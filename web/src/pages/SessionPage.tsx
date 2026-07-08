@@ -377,16 +377,11 @@ export default function SessionPage() {
     if (!p) return;
     const dx = e.clientX - p.x;
     const dy = e.clientY - p.y;
-    if (i !== current) return;
-    const horizontal = Math.abs(dx) >= Math.abs(dy) * SWIPE_DOMINANCE;
-    if (!horizontal) return;
-    // Swipe replaces the old Like/Next bar: left advances, right toggles like.
-    if (dx <= -SWIPE_DIST) {
+    // A dominant leftward drag on the focused card advances it (liking is an
+    // explicit heart-button tap, not a gesture).
+    if (i === current && dx <= -SWIPE_DIST && Math.abs(dx) >= Math.abs(dy) * SWIPE_DOMINANCE) {
       p.moved = true; // keep cardClick from treating the follow-up click as a tap
       next();
-    } else if (dx >= SWIPE_DIST) {
-      p.moved = true;
-      like();
     }
   }
   function cardClick(sel: Selected) {
@@ -440,16 +435,18 @@ export default function SessionPage() {
     recordOpen(sel);
     window.open(sel.item.url, "_blank", "noopener");
   }
-  function like() {
-    if (!cur) return;
-    engaged.current.add(cur.item.id);
-    const willLike = !liked.has(cur.item.id);
+  function likeItem(it: Item) {
+    engaged.current.add(it.id);
+    const willLike = !liked.has(it.id);
     setLiked((s) => {
       const n = new Set(s);
-      willLike ? n.add(cur.item.id) : n.delete(cur.item.id);
+      willLike ? n.add(it.id) : n.delete(it.id);
       return n;
     });
-    api.itemEvent(cur.item.id, willLike ? "like" : "unlike", id).catch(() => {});
+    api.itemEvent(it.id, willLike ? "like" : "unlike", id).catch(() => {});
+  }
+  function like() {
+    if (cur) likeItem(cur.item);
   }
   function save(sel: Selected) {
     engaged.current.add(sel.item.id);
@@ -552,9 +549,6 @@ export default function SessionPage() {
           <kbd>⌫</kbd>
           back
         </span>
-        <div className="timebar">
-          <div className="timebar-fill" style={{ width: `${progress * 100}%` }} />
-        </div>
         <span className="clock">
           {mins(elapsed)} / {duration}m
         </span>
@@ -591,12 +585,9 @@ export default function SessionPage() {
               onClick={() => cardClick(it)}
               role="link"
             >
-              {/* Quiet reason line (de-noised, no box) + liked mark + ··· overflow. */}
+              {/* Quiet reason line (de-noised, no box) + the ··· overflow. */}
               <div className="card-top" onClick={(e) => e.stopPropagation()}>
                 {it.reason && <span className="reason">{it.reason}</span>}
-                {liked.has(it.item.id) && (
-                  <Heart className="card-liked" size={14} strokeWidth={2} fill="currentColor" aria-label="Liked" />
-                )}
                 {i === current && (
                   <button
                     className="item-more"
@@ -629,6 +620,13 @@ export default function SessionPage() {
                   <button className="callout-primary" onClick={primary.onClick}>
                     <primary.Icon size={16} strokeWidth={1.9} aria-hidden />
                     {primary.label}
+                  </button>
+                  <button
+                    className={`callout-act ${liked.has(it.item.id) ? "on" : ""}`}
+                    onClick={like}
+                    aria-label={liked.has(it.item.id) ? "Unlike" : "Like"}
+                  >
+                    <Heart size={18} strokeWidth={1.75} fill={liked.has(it.item.id) ? "currentColor" : "none"} aria-hidden />
                   </button>
                   <button className="callout-act" onClick={() => save(it)} aria-label="Save">
                     <Bookmark size={18} strokeWidth={1.75} aria-hidden />
@@ -667,9 +665,14 @@ export default function SessionPage() {
         </div>
       </div>
 
-      {/* No fixed action bar: advance by scrolling or swiping left, like by
-          swiping right (#120). The content actions live on the card (#96), the
-          rest in the ··· overflow - keeps the screen for the article. */}
+      {/* Session progress pinned at the bottom (#120): a thin elapsed-time bar
+          below the reel. The reader overlay covers it while reading (which has its
+          own progress bar). No fixed action bar - advance by scroll/swipe-left,
+          like via the heart button; the rest lives in the ··· overflow. */}
+      <div className="session-progress" aria-hidden>
+        <div className="session-progress-fill" style={{ width: `${progress * 100}%` }} />
+      </div>
+
       <ItemActions
         selected={atEnd ? null : cur}
         open={menuOpen}
@@ -700,6 +703,8 @@ export default function SessionPage() {
         onClose={closeContent}
         onOpen={() => shown && openExternal(shown)}
         onSave={() => shown && setSaveItem(shown.item)}
+        liked={shown ? liked.has(shown.item.id) : false}
+        onLike={() => shown && likeItem(shown.item)}
       />
       <Player
         item={shown && shownKind !== "read" ? shown.item : null}

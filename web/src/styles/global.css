@@ -784,21 +784,23 @@ h1.display {
   padding: 8px 16px;
   border-bottom: 1px solid var(--hair);
 }
-.timebar {
-  flex: 1;
-  height: 3px;
-  background: var(--paper-3);
-  overflow: hidden;
-}
-.timebar-fill {
-  height: 100%;
-  background: var(--ink);
-}
 .timestrip .clock {
+  margin-left: auto;
   font-family: var(--mono);
   font-size: 11px;
   color: var(--ink-mute);
   white-space: nowrap;
+}
+/* Session progress pinned at the bottom of the reel (#120). */
+.session-progress {
+  flex: 0 0 auto;
+  height: 6px;
+  background: var(--paper-3);
+  overflow: hidden;
+}
+.session-progress-fill {
+  height: 100%;
+  background: var(--ink);
 }
 
 .stage {
@@ -1055,12 +1057,12 @@ h1.display {
 
 /* --- compact bottom action bar --- */
 /* Liked mark on a card (#120): the swipe-right-to-like confirmation, since the
-   Like button is gone. A small filled heart pushed to the card's top-right,
-   sitting just before the ··· overflow. */
-.card-liked {
-  margin-left: auto;
+/* Liked state for the heart buttons (card callout, reader top + foot): a filled
+   ink heart is the signal (#120). */
+.callout-act.on,
+.rp-act.on,
+.reader-open.on {
   color: var(--ink);
-  flex: 0 0 auto;
 }
 
 /* pacing check-in */
@@ -4154,7 +4156,7 @@ button.id-source:active {
 /* #87 scroll-progress bar: thin, always visible, single ink, pinned bottom */
 .rp-progress {
   flex: 0 0 auto;
-  height: 3px;
+  height: 6px;
   background: var(--paper-3);
 }
 .rp-progress-fill {

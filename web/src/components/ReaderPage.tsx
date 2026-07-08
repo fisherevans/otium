@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type UIEvent, type PointerEvent as ReactPointerEvent } from "react";
-import { ChevronLeft, ExternalLink, Bookmark } from "lucide-react";
+import { ChevronLeft, ExternalLink, Bookmark, Heart } from "lucide-react";
 import { api, type Item, type ItemContent } from "@/api/client";
 import { renderSummary } from "@/lib/html";
 import { fmtDate, readTime } from "@/lib/format";
@@ -35,6 +35,8 @@ export function ReaderPage({
   onClose,
   onOpen,
   onSave,
+  liked,
+  onLike,
 }: {
   item: Item | null;
   sourceTitle?: string;
@@ -43,6 +45,8 @@ export function ReaderPage({
   onClose: () => void;
   onOpen: () => void; // open the original externally
   onSave?: () => void;
+  liked?: boolean;
+  onLike?: () => void;
 }) {
   // Keep mounted through the slide-out so the page animates away cleanly.
   const [mounted, setMounted] = useState(open);
@@ -193,6 +197,11 @@ export function ReaderPage({
         </button>
         {readEst && <span className="rp-readtime">{readEst}</span>}
         <div className="rp-actions">
+          {onLike && (
+            <button className={`rp-act ${liked ? "on" : ""}`} onClick={onLike} aria-label={liked ? "Unlike" : "Like"}>
+              <Heart size={18} strokeWidth={1.75} fill={liked ? "currentColor" : "none"} aria-hidden />
+            </button>
+          )}
           {onSave && (
             <button className="rp-act" onClick={onSave} aria-label="Save">
               <Bookmark size={18} strokeWidth={1.75} aria-hidden />
@@ -234,6 +243,12 @@ export function ReaderPage({
           <>
             <div className="reader-body" dangerouslySetInnerHTML={{ __html: body?.html ?? "" }} />
             <div className="rp-foot">
+              {onLike && (
+                <button className={`reader-open ${liked ? "on" : ""}`} onClick={onLike}>
+                  <Heart size={15} strokeWidth={1.75} fill={liked ? "currentColor" : "none"} aria-hidden />
+                  {liked ? "Liked" : "Like"}
+                </button>
+              )}
               {onSave && (
                 <button className="reader-open" onClick={onSave}>
                   <Bookmark size={15} strokeWidth={1.75} aria-hidden />
