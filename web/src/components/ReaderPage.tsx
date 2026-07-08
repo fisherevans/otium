@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type UIEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type UIEvent, type PointerEvent as ReactPointerEvent } from "react";
 import { ChevronLeft, ExternalLink, Bookmark } from "lucide-react";
 import { api, type Item, type ItemContent } from "@/api/client";
 import { renderSummary } from "@/lib/html";
@@ -129,14 +129,14 @@ export function ReaderPage({
         case "PageDown":
           if (el) {
             e.preventDefault();
-            el.scrollBy({ top: el.clientHeight * 0.85, behavior: "smooth" });
+            el.scrollBy({ top: el.clientHeight * 0.85 });
           }
           break;
         case "ArrowUp":
         case "PageUp":
           if (el) {
             e.preventDefault();
-            el.scrollBy({ top: -el.clientHeight * 0.85, behavior: "smooth" });
+            el.scrollBy({ top: -el.clientHeight * 0.85 });
           }
           break;
       }
@@ -144,6 +144,21 @@ export function ReaderPage({
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [open, onClose]);
+
+  // Swipe right anywhere on the page to go back to the feed (#120) - the primary
+  // dismiss gesture on touch e-ink, alongside the back chevron / hardware back.
+  const swipe = useRef<{ x: number; y: number } | null>(null);
+  function onPointerDown(e: ReactPointerEvent) {
+    swipe.current = { x: e.clientX, y: e.clientY };
+  }
+  function onPointerUp(e: ReactPointerEvent) {
+    const s = swipe.current;
+    swipe.current = null;
+    if (!s) return;
+    const dx = e.clientX - s.x;
+    const dy = e.clientY - s.y;
+    if (dx >= 80 && Math.abs(dx) >= Math.abs(dy) * 1.3) onClose();
+  }
 
   const readEst = useMemo(() => (body ? readTime(body.html.replace(/<[^>]+>/g, " ")) : ""), [body]);
 
@@ -164,7 +179,13 @@ export function ReaderPage({
   if (!mounted || !item) return null;
 
   return (
-    <div className={`readerpage ${inView ? "in" : ""}`} role="dialog" aria-modal="true">
+    <div
+      className={`readerpage ${inView ? "in" : ""}`}
+      role="dialog"
+      aria-modal="true"
+      onPointerDown={onPointerDown}
+      onPointerUp={onPointerUp}
+    >
       <div className="rp-topbar">
         <div className="readerpage-head">
         <button className="rp-back" onClick={onClose} aria-label="Back to card">

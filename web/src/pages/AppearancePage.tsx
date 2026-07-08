@@ -373,7 +373,7 @@ export default function AppearancePage() {
   function selectTab(t: Tab) {
     setTab(t);
     const el = t === "card" ? cardRef.current : t === "reader" ? readerRef.current : null;
-    el?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+    el?.scrollIntoView({ block: "nearest" });
   }
 
   function setPresetAt(i: number, v: number) {

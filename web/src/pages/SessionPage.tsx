@@ -9,7 +9,7 @@ import { ScoreBreakdownSheet } from "@/components/ScoreBreakdown";
 import { SourceSheet } from "@/components/SourceSheet";
 import { InterestPill, CardSource, Byline, Blurb, Media } from "@/components/CardParts";
 import { ShareActions } from "@/components/ReaderActions";
-import { Heart, Bookmark, ChevronDown, BookOpen, Play, ExternalLink } from "lucide-react";
+import { Heart, Bookmark, BookOpen, Play, ExternalLink } from "lucide-react";
 import { cardRender, isMedia, isVideo } from "@/lib/render";
 import { mins } from "@/lib/format";
 
@@ -76,7 +76,6 @@ export default function SessionPage() {
 
   const [elapsed, setElapsed] = useState(0);
   const [checkin, setCheckin] = useState<Checkin>(null);
-  const [flash, setFlash] = useState(0);
   // Dwell + fast-scroll check-in (#68). fastCheckin gates BOTH the dwell
   // measurement and the nudge; off = old explicit-only behavior. Read via a ref
   // inside the IntersectionObserver so toggling it never re-subscribes the
@@ -345,10 +344,9 @@ export default function SessionPage() {
 
   function scrollTo(idx: number) {
     const el = itemEls.current[idx];
-    if (el) {
-      setFlash((f) => f + 1);
-      el.scrollIntoView({ behavior: "smooth", block: "center" });
-    }
+    // Instant snap, not a smooth glide: good e-ink panels (Plasma 2) render a
+    // smooth-scroll as a low-framerate jitter, so we jump straight to the card.
+    if (el) el.scrollIntoView({ block: "center" });
   }
 
   const cur = items[current];
@@ -379,9 +377,16 @@ export default function SessionPage() {
     if (!p) return;
     const dx = e.clientX - p.x;
     const dy = e.clientY - p.y;
-    if (i === current && dx <= -SWIPE_DIST && Math.abs(dx) >= Math.abs(dy) * SWIPE_DOMINANCE) {
+    if (i !== current) return;
+    const horizontal = Math.abs(dx) >= Math.abs(dy) * SWIPE_DOMINANCE;
+    if (!horizontal) return;
+    // Swipe replaces the old Like/Next bar: left advances, right toggles like.
+    if (dx <= -SWIPE_DIST) {
       p.moved = true; // keep cardClick from treating the follow-up click as a tap
       next();
+    } else if (dx >= SWIPE_DIST) {
+      p.moved = true;
+      like();
     }
   }
   function cardClick(sel: Selected) {
@@ -532,12 +537,10 @@ export default function SessionPage() {
   }
 
   const progress = Math.min(1, elapsed / durationSec);
-  const isLastReal = current === visibleCount - 1;
   const shownItems = overIdx !== null ? items.slice(0, visibleCount) : items;
 
   return (
     <div className="focus-session">
-      {flash > 0 && <span className="eink-flash" key={flash} />}
       <div className="timestrip">
         {/* Desktop-only affordance (#4): CSS reveals it at the wide breakpoint. */}
         <span className="kbd-hint" aria-hidden>
@@ -588,9 +591,12 @@ export default function SessionPage() {
               onClick={() => cardClick(it)}
               role="link"
             >
-              {/* Quiet reason line (de-noised, no box) + the ··· overflow. */}
+              {/* Quiet reason line (de-noised, no box) + liked mark + ··· overflow. */}
               <div className="card-top" onClick={(e) => e.stopPropagation()}>
                 {it.reason && <span className="reason">{it.reason}</span>}
+                {liked.has(it.item.id) && (
+                  <Heart className="card-liked" size={14} strokeWidth={2} fill="currentColor" aria-label="Liked" />
+                )}
                 {i === current && (
                   <button
                     className="item-more"
@@ -661,20 +667,9 @@ export default function SessionPage() {
         </div>
       </div>
 
-      {/* Slim session controls: the content actions (Read/Open/Watch/Save/Share)
-          live on the card now (#96), so the fixed bar keeps only the session-level
-          one-taps - Like (quiet signal) and advance. */}
-      <div className="actionbar">
-        <button className={`act-btn ${cur && liked.has(cur.item.id) ? "on" : ""}`} onClick={like} disabled={atEnd}>
-          <Heart className="ic" size={18} strokeWidth={1.75} fill={cur && liked.has(cur.item.id) ? "currentColor" : "none"} aria-hidden />
-          Like
-        </button>
-        <button className="act-btn" onClick={atEnd ? goHome : next}>
-          <ChevronDown className="ic" size={18} strokeWidth={1.75} aria-hidden />
-          {atEnd ? "New" : isLastReal ? "Finish" : "Next"}
-        </button>
-      </div>
-
+      {/* No fixed action bar: advance by scrolling or swiping left, like by
+          swiping right (#120). The content actions live on the card (#96), the
+          rest in the ··· overflow - keeps the screen for the article. */}
       <ItemActions
         selected={atEnd ? null : cur}
         open={menuOpen}

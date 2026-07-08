@@ -198,7 +198,6 @@ h1.display {
   text-transform: uppercase;
   color: var(--ink-mute);
   pointer-events: none;
-  transition: color 0.2s steps(2);
 }
 .pad-edge.on {
   color: var(--ink);
@@ -502,20 +501,6 @@ h1.display {
      short step still fills the viewport and pins the CTA to the bottom. */
   min-height: 100%;
 }
-/* step 2 slides up into place - the "swipe up" transition. */
-.intent-step.slide-up {
-  animation: stepSlideUp 0.34s cubic-bezier(0.22, 0.61, 0.36, 1);
-}
-@keyframes stepSlideUp {
-  from {
-    opacity: 0;
-    transform: translateY(34px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
 .intent-back {
   display: inline-flex;
   align-items: center;
@@ -548,7 +533,6 @@ h1.display {
   font-family: var(--didot);
   font-size: 22px;
   color: var(--ink);
-  transition: background 0.15s steps(2), border-color 0.15s steps(2);
 }
 .time-chip.on {
   background: var(--ink);
@@ -809,7 +793,6 @@ h1.display {
 .timebar-fill {
   height: 100%;
   background: var(--ink);
-  transition: width 0.9s linear;
 }
 .timestrip .clock {
   font-family: var(--mono);
@@ -834,7 +817,6 @@ h1.display {
   justify-content: center;
   padding: 20px;
   border-bottom: 1px solid var(--hair);
-  transition: opacity 0.3s steps(3);
   /* #10: reserve horizontal motion for the swipe-to-advance gesture while the
      browser keeps handling vertical scroll-snap panning. */
   touch-action: pan-y;
@@ -1072,45 +1054,13 @@ h1.display {
 }
 
 /* --- compact bottom action bar --- */
-.actionbar {
-  flex: 0 0 var(--bar-h);
-  display: flex;
-  border-top: 1.5px solid var(--rule-hard);
-  background: var(--paper);
-}
-.act-btn {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 3px;
-  background: transparent;
-  border: none;
-  border-left: 1px solid var(--hair);
-  font-family: var(--grot);
-  font-size: 9px;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  color: var(--ink-soft);
-  padding: 6px 2px;
-}
-.act-btn:first-child {
-  border-left: none;
-}
-.act-btn:active {
-  background: var(--paper-3);
-}
-.act-btn.on {
-  background: var(--ink);
-  color: var(--paper);
-}
-.act-btn:disabled {
-  opacity: 0.3;
-}
-.act-btn .ic {
-  font-size: 16px;
-  line-height: 1;
+/* Liked mark on a card (#120): the swipe-right-to-like confirmation, since the
+   Like button is gone. A small filled heart pushed to the card's top-right,
+   sitting just before the ··· overflow. */
+.card-liked {
+  margin-left: auto;
+  color: var(--ink);
+  flex: 0 0 auto;
 }
 
 /* pacing check-in */
@@ -1182,7 +1132,6 @@ h1.display {
   background: var(--paper);
   border-radius: 999px;
   position: relative;
-  transition: background 160ms ease-out;
 }
 .switch .switch-knob {
   position: absolute;
@@ -1192,7 +1141,6 @@ h1.display {
   height: 20px;
   border-radius: 50%;
   background: var(--ink);
-  transition: transform 160ms ease-out, background 160ms ease-out;
 }
 .switch.on {
   background: var(--ink);
@@ -1298,7 +1246,6 @@ h1.display {
   font-family: var(--serif);
   font-size: 17px;
   color: var(--ink);
-  transition: background 0.15s steps(2), color 0.15s steps(2);
 }
 .mixchip.on {
   background: var(--ink);
@@ -1375,15 +1322,6 @@ h1.display {
   align-items: center;
   justify-content: center;
   padding: 24px;
-  animation: dlgFade 0.14s ease;
-}
-@keyframes dlgFade {
-  from {
-    opacity: 0;
-  }
-  to {
-    opacity: 1;
-  }
 }
 .dlg {
   background: var(--paper);
@@ -1392,17 +1330,6 @@ h1.display {
   max-height: 84vh;
   overflow-y: auto;
   box-shadow: 0 24px 70px rgba(28, 27, 24, 0.28);
-  animation: dlgRise 0.16s cubic-bezier(0.22, 0.61, 0.36, 1);
-}
-@keyframes dlgRise {
-  from {
-    transform: translateY(8px);
-    opacity: 0;
-  }
-  to {
-    transform: translateY(0);
-    opacity: 1;
-  }
 }
 .dlg-head {
   display: flex;
@@ -2570,7 +2497,6 @@ h1.display {
   align-items: flex-end;
   justify-content: center;
   background: rgba(26, 24, 21, 0);
-  transition: background 0.28s ease;
 }
 .sheet-scrim.up {
   background: rgba(26, 24, 21, 0.34);
@@ -2585,7 +2511,6 @@ h1.display {
   border-top: 1.5px solid var(--rule-hard);
   padding: 14px 20px calc(16px + env(safe-area-inset-bottom));
   transform: translateY(101%);
-  transition: transform 0.34s steps(4, end);
 }
 .sheet.up {
   transform: translateY(0);
@@ -2855,21 +2780,6 @@ h1.display {
 }
 .interest-item.here span {
   color: var(--ink-soft);
-}
-
-/* e-ink refresh flash on advance */
-@keyframes einkflash {
-  0% { opacity: 0; }
-  40% { opacity: 0.9; }
-  100% { opacity: 0; }
-}
-.eink-flash {
-  position: fixed;
-  inset: 0;
-  background: var(--ink);
-  z-index: 50;
-  pointer-events: none;
-  animation: einkflash 0.28s steps(3) forwards;
 }
 
 /* ============================================================
@@ -4092,7 +4002,6 @@ button.id-source:active {
   flex-direction: column;
   background: var(--paper);
   transform: translateX(100%);
-  transition: transform 0.32s cubic-bezier(0.22, 0.61, 0.36, 1);
   will-change: transform;
 }
 .readerpage.in {
@@ -4130,7 +4039,6 @@ button.id-source:active {
   background: var(--paper);
   border-bottom: 1px solid var(--hair);
   transform: translateY(-100%);
-  transition: transform 0.26s ease;
   pointer-events: none;
 }
 .rp-revealbar.in {
@@ -4253,7 +4161,6 @@ button.id-source:active {
   height: 100%;
   background: var(--ink);
   transform-origin: left center;
-  transition: transform 0.1s linear;
 }
 
 /* #92 copy-manual fallback (when clipboard + share both fail) */
