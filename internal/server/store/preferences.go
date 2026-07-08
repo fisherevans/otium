@@ -3,6 +3,7 @@ package store
 import (
 	"context"
 	"encoding/json"
+	"log/slog"
 	"sort"
 )
 
@@ -122,8 +123,11 @@ func (db *DB) GetPreferences(ctx context.Context, userID int64) (Preferences, er
 	}
 	if ok && v != "" {
 		// Overlay stored values onto the defaults. Unknown/absent keys keep the
-		// default; a malformed blob leaves the defaults intact.
-		_ = json.Unmarshal([]byte(v), &p)
+		// default; a malformed blob leaves the defaults intact (but is worth a log -
+		// it means a user's stored prefs silently reverted).
+		if err := json.Unmarshal([]byte(v), &p); err != nil {
+			slog.Warn("preferences: malformed stored blob, using defaults", "user", userID, "err", err)
+		}
 		migrateLegacyMeta(&p.Card, []byte(v))
 	}
 	clampPreferences(&p)

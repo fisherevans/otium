@@ -40,24 +40,6 @@ func (db *DB) ListMixes(ctx context.Context, userID int64) ([]Mix, error) {
 	return out, rows.Err()
 }
 
-// GetMixBySlug returns a single mix (without interest count), scoped to the user.
-func (db *DB) GetMixBySlug(ctx context.Context, userID int64, slug string) (*Mix, error) {
-	var g Mix
-	var created string
-	err := db.sql.QueryRowContext(ctx,
-		`SELECT id, name, slug, icon, sort, created_at FROM mixes WHERE user_id = ? AND slug = ?`,
-		userID, slug).Scan(&g.ID, &g.Name, &g.Slug, &g.Icon, &g.Sort, &created)
-	if err == sql.ErrNoRows {
-		return nil, ErrMixNotFound
-	}
-	if err != nil {
-		return nil, err
-	}
-	g.UserID = userID
-	g.CreatedAt = parseTime(created)
-	return &g, nil
-}
-
 // CreateMix creates a mix. slug is the desired base; a numeric suffix is
 // appended on collision so a create never fails on a duplicate name.
 func (db *DB) CreateMix(ctx context.Context, userID int64, name, slug, icon string) (*Mix, error) {

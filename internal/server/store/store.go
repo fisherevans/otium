@@ -902,19 +902,6 @@ func (db *DB) MarkFetched(ctx context.Context, sourceID int64, fetchErr string) 
 	return err
 }
 
-// ListRecentItemsBySource returns the newest items for a single source, for the
-// "catch up on this creator" drill-in view.
-func (db *DB) ListRecentItemsBySource(ctx context.Context, userID, sourceID int64, limit int) ([]Item, error) {
-	rows, err := db.sql.QueryContext(ctx,
-		`SELECT id, source_id, url, title, summary, content, content_source, author, thumbnail_url, media_type, duration_sec, published_at, fetched_at
-		 FROM items WHERE source_id = ? ORDER BY published_at DESC LIMIT ?`, sourceID, limit)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	return scanItems(rows)
-}
-
 // ItemWithState is an item plus the user's current engagement state on it, for the
 // source's article surfaces (#120): "" = unseen; else surfaced | opened | liked |
 // skipped | saved | dismissed. The displayed status (unread / presented / read /
@@ -993,7 +980,6 @@ func candidateCols() string {
 	                FROM items i2 WHERE i2.source_id = s.id
 	                AND i2.published_at >= datetime('now', ?)) AS win_span,
 	             COALESCE((SELECT f.half_life_days FROM interests f WHERE f.id = s.interest_id), 0) AS interest_half_life,
-	             COALESCE((SELECT f.diversity FROM interests f WHERE f.id = s.interest_id), 0) AS interest_diversity,
 	             COALESCE((SELECT f.archive_after_days FROM interests f WHERE f.id = s.interest_id), 0) AS interest_archive_after`
 }
 
@@ -1039,18 +1025,16 @@ func scanCandidates(rows *sql.Rows, windowDays int) ([]Candidate, error) {
 		var pub, fetched string
 		var winCount int
 		var winSpan, halfLife float64
-		var diversity int
 		if err := rows.Scan(&c.ID, &c.SourceID, &c.URL, &c.Title, &c.Summary, &c.Content, &c.ContentSource, &c.Author, &c.ThumbnailURL,
 			&c.MediaType, &c.DurationSec, &pub, &fetched,
 			&c.SourceTitle, &c.SourceWeight, &c.PerSessionCap, &c.SourceHalfLifeDays, &c.SourceArchiveAfterDays, &c.SourceArchiveKeywords,
-			&winCount, &winSpan, &halfLife, &diversity, &c.InterestArchiveAfterDays); err != nil {
+			&winCount, &winSpan, &halfLife, &c.InterestArchiveAfterDays); err != nil {
 			return nil, err
 		}
 		c.PublishedAt = parseTime(pub)
 		c.FetchedAt = parseTime(fetched)
 		c.SourceCadence = cadencePerDay(winCount, winSpan, windowDays)
 		c.InterestHalfLifeDays = halfLife
-		c.InterestDiversity = diversity
 		out = append(out, c)
 	}
 	return out, rows.Err()
@@ -1141,24 +1125,6 @@ func (db *DB) SourceIDsForInterests(ctx context.Context, userID int64, slugs []s
 		out = append(out, id)
 	}
 	return out, rows.Err()
-}
-
-func (db *DB) ItemsByIDs(ctx context.Context, ids []int64) ([]Item, error) {
-	if len(ids) == 0 {
-		return nil, nil
-	}
-	q := `SELECT id, source_id, url, title, summary, content, content_source, author, thumbnail_url, media_type, duration_sec, published_at, fetched_at
-	      FROM items WHERE id IN (` + placeholders(len(ids)) + `)`
-	args := make([]any, len(ids))
-	for i, id := range ids {
-		args[i] = id
-	}
-	rows, err := db.sql.QueryContext(ctx, q, args...)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	return scanItems(rows)
 }
 
 // GetItem returns a single item scoped to the owning user (via its source), or
@@ -1336,7 +1302,7 @@ func (db *DB) SourceStatsAll(ctx context.Context, userID int64) (map[int64]Sourc
 	// Effective window in days for a row (-1 = evergreen). Mirrors session.resolveArchiveAfter.
 	effWin := fmt.Sprintf(
 		`CASE WHEN s.archive_after_days != 0 THEN s.archive_after_days WHEN fi.archive_after_days != 0 THEN fi.archive_after_days ELSE %d END`,
-		globalArchiveWindowDays)
+		GlobalArchiveAfterDays)
 	rows, err := db.sql.QueryContext(ctx,
 		`SELECT i.source_id,
 		        COUNT(*) AS total,
@@ -1386,11 +1352,12 @@ func (db *DB) SourceStatsAll(ctx context.Context, userID int64) (map[int64]Sourc
 	return out, rows.Err()
 }
 
-// globalArchiveWindowDays mirrors session.globalArchiveAfterDays for the on-deck
-// headline figure (the store can't import session).
-const globalArchiveWindowDays = 21
+// GlobalArchiveAfterDays is the default Archive-After eligibility window (days) when
+// neither a source nor its interest sets one. Single source of truth: the session
+// allocator resolves the same source>interest>global chain in Go and references
+// this const, and SourceStatsAll resolves it in SQL - they must not diverge.
+const GlobalArchiveAfterDays = 21
 
-func round1(f float64) float64  { return math.Round(f*10) / 10 }
 func round2f(f float64) float64 { return math.Round(f*100) / 100 }
 func round3(f float64) float64  { return math.Round(f*1000) / 1000 }
 

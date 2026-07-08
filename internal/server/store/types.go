@@ -194,21 +194,14 @@ type Candidate struct {
 	// computed from accumulated history. Informational (shown in the breakdown);
 	// its RANK among the user's sources - not its absolute value - drives rarity.
 	SourceCadence float64
-	// RarityBoost is the source's population-relative rarity multiplier (#110),
-	// in [1, 1+rareBoostMax]. The store ranks every followed/trial source's
-	// cadence and hands the boost down here, so the ranker never re-derives it.
-	// 0 means "unset" and the ranker treats it as 1 (no boost).
-	RarityBoost float64
 	// SourceHalfLifeDays is the source's own freshness half-life override (#76),
 	// resolved by the store. 0 = inherit; it takes precedence over the interest
-	// half-life in the ranker (source override > interest > global).
+	// half-life in the freshness score (source override > interest > global).
 	SourceHalfLifeDays float64
-	// InterestHalfLifeDays / InterestDiversity are the item's interest ranker overrides (#17),
-	// resolved from the source's one interest (#86). 0 means "use the global default"
-	// (freshness half-life) / "use the source's own per-session cap".
-	// DEPRECATED by session engine v2 (#115): the allocator no longer reads these.
+	// InterestHalfLifeDays is the item's interest freshness-half-life override (#17),
+	// resolved from the source's one interest (#86). 0 = use the global default. Read
+	// by the freshness score (halfLifeOf); Archive-After governs eligibility separately.
 	InterestHalfLifeDays float64
-	InterestDiversity    int
 	// Archive After (session engine v2, #115): eligibility expiration window in
 	// days. Source override > interest default > global. 0 = inherit up the chain;
 	// -1 = evergreen (never archive); N = archive articles older than N days.

@@ -18,8 +18,8 @@ func acand(sourceID int64, repr float64, ageDays float64, srcArchive, intArchive
 
 func TestResolveArchiveAfter(t *testing.T) {
 	now := time.Now()
-	if got := resolveArchiveAfter(acand(1, 1, 0, 0, 0, now)); got != globalArchiveAfterDays {
-		t.Fatalf("no override should resolve to global %d, got %d", globalArchiveAfterDays, got)
+	if got := resolveArchiveAfter(acand(1, 1, 0, 0, 0, now)); got != store.GlobalArchiveAfterDays {
+		t.Fatalf("no override should resolve to global %d, got %d", store.GlobalArchiveAfterDays, got)
 	}
 	if got := resolveArchiveAfter(acand(1, 1, 0, 0, 7, now)); got != 7 {
 		t.Fatalf("interest default should apply, got %d", got)

@@ -65,13 +65,11 @@ func TestCandidatesResolveOneFeedOverrides(t *testing.T) {
 		got[c.SourceID] = c
 	}
 
-	if c := got[member]; c.InterestHalfLifeDays != hl || c.InterestDiversity != div {
-		t.Fatalf("interest member should resolve its one interest (hl=%v div=%d), got hl=%v div=%d",
-			hl, div, c.InterestHalfLifeDays, c.InterestDiversity)
+	if c := got[member]; c.InterestHalfLifeDays != hl {
+		t.Fatalf("interest member should resolve its one interest's half-life (hl=%v), got hl=%v", hl, c.InterestHalfLifeDays)
 	}
-	if c := got[loner]; c.InterestHalfLifeDays != 0 || c.InterestDiversity != 0 {
-		t.Fatalf("interestless source should fall back to global defaults, got hl=%v div=%d",
-			c.InterestHalfLifeDays, c.InterestDiversity)
+	if c := got[loner]; c.InterestHalfLifeDays != 0 {
+		t.Fatalf("interestless source should fall back to the global half-life default, got hl=%v", c.InterestHalfLifeDays)
 	}
 }
 

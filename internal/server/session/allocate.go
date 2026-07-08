@@ -18,13 +18,10 @@ import (
 // never drowns a low-volume one and a session is a relaxing, representative
 // sample rather than a backlog to clear.
 
-const (
-	// globalArchiveAfterDays is the default eligibility window when neither the
-	// source nor its interest sets one.
-	globalArchiveAfterDays = 21
-	// evergreen marks "never archive" (Archive After = Never).
-	evergreen = -1
-)
+// evergreen marks "never archive" (Archive After = Never). The global default
+// window is store.GlobalArchiveAfterDays - single-sourced there because the store's
+// on-deck stat resolves the same chain in SQL and must not drift.
+const evergreen = -1
 
 // resolveArchiveAfter returns the effective Archive-After window in days for a
 // candidate: source override > interest default > global. A non-zero value at
@@ -36,7 +33,7 @@ func resolveArchiveAfter(c store.Candidate) int {
 	if c.InterestArchiveAfterDays != 0 {
 		return c.InterestArchiveAfterDays
 	}
-	return globalArchiveAfterDays
+	return store.GlobalArchiveAfterDays
 }
 
 // eligible reports whether a candidate can appear in a session: within its

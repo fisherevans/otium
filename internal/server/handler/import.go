@@ -87,7 +87,9 @@ func (h *Handler) CommitImport(w http.ResponseWriter, r *http.Request) {
 				fid = f.ID
 				interestIDs[c.Category] = fid
 			}
-			_ = h.db.AssignSourceInterest(r.Context(), id, fid)
+			if err := h.db.AssignSourceInterest(r.Context(), id, fid); err != nil {
+				h.log.Warn("import: source->interest assign failed", "source", id, "interest", fid, "err", err)
+			}
 			continue
 		}
 		// Auto-tag untagged YouTube sources into the Videos interest (#53) so future
@@ -99,7 +101,9 @@ func (h *Handler) CommitImport(w http.ResponseWriter, r *http.Request) {
 				h.log.Warn("import: videos interest create failed", "err", err)
 				continue
 			}
-			_ = h.db.AssignSourceInterest(r.Context(), id, f.ID)
+			if err := h.db.AssignSourceInterest(r.Context(), id, f.ID); err != nil {
+				h.log.Warn("import: youtube source->videos assign failed", "source", id, "err", err)
+			}
 		}
 	}
 
