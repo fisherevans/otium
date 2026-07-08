@@ -146,7 +146,7 @@ func (db *DB) SetMixInterests(ctx context.Context, userID, mixID int64, interest
 // ordered like ListInterests. Scoped to the user.
 func (db *DB) MixInterests(ctx context.Context, userID, mixID int64) ([]Interest, error) {
 	rows, err := db.sql.QueryContext(ctx,
-		`SELECT f.id, f.name, f.slug, f.color, f.icon, f.half_life_days, f.diversity, f.sort, f.created_at,
+		`SELECT f.id, f.name, f.slug, f.color, f.icon, f.half_life_days, f.sort, f.created_at,
 		        (SELECT COUNT(*) FROM sources s WHERE s.interest_id = f.id) AS source_count
 		 FROM mix_interests gf JOIN interests f ON f.id = gf.interest_id
 		 WHERE gf.mix_id = ? AND f.user_id = ?
@@ -159,7 +159,7 @@ func (db *DB) MixInterests(ctx context.Context, userID, mixID int64) ([]Interest
 	for rows.Next() {
 		var f Interest
 		var created string
-		if err := rows.Scan(&f.ID, &f.Name, &f.Slug, &f.Color, &f.Icon, &f.HalfLifeDays, &f.Diversity, &f.Sort, &created, &f.SourceCount); err != nil {
+		if err := rows.Scan(&f.ID, &f.Name, &f.Slug, &f.Color, &f.Icon, &f.HalfLifeDays, &f.Sort, &created, &f.SourceCount); err != nil {
 			return nil, err
 		}
 		f.CreatedAt = parseTime(created)

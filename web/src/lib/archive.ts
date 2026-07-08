@@ -5,8 +5,6 @@
 // archive). One place so the interest page, the source page, and their modals all
 // speak the same options and labels.
 
-export type ArchiveScope = "interest" | "source";
-
 // The quick preset windows, longest-lived last (#120). `0` (inherit) and `-1`
 // (none/evergreen) are NOT listed here: inherit is added per-scope by the picker,
 // and none lives under Custom. Anything off this list is a Custom value (N days).
@@ -44,28 +42,7 @@ export function decomposeArchive(days: number): { n: number; unit: string } {
   return { n: Math.max(1, days), unit: "day" };
 }
 
-// The plain-English label for a stored value. `inherit` (0) reads differently
-// depending on scope: an interest with no override follows the global default; a
-// source with no override follows its interest.
-export function archiveLabel(days: number | undefined, scope: ArchiveScope): string {
-  const v = days ?? 0;
-  if (v === 0) return scope === "interest" ? "the global default" : "its interest's default";
-  if (v === -1) return "never archived";
-  const preset = ARCHIVE_PRESETS.find((p) => p.days === v);
-  if (preset) return preset.label;
-  return `${v} days`;
-}
-
-// The short form for a chip/badge (no scope framing) - "1 week", "Never", "Default".
-export function archiveShort(days: number | undefined): string {
-  const v = days ?? 0;
-  if (v === 0) return "Default";
-  if (v === -1) return "Never";
-  const preset = ARCHIVE_PRESETS.find((p) => p.days === v);
-  return preset ? preset.label : `${v}d`;
-}
-
-// The global fallback window (days). Mirrors the backend's globalArchiveWindowDays.
+// The global fallback window (days). Mirrors the backend's GlobalArchiveAfterDays.
 export const GLOBAL_ARCHIVE_DAYS = 21;
 
 // archiveValue is the plain value phrase for a concrete window - "3 weeks", "never",

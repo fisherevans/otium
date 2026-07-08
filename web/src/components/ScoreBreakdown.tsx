@@ -1,16 +1,11 @@
-import type { PointerEvent as ReactPointerEvent } from "react";
 import { type ScoreBreakdown, type Selected } from "@/api/client";
 import { BottomSheet } from "./BottomSheet";
 
-// Score transparency (#18/#40). Two read-only surfaces that make the card's
-// one-line reason legible as the actual ranker math:
-//   - ScoreCue: a quiet hairline strength meter on the card, sized to the item's
-//     rank score relative to the session's strongest. Tap to open the breakdown.
-//   - ScoreBreakdownSheet: the per-factor decomposition - each multiplicative
-//     contribution the ranker used, as a calm row with a plain-language line,
-//     ending on the net effective score.
-// Neither emits an engagement event: viewing why an item ranked is orientation,
-// not a signal (explicit-signals-only, EXPERIENCE.md principle 3).
+// Score transparency (#18/#40). ScoreBreakdownSheet is the per-factor decomposition
+// - each multiplicative contribution the ranker used, as a calm row with a
+// plain-language line, ending on the net effective score. It emits no engagement
+// event: viewing why an item ranked is orientation, not a signal
+// (explicit-signals-only, EXPERIENCE.md principle 3).
 
 const r2 = (n: number) => Math.round(n * 100) / 100;
 const mult = (n: number) => `×${r2(n)}`;
@@ -93,30 +88,6 @@ function factorsOf(b: ScoreBreakdown): Factor[] {
       line: `Published ${ageLabel(b.age_days)} → ${freshWord(b.freshness)}`,
     },
   ];
-}
-
-// ScoreCue is the quiet on-card strength indicator: a hairline meter filled to the
-// item's rank score relative to the session's strongest item. maxScore is the top
-// score in the loaded queue (the metric items were actually ranked by), so the
-// cue honestly answers "how strongly did this rank." Tap opens the breakdown.
-export function ScoreCue({ sel, maxScore, onOpen }: { sel: Selected; maxScore: number; onOpen: () => void }) {
-  const strength = maxScore > 0 ? Math.max(0.06, Math.min(1, sel.score / maxScore)) : 0;
-  return (
-    <button
-      className="score-cue"
-      onClick={(e) => {
-        e.stopPropagation();
-        onOpen();
-      }}
-      onPointerDown={(e: ReactPointerEvent) => e.stopPropagation()}
-      aria-label="Why this item? Score breakdown"
-      title="Why this item?"
-    >
-      <span className="score-cue-track">
-        <span className="score-cue-fill" style={{ width: `${strength * 100}%` }} />
-      </span>
-    </button>
-  );
 }
 
 export function ScoreBreakdownSheet({ sel, open, onClose }: { sel: Selected | null; open: boolean; onClose: () => void }) {

@@ -55,10 +55,10 @@ type Interest struct {
 	Slug   string `json:"slug"`
 	Color  string `json:"color"`
 	Icon   string `json:"icon"` // flat glyph key; '' = unset (render color swatch)
-	// Per-interest ranker overrides (#17). HalfLifeDays 0 = use the global freshness
-	// half-life; Diversity 0 = use each source's own per-session cap.
+	// Per-interest freshness override (#17). HalfLifeDays 0 = use the global freshness
+	// half-life. (A per-interest "diversity" cap existed pre-engine-v2; the allocator
+	// no longer reads it, so it was removed - the interests.diversity column is inert.)
 	HalfLifeDays float64 `json:"half_life_days"`
-	Diversity    int     `json:"diversity"`
 	// Archive After default for this interest's sources (#115): 0 = global default,
 	// -1 = evergreen, N = days. A source's own archive_after_days overrides it.
 	ArchiveAfterDays int       `json:"archive_after_days"`

@@ -16,7 +16,6 @@ export interface Interest {
   color: string;
   icon: string; // flat glyph key (see lib/feedIcons); "" = unset
   half_life_days: number; // per-interest freshness half-life in days; 0 = global default (#17)
-  diversity: number; // per-session per-source cap for this interest's sources; 0 = use source cap (#17)
   // Default archival window for this interest's sources (#115): 0 = inherit the
   // global default, -1 = evergreen (never archive), N = archive items older than N
   // days. Not returned by the list endpoint yet, so treat absent as 0 (inherit).
@@ -179,11 +178,6 @@ export interface SessionResult {
   target_low_min: number;
   target_high_min: number;
   pool_size: number;
-}
-
-export interface BuildResponse {
-  session_id: string;
-  result: SessionResult;
 }
 
 // --- durable sessions (#67 + #69) ---
@@ -428,7 +422,6 @@ export const api = {
       color?: string;
       icon?: string;
       half_life_days?: number;
-      diversity?: number;
       archive_after_days?: number; // #115: 0 inherit-global, -1 evergreen, N days
     },
   ) => req<{ ok: boolean }>("PATCH", `/interests/${id}`, patch),

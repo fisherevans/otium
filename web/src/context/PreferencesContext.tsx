@@ -213,4 +213,3 @@ export function PreferencesProvider({ children }: { children: ReactNode }) {
 }
 
 export const usePreferences = () => useContext(Ctx);
-export const DEFAULT_PREFERENCES = DEFAULTS;

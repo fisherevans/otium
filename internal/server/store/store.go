@@ -365,7 +365,7 @@ func (db *DB) UpsertUserByUsername(ctx context.Context, username, email string) 
 
 func (db *DB) ListInterests(ctx context.Context, userID int64) ([]Interest, error) {
 	rows, err := db.sql.QueryContext(ctx,
-		`SELECT f.id, f.name, f.slug, f.color, f.icon, f.half_life_days, f.diversity, f.archive_after_days, f.sort, f.created_at,
+		`SELECT f.id, f.name, f.slug, f.color, f.icon, f.half_life_days, f.archive_after_days, f.sort, f.created_at,
 		        (SELECT COUNT(*) FROM sources s WHERE s.interest_id = f.id) AS source_count
 		 FROM interests f WHERE f.user_id = ? ORDER BY f.sort, f.name`, userID)
 	if err != nil {
@@ -376,7 +376,7 @@ func (db *DB) ListInterests(ctx context.Context, userID int64) ([]Interest, erro
 	for rows.Next() {
 		var f Interest
 		var created string
-		if err := rows.Scan(&f.ID, &f.Name, &f.Slug, &f.Color, &f.Icon, &f.HalfLifeDays, &f.Diversity, &f.ArchiveAfterDays, &f.Sort, &created, &f.SourceCount); err != nil {
+		if err := rows.Scan(&f.ID, &f.Name, &f.Slug, &f.Color, &f.Icon, &f.HalfLifeDays, &f.ArchiveAfterDays, &f.Sort, &created, &f.SourceCount); err != nil {
 			return nil, err
 		}
 		f.CreatedAt = parseTime(created)
@@ -542,10 +542,10 @@ func (db *DB) SetFastScrollCheckin(ctx context.Context, userID int64, on bool) e
 	return db.kvSet(ctx, userID, settingFastScrollCheckin, v)
 }
 
-// UpdateInterest patches a interest's presentation fields (name, color, icon) and the
-// per-interest ranker overrides (half-life, diversity). Only non-nil fields are
-// applied. Scoped to the owning user.
-func (db *DB) UpdateInterest(ctx context.Context, userID, id int64, name, color, icon *string, halfLifeDays *float64, diversity *int, archiveAfterDays *int) error {
+// UpdateInterest patches a interest's presentation fields (name, color, icon), the
+// per-interest freshness half-life override, and the Archive-After default. Only
+// non-nil fields are applied. Scoped to the owning user.
+func (db *DB) UpdateInterest(ctx context.Context, userID, id int64, name, color, icon *string, halfLifeDays *float64, archiveAfterDays *int) error {
 	var sets []string
 	var args []any
 	if name != nil {
@@ -563,10 +563,6 @@ func (db *DB) UpdateInterest(ctx context.Context, userID, id int64, name, color,
 	if halfLifeDays != nil {
 		sets = append(sets, "half_life_days = ?")
 		args = append(args, *halfLifeDays)
-	}
-	if diversity != nil {
-		sets = append(sets, "diversity = ?")
-		args = append(args, *diversity)
 	}
 	// Archive After default for this interest's sources (#115).
 	if archiveAfterDays != nil {

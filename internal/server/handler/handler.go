@@ -94,7 +94,6 @@ func (h *Handler) UpdateInterest(w http.ResponseWriter, r *http.Request) {
 		Color            *string  `json:"color"`
 		Icon             *string  `json:"icon"`
 		HalfLifeDays     *float64 `json:"half_life_days"`
-		Diversity        *int     `json:"diversity"`
 		ArchiveAfterDays *int     `json:"archive_after_days"` // #115: 0 inherit-global, -1 evergreen, N days
 	}
 	if !decode(w, r, &body) {
@@ -119,16 +118,7 @@ func (h *Handler) UpdateInterest(w http.ResponseWriter, r *http.Request) {
 		}
 		body.HalfLifeDays = &v
 	}
-	if body.Diversity != nil {
-		v := *body.Diversity
-		if v < 0 {
-			v = 0
-		} else if v > 10 {
-			v = 10
-		}
-		body.Diversity = &v
-	}
-	if err := h.db.UpdateInterest(r.Context(), uid, id, body.Name, body.Color, body.Icon, body.HalfLifeDays, body.Diversity, body.ArchiveAfterDays); err != nil {
+	if err := h.db.UpdateInterest(r.Context(), uid, id, body.Name, body.Color, body.Icon, body.HalfLifeDays, body.ArchiveAfterDays); err != nil {
 		serverError(w, h.log, "update interest", err)
 		return
 	}

@@ -34,7 +34,7 @@ func setSourceInterestWithHalfLife(t *testing.T, db *DB, ctx context.Context, ui
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := db.UpdateInterest(ctx, uid, f.ID, nil, nil, nil, &halfLife, nil, nil); err != nil {
+	if err := db.UpdateInterest(ctx, uid, f.ID, nil, nil, nil, &halfLife, nil); err != nil {
 		t.Fatal(err)
 	}
 	if err := db.AssignSourceInterest(ctx, sid, f.ID); err != nil {
