@@ -4,7 +4,7 @@ import { Pencil, Settings, Copy, Check, Mail, Ban, EyeOff } from "lucide-react";
 import { api, type Interest, type Source, type SourceItem, type SourceStats } from "@/api/client";
 import { bucketOf, BUCKETS, REP_FREQ, REP_HINT, REP_LEVEL, REP_PROSE, REP_LABEL, compareToAverage, type Bucket } from "@/lib/represent";
 import { resolveSourceArchive, itemEligible } from "@/lib/archive";
-import { sourceInsight, type InsightKind } from "@/lib/stats";
+import { sourceInsight, openRateBands, type InsightKind } from "@/lib/stats";
 import { scaleCadence, cadenceCount } from "@/lib/cadence";
 import { relDate } from "@/lib/format";
 import { Dialog } from "@/components/Dialog";
@@ -100,12 +100,17 @@ export default function SourcePage() {
   const all = Object.values(stats);
   const avg = (sel: (s: SourceStats) => number) => (all.length ? all.reduce((a, s) => a + sel(s), 0) / all.length : 0);
   const avgPerDay = avg((s) => s.per_day);
-  // Compare against the sources you've ACTUALLY read in the window, not the whole
-  // library - otherwise ~90 sources with zero recent activity drag the mean to ~1
-  // and every active source reads as "15x your average". Like-for-like.
+  // Compare against every source PRESENTED in the window (shown_30 > 0), including
+  // ones presented but never opened (a real 0% open rate) - not just the whole
+  // library (which would drag the mean to ~1 with ~90 unread sources).
   const active30 = all.filter((s) => (s.shown_30 ?? 0) > 0);
   const avgShown30 = active30.length ? active30.reduce((a, s) => a + s.shown_30, 0) / active30.length : 0;
-  const avgOpen30 = active30.length ? active30.reduce((a, s) => a + s.opened_30 / s.shown_30, 0) / active30.length : 0;
+  // Volume-weighted (pooled) open rate: sum(opened)/sum(shown), so a source with 1
+  // article shown and 0 opened counts as 1 article, not a full 0% data point that
+  // skews a simple mean of per-source rates.
+  const totalShown30 = active30.reduce((a, s) => a + s.shown_30, 0);
+  const avgOpen30 = totalShown30 ? active30.reduce((a, s) => a + s.opened_30, 0) / totalShown30 : 0;
+  const bands = openRateBands(all);
 
   // Open rate is the whole story (#120): a "presented" item is one actually scrolled
   // into view; everything you didn't open (skipped or left on) is simply not-opened.
@@ -113,7 +118,7 @@ export default function SourcePage() {
   const openPct30 = shown30 ? (st?.opened_30 ?? 0) / shown30 : 0;
   // The one threshold-crossing insight for this source (matches the pill shown on
   // the interest page); StatIcon marks the stat line the pill was derived from.
-  const insight = sourceInsight(st);
+  const insight = sourceInsight(st, bands);
   const resolvedSince = (st?.shown_since ?? 0) + (st?.missed_since ?? 0);
 
   function eligible(it: SourceItem): boolean {
@@ -140,7 +145,8 @@ export default function SourcePage() {
   // a user seeing "92% invisible" on the interest page finds the matching line here.
   function statIcon(kind: InsightKind) {
     if (!insight || insight.kind !== kind) return null;
-    const I = kind === "open" ? Mail : kind === "skip" ? Ban : EyeOff;
+    // open with a "down" tone = you open little of it - a ban glyph reads truer.
+    const I = kind === "invisible" ? EyeOff : insight.tone === "down" ? Ban : Mail;
     return (
       <span className={`src-stat-ico ins-${kind}`} aria-hidden>
         <I size={14} strokeWidth={1.9} />

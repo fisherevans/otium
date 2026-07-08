@@ -5,7 +5,7 @@ import { api, type Interest, type Mix, type Source, type SourceStats } from "@/a
 import { FEED_ICONS, feedIcon } from "@/lib/feedIcons";
 import { archiveValue, resolveInterestArchive } from "@/lib/archive";
 import { cadencePhrase } from "@/lib/cadence";
-import { engagementBadge, type InsightKind } from "@/lib/stats";
+import { engagementBadge, openRateBands } from "@/lib/stats";
 import { ArchiveChoice } from "@/components/ArchiveChoice";
 import { bucketOf, REP_LEVEL, REP_LABEL } from "@/lib/represent";
 import { Dialog } from "@/components/Dialog";
@@ -29,9 +29,9 @@ function archivalSuffix(srcDays: number): string {
   if (srcDays === -1) return "EVERGREEN";
   return `${archiveValue(srcDays).toUpperCase()} ARCHIVAL`;
 }
-function BadgeIcon({ kind }: { kind: InsightKind }) {
-  if (kind === "open") return <Mail size={12} strokeWidth={1.9} aria-hidden />;
-  if (kind === "skip") return <Ban size={12} strokeWidth={1.9} aria-hidden />;
+function BadgeIcon({ tone }: { tone: "up" | "down" | "mute" }) {
+  if (tone === "up") return <Mail size={12} strokeWidth={1.9} aria-hidden />;
+  if (tone === "down") return <Ban size={12} strokeWidth={1.9} aria-hidden />;
   return <EyeOff size={12} strokeWidth={1.9} aria-hidden />;
 }
 
@@ -101,6 +101,10 @@ export default function InterestPage() {
       .filter((s) => s.interest_slug === slug)
       .sort((a, b) => b.weight - a.weight || a.title.localeCompare(b.title));
   }, [sources, slug]);
+
+  // Open-rate percentile bands across the whole library (stats holds every source),
+  // so a source's pill reflects where it ranks among all of them, not this interest.
+  const bands = useMemo(() => openRateBands(Object.values(stats)), [stats]);
 
   async function pickArchive(days: number) {
     if (!interest) return;
@@ -206,7 +210,7 @@ export default function InterestPage() {
         <div className="isrc-list">
           {interestSources.map((s) => {
             const st = stats[s.id];
-            const badge = engagementBadge(st);
+            const badge = engagementBadge(st, bands);
             const b = bucketOf(s.weight);
             const pd = st?.per_day ?? 0;
             const onDeck = st?.on_deck ?? 0;
@@ -217,7 +221,7 @@ export default function InterestPage() {
                   <span className="isrc-name">{s.title}</span>
                   {badge && (
                     <span className={`isrc-badge tone-${badge.tone}`}>
-                      <BadgeIcon kind={badge.kind} /> {badge.text}
+                      <BadgeIcon tone={badge.tone} /> {badge.text}
                     </span>
                   )}
                 </div>
