@@ -4,6 +4,7 @@
 // its interest, the interest to the global default) and -1 means "evergreen" (never
 // archive). One place so the interest page, the source page, and their modals all
 // speak the same options and labels.
+import { ageDays } from "./format";
 
 // The quick preset windows, longest-lived last (#120). `0` (inherit) and `-1`
 // (none/evergreen) are NOT listed here: inherit is added per-scope by the picker,
@@ -44,6 +45,17 @@ export function decomposeArchive(days: number): { n: number; unit: string } {
 
 // The global fallback window (days). Mirrors the backend's GlobalArchiveAfterDays.
 export const GLOBAL_ARCHIVE_DAYS = 21;
+
+// itemEligible mirrors the backend allocator's eligible(): an item can appear in a
+// session unless a source auto-archive keyword matches, or it's aged past the
+// resolved window (evergreen, -1, always passes). haystack is the text (title +
+// summary) matched against keywords. resolvedDays comes from resolveSourceArchive.
+export function itemEligible(publishedAt: string | undefined, resolvedDays: number, keywords: string[], haystack: string): boolean {
+  const hay = haystack.toLowerCase();
+  if (keywords.some((k) => k && hay.includes(k.toLowerCase()))) return false;
+  if (resolvedDays === -1) return true;
+  return ageDays(publishedAt) <= resolvedDays;
+}
 
 // archiveValue is the plain value phrase for a concrete window - "3 weeks", "never",
 // "24 hours", "2 months". Unlike archiveLabel it never says "inherit"; it's the

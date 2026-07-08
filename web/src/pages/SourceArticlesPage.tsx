@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { api, type Interest, type Source, type SourceItem } from "@/api/client";
-import { relTime } from "@/lib/format";
+import { relTime, fmtDateLong, ageDays } from "@/lib/format";
+import { freshness, FRESHNESS_HALF_LIFE_DAYS } from "@/lib/freshness";
+import { resolveSourceArchive, itemEligible } from "@/lib/archive";
 import { Dialog } from "@/components/Dialog";
 import { Reader } from "@/components/Reader";
 import { Player } from "@/components/Player";
@@ -11,9 +13,6 @@ import { Player } from "@/components/Player";
 // (seen, or aged/keyword-archived). Each row shows title, the mockup's
 // "{relative} · {date} · {duration}" meta, an age-based explore score with a bar,
 // and its engagement status badges. Opening an item is orientation only.
-const GLOBAL_HALF_LIFE = 21;
-const GLOBAL_ARCHIVE = 21;
-
 function contentKind(it: SourceItem): "video" | "audio" | "read" {
   if (it.media_type === "short" || it.media_type === "long" || it.media_type === "live") return "video";
   if (it.media_type === "audio") return "audio";
@@ -28,24 +27,6 @@ function durType(it: SourceItem): string {
   if (k === "audio") return it.duration_sec > 0 ? `${Math.round(it.duration_sec / 60)} min audio` : "audio";
   return it.content_source === "external" || !it.content ? "linked article" : "article";
 }
-function longDate(iso?: string): string {
-  if (!iso) return "";
-  const d = new Date(iso);
-  if (Number.isNaN(d.getTime())) return "";
-  return d.toLocaleDateString(undefined, { month: "long", day: "numeric", year: "numeric" });
-}
-function ageDays(iso?: string): number {
-  if (!iso) return Infinity;
-  const d = new Date(iso).getTime();
-  if (Number.isNaN(d)) return Infinity;
-  return (Date.now() - d) / 86_400_000;
-}
-function freshness(iso?: string): number {
-  const a = ageDays(iso);
-  if (!Number.isFinite(a)) return 0;
-  return Math.pow(0.5, a / GLOBAL_HALF_LIFE);
-}
-
 type Filter = "none" | "unread" | "read" | "skipped";
 const FILTERS: { key: Filter; label: string }[] = [
   { key: "none", label: "none" },
@@ -77,15 +58,10 @@ export default function SourceArticlesPage() {
   }, [sourceId]);
 
   const keywords = (source?.archive_keywords ?? "").split(",").map((k) => k.trim().toLowerCase()).filter(Boolean);
-  const srcDays = source?.archive_after_days ?? 0;
-  const intDays = interest?.archive_after_days ?? 0;
-  const resolvedDays = srcDays !== 0 ? srcDays : intDays !== 0 ? intDays : GLOBAL_ARCHIVE;
+  const resolvedDays = resolveSourceArchive(source?.archive_after_days ?? 0, interest?.archive_after_days ?? 0).days;
 
   function eligible(it: SourceItem): boolean {
-    const hay = (it.title + " " + it.summary).toLowerCase();
-    if (keywords.some((k) => hay.includes(k))) return false;
-    if (resolvedDays === -1) return true;
-    return ageDays(it.published_at) <= resolvedDays;
+    return itemEligible(it.published_at, resolvedDays, keywords, `${it.title} ${it.summary}`);
   }
   function badges(it: SourceItem): string[] {
     switch (it.state) {
@@ -133,7 +109,7 @@ export default function SourceArticlesPage() {
           {it.title}
         </button>
         <div className="va-meta">
-          {relTime(it.published_at)} · {longDate(it.published_at)} · {durType(it)}
+          {relTime(it.published_at)} · {fmtDateLong(it.published_at)} · {durType(it)}
         </div>
         <div className="va-scoreline">
           <span className="va-bar" aria-hidden>
@@ -214,7 +190,7 @@ export default function SourceArticlesPage() {
             </p>
             <p className="dlg-copy">
               Right now the score is age-based freshness: published {relTime(explain.published_at)} ({Math.round(ageDays(explain.published_at))} days
-              old), so it decays on a {GLOBAL_HALF_LIFE}-day half-life. Newer articles score higher.
+              old), so it decays on a {FRESHNESS_HALF_LIFE_DAYS}-day half-life. Newer articles score higher.
             </p>
             <p className="caphint">More scoring signals (keywords, topics, quality) are coming - freshness is just the first.</p>
           </>

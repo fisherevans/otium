@@ -3,7 +3,7 @@ import { useNavigate, useParams } from "react-router-dom";
 import { Pencil, Settings, Copy, Check, Mail, Ban, EyeOff } from "lucide-react";
 import { api, type Interest, type Source, type SourceItem, type SourceStats } from "@/api/client";
 import { bucketOf, BUCKETS, WFREQ, WHINT, WLEVEL, type Bucket } from "@/lib/weight";
-import { resolveSourceArchive } from "@/lib/archive";
+import { resolveSourceArchive, itemEligible } from "@/lib/archive";
 import { sourceInsight, type InsightKind } from "@/lib/stats";
 import { scaleCadence, cadenceCount } from "@/lib/cadence";
 import { REP_PROSE, REP_LABEL, compareToAverage } from "@/lib/represent";
@@ -107,11 +107,7 @@ export default function SourcePage() {
   const resolvedSince = (st?.shown_since ?? 0) + (st?.missed_since ?? 0);
 
   function eligible(it: SourceItem): boolean {
-    const hay = (it.title + " " + it.summary).toLowerCase();
-    if (keywords.some((k) => k && hay.includes(k.toLowerCase()))) return false;
-    if (resolvedDays === -1) return true;
-    const ageDays = (Date.now() - new Date(it.published_at).getTime()) / 86400000;
-    return ageDays <= resolvedDays;
+    return itemEligible(it.published_at, resolvedDays, keywords, `${it.title} ${it.summary}`);
   }
   function statusOf(it: SourceItem): { label: string; cls: string } {
     switch (it.state) {

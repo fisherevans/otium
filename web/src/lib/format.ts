@@ -20,6 +20,23 @@ export function fmtDate(iso?: string): string {
   return d.toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" });
 }
 
+// fmtDateLong is fmtDate with a spelled-out month: "July 1, 2026".
+export function fmtDateLong(iso?: string): string {
+  if (!iso) return "";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "";
+  return d.toLocaleDateString(undefined, { month: "long", day: "numeric", year: "numeric" });
+}
+
+// ageDays returns an item's age in days, or Infinity for a missing/unparseable
+// timestamp (so it reads as "infinitely old" - never eligible, zero freshness).
+export function ageDays(iso?: string): number {
+  if (!iso) return Infinity;
+  const t = new Date(iso).getTime();
+  if (Number.isNaN(t)) return Infinity;
+  return (Date.now() - t) / 86_400_000;
+}
+
 // relTime is the prominent relative age shown above the card's hero (#73). It
 // stays human and readable at a glance: minutes/hours while fresh, then
 // "yesterday" / "X days ago", then "X weeks ago" past a week, and once it's past
