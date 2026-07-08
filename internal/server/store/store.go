@@ -144,7 +144,9 @@ func migrate(sdb *sql.DB) error {
 	if err := ensureColumn(sdb, "interests", "half_life_days", `ALTER TABLE interests ADD COLUMN half_life_days REAL NOT NULL DEFAULT 0`); err != nil {
 		return err
 	}
-	if err := ensureColumn(sdb, "interests", "diversity", `ALTER TABLE interests ADD COLUMN diversity INTEGER NOT NULL DEFAULT 0`); err != nil {
+	// #120: the per-interest "diversity" cap is gone (engine v2 never read it, and
+	// its only editor was removed). Drop the now-inert column where it still exists.
+	if err := dropColumnIfExists(sdb, "interests", "diversity"); err != nil {
 		return err
 	}
 	// Archive After (session engine v2, #115): expiration window in days.
@@ -334,6 +336,22 @@ func ensureColumn(sdb *sql.DB, table, column, ddl string) error {
 		return nil
 	}
 	_, err = sdb.ExecContext(context.Background(), ddl)
+	return err
+}
+
+// dropColumnIfExists removes a column that's no longer used. No-op when the table
+// or column is already absent (fresh DBs never had it; re-runs are idempotent).
+// table/column are trusted compile-time constants, not user input.
+func dropColumnIfExists(sdb *sql.DB, table, column string) error {
+	var exists int
+	if err := sdb.QueryRowContext(context.Background(),
+		`SELECT COUNT(*) FROM pragma_table_info(?) WHERE name = ?`, table, column).Scan(&exists); err != nil {
+		return err
+	}
+	if exists == 0 {
+		return nil
+	}
+	_, err := sdb.ExecContext(context.Background(), `ALTER TABLE `+table+` DROP COLUMN `+column)
 	return err
 }
 

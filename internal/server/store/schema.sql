@@ -39,10 +39,6 @@ CREATE TABLE IF NOT EXISTS interests (
     -- freshness half-life for this interest's items, in days; 0 = use the global
     -- default (session.freshnessHalfLifeDays).
     half_life_days REAL NOT NULL DEFAULT 0,
-    -- per-session per-source cap for this interest's sources: 0 = use each source's
-    -- own per_session_cap; N >= 1 caps every source in this interest to N items per
-    -- session (lower N = more sources spread across the session).
-    diversity   INTEGER NOT NULL DEFAULT 0,
     -- Archive After (session engine v2, #115): the default expiration window in
     -- days for this interest's sources. 0 = use the global default; -1 = evergreen
     -- (never archive); N = archive articles older than N days. A source's own

@@ -206,9 +206,10 @@ func TestOpenMigratesLegacyFileInterestID(t *testing.T) {
 	}
 }
 
-// TestMigrateAddsFeedOverridesIdempotent verifies the additive half_life_days /
-// diversity columns migrate onto a pre-existing interests table and survive reruns.
-func TestMigrateAddsFeedOverridesIdempotent(t *testing.T) {
+// TestMigrateDropsDiversity verifies the half_life_days override survives while the
+// retired diversity column is dropped (#120), including the legacy path where an
+// existing DB still carries the column - and that re-running migrate is a no-op.
+func TestMigrateDropsDiversity(t *testing.T) {
 	db, err := Open(":memory:")
 	if err != nil {
 		t.Fatal(err)
@@ -217,8 +218,18 @@ func TestMigrateAddsFeedOverridesIdempotent(t *testing.T) {
 	if !hasColumn(t, db.sql, "interests", "half_life_days") {
 		t.Fatal("fresh schema missing half_life_days")
 	}
-	if !hasColumn(t, db.sql, "interests", "diversity") {
-		t.Fatal("fresh schema missing diversity")
+	if hasColumn(t, db.sql, "interests", "diversity") {
+		t.Fatal("fresh schema should no longer carry diversity")
+	}
+	// Simulate a legacy DB that still has the column, then migrate must drop it.
+	if _, err := db.sql.Exec(`ALTER TABLE interests ADD COLUMN diversity INTEGER NOT NULL DEFAULT 0`); err != nil {
+		t.Fatal(err)
+	}
+	if err := migrate(db.sql); err != nil {
+		t.Fatalf("migrate: %v", err)
+	}
+	if hasColumn(t, db.sql, "interests", "diversity") {
+		t.Fatal("migrate should have dropped diversity")
 	}
 	// Rerunning migrate on the already-migrated DB is a no-op, not an error.
 	if err := migrate(db.sql); err != nil {

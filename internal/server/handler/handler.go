@@ -79,9 +79,9 @@ func (h *Handler) CreateInterest(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusCreated, f)
 }
 
-// UpdateInterest patches a interest's presentation fields (name, color, icon) and its
-// per-interest ranker overrides (half-life, diversity - #17). Used by the library's
-// interest-settings sheet. No engagement signal - pure curation.
+// UpdateInterest patches an interest's presentation fields (name, color, icon), the
+// per-interest freshness half-life override (#17), and the Archive-After default.
+// No engagement signal - pure curation.
 func (h *Handler) UpdateInterest(w http.ResponseWriter, r *http.Request) {
 	uid := userID(r)
 	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
