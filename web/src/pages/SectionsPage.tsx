@@ -1,89 +1,42 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Pencil, Plus, GripVertical } from "lucide-react";
+import { Pencil, Plus, ChevronRight, ArrowRightLeft } from "lucide-react";
 import { api, type Topic, type Section } from "@/api/client";
 import { feedIcon, FEED_ICONS } from "@/lib/feedIcons";
 import { Dialog } from "@/components/Dialog";
 
-// Manage Sections (session engine v2, mockup #2). A section groups topics
-// (many-to-many). Each section is a drop zone listing its member topics as
-// draggable cards; drag an topic from one section to another to move it, or to
-// "Other topics" to drop it out. Add a section + rename/delete happen in dialogs.
-// (HTML5 drag - desktop; a touch fallback is a follow-up.)
-type Zone = number | "other" | null;
-
+// Manage Sections (#131, strict Section>Topic>Source tree). A section groups topics
+// one-to-many. Each section lists its topics; tap a topic to manage it, or use
+// "move" to reassign it to another section. No drag - an explicit Move dialog reads
+// calmer and works on touch. Add a section + rename/delete/icon happen in dialogs.
 export default function SectionsPage() {
   const nav = useNavigate();
   const [sections, setSections] = useState<Section[] | null>(null);
   const [topics, setTopics] = useState<Topic[]>([]);
-  const [members, setMembers] = useState<Map<number, Set<number>>>(new Map());
   const [err, setErr] = useState("");
-
-  const [drag, setDrag] = useState<{ topicId: number; fromSection: number | null } | null>(null);
-  const [over, setOver] = useState<Zone>(null);
 
   const [addOpen, setAddOpen] = useState(false);
   const [newName, setNewName] = useState("");
   const [renameFor, setRenameFor] = useState<Section | null>(null);
   const [renameDraft, setRenameDraft] = useState("");
+  const [moveFor, setMoveFor] = useState<Topic | null>(null);
 
-  async function reload() {
-    try {
-      const ms = await api.sections();
-      setSections(ms);
-      const m = new Map<number, Set<number>>();
-      await Promise.all(
-        ms.map(async (section) => {
-          const b = await api.sectionBrowse(section.id).catch(() => null);
-          m.set(section.id, new Set(b ? b.topics.map((f) => f.id) : []));
-        }),
-      );
-      setMembers(m);
-    } catch (e: any) {
-      setErr(String(e.message ?? e));
-    }
-  }
-  useEffect(() => {
-    reload();
+  function reload() {
+    api.sections().then(setSections).catch((e: any) => setErr(String(e.message ?? e)));
     api.topics().then(setTopics).catch(() => {});
-  }, []);
-
-  const noSection = useMemo(() => {
-    const inSome = new Set<number>();
-    members.forEach((set) => set.forEach((id) => inSome.add(id)));
-    return topics.filter((f) => !inSome.has(f.id));
-  }, [topics, members]);
-
-  function memberTopics(section: Section): Topic[] {
-    const set = members.get(section.id);
-    if (!set) return [];
-    return topics.filter((f) => set.has(f.id));
   }
+  useEffect(reload, []);
 
-  async function drop(zone: Zone) {
-    setOver(null);
-    const d = drag;
-    setDrag(null);
-    if (!d || zone === null) return;
-    const toSection = zone === "other" ? null : zone;
-    if (d.fromSection === toSection) return;
-
-    const next = new Map([...members].map(([k, v]) => [k, new Set(v)] as const));
-    if (d.fromSection !== null) next.get(d.fromSection)?.delete(d.topicId);
-    if (toSection !== null) {
-      if (!next.has(toSection)) next.set(toSection, new Set());
-      next.get(toSection)!.add(d.topicId);
+  // Group topics under their section (strict tree: each topic has exactly one).
+  const bySection = useMemo(() => {
+    const m = new Map<number, Topic[]>();
+    for (const t of topics) {
+      const sid = t.section_id ?? -1;
+      if (!m.has(sid)) m.set(sid, []);
+      m.get(sid)!.push(t);
     }
-    setMembers(next); // optimistic
-
-    const affected = new Set<number>();
-    if (d.fromSection !== null) affected.add(d.fromSection);
-    if (toSection !== null) affected.add(toSection);
-    for (const mid of affected) {
-      await api.setSectionTopics(mid, [...(next.get(mid) ?? [])]).catch(() => {});
-    }
-    api.sections().then(setSections).catch(() => {});
-  }
+    return m;
+  }, [topics]);
 
   async function create() {
     const name = newName.trim();
@@ -114,27 +67,33 @@ export default function SectionsPage() {
     if (!renameFor) return;
     const m = renameFor;
     setRenameFor(null);
+    // The server reassigns this section's topics to Uncategorized before deleting.
     await api.deleteSection(m.id).catch(() => {});
     reload();
   }
+  async function moveTopic(sectionId: number) {
+    if (!moveFor) return;
+    const t = moveFor;
+    setMoveFor(null);
+    await api.moveTopicToSection(t.id, sectionId).catch(() => {});
+    reload();
+  }
 
-  function Card(f: Topic, fromSection: number | null) {
+  function TopicRow(f: Topic) {
     const I = feedIcon(f.icon);
     return (
-      <div
-        className={`section-card ${drag?.topicId === f.id ? "dragging" : ""}`}
-        key={`${fromSection}-${f.id}`}
-        draggable
-        onDragStart={() => setDrag({ topicId: f.id, fromSection })}
-        onDragEnd={() => (setDrag(null), setOver(null))}
-      >
-        <span className="section-card-glyph" aria-hidden>
-          {I ? <I size={18} strokeWidth={1.6} /> : <span className="introw-dot" />}
-        </span>
-        <span className="section-card-name">{f.name}</span>
-        <span className="section-card-grip" aria-hidden>
-          <GripVertical size={16} strokeWidth={1.75} />
-        </span>
+      <div className="sec-topic" key={f.id}>
+        <button className="sec-topic-main" onClick={() => nav(`/topics/${f.slug}`)}>
+          <span className="sec-topic-glyph" aria-hidden>
+            {I ? <I size={18} strokeWidth={1.6} /> : <span className="introw-dot" />}
+          </span>
+          <span className="sec-topic-name">{f.name}</span>
+          <span className="sec-topic-count">{(f.source_count ?? 0) === 1 ? "1 source" : `${f.source_count ?? 0} sources`}</span>
+          <ChevronRight size={16} strokeWidth={1.75} className="sec-topic-chev" aria-hidden />
+        </button>
+        <button className="sec-topic-move" onClick={() => setMoveFor(f)} title="Move to another section">
+          <ArrowRightLeft size={14} strokeWidth={1.75} aria-hidden /> move
+        </button>
       </div>
     );
   }
@@ -150,51 +109,30 @@ export default function SectionsPage() {
           <Plus size={15} strokeWidth={1.9} aria-hidden /> Add section
         </button>
       </div>
-      <p className="int-prose">Drag an topic between sections to move it. An topic can live in several sections.</p>
+      <p className="int-prose">Sections group your topics. A topic belongs to one section - tap it to manage it, or move it to another section.</p>
       {err && <p className="err">{err}</p>}
 
       {sections === null ? (
         <p className="lib2-subtitle">Loading…</p>
       ) : (
-        <>
-          {sections.map((section) => (
-            <div
-              className={`section-zone ${over === section.id ? "over" : ""}`}
-              key={section.id}
-              onDragOver={(e) => (e.preventDefault(), setOver(section.id))}
-              onDragLeave={() => setOver((o) => (o === section.id ? null : o))}
-              onDrop={() => drop(section.id)}
-            >
+        sections.map((section) => {
+          const list = bySection.get(section.id) ?? [];
+          return (
+            <div className="section-zone" key={section.id}>
               <div className="section-zone-head">
                 <span className="section-zone-name">{section.name}</span>
                 <button className="mgmt-edit" onClick={() => (setRenameDraft(section.name), setRenameFor(section))}>
-                  <Pencil size={13} strokeWidth={1.9} aria-hidden /> rename
+                  <Pencil size={13} strokeWidth={1.9} aria-hidden /> edit
                 </button>
               </div>
-              {memberTopics(section).length === 0 ? (
-                <p className="section-empty">No topics yet - drag one here.</p>
+              {list.length === 0 ? (
+                <p className="section-empty">No topics yet - move one here or add a topic from the library.</p>
               ) : (
-                <div className="section-cards">{memberTopics(section).map((f) => Card(f, section.id))}</div>
+                <div className="sec-topics">{list.map(TopicRow)}</div>
               )}
             </div>
-          ))}
-
-          <div
-            className={`section-zone ${over === "other" ? "over" : ""}`}
-            onDragOver={(e) => (e.preventDefault(), setOver("other"))}
-            onDragLeave={() => setOver((o) => (o === "other" ? null : o))}
-            onDrop={() => drop("other")}
-          >
-            <div className="section-zone-head">
-              <span className="mgmt-seclabel">Other topics</span>
-            </div>
-            {noSection.length === 0 ? (
-              <p className="section-empty">Every topic is in a section.</p>
-            ) : (
-              <div className="section-cards">{noSection.map((f) => Card(f, null))}</div>
-            )}
-          </div>
-        </>
+          );
+        })
       )}
 
       <Dialog open={addOpen} onClose={() => setAddOpen(false)} kicker="Add section">
@@ -206,7 +144,7 @@ export default function SectionsPage() {
         </div>
       </Dialog>
 
-      <Dialog open={renameFor !== null} onClose={() => setRenameFor(null)} kicker="Rename section">
+      <Dialog open={renameFor !== null} onClose={() => setRenameFor(null)} kicker="Edit section">
         <div className="dlg-sub">Name</div>
         <input className="field" value={renameDraft} autoFocus onChange={(e) => setRenameDraft(e.target.value)} onKeyDown={(e) => e.key === "Enter" && saveRename()} />
         <div className="dlg-sub">Icon</div>
@@ -236,6 +174,24 @@ export default function SectionsPage() {
           <button className="btn" onClick={saveRename} disabled={!renameDraft.trim()}>
             Save
           </button>
+        </div>
+      </Dialog>
+
+      <Dialog open={moveFor !== null} onClose={() => setMoveFor(null)} kicker={moveFor ? `Move "${moveFor.name}"` : "Move topic"}>
+        <div className="dlg-sub">Move to section</div>
+        <div className="dlg-opts">
+          {(sections ?? []).map((s) => (
+            <button
+              key={s.id}
+              className={`dlg-opt ${moveFor?.section_id === s.id ? "on" : ""}`}
+              onClick={() => moveTopic(s.id)}
+              disabled={moveFor?.section_id === s.id}
+            >
+              <span className="dlg-radio" aria-hidden />
+              <span className="dlg-name">{s.name}</span>
+              {moveFor?.section_id === s.id && <span className="dlg-sub">current</span>}
+            </button>
+          ))}
         </div>
       </Dialog>
     </div>

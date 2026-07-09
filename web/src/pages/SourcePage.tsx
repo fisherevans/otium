@@ -370,7 +370,24 @@ export default function SourcePage() {
         <span className="mgmt-seclabel">Topic</span>
       </div>
       <p className="fc-line">
-        This source is in <b>{topic?.name ?? "no topic"}</b>.{" "}
+        Appears in{" "}
+        {topic ? (
+          <button className="mgmt-inline" onClick={() => nav(`/topics/${topic.slug}`)}>
+            {topic.name}
+          </button>
+        ) : (
+          <b>no topic</b>
+        )}
+        {topic?.section_name && (
+          <>
+            , part of the{" "}
+            <button className="mgmt-inline" onClick={() => nav(`/sections`)}>
+              {topic.section_name}
+            </button>{" "}
+            section
+          </>
+        )}
+        .{" "}
         <button className="mgmt-inline" onClick={() => setTopicOpen(true)}>
           change
         </button>

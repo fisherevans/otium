@@ -3993,3 +3993,25 @@ button.id-source.lead {
 .rep-seg:last-child { border-right: none; }
 .rep-seg.on { background: var(--ink); color: var(--paper); font-weight: 700; }
 .rep-picker-hint { margin-top: 6px; font-size: 12px; color: var(--ink-mute); font-style: italic; }
+
+/* #131: sections management - topic rows under each section (no drag; tap to manage,
+   "move" to reassign). */
+.sec-topics { display: flex; flex-direction: column; }
+.sec-topic { display: flex; align-items: stretch; border-bottom: 1px solid var(--rule); }
+.sec-topic:last-child { border-bottom: none; }
+.sec-topic-main {
+  flex: 1; display: flex; align-items: center; gap: 10px;
+  padding: 12px 4px; background: none; border: none; text-align: left; cursor: pointer;
+  font-family: var(--serif); color: var(--ink);
+}
+.sec-topic-glyph { display: inline-flex; width: 20px; justify-content: center; color: var(--ink); }
+.sec-topic-name { flex: 1; font-size: 16px; }
+.sec-topic-count { font-size: 12px; color: var(--ink-mute); font-style: italic; }
+.sec-topic-chev { color: var(--ink-mute); }
+.sec-topic-move {
+  flex: 0 0 auto; display: inline-flex; align-items: center; gap: 4px;
+  padding: 0 10px; background: none; border: none; cursor: pointer;
+  font-family: var(--grot); font-size: 11px; letter-spacing: 0.04em; text-transform: uppercase;
+  color: var(--ink-mute);
+}
+.sec-topic-move:active { color: var(--ink); }

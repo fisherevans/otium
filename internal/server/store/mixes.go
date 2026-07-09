@@ -21,7 +21,7 @@ var ErrSectionNotFound = errors.New("section not found")
 func (db *DB) ListSections(ctx context.Context, userID int64) ([]Section, error) {
 	rows, err := db.sql.QueryContext(ctx,
 		`SELECT g.id, g.name, g.slug, g.icon, g.sort, g.created_at,
-		        (SELECT COUNT(*) FROM section_topics gf WHERE gf.section_id = g.id) AS topic_count
+		        (SELECT COUNT(*) FROM topics t WHERE t.section_id = g.id) AS topic_count
 		 FROM sections g WHERE g.user_id = ? ORDER BY g.sort, g.name`, userID)
 	if err != nil {
 		return nil, err
@@ -96,17 +96,34 @@ func (db *DB) UpdateSection(ctx context.Context, userID, id int64, name, icon *s
 	return nil
 }
 
-// DeleteSection deletes a section (and its memberships, via ON DELETE CASCADE).
-// Scoped to the user.
+// DeleteSection deletes a section, first reassigning its topics to the user's
+// Uncategorized section so the strict tree keeps no orphans (#130). Deleting the
+// Uncategorized section itself is a no-op guard is unnecessary - reassigning to
+// itself then deleting would orphan; instead its topics move to a freshly ensured
+// Uncategorized (recreated if this was it). Scoped to the user.
 func (db *DB) DeleteSection(ctx context.Context, userID, id int64) error {
-	res, err := db.sql.ExecContext(ctx, `DELETE FROM sections WHERE id = ? AND user_id = ?`, id, userID)
+	var owner int64
+	if err := db.sql.QueryRowContext(ctx, `SELECT user_id FROM sections WHERE id = ?`, id).Scan(&owner); err != nil {
+		if err == sql.ErrNoRows {
+			return ErrSectionNotFound
+		}
+		return err
+	}
+	if owner != userID {
+		return ErrSectionNotFound
+	}
+	// Move this section's topics out first. Delete the section, then route any now
+	// section-less topics of this user to Uncategorized (recreated if we just deleted
+	// it), so a topic is never left orphaned.
+	if _, err := db.sql.ExecContext(ctx, `DELETE FROM sections WHERE id = ? AND user_id = ?`, id, userID); err != nil {
+		return err
+	}
+	unc, err := db.ensureUncategorizedSection(ctx, userID)
 	if err != nil {
 		return err
 	}
-	if n, _ := res.RowsAffected(); n == 0 {
-		return ErrSectionNotFound
-	}
-	return nil
+	_, err = db.sql.ExecContext(ctx, `UPDATE topics SET section_id = ? WHERE user_id = ? AND section_id IS NULL`, unc, userID)
+	return err
 }
 
 // SetSectionTopics assigns the given topics to a section (#130 strict tree). Since a
