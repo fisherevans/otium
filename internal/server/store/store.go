@@ -545,7 +545,7 @@ func (db *DB) ListTopics(ctx context.Context, userID int64) ([]Topic, error) {
 		return nil, err
 	}
 	defer rows.Close()
-	var out []Topic
+	out := []Topic{}
 	for rows.Next() {
 		var f Topic
 		var created string

@@ -75,7 +75,7 @@ export default function SourcePage() {
   useEffect(() => {
     reload();
     reloadStats();
-    api.topics().then(setTopics).catch(() => {});
+    api.topics().then((t) => setTopics(t ?? [])).catch(() => {});
   }, []);
   useEffect(() => {
     if (sourceId) api.sourceItems(sourceId).then(setPosts).catch(() => {});

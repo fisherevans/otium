@@ -4,6 +4,7 @@ import { Pencil, Plus } from "lucide-react";
 import { api, type Topic, type Section } from "@/api/client";
 import { feedIcon } from "@/lib/feedIcons";
 import { BottomSheet } from "@/components/BottomSheet";
+import { HowItWorks } from "@/components/HowItWorks";
 
 // The Library home (session engine v2). Two stacked sections, per the mockup:
 //   - Sections: pill chips that filter the topic list ("All", each section, "No Section"),
@@ -27,7 +28,7 @@ export default function SourcesPage() {
   const [creating, setCreating] = useState(false);
 
   function reloadTopics() {
-    api.topics().then(setTopics).catch((e) => setErr(String(e.message ?? e)));
+    api.topics().then((t) => setTopics(t ?? [])).catch((e) => setErr(String(e.message ?? e)));
   }
   async function reloadSections() {
     try {
@@ -116,8 +117,21 @@ export default function SourcesPage() {
 
       {topics === null ? (
         <p className="lib2-subtitle">Loading…</p>
+      ) : topics.length === 0 ? (
+        // #138 first-run: no topics at all. Welcome + the model + a clear first step.
+        <div className="firstrun">
+          <p className="firstrun-lead">Welcome. Otium is empty until you add the feeds you care about.</p>
+          <p className="firstrun-step">
+            Start by adding a <b>topic</b> (say "News" or "Comedy") with <b>Add topic</b> above - then open it to add
+            <b> sources</b>: any RSS/Atom feed, a YouTube channel, a podcast. Group topics into <b>sections</b> later if you like.
+          </p>
+          <button className="btn" onClick={() => setAddOpen(true)}>
+            Add your first topic
+          </button>
+          <HowItWorks defaultOpen />
+        </div>
       ) : shown.length === 0 ? (
-        <p className="lib2-empty">{filter === "all" ? "No topics yet - add one above." : "No topics in this section."}</p>
+        <p className="lib2-empty">No topics in this section.</p>
       ) : (
         <>
           {shown.map((f) => {

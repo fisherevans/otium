@@ -4037,3 +4037,28 @@ button.id-source.lead {
 .recap-close { color: var(--ink-mute); font-style: italic; margin-bottom: 18px; }
 .recap-actions { display: flex; flex-direction: column; align-items: center; gap: 12px; }
 .recap-actions .btn { width: 100%; }
+
+/* #138: first-run onboarding - empty states + the How-it-works explainer. */
+.firstrun { padding: 8px 0 24px; }
+.firstrun-lead { font-family: var(--serif); font-size: 20px; line-height: 1.4; margin-bottom: 12px; }
+.firstrun-step { color: var(--ink); line-height: 1.6; margin-bottom: 18px; }
+.firstrun .btn, .intent-step > .btn { margin-bottom: 20px; }
+.hiw { border-top: 1px solid var(--rule); margin-top: 12px; padding-top: 10px; }
+.hiw-toggle {
+  display: flex; align-items: center; gap: 6px; width: 100%;
+  background: none; border: none; cursor: pointer; padding: 6px 0;
+  font-family: var(--grot); font-size: 12px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink-mute);
+}
+.hiw-chev { transition: transform 0.15s; }
+.hiw.open .hiw-chev { transform: rotate(90deg); }
+.hiw-body { padding: 6px 2px 4px; line-height: 1.6; color: var(--ink); }
+.hiw-body p { margin: 0 0 10px; }
+.hiw-tree { margin: 10px 0; }
+.hiw-tier { padding: 3px 0; }
+.hiw-tier b { font-family: var(--serif); }
+.hiw-tier span { color: var(--ink-mute); font-size: 13px; }
+.hiw-i1 { padding-left: 16px; } .hiw-i2 { padding-left: 32px; } .hiw-i3 { padding-left: 48px; }
+.hiw-sub { color: var(--ink-mute); font-size: 13px; font-style: italic; }
+.hiw-h { font-family: var(--grot); font-size: 12px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink-mute); margin-top: 14px; }
+.hiw-steps { margin: 6px 0 0; padding-left: 20px; }
+.hiw-steps li { margin-bottom: 8px; }

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { api, type Topic, type Section, type Source } from "@/api/client";
 import { usePreferences } from "@/context/PreferencesContext";
+import { HowItWorks } from "@/components/HowItWorks";
 
 // The intent flow is two deliberate steps (#112/#132):
 //   1. How long - preset chips from the user's session-length presets (editable in
@@ -48,10 +49,15 @@ export default function HomePage() {
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
 
+  const [loaded, setLoaded] = useState(false);
   useEffect(() => {
-    api.topics().then(setTopics).catch(() => setTopics([]));
+    api.topics().then((t) => setTopics(t ?? [])).catch(() => setTopics([]));
     api.sections().then(setSections).catch(() => setSections([]));
-    api.sources().then(setSources).catch(() => setSources([]));
+    api
+      .sources()
+      .then((s) => setSources(s ?? []))
+      .catch(() => setSources([]))
+      .finally(() => setLoaded(true));
   }, []);
 
   // Default the time to a preset once preferences load (middle-ish, else first).
@@ -135,6 +141,29 @@ export default function HomePage() {
     } finally {
       setBusy(false);
     }
+  }
+
+  // #138 first-run: no sources yet, so no session is possible. Point to the Library
+  // and explain the model instead of a time picker that can't build anything.
+  if (loaded && sources.length === 0) {
+    return (
+      <div className="intent">
+        <div className="intent-step">
+          <div className="intent-head">
+            <h1 className="display">Welcome to Otium</h1>
+            <p className="sub">A calmer way to keep up - finite sessions from the feeds you choose, not an endless stream.</p>
+          </div>
+          <p className="firstrun-step">
+            You don't follow anything yet. Head to your <b>Library</b> to add a topic and its first sources - any RSS/Atom
+            feed, YouTube channel, or podcast. Then come back and pick how long you have.
+          </p>
+          <button className="btn" onClick={() => nav("/sources")}>
+            Go to Library
+          </button>
+          <HowItWorks defaultOpen />
+        </div>
+      </div>
+    );
   }
 
   return (

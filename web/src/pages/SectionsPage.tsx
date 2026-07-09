@@ -23,7 +23,7 @@ export default function SectionsPage() {
 
   function reload() {
     api.sections().then(setSections).catch((e: any) => setErr(String(e.message ?? e)));
-    api.topics().then(setTopics).catch(() => {});
+    api.topics().then((t) => setTopics(t ?? [])).catch(() => {});
   }
   useEffect(reload, []);
 

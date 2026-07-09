@@ -27,7 +27,7 @@ func (db *DB) ListSections(ctx context.Context, userID int64) ([]Section, error)
 		return nil, err
 	}
 	defer rows.Close()
-	var out []Section
+	out := []Section{}
 	for rows.Next() {
 		var g Section
 		var created string
@@ -186,7 +186,7 @@ func (db *DB) SectionTopics(ctx context.Context, userID, sectionID int64) ([]Top
 		return nil, err
 	}
 	defer rows.Close()
-	var out []Topic
+	out := []Topic{}
 	for rows.Next() {
 		var f Topic
 		var created string
