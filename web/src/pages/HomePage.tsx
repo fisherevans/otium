@@ -3,17 +3,18 @@ import { useNavigate } from "react-router-dom";
 import { api, type Topic, type Section, type Source } from "@/api/client";
 import { usePreferences } from "@/context/PreferencesContext";
 
-// The intent flow is two deliberate steps (#112):
-//   1. How long - preset chips from the user's session-length presets (editable
-//      in Settings -> Appearance -> Sessions), plus a "custom" link that reveals a
-//      slider + numeric input. Next advances.
-//   2. Choose a section - "Everything you follow" (default), the user's sections (saved
-//      groups of topics), and the individual topics below as "other". Custom
-//      selection is just multi-checking sections/topics. "Begin" builds the session.
+// The intent flow is two deliberate steps (#112/#132):
+//   1. How long - preset chips from the user's session-length presets (editable in
+//      Settings -> Appearance -> Sessions), plus a "custom" link (slider + number).
+//   2. Choose section(s) - "Everything you follow" (default) or one/many of the
+//      user's Sections. A subtle "Customize" link then reveals the Topics inside the
+//      chosen sections so you can uncheck any you don't want this session. Begin.
 //
-// Session build (unchanged, #67/#69/#86): POST /sessions with the chosen duration,
-// the selected topic slugs as `themes`, and the selected section slugs as `sections`.
-// "Everything" sends both empty, so topicless sources are included too.
+// Session build (#67/#69/#86): POST /sessions with the duration, selected topic slugs
+// as `themes`, and selected section slugs as `sections`. Customizing sends the kept
+// topics as themes (no section slug) so the excluded ones drop out; a plain section
+// selection sends the section slug (server expands it to all its topics). Everything
+// sends both empty (topicless sources included too).
 
 const MIN_MINUTES = 5;
 const MAX_MINUTES = 120;
@@ -37,10 +38,12 @@ export default function HomePage() {
   const [sections, setSections] = useState<Section[]>([]);
   const [sources, setSources] = useState<Source[]>([]);
 
-  // Selection. `everything` is the default; picking any section/topic turns it off.
+  // Selection. `everything` is the default; picking any section turns it off.
   const [everything, setEverything] = useState(true);
   const [pickedSections, setPickedSections] = useState<string[]>([]);
-  const [pickedTopics, setPickedTopics] = useState<string[]>([]);
+  const [customizing, setCustomizing] = useState(false);
+  // Topic slugs unchecked while customizing (within the picked sections).
+  const [excluded, setExcluded] = useState<string[]>([]);
 
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
@@ -59,44 +62,58 @@ export default function HomePage() {
     }
   }, [prefs.presets, minutes]);
 
-  // Topics that belong to no section, shown as "other sources" in step 2. With no
-  // sections defined yet this is simply every topic.
-  const sectionedTopicSlugs = useMemo(() => {
-    // We don't have per-section membership loaded here (that's a drill-in); treat all
-    // topics as pickable and only separate them once sections carry members.
-    return new Set<string>();
-  }, []);
-  const otherTopics = useMemo(
-    () => topics.filter((i) => !sectionedTopicSlugs.has(i.slug)),
-    [topics, sectionedTopicSlugs],
+  const topicsBySection = useMemo(() => {
+    const m = new Map<string, Topic[]>();
+    for (const t of topics) {
+      if (!t.section_slug) continue;
+      if (!m.has(t.section_slug)) m.set(t.section_slug, []);
+      m.get(t.section_slug)!.push(t);
+    }
+    return m;
+  }, [topics]);
+
+  // Topics in the currently-picked sections (the scope Customize narrows).
+  const scopedTopics = useMemo(
+    () => pickedSections.flatMap((slug) => topicsBySection.get(slug) ?? []),
+    [pickedSections, topicsBySection],
   );
 
   function pickEverything() {
     setEverything(true);
     setPickedSections([]);
-    setPickedTopics([]);
+    setCustomizing(false);
+    setExcluded([]);
   }
   function toggleSection(slug: string) {
     setEverything(false);
-    setPickedSections((p) => (p.includes(slug) ? p.filter((s) => s !== slug) : [...p, slug]));
+    setPickedSections((p) => {
+      const next = p.includes(slug) ? p.filter((s) => s !== slug) : [...p, slug];
+      if (next.length === 0) {
+        setCustomizing(false);
+        setExcluded([]);
+      }
+      return next;
+    });
   }
-  function toggleTopic(slug: string) {
-    setEverything(false);
-    setPickedTopics((p) => (p.includes(slug) ? p.filter((s) => s !== slug) : [...p, slug]));
+  function toggleExclude(slug: string) {
+    setExcluded((p) => (p.includes(slug) ? p.filter((s) => s !== slug) : [...p, slug]));
   }
 
-  // If a selection empties out, fall back to "everything" so Begin is never a no-op.
-  const effectiveEverything = everything || (pickedSections.length === 0 && pickedTopics.length === 0);
+  const effectiveEverything = everything || pickedSections.length === 0;
+
+  // Kept topic slugs when customizing (scope minus excluded).
+  const keptTopics = useMemo(
+    () => scopedTopics.filter((t) => !excluded.includes(t.slug)).map((t) => t.slug),
+    [scopedTopics, excluded],
+  );
 
   // Unseen supply for the selection, to disable Begin when there's nothing new.
   const unseen = useMemo(() => {
     if (effectiveEverything) return sources.reduce((n, s) => n + (s.unseen_count ?? 0), 0);
-    const match = sources.filter((s) => s.topic_slug && pickedTopics.includes(s.topic_slug));
-    // Sections expand server-side; if any section is picked we can't cheaply count here,
-    // so assume there's supply (the build will confirm).
-    if (pickedSections.length > 0) return 1;
+    const scope = customizing ? keptTopics : scopedTopics.map((t) => t.slug);
+    const match = sources.filter((s) => s.topic_slug && scope.includes(s.topic_slug));
     return match.reduce((n, s) => n + (s.unseen_count ?? 0), 0);
-  }, [sources, pickedTopics, pickedSections, effectiveEverything]);
+  }, [sources, effectiveEverything, customizing, keptTopics, scopedTopics]);
   const nothingNew = sources.length > 0 && unseen === 0;
 
   async function begin() {
@@ -104,8 +121,12 @@ export default function HomePage() {
     setBusy(true);
     setErr("");
     try {
-      const themes = effectiveEverything ? [] : pickedTopics;
-      const sectionSlugs = effectiveEverything ? [] : pickedSections;
+      let themes: string[] = [];
+      let sectionSlugs: string[] = [];
+      if (!effectiveEverything) {
+        if (customizing) themes = keptTopics;
+        else sectionSlugs = pickedSections;
+      }
       const resp = await api.createSession(minutes, themes, sectionSlugs);
       if (resp && resp.session_id) nav(`/session/${resp.session_id}`);
       else setErr("Nothing new to gather right now.");
@@ -129,11 +150,7 @@ export default function HomePage() {
             <>
               <div className="time-presets">
                 {prefs.presets.map((v) => (
-                  <button
-                    key={v}
-                    className={`time-chip ${minutes === v ? "on" : ""}`}
-                    onClick={() => setMinutes(v)}
-                  >
+                  <button key={v} className={`time-chip ${minutes === v ? "on" : ""}`} onClick={() => setMinutes(v)}>
                     {minutesLabel(v)}
                   </button>
                 ))}
@@ -186,7 +203,7 @@ export default function HomePage() {
               ← {minutesLabel(minutes ?? 0)}
             </button>
             <h1 className="display">Choose a section</h1>
-            <p className="sub">A section, or hand-pick what to read. Nothing chosen = everything you follow.</p>
+            <p className="sub">One or more sections, or everything you follow.</p>
           </div>
 
           <ul className="pick-list">
@@ -214,7 +231,7 @@ export default function HomePage() {
                       <button className={`pick-row ${on ? "on" : ""}`} onClick={() => toggleSection(m.slug)} role="checkbox" aria-checked={on}>
                         <span className={`pick-check ${on ? "on" : ""}`} aria-hidden />
                         <span className="pick-name">{m.name}</span>
-                        <span className="pick-meta">{m.topic_count} topics</span>
+                        <span className="pick-meta">{m.topic_count === 1 ? "1 topic" : `${m.topic_count} topics`}</span>
                       </button>
                     </li>
                   );
@@ -223,22 +240,44 @@ export default function HomePage() {
             </div>
           )}
 
-          {otherTopics.length > 0 && (
-            <div className="pick-group">
-              <div className="pick-group-label">{sections.length > 0 ? "Other topics" : "Topics"}</div>
-              <ul className="pick-list">
-                {otherTopics.map((i) => {
-                  const on = !everything && pickedTopics.includes(i.slug);
-                  return (
-                    <li key={i.slug}>
-                      <button className={`pick-row ${on ? "on" : ""}`} onClick={() => toggleTopic(i.slug)} role="checkbox" aria-checked={on}>
-                        <span className={`pick-check ${on ? "on" : ""}`} aria-hidden />
-                        <span className="pick-name">{i.name}</span>
-                      </button>
-                    </li>
-                  );
-                })}
-              </ul>
+          {/* Customize: uncheck individual topics inside the chosen sections. */}
+          {!effectiveEverything && scopedTopics.length > 0 && (
+            <div className="pick-customize">
+              {!customizing ? (
+                <button className="intent-link" onClick={() => setCustomizing(true)}>
+                  customize topics…
+                </button>
+              ) : (
+                <>
+                  <div className="pick-group-label">Topics ({keptTopics.length} of {scopedTopics.length})</div>
+                  {pickedSections.map((slug) => {
+                    const list = topicsBySection.get(slug) ?? [];
+                    const sec = sections.find((s) => s.slug === slug);
+                    if (list.length === 0) return null;
+                    return (
+                      <div className="pick-group" key={slug}>
+                        <div className="pick-group-sublabel">{sec?.name}</div>
+                        <ul className="pick-list">
+                          {list.map((t) => {
+                            const on = !excluded.includes(t.slug);
+                            return (
+                              <li key={t.slug}>
+                                <button className={`pick-row ${on ? "on" : ""}`} onClick={() => toggleExclude(t.slug)} role="checkbox" aria-checked={on}>
+                                  <span className={`pick-check ${on ? "on" : ""}`} aria-hidden />
+                                  <span className="pick-name">{t.name}</span>
+                                </button>
+                              </li>
+                            );
+                          })}
+                        </ul>
+                      </div>
+                    );
+                  })}
+                  <button className="intent-link" onClick={() => (setCustomizing(false), setExcluded([]))}>
+                    done customizing
+                  </button>
+                </>
+              )}
             </div>
           )}
 
@@ -248,7 +287,7 @@ export default function HomePage() {
             </p>
           )}
 
-          <button className="btn" onClick={begin} disabled={busy || nothingNew}>
+          <button className="btn" onClick={begin} disabled={busy || nothingNew || (customizing && keptTopics.length === 0)}>
             {busy ? "Gathering…" : nothingNew ? "Nothing new right now" : "Begin"}
           </button>
         </div>

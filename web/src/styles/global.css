@@ -4015,3 +4015,10 @@ button.id-source.lead {
   color: var(--ink-mute);
 }
 .sec-topic-move:active { color: var(--ink); }
+
+/* #132: customize-topics reveal inside the choose-section step. */
+.pick-customize { margin-top: 4px; }
+.pick-group-sublabel {
+  font-family: var(--grot); font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase;
+  color: var(--ink-mute); margin: 10px 0 2px;
+}
