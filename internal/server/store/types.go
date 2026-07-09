@@ -70,10 +70,16 @@ type Topic struct {
 	HalfLifeDays float64 `json:"half_life_days"`
 	// Archive After default for this topic's sources (#115): 0 = global default,
 	// -1 = evergreen, N = days. A source's own archive_after_days overrides it.
-	ArchiveAfterDays int       `json:"archive_after_days"`
-	Sort             int       `json:"sort"`
-	CreatedAt        time.Time `json:"created_at"`
-	SourceCount      int       `json:"source_count,omitempty"`
+	ArchiveAfterDays int `json:"archive_after_days"`
+	// The one section this topic belongs to (#130 strict tree). SectionID is nil only
+	// transiently before enforceTree routes an orphan to Uncategorized; SectionSlug /
+	// SectionName are denormalized for the "part of the X section" UI.
+	SectionID   *int64    `json:"section_id,omitempty"`
+	SectionSlug string    `json:"section_slug,omitempty"`
+	SectionName string    `json:"section_name,omitempty"`
+	Sort        int       `json:"sort"`
+	CreatedAt   time.Time `json:"created_at"`
+	SourceCount int       `json:"source_count,omitempty"`
 }
 
 // TopicRef is the compact topic identity attached to a session item so the card

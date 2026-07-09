@@ -30,7 +30,7 @@ func mkUserSourceItem(t *testing.T, db *DB) (ctx context.Context, uid, sid int64
 // the source to it as its ONE topic (#86). Reassigning moves the source.
 func setSourceTopicWithHalfLife(t *testing.T, db *DB, ctx context.Context, uid, sid int64, name, slug string, halfLife float64) {
 	t.Helper()
-	f, err := db.CreateTopic(ctx, uid, name, slug, "")
+	f, err := db.CreateTopic(ctx, uid, name, slug, "", 0)
 	if err != nil {
 		t.Fatal(err)
 	}

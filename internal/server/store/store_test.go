@@ -52,7 +52,7 @@ func TestOpenAppliesSchemaAndMigration(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	f, err := db.CreateTopic(ctx, u.ID, "Comedy", "comedy", "")
+	f, err := db.CreateTopic(ctx, u.ID, "Comedy", "comedy", "", 0)
 	if err != nil {
 		t.Fatal(err)
 	}

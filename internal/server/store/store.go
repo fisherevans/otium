@@ -293,7 +293,114 @@ func migrate(sdb *sql.DB) error {
 		return err
 	}
 	// Index on the migrated column, created after the column is guaranteed present.
-	return ensureIndexIfTable(sdb, "sources", `CREATE INDEX IF NOT EXISTS idx_sources_topic ON sources(topic_id)`)
+	if err := ensureIndexIfTable(sdb, "sources", `CREATE INDEX IF NOT EXISTS idx_sources_topic ON sources(topic_id)`); err != nil {
+		return err
+	}
+	// #130 strict tree: topics.section_id, then collapse the section<->topic
+	// many-to-many into it and route orphans to Uncategorized.
+	if err := ensureColumn(sdb, "topics", "section_id", `ALTER TABLE topics ADD COLUMN section_id INTEGER REFERENCES sections(id) ON DELETE SET NULL`); err != nil {
+		return err
+	}
+	if err := enforceTree(sdb); err != nil {
+		return err
+	}
+	return ensureIndexIfTable(sdb, "topics", `CREATE INDEX IF NOT EXISTS idx_topics_section ON topics(section_id)`)
+}
+
+// enforceTree collapses the section<->topic many-to-many (section_topics) into the
+// strict one-to-many topics.section_id (#130): each topic adopts its first section;
+// topics with no section, and sources with no topic, are routed to an auto-created
+// per-user "Uncategorized" section/topic so the tree has no orphans. Idempotent:
+// once every topic has a section_id and every source a topic_id it no-ops.
+// section_topics is left frozen (not dropped) as a rollback net, like feed_sources.
+func enforceTree(sdb *sql.DB) error {
+	ctx := context.Background()
+	exists := func(t string) bool {
+		var n int
+		sdb.QueryRowContext(ctx, `SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name=?`, t).Scan(&n)
+		return n > 0
+	}
+	if !exists("topics") || !exists("sections") || !exists("sources") {
+		return nil
+	}
+	// 1. topics.section_id <- first section_topics membership (first section wins).
+	if exists("section_topics") {
+		if _, err := sdb.ExecContext(ctx,
+			`UPDATE topics SET section_id = (SELECT st.section_id FROM section_topics st WHERE st.topic_id = topics.id LIMIT 1)
+			 WHERE section_id IS NULL AND EXISTS (SELECT 1 FROM section_topics st WHERE st.topic_id = topics.id)`); err != nil {
+			return err
+		}
+	}
+	// get-or-create the per-user "Uncategorized" section.
+	uncSection := func(userID int64) (int64, error) {
+		var id int64
+		err := sdb.QueryRowContext(ctx, `SELECT id FROM sections WHERE user_id=? AND slug='uncategorized'`, userID).Scan(&id)
+		if err == sql.ErrNoRows {
+			res, e := sdb.ExecContext(ctx, `INSERT INTO sections (user_id, name, slug) VALUES (?, 'Uncategorized', 'uncategorized')`, userID)
+			if e != nil {
+				return 0, e
+			}
+			id, _ = res.LastInsertId()
+			return id, nil
+		}
+		return id, err
+	}
+	distinctUsers := func(query string) ([]int64, error) {
+		rows, err := sdb.QueryContext(ctx, query)
+		if err != nil {
+			return nil, err
+		}
+		defer rows.Close()
+		var us []int64
+		for rows.Next() {
+			var u int64
+			if err := rows.Scan(&u); err != nil {
+				return nil, err
+			}
+			us = append(us, u)
+		}
+		return us, rows.Err()
+	}
+	// 2. section-less topics -> the user's Uncategorized section.
+	topicUsers, err := distinctUsers(`SELECT DISTINCT user_id FROM topics WHERE section_id IS NULL`)
+	if err != nil {
+		return err
+	}
+	for _, u := range topicUsers {
+		sid, err := uncSection(u)
+		if err != nil {
+			return err
+		}
+		if _, err := sdb.ExecContext(ctx, `UPDATE topics SET section_id=? WHERE user_id=? AND section_id IS NULL`, sid, u); err != nil {
+			return err
+		}
+	}
+	// 3. topic-less sources -> the user's Uncategorized topic (in the Uncategorized section).
+	srcUsers, err := distinctUsers(`SELECT DISTINCT user_id FROM sources WHERE topic_id IS NULL`)
+	if err != nil {
+		return err
+	}
+	for _, u := range srcUsers {
+		sid, err := uncSection(u)
+		if err != nil {
+			return err
+		}
+		var tid int64
+		err = sdb.QueryRowContext(ctx, `SELECT id FROM topics WHERE user_id=? AND slug='uncategorized'`, u).Scan(&tid)
+		if err == sql.ErrNoRows {
+			res, e := sdb.ExecContext(ctx, `INSERT INTO topics (user_id, name, slug, section_id) VALUES (?, 'Uncategorized', 'uncategorized', ?)`, u, sid)
+			if e != nil {
+				return e
+			}
+			tid, _ = res.LastInsertId()
+		} else if err != nil {
+			return err
+		}
+		if _, err := sdb.ExecContext(ctx, `UPDATE sources SET topic_id=? WHERE user_id=? AND topic_id IS NULL`, tid, u); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // ensureIndexIfTable creates an index only when its table exists, so migrate()
@@ -427,9 +534,11 @@ func (db *DB) UpsertUserByUsername(ctx context.Context, username, email string) 
 
 func (db *DB) ListTopics(ctx context.Context, userID int64) ([]Topic, error) {
 	rows, err := db.sql.QueryContext(ctx,
-		`SELECT f.id, f.name, f.slug, f.color, f.icon, f.half_life_days, f.archive_after_days, f.sort, f.created_at,
+		`SELECT f.id, f.name, f.slug, f.color, f.icon, f.half_life_days, f.archive_after_days,
+		        f.section_id, sec.slug, sec.name, f.sort, f.created_at,
 		        (SELECT COUNT(*) FROM sources s WHERE s.topic_id = f.id) AS source_count
-		 FROM topics f WHERE f.user_id = ? ORDER BY f.sort, f.name`, userID)
+		 FROM topics f LEFT JOIN sections sec ON sec.id = f.section_id
+		 WHERE f.user_id = ? ORDER BY f.sort, f.name`, userID)
 	if err != nil {
 		return nil, err
 	}
@@ -438,8 +547,17 @@ func (db *DB) ListTopics(ctx context.Context, userID int64) ([]Topic, error) {
 	for rows.Next() {
 		var f Topic
 		var created string
-		if err := rows.Scan(&f.ID, &f.Name, &f.Slug, &f.Color, &f.Icon, &f.HalfLifeDays, &f.ArchiveAfterDays, &f.Sort, &created, &f.SourceCount); err != nil {
+		var secID sql.NullInt64
+		var secSlug, secName sql.NullString
+		if err := rows.Scan(&f.ID, &f.Name, &f.Slug, &f.Color, &f.Icon, &f.HalfLifeDays, &f.ArchiveAfterDays,
+			&secID, &secSlug, &secName, &f.Sort, &created, &f.SourceCount); err != nil {
 			return nil, err
+		}
+		if secID.Valid {
+			id := secID.Int64
+			f.SectionID = &id
+			f.SectionSlug = secSlug.String
+			f.SectionName = secName.String
 		}
 		f.CreatedAt = parseTime(created)
 		out = append(out, f)
@@ -447,15 +565,41 @@ func (db *DB) ListTopics(ctx context.Context, userID int64) ([]Topic, error) {
 	return out, rows.Err()
 }
 
-func (db *DB) CreateTopic(ctx context.Context, userID int64, name, slug, color string) (*Topic, error) {
+// ensureUncategorizedSection get-or-creates the user's "Uncategorized" section - the
+// home for topics created without an explicit section (#130 no-orphans rule).
+func (db *DB) ensureUncategorizedSection(ctx context.Context, userID int64) (int64, error) {
+	var id int64
+	err := db.sql.QueryRowContext(ctx, `SELECT id FROM sections WHERE user_id=? AND slug='uncategorized'`, userID).Scan(&id)
+	if err == nil {
+		return id, nil
+	}
+	if err != sql.ErrNoRows {
+		return 0, err
+	}
+	res, err := db.sql.ExecContext(ctx, `INSERT INTO sections (user_id, name, slug) VALUES (?, 'Uncategorized', 'uncategorized')`, userID)
+	if err != nil {
+		return 0, err
+	}
+	return res.LastInsertId()
+}
+
+// CreateTopic creates a topic inside a section (#130 strict tree). sectionID 0 routes
+// it to the user's Uncategorized section, so a topic is never orphaned.
+func (db *DB) CreateTopic(ctx context.Context, userID int64, name, slug, color string, sectionID int64) (*Topic, error) {
+	if sectionID == 0 {
+		var err error
+		if sectionID, err = db.ensureUncategorizedSection(ctx, userID); err != nil {
+			return nil, err
+		}
+	}
 	res, err := db.sql.ExecContext(ctx,
-		`INSERT INTO topics (user_id, name, slug, color) VALUES (?, ?, ?, ?)`,
-		userID, name, slug, color)
+		`INSERT INTO topics (user_id, name, slug, color, section_id) VALUES (?, ?, ?, ?, ?)`,
+		userID, name, slug, color, sectionID)
 	if err != nil {
 		return nil, err
 	}
 	id, _ := res.LastInsertId()
-	return &Topic{ID: id, UserID: userID, Name: name, Slug: slug, Color: color}, nil
+	return &Topic{ID: id, UserID: userID, Name: name, Slug: slug, Color: color, SectionID: &sectionID}, nil
 }
 
 // GetOrCreateTopic returns the topic with this slug, creating it if absent. Used
@@ -471,7 +615,7 @@ func (db *DB) GetOrCreateTopic(ctx context.Context, userID int64, name, slug, co
 	if err != sql.ErrNoRows {
 		return nil, err
 	}
-	return db.CreateTopic(ctx, userID, name, slug, color)
+	return db.CreateTopic(ctx, userID, name, slug, color, 0) // 0 = Uncategorized section
 }
 
 // Videos topic (#53): the auto-grouping bucket for untagged YouTube sources.

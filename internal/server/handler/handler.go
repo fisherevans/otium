@@ -147,9 +147,10 @@ func (h *Handler) ListTopics(w http.ResponseWriter, r *http.Request) {
 func (h *Handler) CreateTopic(w http.ResponseWriter, r *http.Request) {
 	uid := userID(r)
 	var body struct {
-		Name  string `json:"name"`
-		Slug  string `json:"slug"`
-		Color string `json:"color"`
+		Name      string `json:"name"`
+		Slug      string `json:"slug"`
+		Color     string `json:"color"`
+		SectionID int64  `json:"section_id"` // #130: section to create it in; 0 = Uncategorized
 	}
 	if !decode(w, r, &body) {
 		return
@@ -157,12 +158,38 @@ func (h *Handler) CreateTopic(w http.ResponseWriter, r *http.Request) {
 	if body.Slug == "" {
 		body.Slug = slugify(body.Name)
 	}
-	f, err := h.db.CreateTopic(r.Context(), uid, body.Name, body.Slug, body.Color)
+	f, err := h.db.CreateTopic(r.Context(), uid, body.Name, body.Slug, body.Color, body.SectionID)
 	if err != nil {
 		serverError(w, h.log, "create topic", err)
 		return
 	}
 	writeJSON(w, http.StatusCreated, f)
+}
+
+// MoveTopicToSection moves a topic into a different section (#130/#131). The strict
+// tree means a topic has exactly one section; this reassigns it.
+func (h *Handler) MoveTopicToSection(w http.ResponseWriter, r *http.Request) {
+	uid := userID(r)
+	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	if err != nil {
+		badRequest(w, "bad topic id")
+		return
+	}
+	var body struct {
+		SectionID int64 `json:"section_id"`
+	}
+	if !decode(w, r, &body) {
+		return
+	}
+	if err := h.db.MoveTopicToSection(r.Context(), uid, id, body.SectionID); err != nil {
+		if err == store.ErrSectionNotFound {
+			writeJSON(w, http.StatusNotFound, map[string]any{"error": "topic or section not found"})
+			return
+		}
+		serverError(w, h.log, "move topic", err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
 }
 
 // UpdateTopic patches an topic's presentation fields (name, color, icon), the

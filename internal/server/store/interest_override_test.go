@@ -23,7 +23,7 @@ func TestCandidatesResolveOneFeedOverrides(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	topic, err := db.CreateTopic(ctx, u.ID, "A", "a", "")
+	topic, err := db.CreateTopic(ctx, u.ID, "A", "a", "", 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -134,8 +134,18 @@ func TestMigratePopulatesSourceTopicID(t *testing.T) {
 	if fid, ok := topicOf(101); !ok || fid != 11 {
 		t.Fatalf("source 101 should populate topic_id=11, got %d (set=%v)", fid, ok)
 	}
-	if _, ok := topicOf(102); ok {
-		t.Fatal("topicless source 102 should stay NULL")
+	// #130 strict tree: a source with no feed_sources membership is no longer left
+	// NULL - enforceTree routes it to the user's Uncategorized topic (no orphans).
+	if fid, ok := topicOf(102); !ok {
+		t.Fatal("topicless source 102 should be routed to Uncategorized, got NULL")
+	} else {
+		var slug string
+		if err := sdb.QueryRow(`SELECT slug FROM topics WHERE id = ?`, fid).Scan(&slug); err != nil {
+			t.Fatal(err)
+		}
+		if slug != "uncategorized" {
+			t.Fatalf("source 102 should be in 'uncategorized', got %q", slug)
+		}
 	}
 
 	// feed_sources is left intact for rollback safety.
@@ -201,8 +211,9 @@ func TestOpenMigratesLegacyFileTopicID(t *testing.T) {
 	if got[100] != "news" {
 		t.Fatalf("source 100 should back-populate topic 'news', got %q", got[100])
 	}
-	if got[101] != "" {
-		t.Fatalf("topicless source 101 should have no topic, got %q", got[101])
+	// #130 strict tree: the membership-less source is routed to Uncategorized.
+	if got[101] != "uncategorized" {
+		t.Fatalf("topicless source 101 should be routed to 'uncategorized', got %q", got[101])
 	}
 }
 

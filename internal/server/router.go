@@ -52,6 +52,7 @@ func NewRouter(h *handler.Handler, authMiddleware func(http.Handler) http.Handle
 			r.Post("/topics", h.CreateTopic)
 			r.Patch("/topics/{id}", h.UpdateTopic)
 			r.Put("/topics/{id}/sources", h.SetTopicSources)
+			r.Put("/topics/{id}/section", h.MoveTopicToSection) // #130 strict tree: move to a section
 			r.Get("/topics/{id}/items", h.TopicItems)
 
 			// Sections (#86): a user-created overlay grouping topics (many-to-many).

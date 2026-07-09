@@ -44,6 +44,12 @@ CREATE TABLE IF NOT EXISTS topics (
     -- (never archive); N = archive articles older than N days. A source's own
     -- archive_after_days overrides this. Replaces user-facing half-life.
     archive_after_days INTEGER NOT NULL DEFAULT 0,
+    -- The one section this topic belongs to (#130, strict Section>Topic>Source
+    -- tree). A topic belongs to exactly one section; orphans are routed to an
+    -- auto-created "Uncategorized" section by enforceTree(). Nullable in the DB
+    -- (SQLite can't add NOT NULL retroactively) but app-enforced: read paths treat
+    -- a NULL section_id as Uncategorized. Added additively via migrate().
+    section_id  INTEGER REFERENCES sections(id) ON DELETE SET NULL,
     sort        INTEGER NOT NULL DEFAULT 0,
     created_at  TEXT NOT NULL DEFAULT (datetime('now')),
     UNIQUE (user_id, slug)

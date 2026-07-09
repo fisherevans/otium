@@ -20,6 +20,11 @@ export interface Topic {
   // global default, -1 = evergreen (never archive), N = archive items older than N
   // days. Not returned by the list endpoint yet, so treat absent as 0 (inherit).
   archive_after_days?: number;
+  // The one section this topic belongs to (#130 strict tree). Present once
+  // enforceTree has run (every topic has a section; orphans go to Uncategorized).
+  section_id?: number | null;
+  section_slug?: string;
+  section_name?: string;
   sort: number;
   source_count?: number;
 }
@@ -441,8 +446,11 @@ export const api = {
   me: () => req<Me>("GET", "/users/me"),
 
   topics: () => req<Topic[]>("GET", "/topics"),
-  createTopic: (name: string, color?: string) =>
-    req<Topic>("POST", "/topics", { name, color: color ?? "" }),
+  createTopic: (name: string, color?: string, sectionId?: number) =>
+    req<Topic>("POST", "/topics", { name, color: color ?? "", section_id: sectionId ?? 0 }),
+  // #130 strict tree: move a topic into a different section.
+  moveTopicToSection: (topicId: number, sectionId: number) =>
+    req<{ ok: boolean }>("PUT", `/topics/${topicId}/section`, { section_id: sectionId }),
   updateTopic: (
     id: number,
     patch: {

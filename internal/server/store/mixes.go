@@ -109,9 +109,11 @@ func (db *DB) DeleteSection(ctx context.Context, userID, id int64) error {
 	return nil
 }
 
-// SetSectionTopics replaces the set of topics in a section with exactly topicIDs.
-// Unknown topic ids (or topics not owned by the user) are ignored. Scoped: a section
-// the user doesn't own returns ErrSectionNotFound before any write.
+// SetSectionTopics assigns the given topics to a section (#130 strict tree). Since a
+// topic belongs to exactly one section, this moves each listed topic into the section
+// (it does not evict the section's other topics - that would orphan them). Unknown or
+// foreign topic ids are ignored. Scoped: a section the user doesn't own returns
+// ErrSectionNotFound before any write.
 func (db *DB) SetSectionTopics(ctx context.Context, userID, sectionID int64, topicIDs []int64) error {
 	var owner int64
 	err := db.sql.QueryRowContext(ctx, `SELECT user_id FROM sections WHERE id = ?`, sectionID).Scan(&owner)
@@ -121,25 +123,37 @@ func (db *DB) SetSectionTopics(ctx context.Context, userID, sectionID int64, top
 	if err != nil {
 		return err
 	}
-	tx, err := db.sql.BeginTx(ctx, nil)
-	if err != nil {
-		return err
-	}
-	defer tx.Rollback()
-	if _, err := tx.ExecContext(ctx, `DELETE FROM section_topics WHERE section_id = ?`, sectionID); err != nil {
-		return err
-	}
 	for _, fid := range topicIDs {
-		// The SELECT guard ensures the topic belongs to the user; a foreign topic id
-		// inserts nothing.
-		if _, err := tx.ExecContext(ctx,
-			`INSERT OR IGNORE INTO section_topics (section_id, topic_id)
-			 SELECT ?, id FROM topics WHERE id = ? AND user_id = ?`,
-			sectionID, fid, userID); err != nil {
+		if _, err := db.sql.ExecContext(ctx,
+			`UPDATE topics SET section_id = ? WHERE id = ? AND user_id = ?`, sectionID, fid, userID); err != nil {
 			return err
 		}
 	}
-	return tx.Commit()
+	return nil
+}
+
+// MoveTopicToSection moves a single topic into a section (#130/#131 "Move"). Both
+// must belong to the user. Returns ErrSectionNotFound if the topic isn't the user's.
+func (db *DB) MoveTopicToSection(ctx context.Context, userID, topicID, sectionID int64) error {
+	var owner int64
+	if err := db.sql.QueryRowContext(ctx, `SELECT user_id FROM sections WHERE id = ?`, sectionID).Scan(&owner); err != nil {
+		if err == sql.ErrNoRows {
+			return ErrSectionNotFound
+		}
+		return err
+	}
+	if owner != userID {
+		return ErrSectionNotFound
+	}
+	res, err := db.sql.ExecContext(ctx,
+		`UPDATE topics SET section_id = ? WHERE id = ? AND user_id = ?`, sectionID, topicID, userID)
+	if err != nil {
+		return err
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		return ErrSectionNotFound
+	}
+	return nil
 }
 
 // SectionTopics returns the topics in a section (full Topic rows with source counts),
@@ -148,8 +162,8 @@ func (db *DB) SectionTopics(ctx context.Context, userID, sectionID int64) ([]Top
 	rows, err := db.sql.QueryContext(ctx,
 		`SELECT f.id, f.name, f.slug, f.color, f.icon, f.half_life_days, f.sort, f.created_at,
 		        (SELECT COUNT(*) FROM sources s WHERE s.topic_id = f.id) AS source_count
-		 FROM section_topics gf JOIN topics f ON f.id = gf.topic_id
-		 WHERE gf.section_id = ? AND f.user_id = ?
+		 FROM topics f
+		 WHERE f.section_id = ? AND f.user_id = ?
 		 ORDER BY f.sort, f.name`, sectionID, userID)
 	if err != nil {
 		return nil, err
@@ -177,8 +191,8 @@ func (db *DB) SourceIDsForSections(ctx context.Context, userID int64, slugs []st
 	}
 	q := `SELECT DISTINCT s.id
 	      FROM sections g
-	      JOIN section_topics gf ON gf.section_id = g.id
-	      JOIN sources s ON s.topic_id = gf.topic_id
+	      JOIN topics f ON f.section_id = g.id
+	      JOIN sources s ON s.topic_id = f.id
 	      WHERE g.user_id = ? AND g.slug IN (` + placeholders(len(slugs)) + `)`
 	args := []any{userID}
 	for _, s := range slugs {
