@@ -34,6 +34,10 @@ type Config struct {
 	OIDCScopes        string
 	OIDCAllowedGroups string
 	SessionSecret     string
+
+	// YouTubeAPIKey enables the YouTube Data API backlog importer (#122). Empty =
+	// disabled (the import endpoint 503s), so the public repo runs without it.
+	YouTubeAPIKey string
 }
 
 func LoadConfig() (*Config, error) {
@@ -58,6 +62,7 @@ func LoadConfig() (*Config, error) {
 		cfg.FetchIntervalMin = n
 	}
 
+	cfg.YouTubeAPIKey = os.Getenv("OTIUM_YOUTUBE_API_KEY")
 	cfg.DevUser = os.Getenv("OTIUM_DEV_USER")
 
 	cfg.OIDCIssuer = os.Getenv("OTIUM_OIDC_ISSUER")
