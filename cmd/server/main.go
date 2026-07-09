@@ -22,6 +22,7 @@ import (
 	"github.com/fisherevans/otium/internal/server/handler"
 	"github.com/fisherevans/otium/internal/server/middleware"
 	"github.com/fisherevans/otium/internal/server/store"
+	"github.com/fisherevans/otium/internal/server/youtube"
 )
 
 func main() {
@@ -116,6 +117,13 @@ func main() {
 	// duration is the first integration. State lives in the DB, so it resumes across
 	// restarts and self-heals through rate limits / outages.
 	go enrich.NewWorker(db, log, enrich.NewYouTube(log)).Run(ctx)
+
+	// YouTube backlog import (#122): RSS only gives ~15 recent videos; the Data API
+	// backfills a channel's history to its archive window. Off unless a key is set.
+	if cfg.YouTubeAPIKey != "" {
+		h.SetYouTubeImportEnabled(true)
+		go youtube.NewImportWorker(db, youtube.NewClient(cfg.YouTubeAPIKey), log).Run(ctx)
+	}
 
 	go func() {
 		log.Info("otium-server listening", "addr", srv.Addr, "db", cfg.DBPath)

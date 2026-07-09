@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"html"
 	"strings"
+	"time"
 
 	"github.com/fisherevans/otium/internal/server/store"
 )
@@ -14,14 +15,18 @@ type ImportResult struct {
 	Imported      int    // genuinely new items upserted this page
 	Seen          int    // videos on the page (new or already present)
 	NextPageToken string // "" when the channel's uploads are fully walked
+	ReachedCutoff bool   // hit a video older than the cutoff - stop paging
 }
 
 // ImportPage runs ONE page of a source's backlog import: fetch a page of the
-// channel's uploads, fill duration/stats, upsert each as an item. Resumable - the
-// caller persists NextPageToken and calls again with it until it's "". Items dedupe
-// against RSS-ingested ones via the same yt:video:<id> external id, so importing a
-// source that RSS already partly covers is safe (existing rows are left untouched).
-func (c *Client) ImportPage(ctx context.Context, db *store.DB, s store.Source, pageToken string) (ImportResult, error) {
+// channel's uploads (newest first), fill duration/stats, and upsert each video
+// published on/after cutoff as an item. Resumable - the caller persists
+// NextPageToken and calls again until NextPageToken is "" or ReachedCutoff is set.
+// A zero cutoff means "no limit" (evergreen: import the whole history). Because the
+// uploads playlist is newest-first, once a page contains a video older than cutoff
+// everything after it is older too, so ReachedCutoff tells the caller to stop.
+// Items dedupe against RSS-ingested ones via the same yt:video:<id> external id.
+func (c *Client) ImportPage(ctx context.Context, db *store.DB, s store.Source, pageToken string, cutoff time.Time) (ImportResult, error) {
 	channelID := ChannelIDFromFeedURL(s.FeedURL)
 	if channelID == "" {
 		return ImportResult{}, fmt.Errorf("source %d is not a youtube channel feed: %s", s.ID, s.FeedURL)
@@ -35,6 +40,10 @@ func (c *Client) ImportPage(ctx context.Context, db *store.DB, s store.Source, p
 	}
 	res := ImportResult{Seen: len(vids), NextPageToken: next}
 	for _, v := range vids {
+		if !cutoff.IsZero() && !v.PublishedAt.IsZero() && v.PublishedAt.Before(cutoff) {
+			res.ReachedCutoff = true
+			continue // older than the archive window - never eligible, skip
+		}
 		isNew, err := db.UpsertItem(ctx, toItem(v, s.ID))
 		if err != nil {
 			return res, err

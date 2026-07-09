@@ -24,15 +24,20 @@ import (
 )
 
 type Handler struct {
-	db  *store.DB
-	ing *feeds.Ingester
-	ft  *fulltext.Fetcher
-	log *slog.Logger
+	db       *store.DB
+	ing      *feeds.Ingester
+	ft       *fulltext.Fetcher
+	log      *slog.Logger
+	ytImport bool // YouTube backlog import enabled (an API key is configured)
 }
 
 func New(db *store.DB, ing *feeds.Ingester, log *slog.Logger) *Handler {
 	return &Handler{db: db, ing: ing, ft: fulltext.New(), log: log}
 }
+
+// SetYouTubeImportEnabled toggles whether creating a YouTube source enqueues a
+// backlog import and whether the re-sync endpoint accepts requests (#122).
+func (h *Handler) SetYouTubeImportEnabled(v bool) { h.ytImport = v }
 
 // --- users ---
 
@@ -195,6 +200,10 @@ func (h *Handler) CreateSource(w http.ResponseWriter, r *http.Request) {
 		FeedURL string  `json:"feed_url"`
 		Weight  float64 `json:"weight"`
 		State   string  `json:"state"`
+		// #122: import the channel's backlog from the Data API on add. Defaults ON
+		// for YouTube (nil = yes); ignored when the importer is disabled or the
+		// source isn't YouTube.
+		ImportBacklog *bool `json:"import_backlog"`
 	}
 	if !decode(w, r, &body) {
 		return
@@ -222,7 +231,48 @@ func (h *Handler) CreateSource(w http.ResponseWriter, r *http.Request) {
 	} else {
 		h.log.Info("initial fetch", "source", created.Title, "new_items", n)
 	}
+	// Queue a backlog import (#122): RSS only gave the ~15 newest; the Data API
+	// worker fills the rest back to the source's archive window. Default ON.
+	if h.ytImport && created.Kind == "youtube" && (body.ImportBacklog == nil || *body.ImportBacklog) {
+		if err := h.db.EnqueueImport(r.Context(), created.ID); err != nil {
+			h.log.Warn("enqueue backlog import", "source", created.ID, "err", err)
+		}
+	}
 	writeJSON(w, http.StatusCreated, created)
+}
+
+// ImportBacklog force-queues (or re-queues) a source's Data API backlog import - the
+// "re-sync" action (#122). Re-running after widening the archive window fetches the
+// newly-in-range older videos.
+func (h *Handler) ImportBacklog(w http.ResponseWriter, r *http.Request) {
+	uid := userID(r)
+	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	if err != nil {
+		badRequest(w, "bad source id")
+		return
+	}
+	if !h.ytImport {
+		writeJSON(w, http.StatusServiceUnavailable, map[string]any{"error": "backlog import is not configured"})
+		return
+	}
+	src, ok, err := h.db.SourceByID(r.Context(), id)
+	if err != nil {
+		serverError(w, h.log, "load source", err)
+		return
+	}
+	if !ok || src.UserID != uid {
+		writeJSON(w, http.StatusNotFound, map[string]any{"error": "source not found"})
+		return
+	}
+	if src.Kind != "youtube" {
+		badRequest(w, "backlog import is only for YouTube sources")
+		return
+	}
+	if err := h.db.EnqueueImport(r.Context(), id); err != nil {
+		serverError(w, h.log, "enqueue import", err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
 }
 
 func (h *Handler) UpdateSource(w http.ResponseWriter, r *http.Request) {

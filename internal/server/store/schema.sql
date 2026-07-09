@@ -202,6 +202,22 @@ CREATE TABLE IF NOT EXISTS item_enrichment (
 );
 CREATE INDEX IF NOT EXISTS idx_item_enrichment_due ON item_enrichment(status, next_attempt_at);
 
+-- Durable per-source backlog import (#122). One row per YouTube source being
+-- backfilled from the Data API. page_token resumes pagination across restarts;
+-- import depth is bounded to the source's resolved Archive-After window (older
+-- videos would never be eligible), computed fresh each run so a re-sync after
+-- widening the window fetches more. status: pending (queued) | done | failed.
+CREATE TABLE IF NOT EXISTS source_import (
+    source_id       INTEGER PRIMARY KEY REFERENCES sources(id) ON DELETE CASCADE,
+    status          TEXT NOT NULL DEFAULT 'pending',
+    page_token      TEXT NOT NULL DEFAULT '',
+    imported        INTEGER NOT NULL DEFAULT 0,
+    attempts        INTEGER NOT NULL DEFAULT 0,
+    next_attempt_at TEXT NOT NULL DEFAULT (datetime('now')),
+    last_error      TEXT NOT NULL DEFAULT '',
+    updated_at      TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
 -- Small global (non-user) key/value store for system cursors, e.g. the enrichment
 -- backfill sweep position. (The other kv table is user-scoped; this is not.)
 CREATE TABLE IF NOT EXISTS meta (
