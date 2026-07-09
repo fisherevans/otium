@@ -754,7 +754,7 @@ func (db *DB) ListSources(ctx context.Context, userID int64) ([]Source, error) {
 		return nil, err
 	}
 	defer rows.Close()
-	var out []Source
+	out := []Source{}
 	for rows.Next() {
 		s, err := scanSource(rows)
 		if err != nil {

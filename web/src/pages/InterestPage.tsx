@@ -67,7 +67,9 @@ export default function InterestPage() {
     api.interests().then(setInterests).catch((e) => setErr(String(e.message ?? e)));
   }
   function reloadSources() {
-    api.sources().then(setSources).catch(() => {});
+    // Guard against a null body (Go marshals an empty slice as JSON null): a null
+    // here would white-screen the page on the sources.filter memo (#126).
+    api.sources().then((s) => setSources(s ?? [])).catch(() => {});
   }
   useEffect(() => {
     reloadInterests();

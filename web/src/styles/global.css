@@ -3932,9 +3932,9 @@ button.id-source.lead {
 /* ===== end session engine v2 library management ===== */
 
 /* #126: YouTube channel resolve row + preview in the Add-source dialog. */
-.yt-resolve-row { display: flex; gap: 8px; align-items: stretch; }
-.yt-resolve-row .field { flex: 1; }
-.yt-resolve-row .btn.ghost { white-space: nowrap; }
+.yt-resolve-row { display: flex; gap: 8px; align-items: center; }
+.yt-resolve-row .field { flex: 1 1 auto; min-width: 0; margin-bottom: 0; }
+.yt-resolve-row .btn { flex: 0 0 auto; width: auto; margin-top: 0; padding: 12px 20px; white-space: nowrap; }
 .yt-channel-preview {
   display: flex;
   align-items: center;
