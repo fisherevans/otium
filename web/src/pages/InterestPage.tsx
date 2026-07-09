@@ -55,6 +55,11 @@ export default function InterestPage() {
   const [addKind, setAddKind] = useState("rss");
   const [addImport, setAddImport] = useState(true); // #122: import YT backlog on add
   const [adding, setAdding] = useState(false);
+  // #126: YouTube-native source creation. Gated on the server having a Data API key.
+  const [ytAvailable, setYtAvailable] = useState(false);
+  const [ytResolving, setYtResolving] = useState(false);
+  const [ytChannel, setYtChannel] = useState<{ title: string; thumbnail: string; feed_url: string } | null>(null);
+  const [ytErr, setYtErr] = useState("");
 
   const interest = useMemo(() => (interests ? interests.find((f) => f.slug === slug) ?? null : null), [interests, slug]);
 
@@ -69,6 +74,7 @@ export default function InterestPage() {
     reloadSources();
     api.mixes().then(setMixes).catch(() => setMixes([]));
     api.sourceStats().then(setStats).catch(() => {});
+    api.getConfig().then((c) => setYtAvailable(c.youtube_available)).catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -134,20 +140,45 @@ export default function InterestPage() {
     await api.updateInterest(interest.id, { half_life_days: days }).catch(() => {});
     reloadInterests();
   }
+  // #126: resolve a YouTube channel identifier so the user confirms the right
+  // channel (and gets its title/avatar) before adding.
+  async function resolveYt() {
+    if (!addUrl.trim() || ytResolving) return;
+    setYtResolving(true);
+    setYtErr("");
+    setYtChannel(null);
+    try {
+      const c = await api.resolveYouTube(addUrl.trim());
+      setYtChannel(c);
+      if (!addTitle.trim()) setAddTitle(c.title);
+    } catch (e: any) {
+      setYtErr(String(e.message ?? e).replace(/^Error:\s*/, ""));
+    } finally {
+      setYtResolving(false);
+    }
+  }
+  function resetAdd() {
+    setAddUrl("");
+    setAddTitle("");
+    setYtChannel(null);
+    setYtErr("");
+    setAddOpen(false);
+  }
   async function addSource() {
     if (!addUrl.trim() || !interest || adding) return;
     setAdding(true);
     try {
+      const isYt = addKind === "youtube";
       const s = await api.createSource({
-        title: addTitle.trim() || addUrl,
-        feed_url: addUrl.trim(),
+        title: addTitle.trim() || (isYt && ytChannel ? ytChannel.title : addUrl),
+        // For a resolved YouTube channel send the canonical feed_url; otherwise send
+        // the raw input and let the server resolve it (channel URL/@handle/id/name).
+        feed_url: isYt && ytChannel ? ytChannel.feed_url : addUrl.trim(),
         kind: addKind,
-        ...(addKind === "youtube" ? { import_backlog: addImport } : {}),
+        ...(isYt ? { import_backlog: addImport } : {}),
       });
       await api.setSourceInterest(s.id, interest.slug).catch(() => {});
-      setAddUrl("");
-      setAddTitle("");
-      setAddOpen(false);
+      resetAdd();
       reloadSources();
       reloadInterests();
       api.sourceStats().then(setStats).catch(() => {});
@@ -313,29 +344,73 @@ export default function InterestPage() {
         </div>
       </Dialog>
 
-      <Dialog open={addOpen} onClose={() => setAddOpen(false)} kicker="Add source">
-        <div className="dlg-sub">Feed URL</div>
-        <input className="field" placeholder="https://example.com/feed" value={addUrl} autoFocus onChange={(e) => setAddUrl(e.target.value)} />
-        <div className="dlg-sub">Name (optional)</div>
-        <input className="field" placeholder="e.g. Seven Days" value={addTitle} onChange={(e) => setAddTitle(e.target.value)} />
-        <div className="dlg-sub">Kind</div>
+      <Dialog open={addOpen} onClose={resetAdd} kicker="Add source">
+        <div className="dlg-sub">Type</div>
         <div className="dlg-opts">
-          {["rss", "youtube", "podcast"].map((k) => (
-            <button key={k} className={`dlg-opt ${addKind === k ? "on" : ""}`} onClick={() => setAddKind(k)}>
+          {["rss", ...(ytAvailable ? ["youtube"] : []), "podcast"].map((k) => (
+            <button
+              key={k}
+              className={`dlg-opt ${addKind === k ? "on" : ""}`}
+              onClick={() => {
+                setAddKind(k);
+                setYtChannel(null);
+                setYtErr("");
+              }}
+            >
               <span className="dlg-radio" aria-hidden />
-              <span className="dlg-name">{k}</span>
+              <span className="dlg-name">{k === "rss" ? "RSS / Atom" : k === "youtube" ? "YouTube" : "Podcast"}</span>
+              <span className="dlg-sub">
+                {k === "rss" ? "any feed URL" : k === "youtube" ? "channel via Data API - full history + durations" : "audio feed"}
+              </span>
             </button>
           ))}
         </div>
-        {addKind === "youtube" && (
-          <button className={`dlg-opt ${addImport ? "on" : ""}`} onClick={() => setAddImport((v) => !v)}>
-            <span className="dlg-check" aria-hidden>
-              {addImport ? "✓" : ""}
-            </span>
-            <span className="dlg-name">Import full history</span>
-            <span className="dlg-sub">back to this source's archive window</span>
-          </button>
+
+        {addKind === "youtube" ? (
+          <>
+            <div className="dlg-sub">Channel</div>
+            <div className="yt-resolve-row">
+              <input
+                className="field"
+                placeholder="Channel URL, @handle, or ID"
+                value={addUrl}
+                autoFocus
+                onChange={(e) => {
+                  setAddUrl(e.target.value);
+                  setYtChannel(null);
+                  setYtErr("");
+                }}
+                onKeyDown={(e) => e.key === "Enter" && resolveYt()}
+              />
+              <button className="btn ghost" onClick={resolveYt} disabled={ytResolving || !addUrl.trim()}>
+                {ytResolving ? "Finding…" : "Find"}
+              </button>
+            </div>
+            {ytErr && <p className="err">{ytErr}</p>}
+            {ytChannel && (
+              <div className="yt-channel-preview">
+                {ytChannel.thumbnail && <img src={ytChannel.thumbnail} alt="" className="yt-channel-avatar" />}
+                <span className="yt-channel-title">{ytChannel.title}</span>
+                <span className="dlg-sub">resolved</span>
+              </div>
+            )}
+            <button className={`dlg-opt ${addImport ? "on" : ""}`} onClick={() => setAddImport((v) => !v)}>
+              <span className="dlg-check" aria-hidden>
+                {addImport ? "✓" : ""}
+              </span>
+              <span className="dlg-name">Import full history</span>
+              <span className="dlg-sub">back to this source's archive window</span>
+            </button>
+          </>
+        ) : (
+          <>
+            <div className="dlg-sub">Feed URL</div>
+            <input className="field" placeholder="https://example.com/feed" value={addUrl} autoFocus onChange={(e) => setAddUrl(e.target.value)} />
+            <div className="dlg-sub">Name (optional)</div>
+            <input className="field" placeholder="e.g. Seven Days" value={addTitle} onChange={(e) => setAddTitle(e.target.value)} />
+          </>
         )}
+
         <div className="dlg-actions">
           <button className="btn" onClick={addSource} disabled={adding || !addUrl.trim()}>
             {adding ? "Adding…" : "Add source"}

@@ -95,3 +95,30 @@ func TestTransientOn403(t *testing.T) {
 		t.Fatalf("403 should be transient, got %T: %v", err, err)
 	}
 }
+
+func TestParseChannelInput(t *testing.T) {
+	tests := []struct {
+		name                                 string
+		in                                   string
+		id, handle, username, videoID, query string
+	}{
+		{"uc id", "UCXuqSBlHAE6Xw-yeJA0Tunw", "UCXuqSBlHAE6Xw-yeJA0Tunw", "", "", "", ""},
+		{"bare handle", "@mkbhd", "", "mkbhd", "", "", ""},
+		{"channel url", "https://www.youtube.com/channel/UCXuqSBlHAE6Xw-yeJA0Tunw", "UCXuqSBlHAE6Xw-yeJA0Tunw", "", "", "", ""},
+		{"handle url", "https://youtube.com/@LinusTechTips", "", "LinusTechTips", "", "", ""},
+		{"user url", "https://www.youtube.com/user/marquesbrownlee", "", "", "marquesbrownlee", "", ""},
+		{"custom c url", "https://www.youtube.com/c/mkbhd", "", "", "", "", "mkbhd"},
+		{"watch url", "https://www.youtube.com/watch?v=dQw4w9WgXcQ", "", "", "", "dQw4w9WgXcQ", ""},
+		{"youtu.be", "https://youtu.be/dQw4w9WgXcQ", "", "", "", "dQw4w9WgXcQ", ""},
+		{"bare word", "veritasium", "", "veritasium", "", "", ""},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			id, handle, username, videoID, query := parseChannelInput(tt.in)
+			if id != tt.id || handle != tt.handle || username != tt.username || videoID != tt.videoID || query != tt.query {
+				t.Errorf("parseChannelInput(%q) = (id=%q handle=%q user=%q vid=%q q=%q), want (id=%q handle=%q user=%q vid=%q q=%q)",
+					tt.in, id, handle, username, videoID, query, tt.id, tt.handle, tt.username, tt.videoID, tt.query)
+			}
+		})
+	}
+}

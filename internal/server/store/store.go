@@ -953,6 +953,48 @@ func (db *DB) UpsertItem(ctx context.Context, it *Item) (bool, error) {
 	return false, nil
 }
 
+// UpsertYouTubeItem is UpsertItem for the Data-API path (ongoing fetch + backlog
+// import). It differs in one way: the API is authoritative for metadata the RSS
+// feed never carries, so on an existing row it refreshes duration/media_type
+// (when the API gave one), thumbnail, and body/summary (when currently empty).
+// This is what backfills items first ingested via RSS with duration_sec=0 - the
+// plain UpsertItem's ON CONFLICT DO NOTHING can't. isNew is derived exactly as in
+// UpsertItem (insert-or-nothing first, so RowsAffected stays truthful).
+func (db *DB) UpsertYouTubeItem(ctx context.Context, it *Item) (bool, error) {
+	res, err := db.sql.ExecContext(ctx,
+		`INSERT INTO items (source_id, external_id, url, title, summary, content, content_source, author, thumbnail_url, media_type, duration_sec, published_at)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		 ON CONFLICT(source_id, external_id) DO NOTHING`,
+		it.SourceID, it.ExternalID, it.URL, it.Title, it.Summary, it.Content, it.ContentSource, it.Author, it.ThumbnailURL,
+		def(it.MediaType, "unknown"), it.DurationSec, it.PublishedAt.UTC().Format(time.RFC3339))
+	if err != nil {
+		return false, err
+	}
+	if n, _ := res.RowsAffected(); n > 0 {
+		return true, nil // genuinely new insert
+	}
+	// Existing row: refresh authoritative API metadata. Duration/media_type only when
+	// the API actually returned a duration (>0); thumbnail always; summary/content
+	// only to fill an empty body (don't clobber an edited/existing one).
+	_, err = db.sql.ExecContext(ctx,
+		`UPDATE items SET
+		   duration_sec   = CASE WHEN ? > 0 THEN ? ELSE duration_sec END,
+		   media_type     = CASE WHEN ? > 0 THEN ? ELSE media_type END,
+		   thumbnail_url  = CASE WHEN ? <> '' THEN ? ELSE thumbnail_url END,
+		   summary        = CASE WHEN summary = '' AND ? <> '' THEN ? ELSE summary END,
+		   content        = CASE WHEN content = '' AND ? <> '' THEN ? ELSE content END,
+		   content_source = CASE WHEN content = '' AND ? <> '' THEN ? ELSE content_source END
+		 WHERE source_id = ? AND external_id = ?`,
+		it.DurationSec, it.DurationSec,
+		it.DurationSec, def(it.MediaType, "unknown"),
+		it.ThumbnailURL, it.ThumbnailURL,
+		it.Summary, it.Summary,
+		it.Content, it.Content,
+		it.Content, def(it.ContentSource, ContentSourceRSS),
+		it.SourceID, it.ExternalID)
+	return false, err
+}
+
 func (db *DB) MarkFetched(ctx context.Context, sourceID int64, fetchErr string) error {
 	_, err := db.sql.ExecContext(ctx,
 		`UPDATE sources SET last_fetch_at = datetime('now'), fetch_error = ? WHERE id = ?`,

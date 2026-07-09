@@ -12,6 +12,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -62,6 +63,204 @@ func UploadsPlaylistID(channelID string) string {
 		return ""
 	}
 	return "UU" + channelID[2:]
+}
+
+// CanonicalFeedURL is the channel's RSS feed URL. otium stores this as a youtube
+// source's feed_url even when the source is API-native: it encodes the channel id
+// (so ChannelIDFromFeedURL round-trips), satisfies the unique feed_url constraint,
+// and remains a valid RSS fallback if the Data API key is ever removed.
+func CanonicalFeedURL(channelID string) string {
+	return "https://www.youtube.com/feeds/videos.xml?channel_id=" + channelID
+}
+
+// ResolvedChannel is a channel identity resolved from free-form user input.
+type ResolvedChannel struct {
+	ChannelID    string
+	Title        string
+	ThumbnailURL string
+}
+
+var ucIDRe = regexp.MustCompile(`^UC[0-9A-Za-z_-]{22}$`)
+
+// ResolveChannel turns user input into a canonical channel identity. It accepts a
+// UC… channel id, an @handle, a channel/handle/user/video URL, or (as a last
+// resort) a free-text name. Direct forms use channels.list (1 unit); a bare name
+// or /c/ custom URL falls back to search.list (100 units, fuzzy - returns the top
+// channel match), and a video URL is resolved via videos.list → its channel.
+func (c *Client) ResolveChannel(ctx context.Context, input string) (ResolvedChannel, error) {
+	input = strings.TrimSpace(input)
+	if input == "" {
+		return ResolvedChannel{}, fmt.Errorf("empty channel identifier")
+	}
+	id, handle, username, videoID, query := parseChannelInput(input)
+	switch {
+	case id != "":
+		return c.channelBy(ctx, "id", id)
+	case handle != "":
+		if rc, err := c.channelBy(ctx, "forHandle", handle); err == nil {
+			return rc, nil
+		}
+		return c.searchChannel(ctx, handle) // stale/renamed handle - fall back to search
+	case username != "":
+		if rc, err := c.channelBy(ctx, "forUsername", username); err == nil {
+			return rc, nil
+		}
+		return c.searchChannel(ctx, username)
+	case videoID != "":
+		cid, err := c.channelIDForVideo(ctx, videoID)
+		if err != nil {
+			return ResolvedChannel{}, err
+		}
+		return c.channelBy(ctx, "id", cid)
+	default:
+		return c.searchChannel(ctx, query)
+	}
+}
+
+// parseChannelInput classifies input into exactly one lookup mode.
+func parseChannelInput(in string) (id, handle, username, videoID, query string) {
+	if ucIDRe.MatchString(in) {
+		return in, "", "", "", ""
+	}
+	if strings.HasPrefix(in, "@") {
+		return "", strings.TrimPrefix(in, "@"), "", "", ""
+	}
+	if u, err := url.Parse(in); err == nil && u.Host != "" {
+		host := strings.TrimPrefix(strings.ToLower(u.Host), "www.")
+		if host == "youtu.be" {
+			return "", "", "", strings.Trim(u.Path, "/"), ""
+		}
+		if v := u.Query().Get("v"); v != "" {
+			return "", "", "", v, ""
+		}
+		seg := strings.Split(strings.Trim(u.Path, "/"), "/")
+		switch {
+		case len(seg) >= 2 && seg[0] == "channel":
+			return seg[1], "", "", "", ""
+		case len(seg) >= 2 && seg[0] == "user":
+			return "", "", seg[1], "", ""
+		case len(seg) >= 2 && seg[0] == "c":
+			return "", "", "", "", seg[1] // custom URL - no direct lookup, search it
+		case len(seg) >= 2 && seg[0] == "shorts":
+			return "", "", "", seg[1], ""
+		case len(seg) >= 1 && strings.HasPrefix(seg[0], "@"):
+			return "", strings.TrimPrefix(seg[0], "@"), "", "", ""
+		case len(seg) >= 1 && seg[0] != "":
+			return "", "", "", "", seg[0] // /Something - treat as a name to search
+		}
+	}
+	// Bare word: try it as a handle first (ResolveChannel falls back to search).
+	return "", in, "", "", ""
+}
+
+func (c *Client) channelBy(ctx context.Context, param, val string) (ResolvedChannel, error) {
+	p := url.Values{}
+	p.Set("part", "snippet")
+	p.Set(param, val)
+	rc, err := c.channelsList(ctx, p)
+	if err != nil {
+		return ResolvedChannel{}, err
+	}
+	if rc.ChannelID == "" {
+		return ResolvedChannel{}, fmt.Errorf("no channel for %s=%s", param, val)
+	}
+	return rc, nil
+}
+
+func (c *Client) channelsList(ctx context.Context, p url.Values) (ResolvedChannel, error) {
+	var out struct {
+		Items []struct {
+			ID      string `json:"id"`
+			Snippet struct {
+				Title      string `json:"title"`
+				Thumbnails map[string]struct {
+					URL string `json:"url"`
+				} `json:"thumbnails"`
+			} `json:"snippet"`
+		} `json:"items"`
+	}
+	if err := c.get(ctx, "channels", p, &out); err != nil {
+		return ResolvedChannel{}, err
+	}
+	if len(out.Items) == 0 {
+		return ResolvedChannel{}, nil
+	}
+	it := out.Items[0]
+	return ResolvedChannel{ChannelID: it.ID, Title: it.Snippet.Title, ThumbnailURL: bestThumb(it.Snippet.Thumbnails)}, nil
+}
+
+func (c *Client) searchChannel(ctx context.Context, q string) (ResolvedChannel, error) {
+	p := url.Values{}
+	p.Set("part", "snippet")
+	p.Set("type", "channel")
+	p.Set("maxResults", "1")
+	p.Set("q", q)
+	var out struct {
+		Items []struct {
+			Snippet struct {
+				ChannelID  string `json:"channelId"`
+				Title      string `json:"title"`
+				Thumbnails map[string]struct {
+					URL string `json:"url"`
+				} `json:"thumbnails"`
+			} `json:"snippet"`
+		} `json:"items"`
+	}
+	if err := c.get(ctx, "search", p, &out); err != nil {
+		return ResolvedChannel{}, err
+	}
+	if len(out.Items) == 0 {
+		return ResolvedChannel{}, fmt.Errorf("no YouTube channel found for %q", q)
+	}
+	s := out.Items[0].Snippet
+	return ResolvedChannel{ChannelID: s.ChannelID, Title: s.Title, ThumbnailURL: bestThumb(s.Thumbnails)}, nil
+}
+
+func (c *Client) channelIDForVideo(ctx context.Context, videoID string) (string, error) {
+	p := url.Values{}
+	p.Set("part", "snippet")
+	p.Set("id", videoID)
+	var out struct {
+		Items []struct {
+			Snippet struct {
+				ChannelID string `json:"channelId"`
+			} `json:"snippet"`
+		} `json:"items"`
+	}
+	if err := c.get(ctx, "videos", p, &out); err != nil {
+		return "", err
+	}
+	if len(out.Items) == 0 || out.Items[0].Snippet.ChannelID == "" {
+		return "", fmt.Errorf("no channel for video %s", videoID)
+	}
+	return out.Items[0].Snippet.ChannelID, nil
+}
+
+// LatestUploads returns up to max most-recent uploads with duration + view/like
+// stats filled (one playlistItems page + one videos.list). The API-native ongoing
+// fetch: replaces the RSS feed for youtube sources when a key is configured.
+func (c *Client) LatestUploads(ctx context.Context, channelID string, max int) ([]Video, error) {
+	vids, _, err := c.ListUploadsPage(ctx, UploadsPlaylistID(channelID), "")
+	if err != nil {
+		return nil, err
+	}
+	if max > 0 && len(vids) > max {
+		vids = vids[:max]
+	}
+	if err := c.FillDetails(ctx, vids); err != nil {
+		return nil, err
+	}
+	return vids, nil
+}
+
+// VideoDuration returns one video's duration in seconds via videos.list (1 unit).
+// Used by the API-backed duration enricher for items that arrived without one.
+func (c *Client) VideoDuration(ctx context.Context, videoID string) (int, error) {
+	vids := []Video{{ID: videoID}}
+	if err := c.FillDetails(ctx, vids); err != nil {
+		return 0, err
+	}
+	return vids[0].DurationSec, nil
 }
 
 // TransientError marks an error the caller should retry (network / 5xx / quota).

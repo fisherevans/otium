@@ -41,6 +41,10 @@ func NewRouter(h *handler.Handler, authMiddleware func(http.Handler) http.Handle
 			r.Use(authMiddleware)
 
 			r.Get("/users/me", h.GetMe)
+			r.Get("/config", h.Config)
+
+			// YouTube-native sources (#126): resolve a channel identifier before create.
+			r.Post("/sources/resolve-youtube", h.ResolveYouTube)
 
 			r.Get("/interests", h.ListInterests)
 			r.Post("/interests", h.CreateInterest)

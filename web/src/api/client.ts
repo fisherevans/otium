@@ -476,6 +476,11 @@ export const api = {
     req<Source>("POST", "/sources", s),
   // #122: force (re)import of a YouTube source's backlog from the Data API.
   importBacklog: (id: number) => req<{ ok: boolean }>("POST", `/sources/${id}/import-backlog`, {}),
+  // #126: server capability flags (e.g. whether YouTube-native sources can be created).
+  getConfig: () => req<{ youtube_available: boolean }>("GET", "/config"),
+  // #126: resolve a channel URL / @handle / id / name to a canonical channel identity.
+  resolveYouTube: (input: string) =>
+    req<{ channel_id: string; title: string; thumbnail: string; feed_url: string }>("POST", "/sources/resolve-youtube", { input }),
   updateSource: (
     id: number,
     patch: {

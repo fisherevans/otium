@@ -15,12 +15,14 @@ import (
 	"github.com/mmcdole/gofeed"
 
 	"github.com/fisherevans/otium/internal/server/store"
+	"github.com/fisherevans/otium/internal/server/youtube"
 )
 
 type Ingester struct {
 	db     *store.DB
 	parser *gofeed.Parser
 	log    *slog.Logger
+	yt     *youtube.Client // nil unless a Data API key is configured
 }
 
 func NewIngester(db *store.DB, log *slog.Logger) *Ingester {
@@ -29,10 +31,23 @@ func NewIngester(db *store.DB, log *slog.Logger) *Ingester {
 	return &Ingester{db: db, parser: p, log: log}
 }
 
+// SetYouTube enables the API-native ongoing fetch for youtube sources. When set,
+// FetchSource pulls a youtube channel's latest uploads (with duration + stats) via
+// the Data API instead of parsing its RSS feed. Called once at startup when a key
+// is present.
+func (ing *Ingester) SetYouTube(c *youtube.Client) { ing.yt = c }
+
 // FetchSource pulls one source's feed and upserts its items. Returns the count
 // of newly inserted items. A fetch/parse error is recorded on the source and
 // returned, but is not fatal to a batch run.
 func (ing *Ingester) FetchSource(ctx context.Context, s store.Source) (int, error) {
+	if s.Kind == "youtube" && ing.yt != nil {
+		if n, err, ok := ing.fetchYouTube(ctx, s); ok {
+			return n, err
+		}
+		// Not a resolvable channel feed - fall through to RSS parsing.
+	}
+
 	fctx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
 
@@ -59,6 +74,36 @@ func (ing *Ingester) FetchSource(ctx context.Context, s store.Source) (int, erro
 	}
 	_ = ing.db.MarkFetched(ctx, s.ID, "")
 	return fresh, nil
+}
+
+// fetchYouTube pulls a youtube source's latest uploads via the Data API. The bool
+// reports whether this path handled the source: false means the feed_url has no
+// resolvable channel id and the caller should fall back to RSS.
+func (ing *Ingester) fetchYouTube(ctx context.Context, s store.Source) (int, error, bool) {
+	channelID := youtube.ChannelIDFromFeedURL(s.FeedURL)
+	if channelID == "" {
+		return 0, nil, false
+	}
+	fctx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	defer cancel()
+	vids, err := ing.yt.LatestUploads(fctx, channelID, 50)
+	if err != nil {
+		_ = ing.db.MarkFetched(ctx, s.ID, err.Error())
+		return 0, err, true
+	}
+	fresh := 0
+	for _, v := range vids {
+		created, err := ing.db.UpsertYouTubeItem(ctx, youtube.ToItem(v, s.ID))
+		if err != nil {
+			ing.log.Warn("upsert youtube item failed", "source", s.Title, "err", err)
+			continue
+		}
+		if created {
+			fresh++
+		}
+	}
+	_ = ing.db.MarkFetched(ctx, s.ID, "")
+	return fresh, nil, true
 }
 
 // FetchAll fetches every non-archived source for a user, sequentially (homelab

@@ -113,16 +113,27 @@ func main() {
 		go ingestLoop(ctx, db, ing, cfg, log)
 	}
 
-	// Durable out-of-band metadata enrichment (#120). Generic worker; YouTube video
-	// duration is the first integration. State lives in the DB, so it resumes across
-	// restarts and self-heals through rate limits / outages.
-	go enrich.NewWorker(db, log, enrich.NewYouTube(log)).Run(ctx)
-
-	// YouTube backlog import (#122): RSS only gives ~15 recent videos; the Data API
-	// backfills a channel's history to its archive window. Off unless a key is set.
+	// A configured Data API key makes YouTube a first-class source kind (#126):
+	// ongoing fetch, backlog import, and duration enrichment all go through the API
+	// instead of RSS + HTML scraping. One client, shared across the three paths.
+	var ytClient *youtube.Client
 	if cfg.YouTubeAPIKey != "" {
+		ytClient = youtube.NewClient(cfg.YouTubeAPIKey)
+		ing.SetYouTube(ytClient)
+		h.SetYouTube(ytClient)
+	}
+
+	// Durable out-of-band metadata enrichment (#120). Generic worker; YouTube video
+	// duration is the first integration. Uses the Data API when a key is set,
+	// falling back to watch-page scraping otherwise. State lives in the DB, so it
+	// resumes across restarts and self-heals through rate limits / outages.
+	go enrich.NewWorker(db, log, enrich.NewYouTube(log, ytClient)).Run(ctx)
+
+	// YouTube backlog import (#122): the Data API backfills a channel's history to
+	// its archive window. Off unless a key is set.
+	if ytClient != nil {
 		h.SetYouTubeImportEnabled(true)
-		go youtube.NewImportWorker(db, youtube.NewClient(cfg.YouTubeAPIKey), log).Run(ctx)
+		go youtube.NewImportWorker(db, ytClient, log).Run(ctx)
 	}
 
 	go func() {

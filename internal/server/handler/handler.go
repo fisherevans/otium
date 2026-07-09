@@ -14,6 +14,7 @@ import (
 	"github.com/fisherevans/otium/internal/server/middleware"
 	"github.com/fisherevans/otium/internal/server/session"
 	"github.com/fisherevans/otium/internal/server/store"
+	"github.com/fisherevans/otium/internal/server/youtube"
 	"github.com/go-chi/chi/v5"
 	"io"
 	"log/slog"
@@ -29,7 +30,8 @@ type Handler struct {
 	ing      *feeds.Ingester
 	ft       *fulltext.Fetcher
 	log      *slog.Logger
-	ytImport bool // YouTube backlog import enabled (an API key is configured)
+	ytImport bool            // YouTube backlog import enabled (an API key is configured)
+	yt       *youtube.Client // nil unless a Data API key is configured
 }
 
 func New(db *store.DB, ing *feeds.Ingester, log *slog.Logger) *Handler {
@@ -39,6 +41,45 @@ func New(db *store.DB, ing *feeds.Ingester, log *slog.Logger) *Handler {
 // SetYouTubeImportEnabled toggles whether creating a YouTube source enqueues a
 // backlog import and whether the re-sync endpoint accepts requests (#122).
 func (h *Handler) SetYouTubeImportEnabled(v bool) { h.ytImport = v }
+
+// SetYouTube supplies the Data API client used to resolve a channel identifier at
+// create time and to answer the youtube-available capability flag (#126).
+func (h *Handler) SetYouTube(c *youtube.Client) { h.yt = c }
+
+// Config reports server capabilities the frontend needs to shape its UI - notably
+// whether YouTube-native sources can be created (requires a Data API key).
+func (h *Handler) Config(w http.ResponseWriter, r *http.Request) {
+	writeJSON(w, http.StatusOK, map[string]any{
+		"youtube_available": h.yt != nil,
+	})
+}
+
+// ResolveYouTube resolves a channel URL / @handle / id / name to a canonical
+// channel identity, so the add-source UI can confirm the right channel before
+// creating the source (#126).
+func (h *Handler) ResolveYouTube(w http.ResponseWriter, r *http.Request) {
+	if h.yt == nil {
+		writeJSON(w, http.StatusServiceUnavailable, map[string]any{"error": "YouTube sources are not configured"})
+		return
+	}
+	var body struct {
+		Input string `json:"input"`
+	}
+	if !decode(w, r, &body) {
+		return
+	}
+	rc, err := h.yt.ResolveChannel(r.Context(), body.Input)
+	if err != nil {
+		badRequest(w, "couldn't resolve YouTube channel: "+err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{
+		"channel_id": rc.ChannelID,
+		"title":      rc.Title,
+		"thumbnail":  rc.ThumbnailURL,
+		"feed_url":   youtube.CanonicalFeedURL(rc.ChannelID),
+	})
+}
 
 // --- users ---
 
@@ -220,6 +261,23 @@ func (h *Handler) CreateSource(w http.ResponseWriter, r *http.Request) {
 		FeedURL: body.FeedURL,
 		Weight:  body.Weight,
 		State:   body.State,
+	}
+	// A YouTube source supplies a channel identifier (URL / @handle / id / name),
+	// not an RSS URL (#126). Resolve it to the canonical channel feed_url and adopt
+	// the channel's title + avatar when the caller didn't set them.
+	if body.Kind == "youtube" && h.yt != nil {
+		rc, err := h.yt.ResolveChannel(r.Context(), body.FeedURL)
+		if err != nil {
+			badRequest(w, "couldn't resolve YouTube channel: "+err.Error())
+			return
+		}
+		s.FeedURL = youtube.CanonicalFeedURL(rc.ChannelID)
+		if s.Title == "" {
+			s.Title = rc.Title
+		}
+		if rc.ThumbnailURL != "" {
+			s.IconURL = rc.ThumbnailURL
+		}
 	}
 	created, err := h.db.CreateSource(r.Context(), s)
 	if err != nil {

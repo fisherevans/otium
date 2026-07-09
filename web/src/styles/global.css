@@ -3930,3 +3930,19 @@ button.id-source.lead {
   color: var(--ink-mute);
 }
 /* ===== end session engine v2 library management ===== */
+
+/* #126: YouTube channel resolve row + preview in the Add-source dialog. */
+.yt-resolve-row { display: flex; gap: 8px; align-items: stretch; }
+.yt-resolve-row .field { flex: 1; }
+.yt-resolve-row .btn.ghost { white-space: nowrap; }
+.yt-channel-preview {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  margin-top: 8px;
+  border: 1px solid var(--rule, #d8d2c4);
+  border-radius: 8px;
+}
+.yt-channel-avatar { width: 32px; height: 32px; border-radius: 50%; object-fit: cover; }
+.yt-channel-title { font-weight: 600; flex: 1; }

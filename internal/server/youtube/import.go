@@ -74,7 +74,7 @@ func (c *Client) ImportPage(ctx context.Context, db *store.DB, s store.Source, p
 			res.ReachedCutoff = true
 			continue // beyond the import bound - never eligible, skip
 		}
-		isNew, err := db.UpsertItem(ctx, toItem(v, s.ID))
+		isNew, err := db.UpsertYouTubeItem(ctx, ToItem(v, s.ID))
 		if err != nil {
 			return res, err
 		}
@@ -85,10 +85,12 @@ func (c *Client) ImportPage(ctx context.Context, db *store.DB, s store.Source, p
 	return res, nil
 }
 
-// toItem maps an imported video to an otium item. External id matches the RSS
-// ingest form (yt:video:<id>) so the two sources dedupe. media_type is bucketed
-// from the real duration; body is the description (video items ship no other body).
-func toItem(v Video, sourceID int64) *store.Item {
+// ToItem maps a video to an otium item. External id matches the RSS ingest form
+// (yt:video:<id>) so the RSS and Data-API paths dedupe onto the same row.
+// media_type is bucketed from the real duration; body is the description (video
+// items ship no other body). Shared by the backlog importer and the API-native
+// ongoing ingest.
+func ToItem(v Video, sourceID int64) *store.Item {
 	mt := "long"
 	if v.DurationSec > 0 && v.DurationSec <= 90 {
 		mt = "short"
