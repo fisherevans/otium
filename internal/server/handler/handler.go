@@ -81,6 +81,45 @@ func (h *Handler) ResolveYouTube(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// SearchYouTube returns up to N channel matches for a free-text query so the
+// add-source wizard can show a pick-list (#127) instead of trusting a single fuzzy
+// guess. Each result carries the canonical feed_url and a channel_url the UI links
+// to ("open channel") for the user to verify before selecting.
+func (h *Handler) SearchYouTube(w http.ResponseWriter, r *http.Request) {
+	if h.yt == nil {
+		writeJSON(w, http.StatusServiceUnavailable, map[string]any{"error": "YouTube sources are not configured"})
+		return
+	}
+	var body struct {
+		Query string `json:"query"`
+		Limit int    `json:"limit"`
+	}
+	if !decode(w, r, &body) {
+		return
+	}
+	if strings.TrimSpace(body.Query) == "" {
+		badRequest(w, "query is required")
+		return
+	}
+	results, err := h.yt.SearchChannels(r.Context(), body.Query, body.Limit)
+	if err != nil {
+		serverError(w, h.log, "youtube search", err)
+		return
+	}
+	out := make([]map[string]any, 0, len(results))
+	for _, rc := range results {
+		out = append(out, map[string]any{
+			"channel_id":  rc.ChannelID,
+			"title":       rc.Title,
+			"thumbnail":   rc.ThumbnailURL,
+			"description": rc.Description,
+			"feed_url":    youtube.CanonicalFeedURL(rc.ChannelID),
+			"channel_url": "https://www.youtube.com/channel/" + rc.ChannelID,
+		})
+	}
+	writeJSON(w, http.StatusOK, out)
+}
+
 // --- users ---
 
 func (h *Handler) GetMe(w http.ResponseWriter, r *http.Request) {
@@ -242,6 +281,11 @@ func (h *Handler) CreateSource(w http.ResponseWriter, r *http.Request) {
 		FeedURL string  `json:"feed_url"`
 		Weight  float64 `json:"weight"`
 		State   string  `json:"state"`
+		// #127: a channel already picked in the add-source wizard's YouTube search.
+		// When set, we skip resolution (no extra API call) and take the supplied
+		// title/icon straight from the chosen search result.
+		ChannelID string `json:"channel_id"`
+		IconURL   string `json:"icon_url"`
 		// #122: import the channel's backlog from the Data API on add. Defaults ON
 		// for YouTube (nil = yes); ignored when the importer is disabled or the
 		// source isn't YouTube.
@@ -250,7 +294,7 @@ func (h *Handler) CreateSource(w http.ResponseWriter, r *http.Request) {
 	if !decode(w, r, &body) {
 		return
 	}
-	if body.FeedURL == "" {
+	if body.FeedURL == "" && body.ChannelID == "" {
 		badRequest(w, "feed_url is required")
 		return
 	}
@@ -259,24 +303,29 @@ func (h *Handler) CreateSource(w http.ResponseWriter, r *http.Request) {
 		Kind:    body.Kind,
 		Title:   body.Title,
 		FeedURL: body.FeedURL,
+		IconURL: body.IconURL,
 		Weight:  body.Weight,
 		State:   body.State,
 	}
-	// A YouTube source supplies a channel identifier (URL / @handle / id / name),
-	// not an RSS URL (#126). Resolve it to the canonical channel feed_url and adopt
-	// the channel's title + avatar when the caller didn't set them.
+	// A YouTube source is identified by a channel, not an RSS URL (#126). Two paths:
+	// a pre-selected channel_id (wizard search - use it verbatim, no API call), or a
+	// free-form feed_url/@handle/name to resolve.
 	if body.Kind == "youtube" && h.yt != nil {
-		rc, err := h.yt.ResolveChannel(r.Context(), body.FeedURL)
-		if err != nil {
-			badRequest(w, "couldn't resolve YouTube channel: "+err.Error())
-			return
-		}
-		s.FeedURL = youtube.CanonicalFeedURL(rc.ChannelID)
-		if s.Title == "" {
-			s.Title = rc.Title
-		}
-		if rc.ThumbnailURL != "" {
-			s.IconURL = rc.ThumbnailURL
+		if body.ChannelID != "" {
+			s.FeedURL = youtube.CanonicalFeedURL(body.ChannelID)
+		} else {
+			rc, err := h.yt.ResolveChannel(r.Context(), body.FeedURL)
+			if err != nil {
+				badRequest(w, "couldn't resolve YouTube channel: "+err.Error())
+				return
+			}
+			s.FeedURL = youtube.CanonicalFeedURL(rc.ChannelID)
+			if s.Title == "" {
+				s.Title = rc.Title
+			}
+			if rc.ThumbnailURL != "" {
+				s.IconURL = rc.ThumbnailURL
+			}
 		}
 	}
 	created, err := h.db.CreateSource(r.Context(), s)

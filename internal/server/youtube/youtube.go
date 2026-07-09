@@ -78,6 +78,46 @@ type ResolvedChannel struct {
 	ChannelID    string
 	Title        string
 	ThumbnailURL string
+	Description  string
+}
+
+// SearchChannels returns up to limit channel matches for a free-text query
+// (search.list, 100 quota units). Backs the add-source wizard's "pick the right
+// channel" step, where the user chooses from results rather than trusting a single
+// fuzzy guess.
+func (c *Client) SearchChannels(ctx context.Context, q string, limit int) ([]ResolvedChannel, error) {
+	if limit <= 0 || limit > 25 {
+		limit = 6
+	}
+	p := url.Values{}
+	p.Set("part", "snippet")
+	p.Set("type", "channel")
+	p.Set("maxResults", strconv.Itoa(limit))
+	p.Set("q", q)
+	var out struct {
+		Items []struct {
+			Snippet struct {
+				ChannelID   string `json:"channelId"`
+				Title       string `json:"title"`
+				Description string `json:"description"`
+				Thumbnails  map[string]struct {
+					URL string `json:"url"`
+				} `json:"thumbnails"`
+			} `json:"snippet"`
+		} `json:"items"`
+	}
+	if err := c.get(ctx, "search", p, &out); err != nil {
+		return nil, err
+	}
+	res := make([]ResolvedChannel, 0, len(out.Items))
+	for _, it := range out.Items {
+		s := it.Snippet
+		if s.ChannelID == "" {
+			continue
+		}
+		res = append(res, ResolvedChannel{ChannelID: s.ChannelID, Title: s.Title, ThumbnailURL: bestThumb(s.Thumbnails), Description: s.Description})
+	}
+	return res, nil
 }
 
 var ucIDRe = regexp.MustCompile(`^UC[0-9A-Za-z_-]{22}$`)
@@ -127,6 +167,11 @@ func parseChannelInput(in string) (id, handle, username, videoID, query string) 
 	}
 	if u, err := url.Parse(in); err == nil && u.Host != "" {
 		host := strings.TrimPrefix(strings.ToLower(u.Host), "www.")
+		// Canonical RSS feed URL (…/feeds/videos.xml?channel_id=UC…): already carries
+		// the channel id, so treat it as a direct id lookup (idempotent resolve).
+		if cid := u.Query().Get("channel_id"); ucIDRe.MatchString(cid) {
+			return cid, "", "", "", ""
+		}
 		if host == "youtu.be" {
 			return "", "", "", strings.Trim(u.Path, "/"), ""
 		}
@@ -190,30 +235,14 @@ func (c *Client) channelsList(ctx context.Context, p url.Values) (ResolvedChanne
 }
 
 func (c *Client) searchChannel(ctx context.Context, q string) (ResolvedChannel, error) {
-	p := url.Values{}
-	p.Set("part", "snippet")
-	p.Set("type", "channel")
-	p.Set("maxResults", "1")
-	p.Set("q", q)
-	var out struct {
-		Items []struct {
-			Snippet struct {
-				ChannelID  string `json:"channelId"`
-				Title      string `json:"title"`
-				Thumbnails map[string]struct {
-					URL string `json:"url"`
-				} `json:"thumbnails"`
-			} `json:"snippet"`
-		} `json:"items"`
-	}
-	if err := c.get(ctx, "search", p, &out); err != nil {
+	res, err := c.SearchChannels(ctx, q, 1)
+	if err != nil {
 		return ResolvedChannel{}, err
 	}
-	if len(out.Items) == 0 {
+	if len(res) == 0 {
 		return ResolvedChannel{}, fmt.Errorf("no YouTube channel found for %q", q)
 	}
-	s := out.Items[0].Snippet
-	return ResolvedChannel{ChannelID: s.ChannelID, Title: s.Title, ThumbnailURL: bestThumb(s.Thumbnails)}, nil
+	return res[0], nil
 }
 
 func (c *Client) channelIDForVideo(ctx context.Context, videoID string) (string, error) {

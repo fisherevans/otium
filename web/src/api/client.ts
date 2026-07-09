@@ -472,8 +472,20 @@ export const api = {
   // Per-source stats bundle (#116), keyed by source id. One call covers the whole
   // library, so a page fetches it once and looks up by id.
   sourceStats: () => req<Record<number, SourceStats>>("GET", "/sources/stats"),
-  createSource: (s: { title: string; feed_url: string; kind?: string; weight?: number; import_backlog?: boolean }) =>
-    req<Source>("POST", "/sources", s),
+  createSource: (s: {
+    title: string;
+    feed_url?: string;
+    kind?: string;
+    weight?: number;
+    import_backlog?: boolean;
+    channel_id?: string; // #127: a channel already picked in the wizard search
+    icon_url?: string;
+  }) => req<Source>("POST", "/sources", s),
+  // #127: search YouTube for channels to pick from (add-source wizard).
+  searchYouTube: (query: string, limit = 6) =>
+    req<
+      { channel_id: string; title: string; thumbnail: string; description: string; feed_url: string; channel_url: string }[]
+    >("POST", "/sources/search-youtube", { query, limit }),
   // #122: force (re)import of a YouTube source's backlog from the Data API.
   importBacklog: (id: number) => req<{ ok: boolean }>("POST", `/sources/${id}/import-backlog`, {}),
   // #126: server capability flags (e.g. whether YouTube-native sources can be created).
