@@ -17,6 +17,7 @@ import (
 
 	"github.com/fisherevans/otium/internal/oidc"
 	"github.com/fisherevans/otium/internal/server"
+	"github.com/fisherevans/otium/internal/server/enrich"
 	"github.com/fisherevans/otium/internal/server/feeds"
 	"github.com/fisherevans/otium/internal/server/handler"
 	"github.com/fisherevans/otium/internal/server/middleware"
@@ -110,6 +111,11 @@ func main() {
 	if cfg.FetchIntervalMin > 0 {
 		go ingestLoop(ctx, db, ing, cfg, log)
 	}
+
+	// Durable out-of-band metadata enrichment (#120). Generic worker; YouTube video
+	// duration is the first integration. State lives in the DB, so it resumes across
+	// restarts and self-heals through rate limits / outages.
+	go enrich.NewWorker(db, log, enrich.NewYouTube(log)).Run(ctx)
 
 	go func() {
 		log.Info("otium-server listening", "addr", srv.Addr, "db", cfg.DBPath)

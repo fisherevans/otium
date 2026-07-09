@@ -183,6 +183,32 @@ CREATE TABLE IF NOT EXISTS item_state (
     PRIMARY KEY (user_id, item_id)
 );
 
+-- Durable per-item metadata enrichment queue (#120). One row per (item, enricher
+-- kind), e.g. ('youtube_metadata'). The background worker fetches out-of-band
+-- metadata (video duration today; article engagement/other facets later) and is
+-- generic - kind names the pluggable enricher. status: pending (needs work /
+-- retry scheduled) | done | failed (gave up after max attempts = "not available").
+-- Durable across restarts: the worker resumes from whatever is still pending, and
+-- backoff lives in next_attempt_at so rate-limits / outages self-heal.
+CREATE TABLE IF NOT EXISTS item_enrichment (
+    item_id         INTEGER NOT NULL REFERENCES items(id) ON DELETE CASCADE,
+    kind            TEXT NOT NULL,
+    status          TEXT NOT NULL DEFAULT 'pending',
+    attempts        INTEGER NOT NULL DEFAULT 0,
+    next_attempt_at TEXT NOT NULL DEFAULT (datetime('now')),
+    last_error      TEXT NOT NULL DEFAULT '',
+    updated_at      TEXT NOT NULL DEFAULT (datetime('now')),
+    PRIMARY KEY (item_id, kind)
+);
+CREATE INDEX IF NOT EXISTS idx_item_enrichment_due ON item_enrichment(status, next_attempt_at);
+
+-- Small global (non-user) key/value store for system cursors, e.g. the enrichment
+-- backfill sweep position. (The other kv table is user-scoped; this is not.)
+CREATE TABLE IF NOT EXISTS meta (
+    key   TEXT PRIMARY KEY,
+    value TEXT NOT NULL
+);
+
 -- Built sessions - one row per "give me 20 minutes of comedy" request. A session
 -- is durable: the built queue (item_ids) and the read position (cursor) live
 -- here, so a refresh or a return resumes the SAME items at the SAME place rather
