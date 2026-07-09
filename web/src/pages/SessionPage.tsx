@@ -32,11 +32,11 @@ function contentKind(item: Item): "video" | "audio" | "read" {
 // back on the same items at the same place.
 type Checkin = null | "fast";
 
-// Fast-scroll check-in tuning (#68). An advance counts as a "fast pass" when the
-// item was on screen under FAST_DWELL_MS and was never engaged (opened/clicked/
-// liked/saved). FAST_STREAK consecutive fast passes trips the calm check-in.
-const FAST_DWELL_MS = 4000;
-const FAST_STREAK = 3;
+// Mindfulness check-in tuning (#68/#137). The nudge is pattern-based, not
+// speed-based: pass this many cards in a row without opening ANY (open/click/like/
+// save) before the calm check-in surfaces. Deliberately high - a real "scrolling
+// past everything" run, not a few skipped headlines. Any engagement resets it.
+const FAST_STREAK = 8;
 
 export default function SessionPage() {
   const { id = "" } = useParams();
@@ -310,10 +310,12 @@ export default function SessionPage() {
               // check-in, not a topic change.
               if (fastCheckin.current) {
                 api.recordDwell(left.item.id, id, dwellMs, wasEngaged).catch(() => {});
-                // A fast, unengaged pass = scrolling past without consuming.
-                // Consecutive such passes are the drift signal; engaging or
-                // dwelling on anything resets the streak.
-                if (!wasEngaged && dwellMs < FAST_DWELL_MS) {
+                // #137: intervene on a PATTERN, not raw speed - passing card after
+                // card without opening ANY of them (regardless of how fast). Any
+                // engagement (open/like/save) resets the streak, so this only trips
+                // on a genuine "scrolling past everything" run, never on skimming a
+                // few headlines looking for something worth opening.
+                if (!wasEngaged) {
                   fastStreak.current += 1;
                   if (fastStreak.current >= FAST_STREAK && !checkin) setCheckin("fast");
                 } else {
@@ -558,7 +560,7 @@ export default function SessionPage() {
           and returns home. Neither re-ranks or re-fetches. */}
       {checkin === "fast" && (
         <div className="checkin">
-          <p>You're scrolling fast - want to keep going, or do something else?</p>
+          <p>You've passed by a lot without opening anything - keep going, or do something else?</p>
           <div className="checkin-actions">
             <button className="mini" onClick={dismissCheckin}>Keep going</button>
             <button className="mini solid" onClick={goHome}>Something else</button>
