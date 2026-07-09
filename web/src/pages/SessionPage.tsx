@@ -90,6 +90,8 @@ export default function SessionPage() {
   const shownIds = useRef<Set<number>>(new Set());
   const engaged = useRef<Set<number>>(new Set()); // ids that got open/like/save
   const opened = useRef<Set<number>>(new Set()); // ids that fired an `open` event (dedupe, #51)
+  // #135 active-reading timer: the in-app read/watch currently being timed.
+  const readTimer = useRef<{ itemId: number; kind: string; openedAt: number; hiddenMs: number; hiddenSince: number | null } | null>(null);
   const lastContent = useRef<Selected | null>(null); // retains the surface item through the exit anim
   const prevIdx = useRef(0);
   const endedServer = useRef(false); // did we already mark the session ended server-side
@@ -278,6 +280,30 @@ export default function SessionPage() {
     if (elapsed >= durationSec) setOverIdx(current);
   }, [elapsed, durationSec, loading, items.length, overIdx, current]);
 
+  // #135: pause the active-read timer while the tab is hidden (backgrounded /
+  // screen locked), so "time spent" reflects real attention, not a left-open tab.
+  useEffect(() => {
+    function onVis() {
+      const t = readTimer.current;
+      if (!t) return;
+      if (document.hidden) {
+        if (t.hiddenSince === null) t.hiddenSince = Date.now();
+      } else if (t.hiddenSince !== null) {
+        t.hiddenMs += Date.now() - t.hiddenSince;
+        t.hiddenSince = null;
+      }
+    }
+    document.addEventListener("visibilitychange", onVis);
+    return () => document.removeEventListener("visibilitychange", onVis);
+  }, []);
+
+  // #135: whenever the in-app reader clears (via any path - scrim, back button,
+  // popstate), flush the active-read time. stopRead no-ops if nothing's timing.
+  useEffect(() => {
+    if (content === null) stopRead();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [content]);
+
   // Scroll-snap: an IntersectionObserver marks the centered item as current,
   // marks it seen, and tracks advance pace (fast-flicking check-in). No refill -
   // the queue is fixed and durable.
@@ -420,8 +446,31 @@ export default function SessionPage() {
   // gesture / browser back closes it instead of navigating the SPA out of the
   // session. popstate (above) closes it; closeContent pops the entry when
   // dismissed by the back button / scrim so history stays balanced.
+  function readKind(it: Item): string {
+    return isVideo(it) ? "video" : isMedia(it) ? "audio" : "read";
+  }
+  // #135 active-reading timer: measure time the in-app reader/player is open AND
+  // the tab is visible; pause while hidden (see the visibilitychange effect).
+  function startRead(sel: Selected) {
+    readTimer.current = {
+      itemId: sel.item.id,
+      kind: readKind(sel.item),
+      openedAt: Date.now(),
+      hiddenMs: 0,
+      hiddenSince: document.hidden ? Date.now() : null,
+    };
+  }
+  function stopRead() {
+    const t = readTimer.current;
+    readTimer.current = null;
+    if (!t) return;
+    const hidden = t.hiddenMs + (t.hiddenSince !== null ? Date.now() - t.hiddenSince : 0);
+    const ms = Math.max(0, Date.now() - t.openedAt - hidden);
+    api.recordRead(t.itemId, id ?? "", ms, false, t.kind).catch(() => {});
+  }
   function openContent(sel: Selected) {
     recordOpen(sel);
+    startRead(sel);
     setContent(sel);
     if (!readerPushed.current) {
       window.history.pushState({ otiumReader: true }, "");
@@ -429,6 +478,7 @@ export default function SessionPage() {
     }
   }
   function closeContent() {
+    stopRead();
     setContent(null);
     if (readerPushed.current) {
       readerPushed.current = false;
@@ -437,6 +487,8 @@ export default function SessionPage() {
   }
   function openExternal(sel: Selected) {
     recordOpen(sel);
+    // External read: engagement counted, duration unmeasured (excluded from averages).
+    api.recordRead(sel.item.id, id ?? "", 0, true, readKind(sel.item)).catch(() => {});
     window.open(sel.item.url, "_blank", "noopener");
   }
   function likeItem(it: Item) {

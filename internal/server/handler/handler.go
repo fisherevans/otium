@@ -1028,6 +1028,37 @@ func (h *Handler) ItemDwell(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
 }
 
+// ItemRead records active reading/watching time (#135). In-app reads (the reader
+// or player, while the tab is visible) carry measured `ms`; an external open
+// ("Open source" -> new tab) carries external=true and ms=0 (unmeasured - it's
+// counted as an engagement but deliberately excluded from reading-time averages,
+// never as a 0-minute read). Append-only into the events log ("read"); the stats
+// aggregation reads these. Never re-ranks.
+func (h *Handler) ItemRead(w http.ResponseWriter, r *http.Request) {
+	uid := userID(r)
+	itemID, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	if err != nil {
+		badRequest(w, "bad item id")
+		return
+	}
+	var body struct {
+		SessionID string `json:"session_id"`
+		Ms        int64  `json:"ms"`
+		External  bool   `json:"external"`
+		Kind      string `json:"kind"` // "read" | "video" | "audio"
+	}
+	if !decode(w, r, &body) {
+		return
+	}
+	detail, _ := json.Marshal(map[string]any{"ms": body.Ms, "external": body.External, "kind": body.Kind})
+	iid := itemID
+	if err := h.db.LogEvent(r.Context(), uid, "read", &iid, nil, body.SessionID, string(detail)); err != nil {
+		serverError(w, h.log, "log read", err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
+}
+
 // --- full-text content (#98) ---
 
 // ItemContent returns the best reader body for an item, fetching + extracting it

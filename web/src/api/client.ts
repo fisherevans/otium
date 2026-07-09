@@ -556,6 +556,11 @@ export const api = {
   // the fast-scroll check-in setting is on.
   recordDwell: (id: number, sessionId: string, dwellMs: number, engaged: boolean) =>
     req<{ ok: boolean }>("POST", `/items/${id}/dwell`, { session_id: sessionId, dwell_ms: dwellMs, engaged }),
+  // #135: active reading/watching time. In-app reads carry measured ms; an external
+  // open carries external=true, ms=0 (unmeasured - counted as engagement, excluded
+  // from reading-time averages).
+  recordRead: (id: number, sessionId: string, ms: number, external: boolean, kind: string) =>
+    req<{ ok: boolean }>("POST", `/items/${id}/read`, { session_id: sessionId, ms, external, kind }),
   fetchNow: () => req<{ new_items: number }>("POST", "/fetch"),
 
   // --- #83 personal-history block ---

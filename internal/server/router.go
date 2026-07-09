@@ -97,6 +97,7 @@ func NewRouter(h *handler.Handler, authMiddleware func(http.Handler) http.Handle
 			r.Post("/items/{id}/event", h.ItemEvent)
 			// Dwell (#68): append-only engagement measurement, never into the ranker.
 			r.Post("/items/{id}/dwell", h.ItemDwell)
+			r.Post("/items/{id}/read", h.ItemRead) // #135: active read/watch time
 			r.Post("/fetch", h.FetchNow)
 
 			// Personal history (#83): items shown vs engaged, read-only over
