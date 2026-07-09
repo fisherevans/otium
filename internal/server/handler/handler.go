@@ -1059,6 +1059,17 @@ func (h *Handler) ItemRead(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
 }
 
+// ReadingStats returns the descriptive "how you read" summary for the You page (#135).
+func (h *Handler) ReadingStats(w http.ResponseWriter, r *http.Request) {
+	uid := userID(r)
+	rs, err := h.db.ReadingStats(r.Context(), uid)
+	if err != nil {
+		serverError(w, h.log, "reading stats", err)
+		return
+	}
+	writeJSON(w, http.StatusOK, rs)
+}
+
 // --- full-text content (#98) ---
 
 // ItemContent returns the best reader body for an item, fetching + extracting it

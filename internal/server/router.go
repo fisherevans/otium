@@ -75,6 +75,7 @@ func NewRouter(h *handler.Handler, authMiddleware func(http.Handler) http.Handle
 			r.Get("/sources/{id}/items", h.SourceItems)
 
 			r.Get("/insights", h.Insights)
+			r.Get("/reading-stats", h.ReadingStats) // #135: descriptive "how you read" summary
 
 			// Collections (#57): named lists of saved items + builtins.
 			r.Get("/collections", h.ListCollections)

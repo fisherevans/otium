@@ -125,6 +125,18 @@ export interface SourceStats {
   skipped_30: number;
 }
 
+// #135: descriptive "how you read" summary. External opens count as engagements but
+// carry no measured time (excluded from the reading-time figures, reported separately).
+export interface ReadingStats {
+  sessions: number;
+  avg_session_min: number;
+  read_min_in_app: number;
+  reads_in_app: number;
+  reads_external: number;
+  avg_read_sec: number;
+  by_topic: { name: string; min: number }[];
+}
+
 export interface Item {
   id: number;
   source_id: number;
@@ -562,6 +574,8 @@ export const api = {
   recordRead: (id: number, sessionId: string, ms: number, external: boolean, kind: string) =>
     req<{ ok: boolean }>("POST", `/items/${id}/read`, { session_id: sessionId, ms, external, kind }),
   fetchNow: () => req<{ new_items: number }>("POST", "/fetch"),
+  // #135: descriptive "how you read" summary for the You page.
+  readingStats: () => req<ReadingStats>("GET", "/reading-stats"),
 
   // --- #83 personal-history block ---
   // Personal history (#83): items shown vs engaged, newest-interaction-first,
