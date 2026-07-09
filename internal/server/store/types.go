@@ -80,6 +80,9 @@ type Topic struct {
 	Sort        int       `json:"sort"`
 	CreatedAt   time.Time `json:"created_at"`
 	SourceCount int       `json:"source_count,omitempty"`
+	// Articles published across this topic's sources in the last 30 days (#136) - a
+	// predictor of "what following this means", surfaced as an activity indicator.
+	ArticlesPerMonth int `json:"articles_per_month,omitempty"`
 }
 
 // TopicRef is the compact topic identity attached to a session item so the card

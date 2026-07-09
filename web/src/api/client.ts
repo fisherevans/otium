@@ -25,6 +25,7 @@ export interface Topic {
   section_id?: number | null;
   section_slug?: string;
   section_name?: string;
+  articles_per_month?: number; // #136: 30-day publishing volume across the topic's sources
   sort: number;
   source_count?: number;
 }

@@ -536,7 +536,9 @@ func (db *DB) ListTopics(ctx context.Context, userID int64) ([]Topic, error) {
 	rows, err := db.sql.QueryContext(ctx,
 		`SELECT f.id, f.name, f.slug, f.color, f.icon, f.half_life_days, f.archive_after_days,
 		        f.section_id, sec.slug, sec.name, f.sort, f.created_at,
-		        (SELECT COUNT(*) FROM sources s WHERE s.topic_id = f.id) AS source_count
+		        (SELECT COUNT(*) FROM sources s WHERE s.topic_id = f.id) AS source_count,
+		        (SELECT COUNT(*) FROM items it JOIN sources s2 ON s2.id = it.source_id
+		         WHERE s2.topic_id = f.id AND it.published_at >= datetime('now','-30 days')) AS articles_per_month
 		 FROM topics f LEFT JOIN sections sec ON sec.id = f.section_id
 		 WHERE f.user_id = ? ORDER BY f.sort, f.name`, userID)
 	if err != nil {
@@ -550,7 +552,7 @@ func (db *DB) ListTopics(ctx context.Context, userID int64) ([]Topic, error) {
 		var secID sql.NullInt64
 		var secSlug, secName sql.NullString
 		if err := rows.Scan(&f.ID, &f.Name, &f.Slug, &f.Color, &f.Icon, &f.HalfLifeDays, &f.ArchiveAfterDays,
-			&secID, &secSlug, &secName, &f.Sort, &created, &f.SourceCount); err != nil {
+			&secID, &secSlug, &secName, &f.Sort, &created, &f.SourceCount, &f.ArticlesPerMonth); err != nil {
 			return nil, err
 		}
 		if secID.Valid {

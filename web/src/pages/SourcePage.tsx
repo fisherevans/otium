@@ -126,6 +126,24 @@ export default function SourcePage() {
   const insight = sourceInsight(st, bands);
   const resolvedSince = (st?.shown_since ?? 0) + (st?.missed_since ?? 0);
 
+  // #136: typical length - video runtime for media sources, else an estimated read
+  // time from the article's word count (~220 wpm). Computed from the loaded posts;
+  // honest "what following this feels like" rather than tracked dwell.
+  const typical = useMemo(() => {
+    if (!posts || posts.length === 0) return null;
+    const durs = posts.filter((p) => (p.duration_sec ?? 0) > 0).map((p) => p.duration_sec);
+    if (source?.kind === "youtube" || durs.length > posts.length / 2) {
+      if (durs.length === 0) return null;
+      return { kind: "video" as const, mins: Math.max(1, Math.round(durs.reduce((a, b) => a + b, 0) / durs.length / 60)) };
+    }
+    const words = posts
+      .map((p) => (p.content || p.summary || "").replace(/<[^>]+>/g, " ").split(/\s+/).filter(Boolean).length)
+      .filter((n) => n > 0);
+    if (words.length === 0) return null;
+    const avgWords = Math.round(words.reduce((a, b) => a + b, 0) / words.length);
+    return { kind: "read" as const, mins: Math.max(1, Math.round(avgWords / 220)), words: avgWords };
+  }, [posts, source?.kind]);
+
   function eligible(it: SourceItem): boolean {
     return itemEligible(it.published_at, resolvedDays, keywords, `${it.title} ${it.summary}`);
   }
@@ -285,6 +303,15 @@ export default function SourcePage() {
         )}
         {(st?.per_day ?? 0) > 0 && (
           <p className="src-stat-sub">That's {compareToAverage(st?.per_day ?? 0, avgPerDay, "more content", "less content")}.</p>
+        )}
+        {typical && (
+          <p className="src-stat-sub">
+            {typical.kind === "video" ? (
+              <>Typical video runs about <b>{typical.mins} min</b>.</>
+            ) : (
+              <>Typical article is about a <b>{typical.mins} min</b> read (~{typical.words} words).</>
+            )}
+          </p>
         )}
 
         <p className="src-stat">

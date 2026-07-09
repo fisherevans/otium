@@ -132,6 +132,7 @@ export default function SourcesPage() {
                   <span className="introw-name">{f.name}</span>
                   <span className="introw-count">
                     {n} {n === 1 ? "source" : "sources"}
+                    {(f.articles_per_month ?? 0) > 0 && <> · ~{f.articles_per_month}/mo</>}
                   </span>
                 </span>
               </button>
