@@ -53,6 +53,7 @@ export default function InterestPage() {
   const [addUrl, setAddUrl] = useState("");
   const [addTitle, setAddTitle] = useState("");
   const [addKind, setAddKind] = useState("rss");
+  const [addImport, setAddImport] = useState(true); // #122: import YT backlog on add
   const [adding, setAdding] = useState(false);
 
   const interest = useMemo(() => (interests ? interests.find((f) => f.slug === slug) ?? null : null), [interests, slug]);
@@ -132,7 +133,12 @@ export default function InterestPage() {
     if (!addUrl.trim() || !interest || adding) return;
     setAdding(true);
     try {
-      const s = await api.createSource({ title: addTitle.trim() || addUrl, feed_url: addUrl.trim(), kind: addKind });
+      const s = await api.createSource({
+        title: addTitle.trim() || addUrl,
+        feed_url: addUrl.trim(),
+        kind: addKind,
+        ...(addKind === "youtube" ? { import_backlog: addImport } : {}),
+      });
       await api.setSourceInterest(s.id, interest.slug).catch(() => {});
       setAddUrl("");
       setAddTitle("");
@@ -296,6 +302,15 @@ export default function InterestPage() {
             </button>
           ))}
         </div>
+        {addKind === "youtube" && (
+          <button className={`dlg-opt ${addImport ? "on" : ""}`} onClick={() => setAddImport((v) => !v)}>
+            <span className="dlg-check" aria-hidden>
+              {addImport ? "✓" : ""}
+            </span>
+            <span className="dlg-name">Import full history</span>
+            <span className="dlg-sub">back to this source's archive window</span>
+          </button>
+        )}
         <div className="dlg-actions">
           <button className="btn" onClick={addSource} disabled={adding || !addUrl.trim()}>
             {adding ? "Adding…" : "Add source"}

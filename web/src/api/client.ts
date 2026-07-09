@@ -450,8 +450,10 @@ export const api = {
   // Per-source stats bundle (#116), keyed by source id. One call covers the whole
   // library, so a page fetches it once and looks up by id.
   sourceStats: () => req<Record<number, SourceStats>>("GET", "/sources/stats"),
-  createSource: (s: { title: string; feed_url: string; kind?: string; weight?: number }) =>
+  createSource: (s: { title: string; feed_url: string; kind?: string; weight?: number; import_backlog?: boolean }) =>
     req<Source>("POST", "/sources", s),
+  // #122: force (re)import of a YouTube source's backlog from the Data API.
+  importBacklog: (id: number) => req<{ ok: boolean }>("POST", `/sources/${id}/import-backlog`, {}),
   updateSource: (
     id: number,
     patch: {

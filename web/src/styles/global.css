@@ -1140,6 +1140,24 @@ h1.display {
   border-radius: 999px;
   background: var(--ink);
 }
+/* Square checkbox variant (#122 import toggle) - a checkmark, not a radio dot. */
+.dlg-opt .dlg-check {
+  flex: 0 0 auto;
+  width: 17px;
+  height: 17px;
+  border-radius: 4px;
+  border: 1.5px solid var(--ink-mute);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  line-height: 1;
+  color: var(--paper);
+}
+.dlg-opt.on .dlg-check {
+  border-color: var(--ink);
+  background: var(--ink);
+}
 .dlg-opt .dlg-sub {
   font-family: var(--serif);
   font-style: italic;

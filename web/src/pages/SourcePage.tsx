@@ -187,6 +187,14 @@ export default function SourcePage() {
     api.sourceItems(sourceId).then(setPosts).catch(() => {});
     showToast("Metadata reset - every article is unread again.");
   }
+  async function resyncBacklog() {
+    try {
+      await api.importBacklog(sourceId);
+      showToast("Re-syncing history from YouTube - new videos will appear as they import.");
+    } catch (e: any) {
+      showToast(e?.message?.includes("not configured") ? "Backlog import isn't configured on the server." : "Couldn't start the re-sync.");
+    }
+  }
   async function replaceUrl() {
     if (!urlDraft.trim()) return;
     setUrlOpen(false);
@@ -382,6 +390,11 @@ export default function SourcePage() {
         <span className="mgmt-seclabel">Actions</span>
       </div>
       <div className="act-list">
+        {source.kind === "youtube" && (
+          <button className="act-item" onClick={resyncBacklog}>
+            Re-sync full history
+          </button>
+        )}
         <button className="act-item" onClick={() => setResetOpen(true)}>
           Reset article metadata
         </button>
