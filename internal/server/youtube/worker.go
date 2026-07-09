@@ -84,9 +84,10 @@ func (w *ImportWorker) step(ctx context.Context, j store.ImportJob) bool {
 		_ = w.db.CompleteImport(ctx, j.SourceID, 0) // source gone / not youtube - resolve it
 		return false
 	}
-	cutoff := w.cutoffFor(ctx, j.SourceID)
+	bound := w.boundFor(ctx, j.SourceID)
+	bound.SeenBefore = j.Seen
 
-	res, err := w.client.ImportPage(ctx, w.db, *src, j.PageToken, cutoff)
+	res, err := w.client.ImportPage(ctx, w.db, *src, j.PageToken, bound)
 	if err != nil {
 		var te *TransientError
 		if errors.As(err, &te) {
@@ -108,23 +109,27 @@ func (w *ImportWorker) step(ctx context.Context, j store.ImportJob) bool {
 		_ = w.db.CompleteImport(ctx, j.SourceID, res.Imported)
 		w.log.Info("import complete", "source", j.SourceID, "title", src.Title, "new_this_page", res.Imported, "reached_cutoff", res.ReachedCutoff)
 	} else {
-		_ = w.db.AdvanceImport(ctx, j.SourceID, res.NextPageToken, res.Imported)
+		_ = w.db.AdvanceImport(ctx, j.SourceID, res.NextPageToken, res.Imported, res.Seen)
 	}
 	return false
 }
 
-// cutoffFor turns the source's resolved archive window into the oldest publish time
-// to import. Evergreen (-1) returns the zero time = no limit (full history).
-func (w *ImportWorker) cutoffFor(ctx context.Context, sourceID int64) time.Time {
-	days, err := w.db.ResolvedArchiveDays(ctx, sourceID)
+// boundFor turns the source's resolved archive rule (#124) into the import depth
+// bound: the age cutoff (evergreen -> zero time = no age limit), the keep-latest-N
+// count, and how they combine. So a count-capped source imports only its newest N
+// videos; an age-capped one stops at the age cutoff; evergreen + no count fetches
+// the whole catalog.
+func (w *ImportWorker) boundFor(ctx context.Context, sourceID int64) ImportBound {
+	rule, err := w.db.ResolvedArchiveRule(ctx, sourceID)
 	if err != nil {
-		w.log.Warn("import resolve window", "source", sourceID, "err", err)
-		days = store.GlobalArchiveAfterDays
+		w.log.Warn("import resolve rule", "source", sourceID, "err", err)
+		rule = store.ArchiveRule{Days: store.GlobalArchiveAfterDays, Combine: "and"}
 	}
-	if days < 0 {
-		return time.Time{} // evergreen: no cutoff
+	b := ImportBound{MaxCount: rule.KeepCount, Combine: rule.Combine}
+	if rule.Days >= 0 {
+		b.Cutoff = importNow().AddDate(0, 0, -rule.Days)
 	}
-	return importNow().AddDate(0, 0, -days)
+	return b
 }
 
 func importBackoff(attempt int) time.Duration {

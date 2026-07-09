@@ -129,6 +129,11 @@ export default function InterestPage() {
     await api.updateInterest(interest.id, { icon: next }).catch(() => {});
     reloadInterests();
   }
+  async function setHalfLife(days: number) {
+    if (!interest) return;
+    await api.updateInterest(interest.id, { half_life_days: days }).catch(() => {});
+    reloadInterests();
+  }
   async function addSource() {
     if (!addUrl.trim() || !interest || adding) return;
     setAdding(true);
@@ -270,6 +275,26 @@ export default function InterestPage() {
               </button>
             );
           })}
+        </div>
+        <div className="dlg-sub">Freshness half-life</div>
+        <p className="caphint">How fast articles in {interest.name} lose ranking as they age. 0 = use the global default.</p>
+        <div className="dlg-opts">
+          {[
+            { d: 0, label: "Global default" },
+            { d: 3, label: "3 days" },
+            { d: 7, label: "1 week" },
+            { d: 14, label: "2 weeks" },
+            { d: 30, label: "1 month" },
+          ].map((h) => (
+            <button
+              key={h.d}
+              className={`dlg-opt ${(interest.half_life_days ?? 0) === h.d ? "on" : ""}`}
+              onClick={() => setHalfLife(h.d)}
+            >
+              <span className="dlg-radio" aria-hidden />
+              <span className="dlg-name">{h.label}</span>
+            </button>
+          ))}
         </div>
         <div className="dlg-actions">
           <button className="btn" onClick={saveEdit}>

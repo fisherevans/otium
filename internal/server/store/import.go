@@ -15,17 +15,20 @@ type ImportJob struct {
 	SourceID  int64
 	PageToken string
 	Imported  int
-	Attempts  int
+	// Seen is how many videos prior pages already walked (#124), so the keep-latest-N
+	// count bound is over the source's absolute newest-first position, not per-page.
+	Seen     int
+	Attempts int
 }
 
 // EnqueueImport queues (or re-queues, for a forced re-sync) a source backlog import,
-// resetting it to pending from the start.
+// resetting it to pending from the start (page_token and the seen counter cleared).
 func (db *DB) EnqueueImport(ctx context.Context, sourceID int64) error {
 	_, err := db.sql.ExecContext(ctx,
-		`INSERT INTO source_import (source_id, status, page_token, attempts, next_attempt_at, last_error, updated_at)
-		 VALUES (?, 'pending', '', 0, datetime('now'), '', datetime('now'))
+		`INSERT INTO source_import (source_id, status, page_token, imported, seen, attempts, next_attempt_at, last_error, updated_at)
+		 VALUES (?, 'pending', '', 0, 0, 0, datetime('now'), '', datetime('now'))
 		 ON CONFLICT(source_id) DO UPDATE SET
-		   status='pending', page_token='', attempts=0, next_attempt_at=datetime('now'), last_error='', updated_at=datetime('now')`,
+		   status='pending', page_token='', seen=0, attempts=0, next_attempt_at=datetime('now'), last_error='', updated_at=datetime('now')`,
 		sourceID)
 	return err
 }
@@ -33,7 +36,7 @@ func (db *DB) EnqueueImport(ctx context.Context, sourceID int64) error {
 // DueImports returns pending source imports whose backoff has elapsed as of now.
 func (db *DB) DueImports(ctx context.Context, now time.Time, limit int) ([]ImportJob, error) {
 	rows, err := db.sql.QueryContext(ctx,
-		`SELECT source_id, page_token, imported, attempts FROM source_import
+		`SELECT source_id, page_token, imported, seen, attempts FROM source_import
 		 WHERE status='pending' AND next_attempt_at <= ?
 		 ORDER BY next_attempt_at ASC LIMIT ?`, sqlTime(now), limit)
 	if err != nil {
@@ -43,7 +46,7 @@ func (db *DB) DueImports(ctx context.Context, now time.Time, limit int) ([]Impor
 	var out []ImportJob
 	for rows.Next() {
 		var j ImportJob
-		if err := rows.Scan(&j.SourceID, &j.PageToken, &j.Imported, &j.Attempts); err != nil {
+		if err := rows.Scan(&j.SourceID, &j.PageToken, &j.Imported, &j.Seen, &j.Attempts); err != nil {
 			return nil, err
 		}
 		out = append(out, j)
@@ -52,10 +55,11 @@ func (db *DB) DueImports(ctx context.Context, now time.Time, limit int) ([]Impor
 }
 
 // AdvanceImport records progress after one imported page (still pending, next page).
-func (db *DB) AdvanceImport(ctx context.Context, sourceID int64, pageToken string, addImported int) error {
+// addSeen is the videos walked this page, so the persisted count bound advances.
+func (db *DB) AdvanceImport(ctx context.Context, sourceID int64, pageToken string, addImported, addSeen int) error {
 	_, err := db.sql.ExecContext(ctx,
-		`UPDATE source_import SET page_token=?, imported=imported+?, attempts=0, last_error='', next_attempt_at=datetime('now'), updated_at=datetime('now')
-		 WHERE source_id=?`, pageToken, addImported, sourceID)
+		`UPDATE source_import SET page_token=?, imported=imported+?, seen=seen+?, attempts=0, last_error='', next_attempt_at=datetime('now'), updated_at=datetime('now')
+		 WHERE source_id=?`, pageToken, addImported, addSeen, sourceID)
 	return err
 }
 
@@ -116,6 +120,34 @@ func (db *DB) ResolvedArchiveDays(ctx context.Context, sourceID int64) (int, err
 		return GlobalArchiveAfterDays, nil
 	}
 	return days, err
+}
+
+// ArchiveRule is a source's fully-resolved archive rule (#124): the age window
+// (-1 = evergreen, N = days), the keep-latest-N count (0 = off), and how the two
+// combine ("and" | "or"). Used to bound how deep a backlog import fetches.
+type ArchiveRule struct {
+	Days      int
+	KeepCount int
+	Combine   string
+}
+
+// ResolvedArchiveRule resolves a source's effective archive rule (source > interest
+// > global for the age window; the count/combine are per-source), matching
+// session.eligible + the #124 count rule.
+func (db *DB) ResolvedArchiveRule(ctx context.Context, sourceID int64) (ArchiveRule, error) {
+	r := ArchiveRule{Days: GlobalArchiveAfterDays, Combine: "and"}
+	q := fmt.Sprintf(
+		`SELECT CASE WHEN s.archive_after_days != 0 THEN s.archive_after_days
+		             WHEN fi.archive_after_days != 0 THEN fi.archive_after_days
+		             ELSE %d END,
+		        s.archive_keep_count, s.archive_combine
+		 FROM sources s LEFT JOIN interests fi ON fi.id = s.interest_id WHERE s.id = ?`,
+		GlobalArchiveAfterDays)
+	err := db.sql.QueryRowContext(ctx, q, sourceID).Scan(&r.Days, &r.KeepCount, &r.Combine)
+	if err == sql.ErrNoRows {
+		return ArchiveRule{Days: GlobalArchiveAfterDays, Combine: "and"}, nil
+	}
+	return r, err
 }
 
 // SourceByID loads a source (any user) for the import worker.

@@ -20,12 +20,22 @@ export function ArchiveChoice({
   intDays,
   interestName,
   onChange,
+  keepCount,
+  combine,
+  onKeepCount,
+  onCombine,
 }: {
   scope: "source" | "interest";
   value: number; // current archive_after_days
   intDays?: number; // the interest's own value, for a source's inherit resolution
   interestName?: string;
   onChange: (days: number) => void;
+  // Source-only rule-based archive (#124): keep-latest-N count + how it combines
+  // with the age window. Rendered only when onKeepCount is supplied.
+  keepCount?: number;
+  combine?: string;
+  onKeepCount?: (n: number) => void;
+  onCombine?: (c: "and" | "or") => void;
 }) {
   const seedDays = value > 0 ? value : scope === "source" ? resolveSourceArchive(0, intDays ?? 0, interestName).days : resolveInterestArchive(0).days;
   const seed = decomposeArchive(seedDays);
@@ -35,6 +45,9 @@ export function ArchiveChoice({
 
   const inherit = scope === "source" ? resolveSourceArchive(0, intDays ?? 0, interestName) : resolveInterestArchive(0);
   const customActive = showCustom || isCustomArchive(value);
+  // The age rule is active (and the AND/OR combine matters) unless it resolves to
+  // evergreen - then only the count rule limits what's on deck.
+  const ageActive = resolveSourceArchive(value, intDays ?? 0, interestName).days !== -1;
 
   function unitDays(u: string): number {
     return ARCHIVE_UNITS.find((x) => x.key === u)?.days ?? 1;
@@ -115,6 +128,31 @@ export function ArchiveChoice({
             <span className="dlg-name">None</span>
             <span className="dlg-sub">never auto-archive</span>
           </button>
+        </div>
+      )}
+
+      {onKeepCount && (
+        <div className="arch-rule">
+          <div className="arch-rule-row">
+            <span className="dlg-name">Keep latest</span>
+            <input
+              className="arch-num"
+              type="number"
+              min={0}
+              value={keepCount ?? 0}
+              onChange={(e) => onKeepCount(Math.max(0, Math.round(Number(e.target.value) || 0)))}
+            />
+            <span className="dlg-sub">{(keepCount ?? 0) === 0 ? "no count limit" : "on deck"}</span>
+          </div>
+          {ageActive && (keepCount ?? 0) > 0 && onCombine && (
+            <div className="arch-combine">
+              {(["and", "or"] as const).map((c) => (
+                <button key={c} className={`arch-comb ${(combine ?? "and") === c ? "on" : ""}`} onClick={() => onCombine(c)}>
+                  {c === "and" ? "within age AND latest N" : "within age OR latest N"}
+                </button>
+              ))}
+            </div>
+          )}
         </div>
       )}
     </div>

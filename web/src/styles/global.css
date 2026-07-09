@@ -1174,6 +1174,42 @@ h1.display {
   flex-direction: column;
   padding: 12px 2px 0 29px;
 }
+/* Keep-latest-N + AND/OR combine (#124), below the age options. */
+.arch-rule {
+  border-top: 1px solid var(--hair);
+  padding-top: 12px;
+  margin-top: 4px;
+}
+.arch-rule-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.arch-rule-row .dlg-name {
+  flex: 0 0 auto;
+}
+.arch-combine {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+}
+.arch-comb {
+  flex: 1;
+  padding: 7px 8px;
+  font-family: var(--grot);
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  border: 1px solid var(--hair);
+  border-radius: 6px;
+  background: var(--paper);
+  color: var(--ink-mute);
+}
+.arch-comb.on {
+  border-color: var(--ink);
+  background: var(--ink);
+  color: var(--paper);
+}
 .arch-custom-row {
   display: flex;
   gap: 8px;

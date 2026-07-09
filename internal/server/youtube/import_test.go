@@ -47,7 +47,7 @@ func TestImportPage(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	res, err := NewClient("k").ImportPage(ctx, db, *s, "", time.Time{})
+	res, err := NewClient("k").ImportPage(ctx, db, *s, "", ImportBound{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -56,7 +56,7 @@ func TestImportPage(t *testing.T) {
 	}
 
 	// Re-running the same page must not duplicate (external-id dedupe).
-	res2, err := NewClient("k").ImportPage(ctx, db, *s, "", time.Time{})
+	res2, err := NewClient("k").ImportPage(ctx, db, *s, "", ImportBound{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -110,7 +110,7 @@ func TestImportPageCutoff(t *testing.T) {
 		FeedURL: "https://www.youtube.com/feeds/videos.xml?channel_id=UCz"})
 
 	cutoff := time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC)
-	res, err := NewClient("k").ImportPage(ctx, db, *s, "", cutoff)
+	res, err := NewClient("k").ImportPage(ctx, db, *s, "", ImportBound{Cutoff: cutoff})
 	if err != nil {
 		t.Fatal(err)
 	}

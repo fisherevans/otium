@@ -62,6 +62,28 @@ export interface Source {
   // yet, so treat absent archive_after_days as 0 (inherit) and keywords as "".
   archive_after_days?: number;
   archive_keywords?: string;
+  // Rule-based archive (#124): keep-latest-N count (0 = off) + how it combines with
+  // the age window ("and" | "or"). Per-source scoring config as a JSON string
+  // ("" = default newest/no-facets) - parse with parseScoring().
+  archive_keep_count?: number;
+  archive_combine?: string;
+  scoring_config?: string;
+}
+
+// ScoringConfig (#124): per-source article ordering. direction shapes the age
+// facet; length optionally layers a duration preference. Undefined/empty = newest.
+export interface ScoringConfig {
+  direction?: "newest" | "oldest" | "random";
+  length?: { prefer: "longer" | "shorter" } | null;
+}
+
+export function parseScoring(raw?: string): ScoringConfig {
+  if (!raw) return {};
+  try {
+    return JSON.parse(raw) as ScoringConfig;
+  } catch {
+    return {};
+  }
 }
 
 // Per-source transparency bundle (#116): supply, publishing rate, and the
@@ -464,6 +486,9 @@ export const api = {
       title?: string;
       archive_after_days?: number; // #115: 0 inherit, -1 evergreen, N days
       archive_keywords?: string; // #118: comma-separated keyword list
+      archive_keep_count?: number; // #124: keep-latest-N, 0 = off
+      archive_combine?: "and" | "or"; // #124: how age + count combine
+      scoring_config?: ScoringConfig; // #124: sent as an object, stored as JSON
     },
   ) => req<{ ok: boolean }>("PATCH", `/sources/${id}`, patch),
   deleteSource: (id: number) => req<{ ok: boolean }>("DELETE", `/sources/${id}`),

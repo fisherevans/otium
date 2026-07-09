@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { Pencil, Settings, Copy, Check, Mail, Ban, EyeOff } from "lucide-react";
-import { api, type Interest, type Source, type SourceItem, type SourceStats } from "@/api/client";
+import { api, parseScoring, type Interest, type Source, type SourceItem, type SourceStats, type ScoringConfig } from "@/api/client";
 import { bucketOf, BUCKETS, REP_FREQ, REP_HINT, REP_LEVEL, REP_PROSE, REP_LABEL, compareToAverage, type Bucket } from "@/lib/represent";
 import { resolveSourceArchive, itemEligible } from "@/lib/archive";
 import { sourceInsight, openRateBands, type InsightKind } from "@/lib/stats";
@@ -87,6 +87,10 @@ export default function SourcePage() {
 
   const bucket: Bucket = source ? bucketOf(source.weight) : "normal";
   const keywords = parseKeywords(source?.archive_keywords);
+  const scoring = parseScoring(source?.scoring_config);
+  const keepCount = source?.archive_keep_count ?? 0;
+  const combine = (source?.archive_combine ?? "and") as "and" | "or";
+  const lengthPrefer = scoring.length?.prefer ?? null;
 
   // Resolve Archive-After: source override > interest default > global (21d).
   const srcDays = source?.archive_after_days ?? 0;
@@ -174,6 +178,25 @@ export default function SourcePage() {
     const list = parseKeywords(kwDraft);
     await api.updateSource(sourceId, { archive_keywords: list.join(", ") }).catch(() => {});
     reload();
+  }
+  async function setKeepCount(n: number) {
+    await api.updateSource(sourceId, { archive_keep_count: n }).catch(() => {});
+    reload();
+  }
+  async function setCombine(c: "and" | "or") {
+    await api.updateSource(sourceId, { archive_combine: c }).catch(() => {});
+    reload();
+  }
+  // Scoring is a single config object; merge the changed field and send the whole thing.
+  async function saveScoring(next: ScoringConfig) {
+    await api.updateSource(sourceId, { scoring_config: next }).catch(() => {});
+    reload();
+  }
+  function setDirection(d: "newest" | "oldest" | "random") {
+    saveScoring({ ...scoring, direction: d });
+  }
+  function setLengthPrefer(p: "longer" | "shorter" | null) {
+    saveScoring({ ...scoring, length: p ? { prefer: p } : null });
   }
   async function chooseInterest(slug: string) {
     setInterestOpen(false);
@@ -430,7 +453,44 @@ export default function SourcePage() {
           ))}
         </div>
         <div className="dlg-sub">Archive after</div>
-        <ArchiveChoice scope="source" value={srcDays} intDays={intDays} interestName={interest?.name} onChange={pickArchive} />
+        <ArchiveChoice
+          scope="source"
+          value={srcDays}
+          intDays={intDays}
+          interestName={interest?.name}
+          onChange={pickArchive}
+          keepCount={keepCount}
+          combine={combine}
+          onKeepCount={setKeepCount}
+          onCombine={setCombine}
+        />
+
+        <div className="dlg-sub">Article order</div>
+        <div className="dlg-opts">
+          {(["newest", "oldest", "random"] as const).map((d) => (
+            <button
+              key={d}
+              className={`dlg-opt ${(scoring.direction ?? "newest") === d ? "on" : ""}`}
+              onClick={() => setDirection(d)}
+            >
+              <span className="dlg-radio" aria-hidden />
+              <span className="dlg-name">{d === "newest" ? "Newest first" : d === "oldest" ? "Oldest first" : "Random"}</span>
+              <span className="dlg-sub">
+                {d === "newest" ? "reverse chronological" : d === "oldest" ? "work through the backlog" : "shuffled by age"}
+              </span>
+            </button>
+          ))}
+        </div>
+        <div className="dlg-sub">Prefer by length</div>
+        <div className="dlg-opts">
+          {([null, "longer", "shorter"] as const).map((p) => (
+            <button key={p ?? "off"} className={`dlg-opt ${lengthPrefer === p ? "on" : ""}`} onClick={() => setLengthPrefer(p)}>
+              <span className="dlg-radio" aria-hidden />
+              <span className="dlg-name">{p === null ? "No length preference" : p === "longer" ? "Prefer longer" : "Prefer shorter"}</span>
+            </button>
+          ))}
+        </div>
+
         <div className="dlg-sub">Auto-archive keywords</div>
         <input
           className="field"

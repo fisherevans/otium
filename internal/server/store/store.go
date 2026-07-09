@@ -160,6 +160,23 @@ func migrate(sdb *sql.DB) error {
 	if err := ensureColumn(sdb, "sources", "archive_keywords", `ALTER TABLE sources ADD COLUMN archive_keywords TEXT NOT NULL DEFAULT ''`); err != nil {
 		return err
 	}
+	// Rule-based per-source auto-archive (#124): keep-latest-N count + how it
+	// combines with the age rule. Defaults reproduce today's age-only behavior.
+	if err := ensureColumn(sdb, "sources", "archive_keep_count", `ALTER TABLE sources ADD COLUMN archive_keep_count INTEGER NOT NULL DEFAULT 0`); err != nil {
+		return err
+	}
+	if err := ensureColumn(sdb, "sources", "archive_combine", `ALTER TABLE sources ADD COLUMN archive_combine TEXT NOT NULL DEFAULT 'and'`); err != nil {
+		return err
+	}
+	// Per-source article scoring config (#124), JSON. '' = default (newest, no facets).
+	if err := ensureColumn(sdb, "sources", "scoring_config", `ALTER TABLE sources ADD COLUMN scoring_config TEXT NOT NULL DEFAULT ''`); err != nil {
+		return err
+	}
+	// Backlog-import count cursor (#124): videos walked so far, for the keep-latest-N
+	// import bound. Additive for DBs whose source_import predates the column.
+	if err := ensureColumn(sdb, "source_import", "seen", `ALTER TABLE source_import ADD COLUMN seen INTEGER NOT NULL DEFAULT 0`); err != nil {
+		return err
+	}
 	// Backfill YouTube Shorts classification from the URL (#117): items with a
 	// /shorts/ URL are shorts even though the RSS feed shipped no duration.
 	// Condition-idempotent (only touches mis-classified rows); guarded on the items
@@ -719,7 +736,8 @@ func (db *DB) SetInterestSources(ctx context.Context, userID, interestID int64, 
 func (db *DB) ListSources(ctx context.Context, userID int64) ([]Source, error) {
 	rows, err := db.sql.QueryContext(ctx,
 		`SELECT s.id, s.kind, s.title, s.feed_url, s.homepage_url, s.icon_url, s.weight,
-		        s.state, s.trial_until, s.per_session_cap, s.half_life_days, s.archive_after_days, s.archive_keywords, s.added_at, s.last_fetch_at, s.fetch_error,
+		        s.state, s.trial_until, s.per_session_cap, s.half_life_days, s.archive_after_days, s.archive_keywords,
+		        s.archive_keep_count, s.archive_combine, s.scoring_config, s.added_at, s.last_fetch_at, s.fetch_error,
 		        s.interest_id, f.slug,
 		        (SELECT COUNT(*) FROM items i WHERE i.source_id = s.id) AS item_count,
 		        (SELECT COUNT(*) FROM items i WHERE i.source_id = s.id
@@ -757,7 +775,8 @@ func scanSource(r rowScanner) (*Source, error) {
 	var trialUntil, lastFetch, interestSlug sql.NullString
 	var interestID sql.NullInt64
 	if err := r.Scan(&s.ID, &s.Kind, &s.Title, &s.FeedURL, &s.HomepageURL, &s.IconURL, &s.Weight,
-		&s.State, &trialUntil, &s.PerSessionCap, &s.HalfLifeDays, &s.ArchiveAfterDays, &s.ArchiveKeywords, &added, &lastFetch, &s.FetchError,
+		&s.State, &trialUntil, &s.PerSessionCap, &s.HalfLifeDays, &s.ArchiveAfterDays, &s.ArchiveKeywords,
+		&s.ArchiveKeepCount, &s.ArchiveCombine, &s.ScoringConfig, &added, &lastFetch, &s.FetchError,
 		&interestID, &interestSlug,
 		&s.ItemCount, &s.UnseenCount, &s.SkipPct, &s.PostsPerDay); err != nil {
 		return nil, err
@@ -792,39 +811,64 @@ func (db *DB) CreateSource(ctx context.Context, s *Source) (*Source, error) {
 	return s, nil
 }
 
-// UpdateSource patches weight, state, per_session_cap, half_life_days, title.
-// Only non-nil fields are applied.
-func (db *DB) UpdateSource(ctx context.Context, userID, id int64, weight *float64, state *string, cap *int, halfLifeDays *float64, title *string, archiveAfterDays *int, archiveKeywords *string) error {
+// SourcePatch is the set of optionally-updated source fields (#124). Each field is
+// a pointer so nil means "leave unchanged"; UpdateSource applies only the non-nil
+// ones. This replaced UpdateSource's long positional signature - it had reached 8+
+// optional args and adding the #124 archive/scoring knobs on top would have made
+// call sites unreadable.
+type SourcePatch struct {
+	Weight           *float64
+	State            *string
+	Cap              *int
+	HalfLifeDays     *float64
+	Title            *string
+	ArchiveAfterDays *int    // #115: 0 inherit, -1 evergreen, N days
+	ArchiveKeywords  *string // #118: comma-separated
+	ArchiveKeepCount *int    // #124: keep-latest-N, 0 = off
+	ArchiveCombine   *string // #124: "and" | "or"
+	ScoringConfig    *string // #124: scoring JSON; "" = default (newest, no facets)
+}
+
+// UpdateSource applies a SourcePatch: only the patch's non-nil fields are written.
+// Scoped to the owning user.
+func (db *DB) UpdateSource(ctx context.Context, userID, id int64, p SourcePatch) error {
 	var sets []string
 	var args []any
-	if weight != nil {
-		sets = append(sets, "weight = ?")
-		args = append(args, *weight)
+	set := func(col string, v any) {
+		sets = append(sets, col+" = ?")
+		args = append(args, v)
 	}
-	if state != nil {
-		sets = append(sets, "state = ?")
-		args = append(args, *state)
+	if p.Weight != nil {
+		set("weight", *p.Weight)
 	}
-	if cap != nil {
-		sets = append(sets, "per_session_cap = ?")
-		args = append(args, *cap)
+	if p.State != nil {
+		set("state", *p.State)
 	}
-	if halfLifeDays != nil {
-		sets = append(sets, "half_life_days = ?")
-		args = append(args, *halfLifeDays)
+	if p.Cap != nil {
+		set("per_session_cap", *p.Cap)
 	}
-	if title != nil {
-		sets = append(sets, "title = ?")
-		args = append(args, *title)
+	if p.HalfLifeDays != nil {
+		set("half_life_days", *p.HalfLifeDays)
+	}
+	if p.Title != nil {
+		set("title", *p.Title)
 	}
 	// Session engine v2 (#115/#118): Archive-After window + auto-archive keywords.
-	if archiveAfterDays != nil {
-		sets = append(sets, "archive_after_days = ?")
-		args = append(args, *archiveAfterDays)
+	if p.ArchiveAfterDays != nil {
+		set("archive_after_days", *p.ArchiveAfterDays)
 	}
-	if archiveKeywords != nil {
-		sets = append(sets, "archive_keywords = ?")
-		args = append(args, *archiveKeywords)
+	if p.ArchiveKeywords != nil {
+		set("archive_keywords", *p.ArchiveKeywords)
+	}
+	// Rule-based archive + scoring (#124).
+	if p.ArchiveKeepCount != nil {
+		set("archive_keep_count", *p.ArchiveKeepCount)
+	}
+	if p.ArchiveCombine != nil {
+		set("archive_combine", *p.ArchiveCombine)
+	}
+	if p.ScoringConfig != nil {
+		set("scoring_config", *p.ScoringConfig)
 	}
 	if len(sets) == 0 {
 		return nil
@@ -994,7 +1038,9 @@ func candidateCols() string {
 	                FROM items i2 WHERE i2.source_id = s.id
 	                AND i2.published_at >= datetime('now', ?)) AS win_span,
 	             COALESCE((SELECT f.half_life_days FROM interests f WHERE f.id = s.interest_id), 0) AS interest_half_life,
-	             COALESCE((SELECT f.archive_after_days FROM interests f WHERE f.id = s.interest_id), 0) AS interest_archive_after`
+	             COALESCE((SELECT f.archive_after_days FROM interests f WHERE f.id = s.interest_id), 0) AS interest_archive_after,
+	             s.archive_keep_count, s.archive_combine, s.scoring_config,
+	             ROW_NUMBER() OVER (PARTITION BY i.source_id ORDER BY i.published_at DESC, i.id DESC) AS recency_rank`
 }
 
 // cadence-estimation constants. cadencePerDay powers the informational
@@ -1042,7 +1088,8 @@ func scanCandidates(rows *sql.Rows, windowDays int) ([]Candidate, error) {
 		if err := rows.Scan(&c.ID, &c.SourceID, &c.URL, &c.Title, &c.Summary, &c.Content, &c.ContentSource, &c.Author, &c.ThumbnailURL,
 			&c.MediaType, &c.DurationSec, &pub, &fetched,
 			&c.SourceTitle, &c.SourceWeight, &c.PerSessionCap, &c.SourceHalfLifeDays, &c.SourceArchiveAfterDays, &c.SourceArchiveKeywords,
-			&winCount, &winSpan, &halfLife, &c.InterestArchiveAfterDays); err != nil {
+			&winCount, &winSpan, &halfLife, &c.InterestArchiveAfterDays,
+			&c.SourceArchiveKeepCount, &c.SourceArchiveCombine, &c.ScoringConfig, &c.RecencyRank); err != nil {
 			return nil, err
 		}
 		c.PublishedAt = parseTime(pub)
@@ -1322,32 +1369,58 @@ type SourceStatsView struct {
 // archival change - not a fixed global window. (Keyword auto-archive is still applied
 // only by the ranker; it's a rare finer adjustment.) per_day is items over the span.
 func (db *DB) SourceStatsAll(ctx context.Context, userID int64) (map[int64]SourceStatsView, error) {
-	// Effective window in days for a row (-1 = evergreen). Mirrors session.resolveArchiveAfter.
+	// Effective age window in days for a row (-1 = evergreen). Mirrors
+	// session.resolveArchiveAfter.
 	effWin := fmt.Sprintf(
-		`CASE WHEN s.archive_after_days != 0 THEN s.archive_after_days WHEN fi.archive_after_days != 0 THEN fi.archive_after_days ELSE %d END`,
+		`(CASE WHEN s.archive_after_days != 0 THEN s.archive_after_days WHEN fi.archive_after_days != 0 THEN fi.archive_after_days ELSE %d END)`,
 		GlobalArchiveAfterDays)
-	rows, err := db.sql.QueryContext(ctx,
-		`SELECT i.source_id,
-		        COUNT(*) AS total,
-		        SUM(CASE WHEN st.item_id IS NULL THEN 1 ELSE 0 END) AS unseen,
-		        SUM(CASE WHEN st.item_id IS NOT NULL THEN 1 ELSE 0 END) AS shown,
-		        SUM(CASE WHEN st.state = 'skipped' THEN 1 ELSE 0 END) AS skipped,
-		        SUM(CASE WHEN st.state = 'opened' THEN 1 ELSE 0 END) AS opened,
-		        SUM(CASE WHEN st.state = 'liked' THEN 1 ELSE 0 END) AS liked,
-		        SUM(CASE WHEN st.item_id IS NULL AND ((`+effWin+`) = -1 OR julianday(i.published_at) >= julianday('now') - (`+effWin+`)) THEN 1 ELSE 0 END) AS on_deck,
-		        SUM(CASE WHEN st.item_id IS NOT NULL AND julianday(i.published_at) >= julianday(s.added_at) THEN 1 ELSE 0 END) AS shown_since,
-		        SUM(CASE WHEN st.item_id IS NULL AND julianday(i.published_at) >= julianday(s.added_at) AND (`+effWin+`) != -1 AND julianday(i.published_at) < julianday('now') - (`+effWin+`) THEN 1 ELSE 0 END) AS missed_since,
-		        SUM(CASE WHEN st.item_id IS NOT NULL AND st.acted_at >= datetime('now','-30 days') THEN 1 ELSE 0 END) AS shown_30,
-		        SUM(CASE WHEN st.state = 'opened' AND st.acted_at >= datetime('now','-30 days') THEN 1 ELSE 0 END) AS opened_30,
-		        SUM(CASE WHEN st.state = 'skipped' AND st.acted_at >= datetime('now','-30 days') THEN 1 ELSE 0 END) AS skipped_30,
-		        COALESCE(julianday('now') - julianday(MIN(i.published_at)), 0) AS span_days
-		 FROM sources s
-		 JOIN items i ON i.source_id = s.id
-		 LEFT JOIN item_state st ON st.item_id = i.id AND st.user_id = ?
-		 LEFT JOIN interests fi ON fi.id = s.interest_id
-		 WHERE s.user_id = ?
-		 GROUP BY i.source_id`,
-		userID, userID)
+	// on-deck / eligibility mirror of session.eligible() with the #124 count rule.
+	// age passes when the item is inside the window; count passes when its unseen
+	// recency rank is within keep-latest-N; the two combine per archive_combine when
+	// both are active. Keyword auto-archive is NOT applied here (as before): it's a
+	// rare finer adjustment the ranker owns, so on_deck can slightly over-count.
+	age := `(julianday('now') - julianday(ist.published_at))`
+	agePass := `(` + age + ` <= ` + effWin + `)`
+	countPass := `(s.archive_keep_count > 0 AND ist.unseen_rank <= s.archive_keep_count)`
+	// 1 when the (unseen) item is on deck, else 0.
+	eligExpr := fmt.Sprintf(`(CASE
+		WHEN %[1]s <= 0 AND s.archive_keep_count <= 0 THEN 1
+		WHEN %[1]s <= 0 THEN (CASE WHEN %[3]s THEN 1 ELSE 0 END)
+		WHEN s.archive_keep_count <= 0 THEN (CASE WHEN %[2]s THEN 1 ELSE 0 END)
+		WHEN s.archive_combine = 'or' THEN (CASE WHEN %[2]s OR %[3]s THEN 1 ELSE 0 END)
+		ELSE (CASE WHEN %[2]s AND %[3]s THEN 1 ELSE 0 END)
+	END)`, effWin, agePass, countPass)
+	// ist: per-item state + the item's recency rank among its source's UNSEEN items
+	// (newest = 1), so the count rule can be evaluated in the aggregate below.
+	q := `WITH ist AS (
+		SELECT i.source_id, i.id, i.published_at, st.item_id AS seen, st.state, st.acted_at,
+		       CASE WHEN st.item_id IS NULL
+		            THEN ROW_NUMBER() OVER (PARTITION BY i.source_id, (CASE WHEN st.item_id IS NULL THEN 0 ELSE 1 END) ORDER BY i.published_at DESC, i.id DESC)
+		            ELSE 0 END AS unseen_rank
+		FROM items i
+		JOIN sources s0 ON s0.id = i.source_id
+		LEFT JOIN item_state st ON st.item_id = i.id AND st.user_id = ?
+		WHERE s0.user_id = ?
+	)
+	SELECT ist.source_id,
+	        COUNT(*) AS total,
+	        SUM(CASE WHEN ist.seen IS NULL THEN 1 ELSE 0 END) AS unseen,
+	        SUM(CASE WHEN ist.seen IS NOT NULL THEN 1 ELSE 0 END) AS shown,
+	        SUM(CASE WHEN ist.state = 'skipped' THEN 1 ELSE 0 END) AS skipped,
+	        SUM(CASE WHEN ist.state = 'opened' THEN 1 ELSE 0 END) AS opened,
+	        SUM(CASE WHEN ist.state = 'liked' THEN 1 ELSE 0 END) AS liked,
+	        SUM(CASE WHEN ist.seen IS NULL AND ` + eligExpr + ` = 1 THEN 1 ELSE 0 END) AS on_deck,
+	        SUM(CASE WHEN ist.seen IS NOT NULL AND julianday(ist.published_at) >= julianday(s.added_at) THEN 1 ELSE 0 END) AS shown_since,
+	        SUM(CASE WHEN ist.seen IS NULL AND julianday(ist.published_at) >= julianday(s.added_at) AND ` + eligExpr + ` = 0 THEN 1 ELSE 0 END) AS missed_since,
+	        SUM(CASE WHEN ist.seen IS NOT NULL AND ist.acted_at >= datetime('now','-30 days') THEN 1 ELSE 0 END) AS shown_30,
+	        SUM(CASE WHEN ist.state = 'opened' AND ist.acted_at >= datetime('now','-30 days') THEN 1 ELSE 0 END) AS opened_30,
+	        SUM(CASE WHEN ist.state = 'skipped' AND ist.acted_at >= datetime('now','-30 days') THEN 1 ELSE 0 END) AS skipped_30,
+	        COALESCE(julianday('now') - julianday(MIN(ist.published_at)), 0) AS span_days
+	 FROM ist
+	 JOIN sources s ON s.id = ist.source_id
+	 LEFT JOIN interests fi ON fi.id = s.interest_id
+	 GROUP BY ist.source_id`
+	rows, err := db.sql.QueryContext(ctx, q, userID, userID)
 	if err != nil {
 		return nil, err
 	}

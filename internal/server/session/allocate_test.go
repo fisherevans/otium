@@ -125,6 +125,66 @@ func TestKeywordArchive(t *testing.T) {
 	}
 }
 
+func TestEligibilityCountRule(t *testing.T) {
+	now := time.Date(2026, 7, 7, 12, 0, 0, 0, time.UTC)
+	// Count-only (evergreen age): keep the latest 2 unseen items.
+	mk := func(ageDays float64, rank int) store.Candidate {
+		c := acand(1, 1, ageDays, evergreen, 0, now)
+		c.SourceArchiveKeepCount = 2
+		c.RecencyRank = rank
+		return c
+	}
+	if !eligible(mk(400, 1), now) {
+		t.Fatal("rank 1 within keep-2 should be eligible even when ancient (evergreen age)")
+	}
+	if !eligible(mk(400, 2), now) {
+		t.Fatal("rank 2 within keep-2 should be eligible")
+	}
+	if eligible(mk(1, 3), now) {
+		t.Fatal("rank 3 beyond keep-2 should be ineligible even when fresh")
+	}
+}
+
+func TestEligibilityAgeAndCount(t *testing.T) {
+	now := time.Date(2026, 7, 7, 12, 0, 0, 0, time.UTC)
+	mk := func(ageDays float64, rank int) store.Candidate {
+		c := acand(1, 1, ageDays, 5, 0, now) // 5-day age window
+		c.SourceArchiveKeepCount = 2
+		c.SourceArchiveCombine = "and"
+		c.RecencyRank = rank
+		return c
+	}
+	if !eligible(mk(2, 1), now) {
+		t.Fatal("within age AND within count should pass")
+	}
+	if eligible(mk(2, 9), now) {
+		t.Fatal("within age but beyond count should fail under AND")
+	}
+	if eligible(mk(10, 1), now) {
+		t.Fatal("within count but past age should fail under AND")
+	}
+}
+
+func TestEligibilityAgeOrCount(t *testing.T) {
+	now := time.Date(2026, 7, 7, 12, 0, 0, 0, time.UTC)
+	mk := func(ageDays float64, rank int) store.Candidate {
+		c := acand(1, 1, ageDays, 5, 0, now) // 5-day age window
+		c.SourceArchiveKeepCount = 3
+		c.SourceArchiveCombine = "or"
+		c.RecencyRank = rank
+		return c
+	}
+	if !eligible(mk(40, 2), now) {
+		t.Fatal("old but within count should pass under OR")
+	}
+	if !eligible(mk(2, 40), now) {
+		t.Fatal("within age but beyond count should pass under OR")
+	}
+	if eligible(mk(40, 40), now) {
+		t.Fatal("past age AND beyond count should fail under OR")
+	}
+}
+
 func TestAllocateSkipsEmptySource(t *testing.T) {
 	now := time.Date(2026, 7, 7, 12, 0, 0, 0, time.UTC)
 	// Source 1 has 2 eligible; source 2 has huge representation but 0 eligible.

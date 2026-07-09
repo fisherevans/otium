@@ -89,6 +89,17 @@ CREATE TABLE IF NOT EXISTS sources (
     -- Auto-archive keywords (#118): comma-separated, case-insensitive. An item
     -- whose title or summary contains any of these is ineligible (auto-archived).
     archive_keywords TEXT NOT NULL DEFAULT '',
+    -- Rule-based auto-archive (#124), per-source only (interests/global stay
+    -- age-only). archive_keep_count is the keep-latest-N rule: 0 = off, N = keep
+    -- only the newest N eligible items (a rolling window that refills from the
+    -- backlog as items are consumed). archive_combine is how the age and count
+    -- rules combine when BOTH are active: 'and' (older-than-X AND beyond-newest-N)
+    -- or 'or'. Defaults reproduce today's age-only behavior.
+    archive_keep_count INTEGER NOT NULL DEFAULT 0,
+    archive_combine    TEXT NOT NULL DEFAULT 'and',
+    -- Per-source article scoring config (#124), JSON: {direction, length}. '' =
+    -- default (newest, no facets), byte-identical to today's pure-recency order.
+    scoring_config TEXT NOT NULL DEFAULT '',
     added_at      TEXT NOT NULL DEFAULT (datetime('now')),
     last_fetch_at TEXT,
     fetch_error   TEXT NOT NULL DEFAULT '',
@@ -212,6 +223,9 @@ CREATE TABLE IF NOT EXISTS source_import (
     status          TEXT NOT NULL DEFAULT 'pending',
     page_token      TEXT NOT NULL DEFAULT '',
     imported        INTEGER NOT NULL DEFAULT 0,
+    -- videos walked so far (#124), so the keep-latest-N count bound is over the
+    -- source's absolute newest-first position, not reset each page.
+    seen            INTEGER NOT NULL DEFAULT 0,
     attempts        INTEGER NOT NULL DEFAULT 0,
     next_attempt_at TEXT NOT NULL DEFAULT (datetime('now')),
     last_error      TEXT NOT NULL DEFAULT '',

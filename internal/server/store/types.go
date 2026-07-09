@@ -31,6 +31,15 @@ type Source struct {
 	HalfLifeDays float64 `json:"half_life_days"`
 	// Archive After (#115): 0 = inherit interest default, -1 = evergreen, N = days.
 	ArchiveAfterDays int `json:"archive_after_days"`
+	// Rule-based per-source archive (#124). ArchiveKeepCount is the keep-latest-N
+	// count rule: 0 = off, N = keep the newest N eligible items. ArchiveCombine is
+	// how the age and count rules combine when BOTH are active: "and" (default) or
+	// "or". Per-source only - interests/global stay age-only.
+	ArchiveKeepCount int    `json:"archive_keep_count"`
+	ArchiveCombine   string `json:"archive_combine"`
+	// Per-source article scoring config (#124), stored as JSON. "" = default
+	// (newest, no facets), which is byte-identical to today's pure-recency order.
+	ScoringConfig string `json:"scoring_config,omitempty"`
 	// Auto-archive keywords (#118): comma-separated, case-insensitive.
 	ArchiveKeywords string     `json:"archive_keywords"`
 	AddedAt         time.Time  `json:"added_at"`
@@ -210,4 +219,17 @@ type Candidate struct {
 	// SourceArchiveKeywords is the source's comma-separated auto-archive keyword
 	// list (#118): an item matching any keyword is ineligible.
 	SourceArchiveKeywords string
+	// Rule-based archive (#124): the source's keep-latest-N count rule (0 = off)
+	// and how it combines with the age rule ("and" | "or"). Per-source only.
+	SourceArchiveKeepCount int
+	SourceArchiveCombine   string
+	// RecencyRank is the item's 1-based recency position among its source's UNSEEN
+	// items (newest = 1), computed in SQL over the candidate set. The count rule
+	// (#124) keeps items whose rank is <= the keep-count. Keyword-clean filtering is
+	// applied in Go (eligible()), so the rank counts keyword-matched items too; that
+	// only ever over-counts the window slightly, which is the conservative direction.
+	RecencyRank int
+	// ScoringConfig is the source's per-source article-scoring JSON (#124). "" =
+	// default (newest, no facets). Parsed by session/facets.go.
+	ScoringConfig string
 }

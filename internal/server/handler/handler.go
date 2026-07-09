@@ -8,6 +8,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
+	"fmt"
 	"github.com/fisherevans/otium/internal/server/feeds"
 	"github.com/fisherevans/otium/internal/server/fulltext"
 	"github.com/fisherevans/otium/internal/server/middleware"
@@ -291,18 +292,31 @@ func (h *Handler) UpdateSource(w http.ResponseWriter, r *http.Request) {
 		Title            *string  `json:"title"`
 		ArchiveAfterDays *int     `json:"archive_after_days"` // #115: 0 inherit, -1 evergreen, N days
 		ArchiveKeywords  *string  `json:"archive_keywords"`   // #118: comma-separated
+		ArchiveKeepCount *int     `json:"archive_keep_count"` // #124: keep-latest-N, 0 = off
+		ArchiveCombine   *string  `json:"archive_combine"`    // #124: "and" | "or"
+		// #124 scoring: a structured object, re-serialized to the stored JSON after
+		// validation. Send null/omit to leave unchanged; send an empty object or
+		// {"direction":"newest"} to reset to the default (stored as "").
+		ScoringConfig *session.ScoringConfig `json:"scoring_config"`
 	}
 	if !decode(w, r, &body) {
 		return
 	}
-	weight := body.Weight
+	patch := store.SourcePatch{
+		State:            body.State,
+		Cap:              body.Cap,
+		Title:            body.Title,
+		ArchiveKeywords:  body.ArchiveKeywords,
+		ArchiveAfterDays: body.ArchiveAfterDays,
+	}
+	patch.Weight = body.Weight
 	if body.Bucket != nil {
 		wf, err := session.WeightForBucket(*body.Bucket)
 		if err != nil {
 			badRequest(w, err.Error())
 			return
 		}
-		weight = &wf
+		patch.Weight = &wf
 	}
 	// Clamp the half-life override to sane bounds; 0 stays "inherit" (interest/global).
 	if body.HalfLifeDays != nil {
@@ -312,7 +326,7 @@ func (h *Handler) UpdateSource(w http.ResponseWriter, r *http.Request) {
 		} else if v > 365 {
 			v = 365
 		}
-		body.HalfLifeDays = &v
+		patch.HalfLifeDays = &v
 	}
 	// Archive After: -1 (evergreen) and 0 (inherit) pass through; clamp positives.
 	if body.ArchiveAfterDays != nil {
@@ -322,13 +336,74 @@ func (h *Handler) UpdateSource(w http.ResponseWriter, r *http.Request) {
 		} else if v > 3650 {
 			v = 3650
 		}
-		body.ArchiveAfterDays = &v
+		patch.ArchiveAfterDays = &v
 	}
-	if err := h.db.UpdateSource(r.Context(), uid, id, weight, body.State, body.Cap, body.HalfLifeDays, body.Title, body.ArchiveAfterDays, body.ArchiveKeywords); err != nil {
+	// Keep-latest-N count (#124): clamp to >= 0 (0 = off), sane ceiling.
+	if body.ArchiveKeepCount != nil {
+		v := *body.ArchiveKeepCount
+		if v < 0 {
+			v = 0
+		} else if v > 100000 {
+			v = 100000
+		}
+		patch.ArchiveKeepCount = &v
+	}
+	// Combine mode (#124): only "and" | "or"; anything else rejected.
+	if body.ArchiveCombine != nil {
+		c := strings.ToLower(strings.TrimSpace(*body.ArchiveCombine))
+		if c != "and" && c != "or" {
+			badRequest(w, "archive_combine must be 'and' or 'or'")
+			return
+		}
+		patch.ArchiveCombine = &c
+	}
+	// Scoring config (#124): validate + normalize, then store as JSON ("" for the
+	// default so a reset is byte-identical to a never-configured source).
+	if body.ScoringConfig != nil {
+		s, err := normalizeScoringConfig(*body.ScoringConfig)
+		if err != nil {
+			badRequest(w, err.Error())
+			return
+		}
+		patch.ScoringConfig = &s
+	}
+	if err := h.db.UpdateSource(r.Context(), uid, id, patch); err != nil {
 		serverError(w, h.log, "update source", err)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
+}
+
+// normalizeScoringConfig validates a #124 scoring config and serializes it to the
+// stored JSON. A default config (newest direction, no facets) serializes to "" so a
+// reset source is byte-identical to a never-configured one. Unknown direction or
+// length preference is a 400.
+func normalizeScoringConfig(c session.ScoringConfig) (string, error) {
+	switch c.Direction {
+	case "", "newest", "oldest", "random":
+	default:
+		return "", fmt.Errorf("scoring direction must be newest, oldest, or random")
+	}
+	if c.Length != nil {
+		switch c.Length.Prefer {
+		case "longer", "shorter":
+		default:
+			return "", fmt.Errorf("scoring length.prefer must be longer or shorter")
+		}
+	}
+	// Normalize "" to "newest" for a clean isDefault check, then blank the default.
+	norm := session.ScoringConfig{Direction: c.Direction, Length: c.Length}
+	if norm.Direction == "" {
+		norm.Direction = "newest"
+	}
+	if norm.Direction == "newest" && norm.Length == nil {
+		return "", nil // default: store blank
+	}
+	b, err := json.Marshal(norm)
+	if err != nil {
+		return "", err
+	}
+	return string(b), nil
 }
 
 // ResetSourceMetadata clears the user's engagement state for a source (#119) -
@@ -586,8 +661,11 @@ func (h *Handler) buildSessionQueue(ctx context.Context, uid int64, durationMin 
 	}
 
 	// Engine v2 (#115): pull a broad candidate window (the allocator does its own
-	// Archive-After eligibility, so `sinceDays` is just a generous fetch bound).
-	pool, err := h.db.Candidates(ctx, uid, sourceIDs, 400, 2000)
+	// Archive-After eligibility, so `sinceDays` is just the cadence-stat window). The
+	// row cap is generous so non-newest scoring directions (#124: oldest/random) and
+	// low-cadence sources aren't clipped to the newest slice - the allocator's target
+	// caps the actual session, this only bounds the pool it samples from.
+	pool, err := h.db.Candidates(ctx, uid, sourceIDs, 400, 20000)
 	if err != nil {
 		return nil, err
 	}

@@ -36,19 +36,44 @@ func resolveArchiveAfter(c store.Candidate) int {
 	return store.GlobalArchiveAfterDays
 }
 
-// eligible reports whether a candidate can appear in a session: within its
-// Archive-After window (evergreen sources always pass) and not matching any of the
-// source's auto-archive keywords (#118).
+// eligible reports whether a candidate can appear in a session. A keyword match
+// (#118) always excludes it. Otherwise eligibility is the source's resolved archive
+// rule (#124): the age window (evergreen sources have no age limit), the keep-latest-N
+// count rule (0 = off), and how the two combine ("and" | "or") when BOTH are active.
+// The count rank is the item's recency position among its source's UNSEEN items
+// (Candidate.RecencyRank), so as items are consumed the backlog slides up to refill
+// the window - a rolling keep-latest-N, not a static published-at slice.
 func eligible(c store.Candidate, now time.Time) bool {
 	if keywordArchived(c) {
 		return false
 	}
 	win := resolveArchiveAfter(c)
-	if win == evergreen {
-		return true
+	ageIsLimit := win > 0 // evergreen (-1) or unresolved (0) is not an age limit
+	countIsLimit := c.SourceArchiveKeepCount > 0
+	switch {
+	case !ageIsLimit && !countIsLimit:
+		return true // OFF: evergreen with no count rule
+	case ageIsLimit && !countIsLimit:
+		return agePass(c, win, now)
+	case !ageIsLimit && countIsLimit:
+		return countPass(c) // count-only (evergreen age): keep the latest N
+	case strings.EqualFold(c.SourceArchiveCombine, "or"):
+		return agePass(c, win, now) || countPass(c)
+	default: // "and"
+		return agePass(c, win, now) && countPass(c)
 	}
+}
+
+// agePass is the age rule: the item is within its resolved Archive-After window.
+func agePass(c store.Candidate, win int, now time.Time) bool {
 	ageDays := now.Sub(c.PublishedAt).Hours() / 24
 	return ageDays <= float64(win)
+}
+
+// countPass is the keep-latest-N rule: the item is within the newest N unseen items
+// of its source. RecencyRank is 1-based (newest = 1), resolved in SQL.
+func countPass(c store.Candidate) bool {
+	return c.RecencyRank > 0 && c.RecencyRank <= c.SourceArchiveKeepCount
 }
 
 // keywordArchived reports whether the item's title or summary contains any of the
@@ -86,6 +111,7 @@ func representationOf(c store.Candidate) float64 {
 // source is skipped and its representation redistributes naturally among the rest.
 // rng makes it seedable/testable; a per-session seed keeps a rebuild stable.
 func Allocate(pool []store.Candidate, now time.Time, target int, rng *rand.Rand) []Selected {
+	seed := rng.Int63() // stable within this build; drives the random-by-age direction (#124)
 	bySource := map[int64][]store.Candidate{}
 	repr := map[int64]float64{}
 	for _, c := range pool {
@@ -95,8 +121,20 @@ func Allocate(pool []store.Candidate, now time.Time, target int, rng *rand.Rand)
 		bySource[c.SourceID] = append(bySource[c.SourceID], c)
 		repr[c.SourceID] = representationOf(c)
 	}
+	// facetScore holds the per-item scoring-facet product for sources that opted into
+	// a non-default scoring config (#124), so Selected.Score reflects the real order
+	// instead of freshness. Absent for default (newest, no facets) sources, which keep
+	// their byte-identical pure-recency ordering and freshness score.
+	facetScore := map[int64]float64{}
 	for sid, cs := range bySource {
-		sort.SliceStable(cs, func(i, j int) bool { return cs[i].PublishedAt.After(cs[j].PublishedAt) })
+		cfg := parseScoring(cs[0].ScoringConfig) // source-level: all its items share it
+		if cfg.isDefault() {
+			sort.SliceStable(cs, func(i, j int) bool { return cs[i].PublishedAt.After(cs[j].PublishedAt) })
+		} else {
+			for id, s := range orderSource(cs, cfg, seed, now) {
+				facetScore[id] = s
+			}
+		}
 		bySource[sid] = cs
 	}
 
@@ -125,7 +163,11 @@ func Allocate(pool []store.Candidate, now time.Time, target int, rng *rand.Rand)
 			}
 		}
 		cs := bySource[pick]
-		out = append(out, selectedFrom(cs[0], now))
+		sel := selectedFrom(cs[0], now)
+		if s, ok := facetScore[cs[0].ID]; ok {
+			sel.Score = round2(s) // non-default scoring: report the facet product, not freshness
+		}
+		out = append(out, sel)
 		bySource[pick] = cs[1:]
 	}
 	return out

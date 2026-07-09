@@ -104,7 +104,7 @@ func TestSourceHalfLifeOverridePlumbing(t *testing.T) {
 	}
 
 	hl := 9.0
-	if err := db.UpdateSource(ctx, uid, sid, nil, nil, nil, &hl, nil, nil, nil); err != nil {
+	if err := db.UpdateSource(ctx, uid, sid, SourcePatch{HalfLifeDays: &hl}); err != nil {
 		t.Fatal(err)
 	}
 	pool, err = db.Candidates(ctx, uid, nil, 45, 500)

@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Pencil, Plus, GripVertical } from "lucide-react";
 import { api, type Interest, type Mix } from "@/api/client";
-import { feedIcon } from "@/lib/feedIcons";
+import { feedIcon, FEED_ICONS } from "@/lib/feedIcons";
 import { Dialog } from "@/components/Dialog";
 
 // Manage Mixes (session engine v2, mockup #2). A mix groups interests
@@ -91,6 +91,13 @@ export default function MixesPage() {
     setAddOpen(false);
     setNewName("");
     await api.createMix(name).catch((e: any) => setErr(String(e.message ?? e)));
+    reload();
+  }
+  async function chooseMixIcon(key: string) {
+    if (!renameFor) return;
+    const next = renameFor.icon === key ? "" : key;
+    await api.updateMix(renameFor.id, { icon: next }).catch(() => {});
+    setRenameFor((m) => (m ? { ...m, icon: next } : m));
     reload();
   }
   async function saveRename() {
@@ -200,7 +207,28 @@ export default function MixesPage() {
       </Dialog>
 
       <Dialog open={renameFor !== null} onClose={() => setRenameFor(null)} kicker="Rename mix">
+        <div className="dlg-sub">Name</div>
         <input className="field" value={renameDraft} autoFocus onChange={(e) => setRenameDraft(e.target.value)} onKeyDown={(e) => e.key === "Enter" && saveRename()} />
+        <div className="dlg-sub">Icon</div>
+        <div className="icon-grid">
+          <button className={`icon-cell ${!renameFor?.icon ? "on" : ""}`} onClick={() => chooseMixIcon("")} aria-label="No icon">
+            <span className="introw-dot" />
+          </button>
+          {FEED_ICONS.map((def) => {
+            const I = def.Icon;
+            return (
+              <button
+                key={def.key}
+                className={`icon-cell ${renameFor?.icon === def.key ? "on" : ""}`}
+                onClick={() => chooseMixIcon(def.key)}
+                aria-label={def.label}
+                title={def.label}
+              >
+                {I && <I size={20} strokeWidth={1.6} />}
+              </button>
+            );
+          })}
+        </div>
         <div className="dlg-actions">
           <button className="btn danger" onClick={del}>
             Delete
