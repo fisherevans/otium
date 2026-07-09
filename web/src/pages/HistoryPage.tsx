@@ -108,7 +108,7 @@ export default function HistoryPage({ embedded = false }: { embedded?: boolean }
     <div>
       {!embedded && (
         <>
-          <button className="lib-back" onClick={() => nav("/sources")}>
+          <button className="lib-back" onClick={() => nav("/sections")}>
             <span aria-hidden>←</span> Library
           </button>
           <div className="lib-topbar">

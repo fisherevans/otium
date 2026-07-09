@@ -144,7 +144,7 @@ export default function TopicPage() {
   if (topics && !topic) {
     return (
       <div className="mgmt">
-        <button className="mgmt-back" onClick={() => nav("/sources")}>
+        <button className="mgmt-back" onClick={() => nav("/sections")}>
           ← Library
         </button>
         <p className="lib2-empty">That topic doesn't exist.</p>
@@ -163,7 +163,7 @@ export default function TopicPage() {
 
   return (
     <div className="mgmt">
-      <button className="mgmt-back" onClick={() => nav("/sources")}>
+      <button className="mgmt-back" onClick={() => nav("/sections")}>
         ← Library
       </button>
       <div className="mgmt-kicker">Manage Topic</div>

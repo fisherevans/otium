@@ -3,7 +3,6 @@ import { BookOpen, Library, Bookmark, User } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import HomePage from "@/pages/HomePage";
 import SessionPage from "@/pages/SessionPage";
-import SourcesPage from "@/pages/SourcesPage";
 import CollectionsPage from "@/pages/CollectionsPage";
 import ImportPage from "@/pages/ImportPage";
 import InsightsPage from "@/pages/InsightsPage";
@@ -52,7 +51,7 @@ export default function App() {
               <span className="chrome-ic">←</span> intent
             </button>
             <span className="wordmark">otium</span>
-            <button className="chrome-btn right" onClick={() => nav("/sources")} aria-label="Go to library">
+            <button className="chrome-btn right" onClick={() => nav("/sections")} aria-label="Go to library">
               library
             </button>
           </>
@@ -68,7 +67,6 @@ export default function App() {
         <Routes>
           <Route path="/" element={<HomePage />} />
           <Route path="/session/:id" element={<SessionPage />} /> {/* #67: durable session by id */}
-          <Route path="/sources" element={<SourcesPage />} />
           {/* --- #66 topic-mgmt-pages: dedicated source/topic pages --- */}
           <Route path="/sources/:id" element={<SourcePage />} />
           <Route path="/sources/:id/articles" element={<SourceArticlesPage />} /> {/* per-source article list */}
@@ -97,7 +95,7 @@ export default function App() {
             <BookOpen size={19} strokeWidth={1.75} aria-hidden />
             <span>read</span>
           </NavLink>
-          <NavLink to="/sources" className={({ isActive }) => (isActive ? "active" : "")}>
+          <NavLink to="/sections" className={({ isActive }) => (isActive ? "active" : "")}>
             <Library size={19} strokeWidth={1.75} aria-hidden />
             <span>library</span>
           </NavLink>

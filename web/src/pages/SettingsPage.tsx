@@ -37,7 +37,7 @@ export default function SettingsPage() {
 
   return (
     <div>
-      <button className="lib-back" onClick={() => nav("/sources")}>
+      <button className="lib-back" onClick={() => nav("/sections")}>
         <span aria-hidden>←</span> Library
       </button>
       <div className="lib-topbar">

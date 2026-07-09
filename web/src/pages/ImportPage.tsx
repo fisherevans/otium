@@ -75,7 +75,7 @@ export default function ImportPage() {
         <button className="btn" onClick={() => nav("/")}>
           Build a session
         </button>
-        <button className="btn ghost" onClick={() => nav("/sources")}>
+        <button className="btn ghost" onClick={() => nav("/sections")}>
           Review library
         </button>
       </div>

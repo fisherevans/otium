@@ -4,11 +4,13 @@ import { Pencil, Plus, ChevronRight, ArrowRightLeft } from "lucide-react";
 import { api, type Topic, type Section } from "@/api/client";
 import { feedIcon, FEED_ICONS } from "@/lib/feedIcons";
 import { Dialog } from "@/components/Dialog";
+import { HowItWorks } from "@/components/HowItWorks";
 
-// Manage Sections (#131, strict Section>Topic>Source tree). A section groups topics
-// one-to-many. Each section lists its topics; tap a topic to manage it, or use
-// "move" to reassign it to another section. No drag - an explicit Move dialog reads
-// calmer and works on touch. Add a section + rename/delete/icon happen in dialogs.
+// The Library landing (#131, strict Section>Topic>Source tree). Sections group
+// topics one-to-many; each section lists its topics. Tap a topic to manage it, or
+// use "move" to reassign it. No drag - an explicit Move dialog reads calmer and
+// works on touch. Add a section/topic + rename/delete/icon happen in dialogs. This
+// replaced the old flat /sources library page.
 export default function SectionsPage() {
   const nav = useNavigate();
   const [sections, setSections] = useState<Section[] | null>(null);
@@ -17,6 +19,8 @@ export default function SectionsPage() {
 
   const [addOpen, setAddOpen] = useState(false);
   const [newName, setNewName] = useState("");
+  const [addTopicOpen, setAddTopicOpen] = useState(false);
+  const [newTopic, setNewTopic] = useState("");
   const [renameFor, setRenameFor] = useState<Section | null>(null);
   const [renameDraft, setRenameDraft] = useState("");
   const [moveFor, setMoveFor] = useState<Topic | null>(null);
@@ -44,6 +48,15 @@ export default function SectionsPage() {
     setAddOpen(false);
     setNewName("");
     await api.createSection(name).catch((e: any) => setErr(String(e.message ?? e)));
+    reload();
+  }
+  async function createTopic() {
+    const name = newTopic.trim();
+    if (!name) return;
+    setAddTopicOpen(false);
+    setNewTopic("");
+    // No section chosen -> lands in Uncategorized; move it after with the Move link.
+    await api.createTopic(name).catch((e: any) => setErr(String(e.message ?? e)));
     reload();
   }
   async function chooseSectionIcon(key: string) {
@@ -98,22 +111,39 @@ export default function SectionsPage() {
     );
   }
 
+  const noTopics = sections !== null && topics.length === 0;
+
   return (
     <div className="mgmt">
-      <button className="mgmt-back" onClick={() => nav("/sources")}>
-        ← Library
-      </button>
       <div className="mgmt-titlerow">
-        <h1 className="mgmt-title">Sections</h1>
-        <button className="mgmt-edit" onClick={() => (setNewName(""), setAddOpen(true))}>
-          <Plus size={15} strokeWidth={1.9} aria-hidden /> Add section
-        </button>
+        <h1 className="mgmt-title">Library</h1>
+        <div className="mgmt-actions">
+          <button className="mgmt-edit" onClick={() => (setNewTopic(""), setAddTopicOpen(true))}>
+            <Plus size={15} strokeWidth={1.9} aria-hidden /> Topic
+          </button>
+          <button className="mgmt-edit" onClick={() => (setNewName(""), setAddOpen(true))}>
+            <Plus size={15} strokeWidth={1.9} aria-hidden /> Section
+          </button>
+        </div>
       </div>
-      <p className="int-prose">Sections group your topics. A topic belongs to one section - tap it to manage it, or move it to another section.</p>
+      <p className="int-prose">Your sources, grouped as sections of topics. Tap a topic to manage its sources, or move it to another section.</p>
       {err && <p className="err">{err}</p>}
 
       {sections === null ? (
         <p className="lib2-subtitle">Loading…</p>
+      ) : noTopics ? (
+        // #138 first-run: nothing added yet.
+        <div className="firstrun">
+          <p className="firstrun-lead">Welcome. Otium is empty until you add the feeds you care about.</p>
+          <p className="firstrun-step">
+            Start by adding a <b>topic</b> (say "News" or "Comedy") - then open it to add <b>sources</b>: any RSS/Atom feed, a
+            YouTube channel, a podcast. Group topics into <b>sections</b> whenever you like.
+          </p>
+          <button className="btn" onClick={() => (setNewTopic(""), setAddTopicOpen(true))}>
+            Add your first topic
+          </button>
+          <HowItWorks defaultOpen />
+        </div>
       ) : (
         sections.map((section) => {
           const list = bySection.get(section.id) ?? [];
@@ -140,6 +170,16 @@ export default function SectionsPage() {
         <div className="dlg-actions">
           <button className="btn" onClick={create} disabled={!newName.trim()}>
             Add section
+          </button>
+        </div>
+      </Dialog>
+
+      <Dialog open={addTopicOpen} onClose={() => setAddTopicOpen(false)} kicker="Add topic">
+        <input className="field" placeholder="e.g. Local News" value={newTopic} autoFocus onChange={(e) => setNewTopic(e.target.value)} onKeyDown={(e) => e.key === "Enter" && createTopic()} />
+        <p className="caphint">Lands in Uncategorized - move it into a section afterward, and add sources from its page.</p>
+        <div className="dlg-actions">
+          <button className="btn" onClick={createTopic} disabled={!newTopic.trim()}>
+            Add topic
           </button>
         </div>
       </Dialog>

@@ -157,7 +157,7 @@ export default function HomePage() {
             You don't follow anything yet. Head to your <b>Library</b> to add a topic and its first sources - any RSS/Atom
             feed, YouTube channel, or podcast. Then come back and pick how long you have.
           </p>
-          <button className="btn" onClick={() => nav("/sources")}>
+          <button className="btn" onClick={() => nav("/sections")}>
             Go to Library
           </button>
           <HowItWorks defaultOpen />

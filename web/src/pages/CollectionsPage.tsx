@@ -212,7 +212,7 @@ export default function CollectionsPage({ embedded = false }: { embedded?: boole
   return (
     <div>
       {!embedded && (
-        <button className="lib-back" onClick={() => nav("/sources")}>
+        <button className="lib-back" onClick={() => nav("/sections")}>
           <span aria-hidden>←</span> Library
         </button>
       )}

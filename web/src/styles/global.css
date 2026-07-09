@@ -4076,3 +4076,6 @@ button.id-source.lead {
 .you-bytopic-row:last-child { border-bottom: none; }
 .you-bytopic-name { font-family: var(--serif); }
 .you-bytopic-min { color: var(--ink-mute); font-size: 14px; }
+
+/* Library landing: two add-buttons in the title row. */
+.mgmt-actions { display: flex; gap: 6px; align-items: center; }

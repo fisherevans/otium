@@ -246,7 +246,7 @@ export default function SourcePage() {
   }
   async function del() {
     await api.deleteSource(sourceId).catch(() => {});
-    nav(source?.topic_slug ? `/topics/${source.topic_slug}` : "/sources");
+    nav(source?.topic_slug ? `/topics/${source.topic_slug}` : "/sections");
   }
   function copyUrl() {
     if (source?.feed_url) navigator.clipboard?.writeText(source.feed_url).catch(() => {});
@@ -257,7 +257,7 @@ export default function SourcePage() {
   if (sources && !source) {
     return (
       <div className="mgmt">
-        <button className="mgmt-back" onClick={() => nav("/sources")}>
+        <button className="mgmt-back" onClick={() => nav("/sections")}>
           ← Library
         </button>
         <p className="lib2-empty">That source is gone.</p>
@@ -266,7 +266,7 @@ export default function SourcePage() {
   }
   if (!source) return <p className="lib2-subtitle">Loading…</p>;
 
-  const backTo = source.topic_slug ? `/topics/${source.topic_slug}` : "/sources";
+  const backTo = source.topic_slug ? `/topics/${source.topic_slug}` : "/sections";
   const backLabel = topic?.name ?? "Library";
 
   return (
