@@ -1,14 +1,14 @@
 // Package importer turns a follow-list export into otium sources. It parses the
 // two formats that cover most of what people can actually export in bulk:
 //
-//   - OPML: the universal interest-list format (Feedly, Inoreader, most podcast
-//     apps, any RSS reader). Folders become suggested interests.
+//   - OPML: the universal topic-list format (Feedly, Inoreader, most podcast
+//     apps, any RSS reader). Folders become suggested topics.
 //   - YouTube Takeout CSV: Google Takeout's `subscriptions.csv`
 //     (Channel Id, Channel Url, Channel Title) - the clean path for all your
-//     YouTube follows; each channel id becomes its RSS interest URL.
+//     YouTube follows; each channel id becomes its RSS topic URL.
 //
 // As a fallback it also accepts a plain newline/comma list of URLs (paste your
-// Reddit/Mastodon/Bluesky interests).
+// Reddit/Mastodon/Bluesky topics).
 //
 // Parsing never persists - the handler returns candidates for review, then
 // commits the ones the user keeps.
@@ -46,14 +46,14 @@ func ExtractImportable(data []byte) ([]byte, error) {
 			return readZipEntry(f)
 		}
 	}
-	// Otherwise the first OPML/XML interest list.
+	// Otherwise the first OPML/XML topic list.
 	for _, f := range zr.File {
 		n := strings.ToLower(f.Name)
 		if strings.HasSuffix(n, ".opml") || strings.HasSuffix(n, ".xml") {
 			return readZipEntry(f)
 		}
 	}
-	return nil, fmt.Errorf("zip has no subscriptions.csv or .opml (a TikTok/Instagram follow list isn't a interest list - send it for handle mapping instead)")
+	return nil, fmt.Errorf("zip has no subscriptions.csv or .opml (a TikTok/Instagram follow list isn't a topic list - send it for handle mapping instead)")
 }
 
 func isZip(b []byte) bool {
@@ -75,7 +75,7 @@ type Candidate struct {
 	FeedURL     string `json:"feed_url"`
 	HomepageURL string `json:"homepage_url"`
 	Kind        string `json:"kind"`     // rss | youtube | podcast
-	Category    string `json:"category"` // OPML folder, if any -> suggested interest
+	Category    string `json:"category"` // OPML folder, if any -> suggested topic
 }
 
 // Parse detects the format and returns candidates. format is one of
@@ -197,7 +197,7 @@ func parseYouTubeCSV(b []byte) ([]Candidate, error) {
 		}
 		out = append(out, Candidate{
 			Title:       title,
-			FeedURL:     "https://www.youtube.com/interests/videos.xml?channel_id=" + chID,
+			FeedURL:     "https://www.youtube.com/topics/videos.xml?channel_id=" + chID,
 			HomepageURL: home,
 			Kind:        "youtube",
 		})

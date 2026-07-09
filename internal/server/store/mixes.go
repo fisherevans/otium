@@ -8,30 +8,30 @@ import (
 	"strings"
 )
 
-// ErrMixNotFound is returned when a rename/delete/assign targets a mix the
+// ErrSectionNotFound is returned when a rename/delete/assign targets a section the
 // user doesn't own (or that doesn't exist). Handlers map it to 404/400.
-var ErrMixNotFound = errors.New("mix not found")
+var ErrSectionNotFound = errors.New("section not found")
 
-// Mixes (#86) are a user-created overlay that gathers several FEEDS under one
-// name, many-to-many. This file owns their CRUD, interest-assignment, and the
-// mix->interests->sources expansion the session builder can target.
+// Sections (#86) are a user-created overlay that gathers several FEEDS under one
+// name, many-to-many. This file owns their CRUD, topic-assignment, and the
+// section->topics->sources expansion the session builder can target.
 
-// ListMixes returns the user's mixes with their interest counts, ordered by sort
+// ListSections returns the user's sections with their topic counts, ordered by sort
 // then name.
-func (db *DB) ListMixes(ctx context.Context, userID int64) ([]Mix, error) {
+func (db *DB) ListSections(ctx context.Context, userID int64) ([]Section, error) {
 	rows, err := db.sql.QueryContext(ctx,
 		`SELECT g.id, g.name, g.slug, g.icon, g.sort, g.created_at,
-		        (SELECT COUNT(*) FROM mix_interests gf WHERE gf.mix_id = g.id) AS interest_count
-		 FROM mixes g WHERE g.user_id = ? ORDER BY g.sort, g.name`, userID)
+		        (SELECT COUNT(*) FROM section_topics gf WHERE gf.section_id = g.id) AS topic_count
+		 FROM sections g WHERE g.user_id = ? ORDER BY g.sort, g.name`, userID)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var out []Mix
+	var out []Section
 	for rows.Next() {
-		var g Mix
+		var g Section
 		var created string
-		if err := rows.Scan(&g.ID, &g.Name, &g.Slug, &g.Icon, &g.Sort, &created, &g.InterestCount); err != nil {
+		if err := rows.Scan(&g.ID, &g.Name, &g.Slug, &g.Icon, &g.Sort, &created, &g.TopicCount); err != nil {
 			return nil, err
 		}
 		g.CreatedAt = parseTime(created)
@@ -40,17 +40,17 @@ func (db *DB) ListMixes(ctx context.Context, userID int64) ([]Mix, error) {
 	return out, rows.Err()
 }
 
-// CreateMix creates a mix. slug is the desired base; a numeric suffix is
+// CreateSection creates a section. slug is the desired base; a numeric suffix is
 // appended on collision so a create never fails on a duplicate name.
-func (db *DB) CreateMix(ctx context.Context, userID int64, name, slug, icon string) (*Mix, error) {
+func (db *DB) CreateSection(ctx context.Context, userID int64, name, slug, icon string) (*Section, error) {
 	if slug == "" {
-		slug = "mix"
+		slug = "section"
 	}
 	base := slug
 	for i := 2; ; i++ {
 		var n int
 		if err := db.sql.QueryRowContext(ctx,
-			`SELECT COUNT(*) FROM mixes WHERE user_id = ? AND slug = ?`, userID, slug).Scan(&n); err != nil {
+			`SELECT COUNT(*) FROM sections WHERE user_id = ? AND slug = ?`, userID, slug).Scan(&n); err != nil {
 			return nil, err
 		}
 		if n == 0 {
@@ -59,18 +59,18 @@ func (db *DB) CreateMix(ctx context.Context, userID int64, name, slug, icon stri
 		slug = fmt.Sprintf("%s-%d", base, i)
 	}
 	res, err := db.sql.ExecContext(ctx,
-		`INSERT INTO mixes (user_id, name, slug, icon) VALUES (?, ?, ?, ?)`,
+		`INSERT INTO sections (user_id, name, slug, icon) VALUES (?, ?, ?, ?)`,
 		userID, name, slug, icon)
 	if err != nil {
 		return nil, err
 	}
 	id, _ := res.LastInsertId()
-	return &Mix{ID: id, UserID: userID, Name: name, Slug: slug, Icon: icon}, nil
+	return &Section{ID: id, UserID: userID, Name: name, Slug: slug, Icon: icon}, nil
 }
 
-// UpdateMix patches a mix's name/icon. Only non-nil fields are applied.
-// Scoped to the user; a 0-row update means the mix isn't theirs.
-func (db *DB) UpdateMix(ctx context.Context, userID, id int64, name, icon *string) error {
+// UpdateSection patches a section's name/icon. Only non-nil fields are applied.
+// Scoped to the user; a 0-row update means the section isn't theirs.
+func (db *DB) UpdateSection(ctx context.Context, userID, id int64, name, icon *string) error {
 	var sets []string
 	var args []any
 	if name != nil {
@@ -86,37 +86,37 @@ func (db *DB) UpdateMix(ctx context.Context, userID, id int64, name, icon *strin
 	}
 	args = append(args, id, userID)
 	res, err := db.sql.ExecContext(ctx,
-		`UPDATE mixes SET `+strings.Join(sets, ", ")+` WHERE id = ? AND user_id = ?`, args...)
+		`UPDATE sections SET `+strings.Join(sets, ", ")+` WHERE id = ? AND user_id = ?`, args...)
 	if err != nil {
 		return err
 	}
 	if n, _ := res.RowsAffected(); n == 0 {
-		return ErrMixNotFound
+		return ErrSectionNotFound
 	}
 	return nil
 }
 
-// DeleteMix deletes a mix (and its memberships, via ON DELETE CASCADE).
+// DeleteSection deletes a section (and its memberships, via ON DELETE CASCADE).
 // Scoped to the user.
-func (db *DB) DeleteMix(ctx context.Context, userID, id int64) error {
-	res, err := db.sql.ExecContext(ctx, `DELETE FROM mixes WHERE id = ? AND user_id = ?`, id, userID)
+func (db *DB) DeleteSection(ctx context.Context, userID, id int64) error {
+	res, err := db.sql.ExecContext(ctx, `DELETE FROM sections WHERE id = ? AND user_id = ?`, id, userID)
 	if err != nil {
 		return err
 	}
 	if n, _ := res.RowsAffected(); n == 0 {
-		return ErrMixNotFound
+		return ErrSectionNotFound
 	}
 	return nil
 }
 
-// SetMixInterests replaces the set of interests in a mix with exactly interestIDs.
-// Unknown interest ids (or interests not owned by the user) are ignored. Scoped: a mix
-// the user doesn't own returns ErrMixNotFound before any write.
-func (db *DB) SetMixInterests(ctx context.Context, userID, mixID int64, interestIDs []int64) error {
+// SetSectionTopics replaces the set of topics in a section with exactly topicIDs.
+// Unknown topic ids (or topics not owned by the user) are ignored. Scoped: a section
+// the user doesn't own returns ErrSectionNotFound before any write.
+func (db *DB) SetSectionTopics(ctx context.Context, userID, sectionID int64, topicIDs []int64) error {
 	var owner int64
-	err := db.sql.QueryRowContext(ctx, `SELECT user_id FROM mixes WHERE id = ?`, mixID).Scan(&owner)
+	err := db.sql.QueryRowContext(ctx, `SELECT user_id FROM sections WHERE id = ?`, sectionID).Scan(&owner)
 	if err == sql.ErrNoRows || (err == nil && owner != userID) {
-		return ErrMixNotFound
+		return ErrSectionNotFound
 	}
 	if err != nil {
 		return err
@@ -126,38 +126,38 @@ func (db *DB) SetMixInterests(ctx context.Context, userID, mixID int64, interest
 		return err
 	}
 	defer tx.Rollback()
-	if _, err := tx.ExecContext(ctx, `DELETE FROM mix_interests WHERE mix_id = ?`, mixID); err != nil {
+	if _, err := tx.ExecContext(ctx, `DELETE FROM section_topics WHERE section_id = ?`, sectionID); err != nil {
 		return err
 	}
-	for _, fid := range interestIDs {
-		// The SELECT guard ensures the interest belongs to the user; a foreign interest id
+	for _, fid := range topicIDs {
+		// The SELECT guard ensures the topic belongs to the user; a foreign topic id
 		// inserts nothing.
 		if _, err := tx.ExecContext(ctx,
-			`INSERT OR IGNORE INTO mix_interests (mix_id, interest_id)
-			 SELECT ?, id FROM interests WHERE id = ? AND user_id = ?`,
-			mixID, fid, userID); err != nil {
+			`INSERT OR IGNORE INTO section_topics (section_id, topic_id)
+			 SELECT ?, id FROM topics WHERE id = ? AND user_id = ?`,
+			sectionID, fid, userID); err != nil {
 			return err
 		}
 	}
 	return tx.Commit()
 }
 
-// MixInterests returns the interests in a mix (full Interest rows with source counts),
-// ordered like ListInterests. Scoped to the user.
-func (db *DB) MixInterests(ctx context.Context, userID, mixID int64) ([]Interest, error) {
+// SectionTopics returns the topics in a section (full Topic rows with source counts),
+// ordered like ListTopics. Scoped to the user.
+func (db *DB) SectionTopics(ctx context.Context, userID, sectionID int64) ([]Topic, error) {
 	rows, err := db.sql.QueryContext(ctx,
 		`SELECT f.id, f.name, f.slug, f.color, f.icon, f.half_life_days, f.sort, f.created_at,
-		        (SELECT COUNT(*) FROM sources s WHERE s.interest_id = f.id) AS source_count
-		 FROM mix_interests gf JOIN interests f ON f.id = gf.interest_id
-		 WHERE gf.mix_id = ? AND f.user_id = ?
-		 ORDER BY f.sort, f.name`, mixID, userID)
+		        (SELECT COUNT(*) FROM sources s WHERE s.topic_id = f.id) AS source_count
+		 FROM section_topics gf JOIN topics f ON f.id = gf.topic_id
+		 WHERE gf.section_id = ? AND f.user_id = ?
+		 ORDER BY f.sort, f.name`, sectionID, userID)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var out []Interest
+	var out []Topic
 	for rows.Next() {
-		var f Interest
+		var f Topic
 		var created string
 		if err := rows.Scan(&f.ID, &f.Name, &f.Slug, &f.Color, &f.Icon, &f.HalfLifeDays, &f.Sort, &created, &f.SourceCount); err != nil {
 			return nil, err
@@ -168,17 +168,17 @@ func (db *DB) MixInterests(ctx context.Context, userID, mixID int64) ([]Interest
 	return out, rows.Err()
 }
 
-// SourceIDsForMixes resolves mix slugs to the set of source ids across all
-// their member interests (#86). The session builder uses this to let a mix filter a
-// session (a mix = its interests = their sources).
-func (db *DB) SourceIDsForMixes(ctx context.Context, userID int64, slugs []string) ([]int64, error) {
+// SourceIDsForSections resolves section slugs to the set of source ids across all
+// their member topics (#86). The session builder uses this to let a section filter a
+// session (a section = its topics = their sources).
+func (db *DB) SourceIDsForSections(ctx context.Context, userID int64, slugs []string) ([]int64, error) {
 	if len(slugs) == 0 {
 		return nil, nil
 	}
 	q := `SELECT DISTINCT s.id
-	      FROM mixes g
-	      JOIN mix_interests gf ON gf.mix_id = g.id
-	      JOIN sources s ON s.interest_id = gf.interest_id
+	      FROM sections g
+	      JOIN section_topics gf ON gf.section_id = g.id
+	      JOIN sources s ON s.topic_id = gf.topic_id
 	      WHERE g.user_id = ? AND g.slug IN (` + placeholders(len(slugs)) + `)`
 	args := []any{userID}
 	for _, s := range slugs {

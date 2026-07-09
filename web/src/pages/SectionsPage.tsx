@@ -1,41 +1,41 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Pencil, Plus, GripVertical } from "lucide-react";
-import { api, type Interest, type Mix } from "@/api/client";
+import { api, type Topic, type Section } from "@/api/client";
 import { feedIcon, FEED_ICONS } from "@/lib/feedIcons";
 import { Dialog } from "@/components/Dialog";
 
-// Manage Mixes (session engine v2, mockup #2). A mix groups interests
-// (many-to-many). Each mix is a drop zone listing its member interests as
-// draggable cards; drag an interest from one mix to another to move it, or to
-// "Other interests" to drop it out. Add a mix + rename/delete happen in dialogs.
+// Manage Sections (session engine v2, mockup #2). A section groups topics
+// (many-to-many). Each section is a drop zone listing its member topics as
+// draggable cards; drag an topic from one section to another to move it, or to
+// "Other topics" to drop it out. Add a section + rename/delete happen in dialogs.
 // (HTML5 drag - desktop; a touch fallback is a follow-up.)
 type Zone = number | "other" | null;
 
-export default function MixesPage() {
+export default function SectionsPage() {
   const nav = useNavigate();
-  const [mixes, setMixes] = useState<Mix[] | null>(null);
-  const [interests, setInterests] = useState<Interest[]>([]);
+  const [sections, setSections] = useState<Section[] | null>(null);
+  const [topics, setTopics] = useState<Topic[]>([]);
   const [members, setMembers] = useState<Map<number, Set<number>>>(new Map());
   const [err, setErr] = useState("");
 
-  const [drag, setDrag] = useState<{ interestId: number; fromMix: number | null } | null>(null);
+  const [drag, setDrag] = useState<{ topicId: number; fromSection: number | null } | null>(null);
   const [over, setOver] = useState<Zone>(null);
 
   const [addOpen, setAddOpen] = useState(false);
   const [newName, setNewName] = useState("");
-  const [renameFor, setRenameFor] = useState<Mix | null>(null);
+  const [renameFor, setRenameFor] = useState<Section | null>(null);
   const [renameDraft, setRenameDraft] = useState("");
 
   async function reload() {
     try {
-      const ms = await api.mixes();
-      setMixes(ms);
+      const ms = await api.sections();
+      setSections(ms);
       const m = new Map<number, Set<number>>();
       await Promise.all(
-        ms.map(async (mix) => {
-          const b = await api.mixBrowse(mix.id).catch(() => null);
-          m.set(mix.id, new Set(b ? b.interests.map((f) => f.id) : []));
+        ms.map(async (section) => {
+          const b = await api.sectionBrowse(section.id).catch(() => null);
+          m.set(section.id, new Set(b ? b.topics.map((f) => f.id) : []));
         }),
       );
       setMembers(m);
@@ -45,19 +45,19 @@ export default function MixesPage() {
   }
   useEffect(() => {
     reload();
-    api.interests().then(setInterests).catch(() => {});
+    api.topics().then(setTopics).catch(() => {});
   }, []);
 
-  const noMix = useMemo(() => {
+  const noSection = useMemo(() => {
     const inSome = new Set<number>();
     members.forEach((set) => set.forEach((id) => inSome.add(id)));
-    return interests.filter((f) => !inSome.has(f.id));
-  }, [interests, members]);
+    return topics.filter((f) => !inSome.has(f.id));
+  }, [topics, members]);
 
-  function memberInterests(mix: Mix): Interest[] {
-    const set = members.get(mix.id);
+  function memberTopics(section: Section): Topic[] {
+    const set = members.get(section.id);
     if (!set) return [];
-    return interests.filter((f) => set.has(f.id));
+    return topics.filter((f) => set.has(f.id));
   }
 
   async function drop(zone: Zone) {
@@ -65,24 +65,24 @@ export default function MixesPage() {
     const d = drag;
     setDrag(null);
     if (!d || zone === null) return;
-    const toMix = zone === "other" ? null : zone;
-    if (d.fromMix === toMix) return;
+    const toSection = zone === "other" ? null : zone;
+    if (d.fromSection === toSection) return;
 
     const next = new Map([...members].map(([k, v]) => [k, new Set(v)] as const));
-    if (d.fromMix !== null) next.get(d.fromMix)?.delete(d.interestId);
-    if (toMix !== null) {
-      if (!next.has(toMix)) next.set(toMix, new Set());
-      next.get(toMix)!.add(d.interestId);
+    if (d.fromSection !== null) next.get(d.fromSection)?.delete(d.topicId);
+    if (toSection !== null) {
+      if (!next.has(toSection)) next.set(toSection, new Set());
+      next.get(toSection)!.add(d.topicId);
     }
     setMembers(next); // optimistic
 
     const affected = new Set<number>();
-    if (d.fromMix !== null) affected.add(d.fromMix);
-    if (toMix !== null) affected.add(toMix);
+    if (d.fromSection !== null) affected.add(d.fromSection);
+    if (toSection !== null) affected.add(toSection);
     for (const mid of affected) {
-      await api.setMixInterests(mid, [...(next.get(mid) ?? [])]).catch(() => {});
+      await api.setSectionTopics(mid, [...(next.get(mid) ?? [])]).catch(() => {});
     }
-    api.mixes().then(setMixes).catch(() => {});
+    api.sections().then(setSections).catch(() => {});
   }
 
   async function create() {
@@ -90,13 +90,13 @@ export default function MixesPage() {
     if (!name) return;
     setAddOpen(false);
     setNewName("");
-    await api.createMix(name).catch((e: any) => setErr(String(e.message ?? e)));
+    await api.createSection(name).catch((e: any) => setErr(String(e.message ?? e)));
     reload();
   }
-  async function chooseMixIcon(key: string) {
+  async function chooseSectionIcon(key: string) {
     if (!renameFor) return;
     const next = renameFor.icon === key ? "" : key;
-    await api.updateMix(renameFor.id, { icon: next }).catch(() => {});
+    await api.updateSection(renameFor.id, { icon: next }).catch(() => {});
     setRenameFor((m) => (m ? { ...m, icon: next } : m));
     reload();
   }
@@ -106,7 +106,7 @@ export default function MixesPage() {
     const m = renameFor;
     setRenameFor(null);
     if (name && name !== m.name) {
-      await api.updateMix(m.id, { name }).catch(() => {});
+      await api.updateSection(m.id, { name }).catch(() => {});
       reload();
     }
   }
@@ -114,25 +114,25 @@ export default function MixesPage() {
     if (!renameFor) return;
     const m = renameFor;
     setRenameFor(null);
-    await api.deleteMix(m.id).catch(() => {});
+    await api.deleteSection(m.id).catch(() => {});
     reload();
   }
 
-  function Card(f: Interest, fromMix: number | null) {
+  function Card(f: Topic, fromSection: number | null) {
     const I = feedIcon(f.icon);
     return (
       <div
-        className={`mix-card ${drag?.interestId === f.id ? "dragging" : ""}`}
-        key={`${fromMix}-${f.id}`}
+        className={`section-card ${drag?.topicId === f.id ? "dragging" : ""}`}
+        key={`${fromSection}-${f.id}`}
         draggable
-        onDragStart={() => setDrag({ interestId: f.id, fromMix })}
+        onDragStart={() => setDrag({ topicId: f.id, fromSection })}
         onDragEnd={() => (setDrag(null), setOver(null))}
       >
-        <span className="mix-card-glyph" aria-hidden>
+        <span className="section-card-glyph" aria-hidden>
           {I ? <I size={18} strokeWidth={1.6} /> : <span className="introw-dot" />}
         </span>
-        <span className="mix-card-name">{f.name}</span>
-        <span className="mix-card-grip" aria-hidden>
+        <span className="section-card-name">{f.name}</span>
+        <span className="section-card-grip" aria-hidden>
           <GripVertical size={16} strokeWidth={1.75} />
         </span>
       </div>
@@ -145,73 +145,73 @@ export default function MixesPage() {
         ← Library
       </button>
       <div className="mgmt-titlerow">
-        <h1 className="mgmt-title">Mixes</h1>
+        <h1 className="mgmt-title">Sections</h1>
         <button className="mgmt-edit" onClick={() => (setNewName(""), setAddOpen(true))}>
-          <Plus size={15} strokeWidth={1.9} aria-hidden /> Add mix
+          <Plus size={15} strokeWidth={1.9} aria-hidden /> Add section
         </button>
       </div>
-      <p className="int-prose">Drag an interest between mixes to move it. An interest can live in several mixes.</p>
+      <p className="int-prose">Drag an topic between sections to move it. An topic can live in several sections.</p>
       {err && <p className="err">{err}</p>}
 
-      {mixes === null ? (
+      {sections === null ? (
         <p className="lib2-subtitle">Loading…</p>
       ) : (
         <>
-          {mixes.map((mix) => (
+          {sections.map((section) => (
             <div
-              className={`mix-zone ${over === mix.id ? "over" : ""}`}
-              key={mix.id}
-              onDragOver={(e) => (e.preventDefault(), setOver(mix.id))}
-              onDragLeave={() => setOver((o) => (o === mix.id ? null : o))}
-              onDrop={() => drop(mix.id)}
+              className={`section-zone ${over === section.id ? "over" : ""}`}
+              key={section.id}
+              onDragOver={(e) => (e.preventDefault(), setOver(section.id))}
+              onDragLeave={() => setOver((o) => (o === section.id ? null : o))}
+              onDrop={() => drop(section.id)}
             >
-              <div className="mix-zone-head">
-                <span className="mix-zone-name">{mix.name}</span>
-                <button className="mgmt-edit" onClick={() => (setRenameDraft(mix.name), setRenameFor(mix))}>
+              <div className="section-zone-head">
+                <span className="section-zone-name">{section.name}</span>
+                <button className="mgmt-edit" onClick={() => (setRenameDraft(section.name), setRenameFor(section))}>
                   <Pencil size={13} strokeWidth={1.9} aria-hidden /> rename
                 </button>
               </div>
-              {memberInterests(mix).length === 0 ? (
-                <p className="mix-empty">No interests yet - drag one here.</p>
+              {memberTopics(section).length === 0 ? (
+                <p className="section-empty">No topics yet - drag one here.</p>
               ) : (
-                <div className="mix-cards">{memberInterests(mix).map((f) => Card(f, mix.id))}</div>
+                <div className="section-cards">{memberTopics(section).map((f) => Card(f, section.id))}</div>
               )}
             </div>
           ))}
 
           <div
-            className={`mix-zone ${over === "other" ? "over" : ""}`}
+            className={`section-zone ${over === "other" ? "over" : ""}`}
             onDragOver={(e) => (e.preventDefault(), setOver("other"))}
             onDragLeave={() => setOver((o) => (o === "other" ? null : o))}
             onDrop={() => drop("other")}
           >
-            <div className="mix-zone-head">
-              <span className="mgmt-seclabel">Other interests</span>
+            <div className="section-zone-head">
+              <span className="mgmt-seclabel">Other topics</span>
             </div>
-            {noMix.length === 0 ? (
-              <p className="mix-empty">Every interest is in a mix.</p>
+            {noSection.length === 0 ? (
+              <p className="section-empty">Every topic is in a section.</p>
             ) : (
-              <div className="mix-cards">{noMix.map((f) => Card(f, null))}</div>
+              <div className="section-cards">{noSection.map((f) => Card(f, null))}</div>
             )}
           </div>
         </>
       )}
 
-      <Dialog open={addOpen} onClose={() => setAddOpen(false)} kicker="Add mix">
+      <Dialog open={addOpen} onClose={() => setAddOpen(false)} kicker="Add section">
         <input className="field" placeholder="e.g. News" value={newName} autoFocus onChange={(e) => setNewName(e.target.value)} onKeyDown={(e) => e.key === "Enter" && create()} />
         <div className="dlg-actions">
           <button className="btn" onClick={create} disabled={!newName.trim()}>
-            Add mix
+            Add section
           </button>
         </div>
       </Dialog>
 
-      <Dialog open={renameFor !== null} onClose={() => setRenameFor(null)} kicker="Rename mix">
+      <Dialog open={renameFor !== null} onClose={() => setRenameFor(null)} kicker="Rename section">
         <div className="dlg-sub">Name</div>
         <input className="field" value={renameDraft} autoFocus onChange={(e) => setRenameDraft(e.target.value)} onKeyDown={(e) => e.key === "Enter" && saveRename()} />
         <div className="dlg-sub">Icon</div>
         <div className="icon-grid">
-          <button className={`icon-cell ${!renameFor?.icon ? "on" : ""}`} onClick={() => chooseMixIcon("")} aria-label="No icon">
+          <button className={`icon-cell ${!renameFor?.icon ? "on" : ""}`} onClick={() => chooseSectionIcon("")} aria-label="No icon">
             <span className="introw-dot" />
           </button>
           {FEED_ICONS.map((def) => {
@@ -220,7 +220,7 @@ export default function MixesPage() {
               <button
                 key={def.key}
                 className={`icon-cell ${renameFor?.icon === def.key ? "on" : ""}`}
-                onClick={() => chooseMixIcon(def.key)}
+                onClick={() => chooseSectionIcon(def.key)}
                 aria-label={def.label}
                 title={def.label}
               >

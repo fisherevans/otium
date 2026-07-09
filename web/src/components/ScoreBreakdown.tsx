@@ -41,7 +41,7 @@ export function ScoreBreakdownSheet({ sel, open, onClose }: { sel: Selected | nu
             <div className="bd-step-body">
               <div className="bd-step-head">Why this source?</div>
               <p className="bd-step-line">
-                {sel.source_title} was picked from your mix, then its freshest article was taken. It's set to{" "}
+                {sel.source_title} was picked from your section, then its freshest article was taken. It's set to{" "}
                 <b>{REP_FREQ[bucket]}</b> representation - {REP_PROSE[bucket]}.
               </p>
               <div className="bd-rep">

@@ -9,7 +9,7 @@ import { fmtDate, authorRedundant } from "@/lib/format";
 // In-app reader (#41). Renders the item's stored text inline so a session
 // doesn't have to bounce to a browser tab. Prefers the full body (`content`,
 // content:encoded stored raw at ingest - #58) and falls back to the short
-// `summary` when a interest ships no full body. Both go through the same DOMPurify
+// `summary` when a topic ships no full body. Both go through the same DOMPurify
 // sanitizer, which whitelists formatting tags so paragraphs/links/lists/quotes
 // render. When there's no text at all (e.g. YouTube), it degrades to a calm
 // "open externally" state. Reading in place is deliberately NOT an engagement
@@ -31,7 +31,7 @@ export function Reader({
   onSave?: () => void;
 }) {
   // Prefer the full body; fall back to the short summary when content is empty
-  // (old items pre-#58, or interests that ship no full body).
+  // (old items pre-#58, or topics that ship no full body).
   const rendered = useMemo(
     () => renderSummary(item?.content?.trim() ? item.content : item?.summary),
     [item?.content, item?.summary],

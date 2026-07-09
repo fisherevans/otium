@@ -14,30 +14,30 @@ import (
 // candidate window so the insights's rarity semantics line up with what sessions do.
 const insightsCadenceDays = 45
 
-// InsightsSource is one source's live slice of the interest. EffectiveShare is its share
+// InsightsSource is one source's live slice of the topic. EffectiveShare is its share
 // of the full ranker score (incl. skip penalty) - "what you actually see".
 // IntendedShare drops the skip penalty - "what it wants to be" - so the gap
 // between the two, read next to SkipPct, is the inefficiency signal: a big
 // intended slice you mostly skip is a prune candidate.
 type InsightsSource struct {
-	SourceID       int64              `json:"source_id"`
-	SourceTitle    string             `json:"source_title"`
-	Interest       *store.InterestRef `json:"interest"` // the source's one interest (#86); null for a interestless source
-	EffectiveShare float64            `json:"effective_share"`
-	IntendedShare  float64            `json:"intended_share"`
-	SkipPct        float64            `json:"skip_pct"`
-	ItemCount      int                `json:"item_count"`
-	Weight         float64            `json:"weight"`
+	SourceID       int64           `json:"source_id"`
+	SourceTitle    string          `json:"source_title"`
+	Topic          *store.TopicRef `json:"topic"` // the source's one topic (#86); null for a topicless source
+	EffectiveShare float64         `json:"effective_share"`
+	IntendedShare  float64         `json:"intended_share"`
+	SkipPct        float64         `json:"skip_pct"`
+	ItemCount      int             `json:"item_count"`
+	Weight         float64         `json:"weight"`
 }
 
-// InsightsInterest is a per-interest rollup: the summed shares of its member sources. A nil
-// Interest is the interestless bucket (sources belonging to no interest).
-type InsightsInterest struct {
-	Interest       *store.InterestRef `json:"interest"`
-	EffectiveShare float64            `json:"effective_share"`
-	IntendedShare  float64            `json:"intended_share"`
-	SourceCount    int                `json:"source_count"`
-	ItemCount      int                `json:"item_count"`
+// InsightsTopic is a per-topic rollup: the summed shares of its member sources. A nil
+// Topic is the topicless bucket (sources belonging to no topic).
+type InsightsTopic struct {
+	Topic          *store.TopicRef `json:"topic"`
+	EffectiveShare float64         `json:"effective_share"`
+	IntendedShare  float64         `json:"intended_share"`
+	SourceCount    int             `json:"source_count"`
+	ItemCount      int             `json:"item_count"`
 }
 
 type InsightsTotals struct {
@@ -46,14 +46,14 @@ type InsightsTotals struct {
 }
 
 // InsightsResponse is the /insights payload. Shares are normalized so the source list (and
-// the interest rollup) each sum to 1 over the scope; when scope=="interest" everything is
-// renormalized within that interest's sources.
+// the topic rollup) each sum to 1 over the scope; when scope=="topic" everything is
+// renormalized within that topic's sources.
 type InsightsResponse struct {
-	Scope     string             `json:"scope"`              // "all" | "interest"
-	Interest  string             `json:"interest,omitempty"` // slug, when scope=="interest"
-	Sources   []InsightsSource   `json:"sources"`
-	Interests []InsightsInterest `json:"interests"`
-	Totals    InsightsTotals     `json:"totals"`
+	Scope   string           `json:"scope"`           // "all" | "topic"
+	Topic   string           `json:"topic,omitempty"` // slug, when scope=="topic"
+	Sources []InsightsSource `json:"sources"`
+	Topics  []InsightsTopic  `json:"topics"`
+	Totals  InsightsTotals   `json:"totals"`
 }
 
 // Insights computes the live effective share of each source: sum the current
@@ -62,20 +62,20 @@ type InsightsResponse struct {
 // to ~0 and the insights drifts as content ages. Read-only: emits no engagement events.
 func (h *Handler) Insights(w http.ResponseWriter, r *http.Request) {
 	uid := userID(r)
-	interestSlug := r.URL.Query().Get("interest")
+	topicSlug := r.URL.Query().Get("topic")
 	scope := "all"
 	var sourceIDs []int64
-	if interestSlug != "" {
-		scope = "interest"
-		ids, err := h.db.SourceIDsForInterests(r.Context(), uid, []string{interestSlug})
+	if topicSlug != "" {
+		scope = "topic"
+		ids, err := h.db.SourceIDsForTopics(r.Context(), uid, []string{topicSlug})
 		if err != nil {
-			serverError(w, h.log, "insights resolve interest", err)
+			serverError(w, h.log, "insights resolve topic", err)
 			return
 		}
 		sourceIDs = ids
 		if len(sourceIDs) == 0 {
-			// A interest with no sources yields an empty insights, not "all".
-			writeJSON(w, http.StatusOK, InsightsResponse{Scope: scope, Interest: interestSlug, Sources: []InsightsSource{}, Interests: []InsightsInterest{}})
+			// A topic with no sources yields an empty insights, not "all".
+			writeJSON(w, http.StatusOK, InsightsResponse{Scope: scope, Topic: topicSlug, Sources: []InsightsSource{}, Topics: []InsightsTopic{}})
 			return
 		}
 	}
@@ -122,12 +122,12 @@ func (h *Handler) Insights(w http.ResponseWriter, r *http.Request) {
 		grandInt += intd
 	}
 
-	interestOf := map[int64]store.InterestRef{}
+	topicOf := map[int64]store.TopicRef{}
 	if len(order) > 0 {
-		if m, err := h.db.InterestsForSources(r.Context(), uid, order); err != nil {
-			h.log.Warn("insights interests", "err", err)
+		if m, err := h.db.TopicsForSources(r.Context(), uid, order); err != nil {
+			h.log.Warn("insights topics", "err", err)
 		} else {
-			interestOf = m
+			topicOf = m
 		}
 	}
 
@@ -145,8 +145,8 @@ func (h *Handler) Insights(w http.ResponseWriter, r *http.Request) {
 	}
 
 	sources := make([]InsightsSource, 0, len(order))
-	interestAgg := map[string]*InsightsInterest{}
-	var interestKeys []string
+	topicAgg := map[string]*InsightsTopic{}
+	var topicKeys []string
 	totalItems := 0
 	for _, sid := range order {
 		a := byID[sid]
@@ -155,8 +155,8 @@ func (h *Handler) Insights(w http.ResponseWriter, r *http.Request) {
 		if sk.Shown > 0 {
 			skipPct = float64(sk.Skipped) / float64(sk.Shown)
 		}
-		var fref *store.InterestRef
-		if f, ok := interestOf[sid]; ok {
+		var fref *store.TopicRef
+		if f, ok := topicOf[sid]; ok {
 			fc := f
 			fref = &fc
 		}
@@ -165,7 +165,7 @@ func (h *Handler) Insights(w http.ResponseWriter, r *http.Request) {
 		sources = append(sources, InsightsSource{
 			SourceID:       sid,
 			SourceTitle:    a.title,
-			Interest:       fref,
+			Topic:          fref,
 			EffectiveShare: es,
 			IntendedShare:  is,
 			SkipPct:        skipPct,
@@ -174,15 +174,15 @@ func (h *Handler) Insights(w http.ResponseWriter, r *http.Request) {
 		})
 		totalItems += a.itemCount
 
-		key := "" // "" = interestless bucket
+		key := "" // "" = topicless bucket
 		if fref != nil {
 			key = fref.Slug
 		}
-		mf := interestAgg[key]
+		mf := topicAgg[key]
 		if mf == nil {
-			mf = &InsightsInterest{Interest: fref}
-			interestAgg[key] = mf
-			interestKeys = append(interestKeys, key)
+			mf = &InsightsTopic{Topic: fref}
+			topicAgg[key] = mf
+			topicKeys = append(topicKeys, key)
 		}
 		mf.EffectiveShare += es
 		mf.IntendedShare += is
@@ -197,17 +197,17 @@ func (h *Handler) Insights(w http.ResponseWriter, r *http.Request) {
 		return sources[i].SourceID < sources[j].SourceID
 	})
 
-	interests := make([]InsightsInterest, 0, len(interestKeys))
-	for _, k := range interestKeys {
-		interests = append(interests, *interestAgg[k])
+	topics := make([]InsightsTopic, 0, len(topicKeys))
+	for _, k := range topicKeys {
+		topics = append(topics, *topicAgg[k])
 	}
-	sort.SliceStable(interests, func(i, j int) bool { return interests[i].EffectiveShare > interests[j].EffectiveShare })
+	sort.SliceStable(topics, func(i, j int) bool { return topics[i].EffectiveShare > topics[j].EffectiveShare })
 
 	writeJSON(w, http.StatusOK, InsightsResponse{
-		Scope:     scope,
-		Interest:  interestSlug,
-		Sources:   sources,
-		Interests: interests,
-		Totals:    InsightsTotals{SourceCount: len(sources), ItemCount: totalItems},
+		Scope:   scope,
+		Topic:   topicSlug,
+		Sources: sources,
+		Topics:  topics,
+		Totals:  InsightsTotals{SourceCount: len(sources), ItemCount: totalItems},
 	})
 }

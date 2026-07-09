@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { api, type Interest, type ScoringConfig } from "@/api/client";
+import { api, type Topic, type ScoringConfig } from "@/api/client";
 import { type Bucket } from "@/lib/represent";
 import { Dialog } from "@/components/Dialog";
 import { ArchiveChoice } from "@/components/ArchiveChoice";
@@ -11,20 +11,20 @@ import { RepresentationPicker } from "@/components/RepresentationPicker";
 //      picks the right result (with an "open channel" link to verify)
 //   3. name + per-source options (import full history for YouTube, representation,
 //      archive rule, article order/length, keywords), then create.
-// The source is created with the chosen identifier, attached to the interest, then
+// The source is created with the chosen identifier, attached to the topic, then
 // patched with any non-default options in one follow-up call.
 type Kind = "rss" | "youtube" | "podcast";
 type YtResult = { channel_id: string; title: string; thumbnail: string; description: string; feed_url: string; channel_url: string };
 
 export function AddSourceWizard({
   open,
-  interest,
+  topic,
   ytAvailable,
   onClose,
   onAdded,
 }: {
   open: boolean;
-  interest: Interest;
+  topic: Topic;
   ytAvailable: boolean;
   onClose: () => void;
   onAdded: () => void;
@@ -121,7 +121,7 @@ export function AddSourceWizard({
           ? { channel_id: ytSelected.channel_id, icon_url: ytSelected.thumbnail, import_backlog: importAll }
           : { feed_url: url.trim() }),
       });
-      await api.setSourceInterest(created.id, interest.slug).catch(() => {});
+      await api.setSourceTopic(created.id, topic.slug).catch(() => {});
       // Patch only the options that differ from the defaults.
       const patch: Parameters<typeof api.updateSource>[1] = {};
       if (bucket !== "normal") patch.weight_bucket = bucket;
@@ -272,8 +272,8 @@ export function AddSourceWizard({
           <ArchiveChoice
             scope="source"
             value={archiveDays}
-            intDays={interest.archive_after_days ?? 0}
-            interestName={interest.name}
+            intDays={topic.archive_after_days ?? 0}
+            topicName={topic.name}
             onChange={setArchiveDays}
             keepCount={keepCount}
             combine={combine}

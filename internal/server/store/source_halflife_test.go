@@ -26,25 +26,25 @@ func mkUserSourceItem(t *testing.T, db *DB) (ctx context.Context, uid, sid int64
 	return ctx, u.ID, s.ID
 }
 
-// setSourceInterestWithHalfLife creates a interest with the given half-life and assigns
-// the source to it as its ONE interest (#86). Reassigning moves the source.
-func setSourceInterestWithHalfLife(t *testing.T, db *DB, ctx context.Context, uid, sid int64, name, slug string, halfLife float64) {
+// setSourceTopicWithHalfLife creates a topic with the given half-life and assigns
+// the source to it as its ONE topic (#86). Reassigning moves the source.
+func setSourceTopicWithHalfLife(t *testing.T, db *DB, ctx context.Context, uid, sid int64, name, slug string, halfLife float64) {
 	t.Helper()
-	f, err := db.CreateInterest(ctx, uid, name, slug, "")
+	f, err := db.CreateTopic(ctx, uid, name, slug, "")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := db.UpdateInterest(ctx, uid, f.ID, nil, nil, nil, &halfLife, nil); err != nil {
+	if err := db.UpdateTopic(ctx, uid, f.ID, nil, nil, nil, &halfLife, nil); err != nil {
 		t.Fatal(err)
 	}
-	if err := db.AssignSourceInterest(ctx, sid, f.ID); err != nil {
+	if err := db.AssignSourceTopic(ctx, sid, f.ID); err != nil {
 		t.Fatal(err)
 	}
 }
 
-// TestCandidateResolvesOneFeedHalfLife covers #86: the candidate's interest half-life
-// comes directly from the source's one interest, with no multi-interest rule. Changing
-// the source's interest changes the resolved half-life.
+// TestCandidateResolvesOneFeedHalfLife covers #86: the candidate's topic half-life
+// comes directly from the source's one topic, with no multi-topic rule. Changing
+// the source's topic changes the resolved half-life.
 func TestCandidateResolvesOneFeedHalfLife(t *testing.T) {
 	db, err := Open(":memory:")
 	if err != nil {
@@ -53,39 +53,39 @@ func TestCandidateResolvesOneFeedHalfLife(t *testing.T) {
 	defer db.Close()
 	ctx, uid, sid := mkUserSourceItem(t, db)
 
-	// No interest yet: interest half-life resolves to 0 (global fallback).
+	// No topic yet: topic half-life resolves to 0 (global fallback).
 	pool, err := db.Candidates(ctx, uid, nil, 45, 500)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(pool) != 1 || pool[0].InterestHalfLifeDays != 0 {
-		t.Fatalf("interestless source should resolve interest half-life 0, got %+v", pool)
+	if len(pool) != 1 || pool[0].TopicHalfLifeDays != 0 {
+		t.Fatalf("topicless source should resolve topic half-life 0, got %+v", pool)
 	}
 
-	// Assign to a 14d interest: candidate reads 14.
-	setSourceInterestWithHalfLife(t, db, ctx, uid, sid, "News", "news", 14)
+	// Assign to a 14d topic: candidate reads 14.
+	setSourceTopicWithHalfLife(t, db, ctx, uid, sid, "News", "news", 14)
 	pool, err = db.Candidates(ctx, uid, nil, 45, 500)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if pool[0].InterestHalfLifeDays != 14 {
-		t.Fatalf("one-interest half-life should be 14, got %v", pool[0].InterestHalfLifeDays)
+	if pool[0].TopicHalfLifeDays != 14 {
+		t.Fatalf("one-topic half-life should be 14, got %v", pool[0].TopicHalfLifeDays)
 	}
 
-	// Move it to a 45d interest: candidate now reads 45 (no ambiguity, no rule).
-	setSourceInterestWithHalfLife(t, db, ctx, uid, sid, "Evergreen", "evergreen", 45)
+	// Move it to a 45d topic: candidate now reads 45 (no ambiguity, no rule).
+	setSourceTopicWithHalfLife(t, db, ctx, uid, sid, "Evergreen", "evergreen", 45)
 	pool, err = db.Candidates(ctx, uid, nil, 45, 500)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if pool[0].InterestHalfLifeDays != 45 {
-		t.Fatalf("after reassign, one-interest half-life should be 45, got %v", pool[0].InterestHalfLifeDays)
+	if pool[0].TopicHalfLifeDays != 45 {
+		t.Fatalf("after reassign, one-topic half-life should be 45, got %v", pool[0].TopicHalfLifeDays)
 	}
 }
 
 // TestSourceHalfLifeOverridePlumbing verifies the per-source override flows onto
 // the candidate (SourceHalfLifeDays) and round-trips through UpdateSource /
-// ListSources (#76). The session ranker applies the source > interest precedence.
+// ListSources (#76). The session ranker applies the source > topic precedence.
 func TestSourceHalfLifeOverridePlumbing(t *testing.T) {
 	db, err := Open(":memory:")
 	if err != nil {

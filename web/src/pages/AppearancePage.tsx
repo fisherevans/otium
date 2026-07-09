@@ -1,7 +1,7 @@
 import { useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import type { DelimKey, InterestInkKey, FontKey, InkKey, Selected } from "@/api/client";
-import { Media, InterestPill, CardSource, Byline, Blurb } from "@/components/CardParts";
+import type { DelimKey, TopicInkKey, FontKey, InkKey, Selected } from "@/api/client";
+import { Media, TopicPill, CardSource, Byline, Blurb } from "@/components/CardParts";
 import { usePreferences, prefsToVars, FONT_STACKS, INK_SHADES } from "@/context/PreferencesContext";
 
 // Appearance screen (#80/#81/#82). The centerpiece is a LIVE PREVIEW pinned at
@@ -38,7 +38,7 @@ const SAMPLE: Selected = {
     fetched_at: REL_TWO_DAYS,
   },
   source_title: "The Reader",
-  interest: { name: "Essays", slug: "essays", color: "#6b7f6b", icon: "" },
+  topic: { name: "Essays", slug: "essays", color: "#6b7f6b", icon: "" },
   score: 0.82,
   est_duration_sec: 300,
   reason: "Fresh - posted recently",
@@ -170,9 +170,9 @@ function InkSwatches({
   onChange,
 }: {
   label: string;
-  // #97: value is a plain string so the interest pill's "interest" (keep-tint) option fits
+  // #97: value is a plain string so the topic pill's "topic" (keep-tint) option fits
   // alongside the grayscale ink keys. An option may carry its own `swatch` color
-  // (e.g. the interest tint sample); otherwise the dot uses the ink-key shade.
+  // (e.g. the topic tint sample); otherwise the dot uses the ink-key shade.
   options: { label: string; value: string; swatch?: string }[];
   value: string;
   onChange: (v: string) => void;
@@ -304,11 +304,11 @@ const CARD_INK: { label: string; value: InkKey }[] = [
   { label: "Soft", value: "soft" },
   { label: "Muted", value: "mute" },
 ];
-// #97: the interest pill ink adds a "Interest" option that keeps the interest's own color tint
-// (the default, distinctive look). Its swatch shows the sample interest color so the
+// #97: the topic pill ink adds a "Topic" option that keeps the topic's own color tint
+// (the default, distinctive look). Its swatch shows the sample topic color so the
 // pick is WYSIWYG; picking a grayscale shade overrides the tint.
-const FEED_INK: { label: string; value: InterestInkKey; swatch?: string }[] = [
-  { label: "Interest", value: "interest", swatch: SAMPLE.interest?.color || "#6b7f6b" },
+const FEED_INK: { label: string; value: TopicInkKey; swatch?: string }[] = [
+  { label: "Topic", value: "topic", swatch: SAMPLE.topic?.color || "#6b7f6b" },
   { label: "Graphite", value: "graphite" },
   { label: "Soft", value: "soft" },
   { label: "Muted", value: "mute" },
@@ -364,7 +364,7 @@ export default function AppearancePage() {
   const nav = useNavigate();
   const { prefs, update } = usePreferences();
 
-  // The Card/Reader split (#90): tabs mix the controls by surface. The live
+  // The Card/Reader split (#90): tabs section the controls by surface. The live
   // preview stays pinned above and shows BOTH surfaces; switching a tab scrolls
   // the preview to the one you're editing so the relevant surface leads.
   const [tab, setTab] = useState<Tab>("reader");
@@ -414,7 +414,7 @@ export default function AppearancePage() {
             <div className="card-top">
               <span className="reason">{SAMPLE.reason}</span>
             </div>
-            <InterestPill interest={SAMPLE.interest} />
+            <TopicPill topic={SAMPLE.topic} />
             <CardSource sel={SAMPLE} onSource={() => {}} />
             <h3 className="card-title">{SAMPLE.item.title}</h3>
             <Byline item={SAMPLE.item} sourceTitle={SAMPLE.source_title} />
@@ -431,7 +431,7 @@ export default function AppearancePage() {
             </div>
             <div className="reader-body">
               <p>
-                Attention is the only truly scarce thing you spend here. Everything else - the interest, the queue, the
+                Attention is the only truly scarce thing you spend here. Everything else - the topic, the queue, the
                 endless backlog - is manufactured abundance. A session says: this much, and no more.
               </p>
               <img src={HERO} alt="" />
@@ -460,7 +460,7 @@ export default function AppearancePage() {
         ))}
       </div>
 
-      <div className="ctl-mixes">
+      <div className="ctl-sections">
         {/* Reader typography (#61/#90) */}
         {tab === "reader" && (
           <section className="ctl-section" role="tabpanel">
@@ -508,26 +508,26 @@ export default function AppearancePage() {
             the controls map 1:1 to what you see on the card above. */}
         {tab === "card" && (
           <section className="ctl-section" role="tabpanel">
-            <div className="ctl-mixhead">Interest pill</div>
+            <div className="ctl-sectionhead">Topic pill</div>
             <Segmented
               label="Size"
               options={TAG_SIZE}
-              value={prefs.card.interest_tag_size}
-              onChange={(v) => update({ card: { interest_tag_size: v } })}
+              value={prefs.card.topic_tag_size}
+              onChange={(v) => update({ card: { topic_tag_size: v } })}
             />
             <WeightSlider
               label="Weight"
-              value={prefs.card.interest_weight}
-              onChange={(v) => update({ card: { interest_weight: v } })}
+              value={prefs.card.topic_weight}
+              onChange={(v) => update({ card: { topic_weight: v } })}
             />
             <InkSwatches
               label="Ink"
               options={FEED_INK}
-              value={prefs.card.interest_ink}
-              onChange={(v) => update({ card: { interest_ink: v as InterestInkKey } })}
+              value={prefs.card.topic_ink}
+              onChange={(v) => update({ card: { topic_ink: v as TopicInkKey } })}
             />
 
-            <div className="ctl-mixhead">Source</div>
+            <div className="ctl-sectionhead">Source</div>
             <Segmented
               label="Size"
               options={META_SIZE}
@@ -546,7 +546,7 @@ export default function AppearancePage() {
               onChange={(v) => update({ card: { source_ink: v as InkKey } })}
             />
 
-            <div className="ctl-mixhead">Author</div>
+            <div className="ctl-sectionhead">Author</div>
             <Segmented
               label="Size"
               options={META_SIZE}
@@ -565,7 +565,7 @@ export default function AppearancePage() {
               onChange={(v) => update({ card: { author_ink: v as InkKey } })}
             />
 
-            <div className="ctl-mixhead">Date</div>
+            <div className="ctl-sectionhead">Date</div>
             <Segmented
               label="Size"
               options={TAG_SIZE}
@@ -584,7 +584,7 @@ export default function AppearancePage() {
               onChange={(v) => update({ card: { date_ink: v as InkKey } })}
             />
 
-            <div className="ctl-mixhead">Delimiter</div>
+            <div className="ctl-sectionhead">Delimiter</div>
             <p className="sub" style={{ marginTop: 0 }}>
               The separator between the author and date in the byline.
             </p>
@@ -601,7 +601,7 @@ export default function AppearancePage() {
               onChange={(v) => update({ card: { delim_gap: v } })}
             />
 
-            <div className="ctl-mixhead">Hero image</div>
+            <div className="ctl-sectionhead">Hero image</div>
             <Segmented
               label="Color"
               options={HERO_COLOR}

@@ -46,30 +46,30 @@ type ReaderPrefs struct {
 // the default grayscale/dither treatment.
 //
 // #97 replaced the single shared meta weight/ink with PER-ELEMENT weight+ink for
-// each of the four meta parts (interest pill, source, author, date), plus a byline
+// each of the four meta parts (topic pill, source, author, date), plus a byline
 // delimiter control (glyph + spacing). Each element keeps its existing size field.
 // The legacy MetaWeight/MetaInk fields are retained as the migration seed only:
 // GetPreferences folds a customized shared value into the author/date per-element
 // fields for old blobs (the two elements the shared control actually drove in the
 // v0.29 card), then the per-element fields own the styling going forward.
 type CardPrefs struct {
-	MetaSize        float64 `json:"meta_size"`         // author line size, px (was the shared sub-text size)
-	SourceSize      float64 `json:"source_size"`       // source label, px
-	InterestTagSize float64 `json:"interest_tag_size"` // interest pill name, px
-	DateSize        float64 `json:"date_size"`         // date, px
-	HeroShow        bool    `json:"hero_show"`         // show the hero/media block
-	HeroColor       bool    `json:"hero_color"`        // true = color; false = grayscale/dither (default)
+	MetaSize     float64 `json:"meta_size"`      // author line size, px (was the shared sub-text size)
+	SourceSize   float64 `json:"source_size"`    // source label, px
+	TopicTagSize float64 `json:"topic_tag_size"` // topic pill name, px
+	DateSize     float64 `json:"date_size"`      // date, px
+	HeroShow     bool    `json:"hero_show"`      // show the hero/media block
+	HeroColor    bool    `json:"hero_color"`     // true = color; false = grayscale/dither (default)
 
-	// #97 per-element weight (300-700) + ink (curated enum). InterestInk additionally
-	// allows "interest" = keep the interest's own color tint (the default, distinctive look).
-	InterestWeight int    `json:"interest_weight"`
-	InterestInk    string `json:"interest_ink"`
-	SourceWeight   int    `json:"source_weight"`
-	SourceInk      string `json:"source_ink"`
-	AuthorWeight   int    `json:"author_weight"`
-	AuthorInk      string `json:"author_ink"`
-	DateWeight     int    `json:"date_weight"`
-	DateInk        string `json:"date_ink"`
+	// #97 per-element weight (300-700) + ink (curated enum). TopicInk additionally
+	// allows "topic" = keep the topic's own color tint (the default, distinctive look).
+	TopicWeight  int    `json:"topic_weight"`
+	TopicInk     string `json:"topic_ink"`
+	SourceWeight int    `json:"source_weight"`
+	SourceInk    string `json:"source_ink"`
+	AuthorWeight int    `json:"author_weight"`
+	AuthorInk    string `json:"author_ink"`
+	DateWeight   int    `json:"date_weight"`
+	DateInk      string `json:"date_ink"`
 
 	// #97 byline delimiter: the separator between author and date. Delim is a
 	// curated glyph key (dot|pipe|slash|space); DelimGap is the byline spacing, px.
@@ -92,13 +92,13 @@ func DefaultPreferences() Preferences {
 			FontFamily: "charter", FontWeight: 400, Ink: "soft",
 		},
 		Card: CardPrefs{
-			MetaSize: 11, SourceSize: 11, InterestTagSize: 13, DateSize: 13,
+			MetaSize: 11, SourceSize: 11, TopicTagSize: 13, DateSize: 13,
 			HeroShow: true, HeroColor: false,
 			// #97 per-element defaults mirror the v0.29 card's designed look exactly:
-			// interest pill 600 + interest-color tint, source 600 + soft, author 500 + mute,
+			// topic pill 600 + topic-color tint, source 600 + soft, author 500 + mute,
 			// date 400 + mute. So a fresh user (and one who never touched the old
 			// shared control) sees no change.
-			InterestWeight: 600, InterestInk: "interest",
+			TopicWeight: 600, TopicInk: "topic",
 			SourceWeight: 600, SourceInk: "soft",
 			AuthorWeight: 500, AuthorInk: "mute",
 			DateWeight: 400, DateInk: "mute",
@@ -136,7 +136,7 @@ func (db *DB) GetPreferences(ctx context.Context, userID int64) (Preferences, er
 
 // migrateLegacyMeta folds a pre-#97 blob's shared meta_weight/meta_ink into the
 // new per-element fields so an existing user's card doesn't shift on upgrade. In
-// the v0.29 card the shared control only drove the AUTHOR and DATE parts (interest
+// the v0.29 card the shared control only drove the AUTHOR and DATE parts (topic
 // pill + source were hardcoded 600 and not ink-tunable), so that's all it seeds.
 // It only runs when the stored blob predates #97 (no per-element keys present) and
 // the user had actually moved the shared control off its default; a fresh or
@@ -144,20 +144,20 @@ func (db *DB) GetPreferences(ctx context.Context, userID int64) (Preferences, er
 func migrateLegacyMeta(p *CardPrefs, raw []byte) {
 	var probe struct {
 		Card struct {
-			InterestWeight *int    `json:"interest_weight"`
-			InterestInk    *string `json:"interest_ink"`
-			SourceWeight   *int    `json:"source_weight"`
-			SourceInk      *string `json:"source_ink"`
-			AuthorWeight   *int    `json:"author_weight"`
-			AuthorInk      *string `json:"author_ink"`
-			DateWeight     *int    `json:"date_weight"`
-			DateInk        *string `json:"date_ink"`
-			Delim          *string `json:"delim"`
+			TopicWeight  *int    `json:"topic_weight"`
+			TopicInk     *string `json:"topic_ink"`
+			SourceWeight *int    `json:"source_weight"`
+			SourceInk    *string `json:"source_ink"`
+			AuthorWeight *int    `json:"author_weight"`
+			AuthorInk    *string `json:"author_ink"`
+			DateWeight   *int    `json:"date_weight"`
+			DateInk      *string `json:"date_ink"`
+			Delim        *string `json:"delim"`
 		} `json:"card"`
 	}
 	_ = json.Unmarshal(raw, &probe)
 	c := probe.Card
-	hasPerElement := c.InterestWeight != nil || c.InterestInk != nil || c.SourceWeight != nil ||
+	hasPerElement := c.TopicWeight != nil || c.TopicInk != nil || c.SourceWeight != nil ||
 		c.SourceInk != nil || c.AuthorWeight != nil || c.AuthorInk != nil ||
 		c.DateWeight != nil || c.DateInk != nil || c.Delim != nil
 	if hasPerElement {
@@ -210,13 +210,13 @@ func clampPreferences(p *Preferences) {
 	p.Reader.Ink = validEnum(p.Reader.Ink, inkShades, "soft")
 	p.Card.MetaSize = clampF(p.Card.MetaSize, 8, 16)
 	p.Card.SourceSize = clampF(p.Card.SourceSize, 8, 16)
-	p.Card.InterestTagSize = clampF(p.Card.InterestTagSize, 9, 20)
+	p.Card.TopicTagSize = clampF(p.Card.TopicTagSize, 9, 20)
 	p.Card.DateSize = clampF(p.Card.DateSize, 9, 22)
 	p.Card.MetaWeight = clampI(p.Card.MetaWeight, 300, 700)
 	p.Card.MetaInk = validEnum(p.Card.MetaInk, inkShades, "mute")
-	// #97 per-element weight/ink. Interest ink additionally allows "interest" (keep tint).
-	p.Card.InterestWeight = clampI(p.Card.InterestWeight, 300, 700)
-	p.Card.InterestInk = validEnum(p.Card.InterestInk, interestInkShades, "interest")
+	// #97 per-element weight/ink. Topic ink additionally allows "topic" (keep tint).
+	p.Card.TopicWeight = clampI(p.Card.TopicWeight, 300, 700)
+	p.Card.TopicInk = validEnum(p.Card.TopicInk, topicInkShades, "topic")
 	p.Card.SourceWeight = clampI(p.Card.SourceWeight, 300, 700)
 	p.Card.SourceInk = validEnum(p.Card.SourceInk, inkShades, "soft")
 	p.Card.AuthorWeight = clampI(p.Card.AuthorWeight, 300, 700)
@@ -235,8 +235,8 @@ func clampPreferences(p *Preferences) {
 var (
 	fontFamilies = map[string]bool{"charter": true, "book": true, "didot": true, "grotesk": true}
 	inkShades    = map[string]bool{"ink": true, "graphite": true, "soft": true, "mute": true}
-	// #97: interest pill ink also allows "interest" = keep the interest's own color tint.
-	interestInkShades = map[string]bool{"interest": true, "ink": true, "graphite": true, "soft": true, "mute": true}
+	// #97: topic pill ink also allows "topic" = keep the topic's own color tint.
+	topicInkShades = map[string]bool{"topic": true, "ink": true, "graphite": true, "soft": true, "mute": true}
 	// #97: curated byline delimiter glyphs.
 	delimGlyphs = map[string]bool{"dot": true, "pipe": true, "slash": true, "space": true}
 )

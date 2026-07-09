@@ -12,7 +12,7 @@ type User struct {
 	CreatedAt time.Time `json:"created_at"`
 }
 
-// Source is a creator/channel: an RSS/Atom interest, a YouTube channel (its RSS),
+// Source is a creator/channel: an RSS/Atom topic, a YouTube channel (its RSS),
 // or a podcast. Weight and PerSessionCap are the deterministic-control knobs.
 type Source struct {
 	ID            int64      `json:"id"`
@@ -27,14 +27,14 @@ type Source struct {
 	TrialUntil    *time.Time `json:"trial_until,omitempty"`
 	PerSessionCap int        `json:"per_session_cap"`
 	// Per-source freshness half-life override (#76). 0 = inherit; the resolver
-	// applies source override > interest (resolved) > global default.
+	// applies source override > topic (resolved) > global default.
 	HalfLifeDays float64 `json:"half_life_days"`
-	// Archive After (#115): 0 = inherit interest default, -1 = evergreen, N = days.
+	// Archive After (#115): 0 = inherit topic default, -1 = evergreen, N = days.
 	ArchiveAfterDays int `json:"archive_after_days"`
 	// Rule-based per-source archive (#124). ArchiveKeepCount is the keep-latest-N
 	// count rule: 0 = off, N = keep the newest N eligible items. ArchiveCombine is
 	// how the age and count rules combine when BOTH are active: "and" (default) or
-	// "or". Per-source only - interests/global stay age-only.
+	// "or". Per-source only - topics/global stay age-only.
 	ArchiveKeepCount int    `json:"archive_keep_count"`
 	ArchiveCombine   string `json:"archive_combine"`
 	// Per-source article scoring config (#124), stored as JSON. "" = default
@@ -45,30 +45,30 @@ type Source struct {
 	AddedAt         time.Time  `json:"added_at"`
 	LastFetchAt     *time.Time `json:"last_fetch_at,omitempty"`
 	FetchError      string     `json:"fetch_error,omitempty"`
-	// The one interest this source belongs to (#86). InterestID is nil for a interestless
-	// source; InterestSlug is the denormalized slug for the UI ("" when interestless).
-	InterestID   *int64  `json:"interest_id,omitempty"`
-	InterestSlug string  `json:"interest_slug,omitempty"`
-	ItemCount    int     `json:"item_count,omitempty"`
-	UnseenCount  int     `json:"unseen_count,omitempty"`
-	SkipPct      float64 `json:"skip_pct"`      // fraction of shown items skipped (0..1)
-	PostsPerDay  float64 `json:"posts_per_day"` // avg items/day over the last 30 days
+	// The one topic this source belongs to (#86). TopicID is nil for a topicless
+	// source; TopicSlug is the denormalized slug for the UI ("" when topicless).
+	TopicID     *int64  `json:"topic_id,omitempty"`
+	TopicSlug   string  `json:"topic_slug,omitempty"`
+	ItemCount   int     `json:"item_count,omitempty"`
+	UnseenCount int     `json:"unseen_count,omitempty"`
+	SkipPct     float64 `json:"skip_pct"`      // fraction of shown items skipped (0..1)
+	PostsPerDay float64 `json:"posts_per_day"` // avg items/day over the last 30 days
 }
 
-// Interest is a theme/collection ("Comedy", "Local News") - a saved grouping of
+// Topic is a theme/collection ("Comedy", "Local News") - a saved grouping of
 // sources the session builder can target.
-type Interest struct {
+type Topic struct {
 	ID     int64  `json:"id"`
 	UserID int64  `json:"-"`
 	Name   string `json:"name"`
 	Slug   string `json:"slug"`
 	Color  string `json:"color"`
 	Icon   string `json:"icon"` // flat glyph key; '' = unset (render color swatch)
-	// Per-interest freshness override (#17). HalfLifeDays 0 = use the global freshness
-	// half-life. (A per-interest "diversity" cap existed pre-engine-v2; the allocator
-	// no longer reads it, so it was removed - the interests.diversity column is inert.)
+	// Per-topic freshness override (#17). HalfLifeDays 0 = use the global freshness
+	// half-life. (A per-topic "diversity" cap existed pre-engine-v2; the allocator
+	// no longer reads it, so it was removed - the topics.diversity column is inert.)
 	HalfLifeDays float64 `json:"half_life_days"`
-	// Archive After default for this interest's sources (#115): 0 = global default,
+	// Archive After default for this topic's sources (#115): 0 = global default,
 	// -1 = evergreen, N = days. A source's own archive_after_days overrides it.
 	ArchiveAfterDays int       `json:"archive_after_days"`
 	Sort             int       `json:"sort"`
@@ -76,34 +76,34 @@ type Interest struct {
 	SourceCount      int       `json:"source_count,omitempty"`
 }
 
-// InterestRef is the compact interest identity attached to a session item so the card
-// can lead with "which interest is this". Populated only when the item's source
-// belongs to a interest; a interestless source (e.g. a YouTube channel with no interest) gets
+// TopicRef is the compact topic identity attached to a session item so the card
+// can lead with "which topic is this". Populated only when the item's source
+// belongs to a topic; a topicless source (e.g. a YouTube channel with no topic) gets
 // a nil ref and the card renders source-only.
-type InterestRef struct {
+type TopicRef struct {
 	Name  string `json:"name"`
 	Slug  string `json:"slug"`
 	Color string `json:"color"`
 	Icon  string `json:"icon"`
 }
 
-// Mix is a user-created overlay gathering several interests under one name (#86):
-// "News" = Local + International. Many-to-many - a interest can be in several mixes.
-// InterestCount is the denormalized membership size for the management list.
-type Mix struct {
-	ID            int64     `json:"id"`
-	UserID        int64     `json:"-"`
-	Name          string    `json:"name"`
-	Slug          string    `json:"slug"`
-	Icon          string    `json:"icon"`
-	Sort          int       `json:"sort"`
-	CreatedAt     time.Time `json:"created_at"`
-	InterestCount int       `json:"interest_count"`
+// Section is a user-created overlay gathering several topics under one name (#86):
+// "News" = Local + International. Many-to-many - a topic can be in several sections.
+// TopicCount is the denormalized membership size for the management list.
+type Section struct {
+	ID         int64     `json:"id"`
+	UserID     int64     `json:"-"`
+	Name       string    `json:"name"`
+	Slug       string    `json:"slug"`
+	Icon       string    `json:"icon"`
+	Sort       int       `json:"sort"`
+	CreatedAt  time.Time `json:"created_at"`
+	TopicCount int       `json:"topic_count"`
 }
 
 // Collection is a named list of saved items (#57). Builtins (Saved, Watch
 // Later, Liked) are seeded per user and protected from rename/delete; the rest
-// are user-created. Unlike a interest (a grouping of sources), a collection mixes
+// are user-created. Unlike a topic (a grouping of sources), a collection sections
 // items the user deliberately set aside.
 type Collection struct {
 	ID        int64     `json:"id"`
@@ -204,18 +204,18 @@ type Candidate struct {
 	// its RANK among the user's sources - not its absolute value - drives rarity.
 	SourceCadence float64
 	// SourceHalfLifeDays is the source's own freshness half-life override (#76),
-	// resolved by the store. 0 = inherit; it takes precedence over the interest
-	// half-life in the freshness score (source override > interest > global).
+	// resolved by the store. 0 = inherit; it takes precedence over the topic
+	// half-life in the freshness score (source override > topic > global).
 	SourceHalfLifeDays float64
-	// InterestHalfLifeDays is the item's interest freshness-half-life override (#17),
-	// resolved from the source's one interest (#86). 0 = use the global default. Read
+	// TopicHalfLifeDays is the item's topic freshness-half-life override (#17),
+	// resolved from the source's one topic (#86). 0 = use the global default. Read
 	// by the freshness score (halfLifeOf); Archive-After governs eligibility separately.
-	InterestHalfLifeDays float64
+	TopicHalfLifeDays float64
 	// Archive After (session engine v2, #115): eligibility expiration window in
-	// days. Source override > interest default > global. 0 = inherit up the chain;
+	// days. Source override > topic default > global. 0 = inherit up the chain;
 	// -1 = evergreen (never archive); N = archive articles older than N days.
-	SourceArchiveAfterDays   int
-	InterestArchiveAfterDays int
+	SourceArchiveAfterDays int
+	TopicArchiveAfterDays  int
 	// SourceArchiveKeywords is the source's comma-separated auto-archive keyword
 	// list (#118): an item matching any keyword is ineligible.
 	SourceArchiveKeywords string

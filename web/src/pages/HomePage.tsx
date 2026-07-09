@@ -1,19 +1,19 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { api, type Interest, type Mix, type Source } from "@/api/client";
+import { api, type Topic, type Section, type Source } from "@/api/client";
 import { usePreferences } from "@/context/PreferencesContext";
 
 // The intent flow is two deliberate steps (#112):
 //   1. How long - preset chips from the user's session-length presets (editable
 //      in Settings -> Appearance -> Sessions), plus a "custom" link that reveals a
 //      slider + numeric input. Next advances.
-//   2. Choose a mix - "Everything you follow" (default), the user's mixes (saved
-//      groups of interests), and the individual interests below as "other". Custom
-//      selection is just multi-checking mixes/interests. "Begin" builds the session.
+//   2. Choose a section - "Everything you follow" (default), the user's sections (saved
+//      groups of topics), and the individual topics below as "other". Custom
+//      selection is just multi-checking sections/topics. "Begin" builds the session.
 //
 // Session build (unchanged, #67/#69/#86): POST /sessions with the chosen duration,
-// the selected interest slugs as `themes`, and the selected mix slugs as `mixes`.
-// "Everything" sends both empty, so interestless sources are included too.
+// the selected topic slugs as `themes`, and the selected section slugs as `sections`.
+// "Everything" sends both empty, so topicless sources are included too.
 
 const MIN_MINUTES = 5;
 const MAX_MINUTES = 120;
@@ -33,21 +33,21 @@ export default function HomePage() {
   const [minutes, setMinutes] = useState<number | null>(null);
   const [custom, setCustom] = useState(false);
 
-  const [interests, setInterests] = useState<Interest[]>([]);
-  const [mixes, setMixes] = useState<Mix[]>([]);
+  const [topics, setTopics] = useState<Topic[]>([]);
+  const [sections, setSections] = useState<Section[]>([]);
   const [sources, setSources] = useState<Source[]>([]);
 
-  // Selection. `everything` is the default; picking any mix/interest turns it off.
+  // Selection. `everything` is the default; picking any section/topic turns it off.
   const [everything, setEverything] = useState(true);
-  const [pickedMixes, setPickedMixes] = useState<string[]>([]);
-  const [pickedInterests, setPickedInterests] = useState<string[]>([]);
+  const [pickedSections, setPickedSections] = useState<string[]>([]);
+  const [pickedTopics, setPickedTopics] = useState<string[]>([]);
 
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState("");
 
   useEffect(() => {
-    api.interests().then(setInterests).catch(() => setInterests([]));
-    api.mixes().then(setMixes).catch(() => setMixes([]));
+    api.topics().then(setTopics).catch(() => setTopics([]));
+    api.sections().then(setSections).catch(() => setSections([]));
     api.sources().then(setSources).catch(() => setSources([]));
   }, []);
 
@@ -59,44 +59,44 @@ export default function HomePage() {
     }
   }, [prefs.presets, minutes]);
 
-  // Interests that belong to no mix, shown as "other sources" in step 2. With no
-  // mixes defined yet this is simply every interest.
-  const mixedInterestSlugs = useMemo(() => {
-    // We don't have per-mix membership loaded here (that's a drill-in); treat all
-    // interests as pickable and only separate them once mixes carry members.
+  // Topics that belong to no section, shown as "other sources" in step 2. With no
+  // sections defined yet this is simply every topic.
+  const sectionedTopicSlugs = useMemo(() => {
+    // We don't have per-section membership loaded here (that's a drill-in); treat all
+    // topics as pickable and only separate them once sections carry members.
     return new Set<string>();
   }, []);
-  const otherInterests = useMemo(
-    () => interests.filter((i) => !mixedInterestSlugs.has(i.slug)),
-    [interests, mixedInterestSlugs],
+  const otherTopics = useMemo(
+    () => topics.filter((i) => !sectionedTopicSlugs.has(i.slug)),
+    [topics, sectionedTopicSlugs],
   );
 
   function pickEverything() {
     setEverything(true);
-    setPickedMixes([]);
-    setPickedInterests([]);
+    setPickedSections([]);
+    setPickedTopics([]);
   }
-  function toggleMix(slug: string) {
+  function toggleSection(slug: string) {
     setEverything(false);
-    setPickedMixes((p) => (p.includes(slug) ? p.filter((s) => s !== slug) : [...p, slug]));
+    setPickedSections((p) => (p.includes(slug) ? p.filter((s) => s !== slug) : [...p, slug]));
   }
-  function toggleInterest(slug: string) {
+  function toggleTopic(slug: string) {
     setEverything(false);
-    setPickedInterests((p) => (p.includes(slug) ? p.filter((s) => s !== slug) : [...p, slug]));
+    setPickedTopics((p) => (p.includes(slug) ? p.filter((s) => s !== slug) : [...p, slug]));
   }
 
   // If a selection empties out, fall back to "everything" so Begin is never a no-op.
-  const effectiveEverything = everything || (pickedMixes.length === 0 && pickedInterests.length === 0);
+  const effectiveEverything = everything || (pickedSections.length === 0 && pickedTopics.length === 0);
 
   // Unseen supply for the selection, to disable Begin when there's nothing new.
   const unseen = useMemo(() => {
     if (effectiveEverything) return sources.reduce((n, s) => n + (s.unseen_count ?? 0), 0);
-    const match = sources.filter((s) => s.interest_slug && pickedInterests.includes(s.interest_slug));
-    // Mixes expand server-side; if any mix is picked we can't cheaply count here,
+    const match = sources.filter((s) => s.topic_slug && pickedTopics.includes(s.topic_slug));
+    // Sections expand server-side; if any section is picked we can't cheaply count here,
     // so assume there's supply (the build will confirm).
-    if (pickedMixes.length > 0) return 1;
+    if (pickedSections.length > 0) return 1;
     return match.reduce((n, s) => n + (s.unseen_count ?? 0), 0);
-  }, [sources, pickedInterests, pickedMixes, effectiveEverything]);
+  }, [sources, pickedTopics, pickedSections, effectiveEverything]);
   const nothingNew = sources.length > 0 && unseen === 0;
 
   async function begin() {
@@ -104,9 +104,9 @@ export default function HomePage() {
     setBusy(true);
     setErr("");
     try {
-      const themes = effectiveEverything ? [] : pickedInterests;
-      const mixSlugs = effectiveEverything ? [] : pickedMixes;
-      const resp = await api.createSession(minutes, themes, mixSlugs);
+      const themes = effectiveEverything ? [] : pickedTopics;
+      const sectionSlugs = effectiveEverything ? [] : pickedSections;
+      const resp = await api.createSession(minutes, themes, sectionSlugs);
       if (resp && resp.session_id) nav(`/session/${resp.session_id}`);
       else setErr("Nothing new to gather right now.");
     } catch (e: any) {
@@ -174,19 +174,19 @@ export default function HomePage() {
           )}
 
           <button className="btn" onClick={() => setStep(2)} disabled={minutes == null}>
-            Choose a mix →
+            Choose a section →
           </button>
         </div>
       )}
 
       {step === 2 && (
-        <div className="intent-step slide-up" key="step-mix">
+        <div className="intent-step slide-up" key="step-section">
           <div className="intent-head">
             <button className="intent-back" onClick={() => setStep(1)} aria-label="Back to length">
               ← {minutesLabel(minutes ?? 0)}
             </button>
-            <h1 className="display">Choose a mix</h1>
-            <p className="sub">A mix, or hand-pick what to read. Nothing chosen = everything you follow.</p>
+            <h1 className="display">Choose a section</h1>
+            <p className="sub">A section, or hand-pick what to read. Nothing chosen = everything you follow.</p>
           </div>
 
           <ul className="pick-list">
@@ -203,18 +203,18 @@ export default function HomePage() {
             </li>
           </ul>
 
-          {mixes.length > 0 && (
+          {sections.length > 0 && (
             <div className="pick-group">
-              <div className="pick-group-label">Mixes</div>
+              <div className="pick-group-label">Sections</div>
               <ul className="pick-list">
-                {mixes.map((m) => {
-                  const on = !everything && pickedMixes.includes(m.slug);
+                {sections.map((m) => {
+                  const on = !everything && pickedSections.includes(m.slug);
                   return (
                     <li key={m.slug}>
-                      <button className={`pick-row ${on ? "on" : ""}`} onClick={() => toggleMix(m.slug)} role="checkbox" aria-checked={on}>
+                      <button className={`pick-row ${on ? "on" : ""}`} onClick={() => toggleSection(m.slug)} role="checkbox" aria-checked={on}>
                         <span className={`pick-check ${on ? "on" : ""}`} aria-hidden />
                         <span className="pick-name">{m.name}</span>
-                        <span className="pick-meta">{m.interest_count} interests</span>
+                        <span className="pick-meta">{m.topic_count} topics</span>
                       </button>
                     </li>
                   );
@@ -223,15 +223,15 @@ export default function HomePage() {
             </div>
           )}
 
-          {otherInterests.length > 0 && (
+          {otherTopics.length > 0 && (
             <div className="pick-group">
-              <div className="pick-group-label">{mixes.length > 0 ? "Other interests" : "Interests"}</div>
+              <div className="pick-group-label">{sections.length > 0 ? "Other topics" : "Topics"}</div>
               <ul className="pick-list">
-                {otherInterests.map((i) => {
-                  const on = !everything && pickedInterests.includes(i.slug);
+                {otherTopics.map((i) => {
+                  const on = !everything && pickedTopics.includes(i.slug);
                   return (
                     <li key={i.slug}>
-                      <button className={`pick-row ${on ? "on" : ""}`} onClick={() => toggleInterest(i.slug)} role="checkbox" aria-checked={on}>
+                      <button className={`pick-row ${on ? "on" : ""}`} onClick={() => toggleTopic(i.slug)} role="checkbox" aria-checked={on}>
                         <span className={`pick-check ${on ? "on" : ""}`} aria-hidden />
                         <span className="pick-name">{i.name}</span>
                       </button>

@@ -168,8 +168,8 @@ func ingestLoop(ctx context.Context, db *store.DB, ing *feeds.Ingester, cfg *ser
 			return
 		}
 		// One-time, marker-guarded grouping of untagged YouTube sources into the
-		// Videos interest (#53). No-ops after the first run.
-		if grouped, err := db.BackfillVideosInterest(ctx, u.ID); err != nil {
+		// Videos topic (#53). No-ops after the first run.
+		if grouped, err := db.BackfillVideosTopic(ctx, u.ID); err != nil {
 			log.Warn("videos backfill failed", "err", err)
 		} else if grouped > 0 {
 			log.Info("videos backfill: grouped untagged youtube sources", "count", grouped)

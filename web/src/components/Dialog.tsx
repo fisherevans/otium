@@ -3,7 +3,7 @@ import { useEffect, type ReactNode } from "react";
 // A calm centered dialog in the e-ink language: a hairline-bordered paper card
 // centered over a dim scrim, click-away / Escape / X to dismiss. This is the
 // deliberate edit surface for the management pages (#120) - rename, choose an
-// archival period, edit keywords, move to a mix, change a source's interest.
+// archival period, edit keywords, move to a section, change a source's topic.
 // The pages themselves stay read-only; editing is an explicit, focused act.
 export function Dialog({
   open,

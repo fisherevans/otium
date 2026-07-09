@@ -2,7 +2,7 @@
 // source occupies (session engine v2). The server stores it as a float multiplier
 // on the source (the `weight` column / `weight_bucket` PATCH field - retained as
 // the wire/storage name); every UI surface talks in the 5 named buckets and the
-// shared labels below, so the library, source page, interest page, and the
+// shared labels below, so the library, source page, topic page, and the
 // in-session ··· menu all agree.
 
 export const BUCKETS = ["very_low", "low", "normal", "high", "favorite"] as const;

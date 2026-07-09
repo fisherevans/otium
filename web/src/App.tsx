@@ -16,13 +16,13 @@ import SavedPage from "@/pages/SavedPage";
 import YouPage from "@/pages/YouPage";
 // --- end #84 ---
 import AppearancePage from "@/pages/AppearancePage";
-// --- #66 interest-mgmt-pages: dedicated source/interest pages ---
+// --- #66 topic-mgmt-pages: dedicated source/topic pages ---
 import SourcePage from "@/pages/SourcePage";
 import SourceArticlesPage from "@/pages/SourceArticlesPage";
-import InterestPage from "@/pages/InterestPage";
+import TopicPage from "@/pages/TopicPage";
 // --- end #66 ---
-// --- #86 mixes management ---
-import MixesPage from "@/pages/MixesPage";
+// --- #86 sections management ---
+import SectionsPage from "@/pages/SectionsPage";
 // --- end #86 ---
 
 export default function App() {
@@ -69,12 +69,12 @@ export default function App() {
           <Route path="/" element={<HomePage />} />
           <Route path="/session/:id" element={<SessionPage />} /> {/* #67: durable session by id */}
           <Route path="/sources" element={<SourcesPage />} />
-          {/* --- #66 interest-mgmt-pages: dedicated source/interest pages --- */}
+          {/* --- #66 topic-mgmt-pages: dedicated source/topic pages --- */}
           <Route path="/sources/:id" element={<SourcePage />} />
           <Route path="/sources/:id/articles" element={<SourceArticlesPage />} /> {/* per-source article list */}
-          <Route path="/interests/:slug" element={<InterestPage />} />
+          <Route path="/topics/:slug" element={<TopicPage />} />
           {/* --- end #66 --- */}
-          <Route path="/mixes" element={<MixesPage />} /> {/* #86: mixes management */}
+          <Route path="/sections" element={<SectionsPage />} /> {/* #86: sections management */}
           {/* #84: Saved (Collections + History) and You (secondary destinations)
               are the two new tab homes. Collections/History keep their own
               routes for deep links; Saved embeds their bodies. */}

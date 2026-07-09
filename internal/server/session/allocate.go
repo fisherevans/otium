@@ -24,14 +24,14 @@ import (
 const evergreen = -1
 
 // resolveArchiveAfter returns the effective Archive-After window in days for a
-// candidate: source override > interest default > global. A non-zero value at
+// candidate: source override > topic default > global. A non-zero value at
 // any level wins (including -1 evergreen); 0 falls through to the next level.
 func resolveArchiveAfter(c store.Candidate) int {
 	if c.SourceArchiveAfterDays != 0 {
 		return c.SourceArchiveAfterDays
 	}
-	if c.InterestArchiveAfterDays != 0 {
-		return c.InterestArchiveAfterDays
+	if c.TopicArchiveAfterDays != 0 {
+		return c.TopicArchiveAfterDays
 	}
 	return store.GlobalArchiveAfterDays
 }

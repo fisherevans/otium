@@ -1,6 +1,6 @@
 // Package handler implements otium's HTTP API. Handlers are thin: parse, call
 // the store or the session builder, encode JSON. The interesting logic lives in
-// internal/server/session (ranking) and internal/server/interests (ingest).
+// internal/server/session (ranking) and internal/server/feeds (ingest).
 package handler
 
 import (
@@ -132,19 +132,19 @@ func (h *Handler) GetMe(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// --- interests ---
+// --- topics ---
 
-func (h *Handler) ListInterests(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) ListTopics(w http.ResponseWriter, r *http.Request) {
 	uid := userID(r)
-	interests, err := h.db.ListInterests(r.Context(), uid)
+	topics, err := h.db.ListTopics(r.Context(), uid)
 	if err != nil {
-		serverError(w, h.log, "list interests", err)
+		serverError(w, h.log, "list topics", err)
 		return
 	}
-	writeJSON(w, http.StatusOK, interests)
+	writeJSON(w, http.StatusOK, topics)
 }
 
-func (h *Handler) CreateInterest(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) CreateTopic(w http.ResponseWriter, r *http.Request) {
 	uid := userID(r)
 	var body struct {
 		Name  string `json:"name"`
@@ -157,22 +157,22 @@ func (h *Handler) CreateInterest(w http.ResponseWriter, r *http.Request) {
 	if body.Slug == "" {
 		body.Slug = slugify(body.Name)
 	}
-	f, err := h.db.CreateInterest(r.Context(), uid, body.Name, body.Slug, body.Color)
+	f, err := h.db.CreateTopic(r.Context(), uid, body.Name, body.Slug, body.Color)
 	if err != nil {
-		serverError(w, h.log, "create interest", err)
+		serverError(w, h.log, "create topic", err)
 		return
 	}
 	writeJSON(w, http.StatusCreated, f)
 }
 
-// UpdateInterest patches an interest's presentation fields (name, color, icon), the
-// per-interest freshness half-life override (#17), and the Archive-After default.
+// UpdateTopic patches an topic's presentation fields (name, color, icon), the
+// per-topic freshness half-life override (#17), and the Archive-After default.
 // No engagement signal - pure curation.
-func (h *Handler) UpdateInterest(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) UpdateTopic(w http.ResponseWriter, r *http.Request) {
 	uid := userID(r)
 	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	if err != nil {
-		badRequest(w, "bad interest id")
+		badRequest(w, "bad topic id")
 		return
 	}
 	var body struct {
@@ -204,18 +204,18 @@ func (h *Handler) UpdateInterest(w http.ResponseWriter, r *http.Request) {
 		}
 		body.HalfLifeDays = &v
 	}
-	if err := h.db.UpdateInterest(r.Context(), uid, id, body.Name, body.Color, body.Icon, body.HalfLifeDays, body.ArchiveAfterDays); err != nil {
-		serverError(w, h.log, "update interest", err)
+	if err := h.db.UpdateTopic(r.Context(), uid, id, body.Name, body.Color, body.Icon, body.HalfLifeDays, body.ArchiveAfterDays); err != nil {
+		serverError(w, h.log, "update topic", err)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
 }
 
-func (h *Handler) SetInterestSources(w http.ResponseWriter, r *http.Request) {
+func (h *Handler) SetTopicSources(w http.ResponseWriter, r *http.Request) {
 	uid := userID(r)
-	interestID, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	topicID, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	if err != nil {
-		badRequest(w, "bad interest id")
+		badRequest(w, "bad topic id")
 		return
 	}
 	var body struct {
@@ -224,26 +224,26 @@ func (h *Handler) SetInterestSources(w http.ResponseWriter, r *http.Request) {
 	if !decode(w, r, &body) {
 		return
 	}
-	if err := h.db.SetInterestSources(r.Context(), uid, interestID, body.SourceIDs); err != nil {
-		serverError(w, h.log, "set interest sources", err)
+	if err := h.db.SetTopicSources(r.Context(), uid, topicID, body.SourceIDs); err != nil {
+		serverError(w, h.log, "set topic sources", err)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
 }
 
-// InterestItems returns recent items across a interest's sources (by interest id), backing
-// the interest page's posts section (#66).
-func (h *Handler) InterestItems(w http.ResponseWriter, r *http.Request) {
+// TopicItems returns recent items across a topic's sources (by topic id), backing
+// the topic page's posts section (#66).
+func (h *Handler) TopicItems(w http.ResponseWriter, r *http.Request) {
 	uid := userID(r)
 	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	if err != nil {
-		badRequest(w, "bad interest id")
+		badRequest(w, "bad topic id")
 		return
 	}
 	limit := intParam(r, "limit", 50)
-	items, err := h.db.ListRecentItemsByInterest(r.Context(), uid, id, limit)
+	items, err := h.db.ListRecentItemsByTopic(r.Context(), uid, id, limit)
 	if err != nil {
-		serverError(w, h.log, "interest items", err)
+		serverError(w, h.log, "topic items", err)
 		return
 	}
 	writeJSON(w, http.StatusOK, items)
@@ -425,7 +425,7 @@ func (h *Handler) UpdateSource(w http.ResponseWriter, r *http.Request) {
 		}
 		patch.Weight = &wf
 	}
-	// Clamp the half-life override to sane bounds; 0 stays "inherit" (interest/global).
+	// Clamp the half-life override to sane bounds; 0 stays "inherit" (topic/global).
 	if body.HalfLifeDays != nil {
 		v := *body.HalfLifeDays
 		if v < 0 {
@@ -586,9 +586,9 @@ func (h *Handler) DeleteSource(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
 }
 
-// SetSourceInterest sets the one interest a source belongs to (#86). An empty interest_slug
-// clears the interest (interestless). Replaces the old multi-interest membership.
-func (h *Handler) SetSourceInterest(w http.ResponseWriter, r *http.Request) {
+// SetSourceTopic sets the one topic a source belongs to (#86). An empty topic_slug
+// clears the topic (topicless). Replaces the old multi-topic membership.
+func (h *Handler) SetSourceTopic(w http.ResponseWriter, r *http.Request) {
 	uid := userID(r)
 	id, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
 	if err != nil {
@@ -596,13 +596,13 @@ func (h *Handler) SetSourceInterest(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var body struct {
-		InterestSlug string `json:"interest_slug"`
+		TopicSlug string `json:"topic_slug"`
 	}
 	if !decode(w, r, &body) {
 		return
 	}
-	if err := h.db.SetSourceInterest(r.Context(), uid, id, body.InterestSlug); err != nil {
-		serverError(w, h.log, "set source interest", err)
+	if err := h.db.SetSourceTopic(r.Context(), uid, id, body.TopicSlug); err != nil {
+		serverError(w, h.log, "set source topic", err)
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
@@ -633,7 +633,7 @@ func (h *Handler) SourceItems(w http.ResponseWriter, r *http.Request) {
 // from a single duration + themes (#69), stores it, and returns it; the queue
 // and the read cursor live in the backend so a refresh or a return resumes the
 // same items at the same place (CurrentSession) rather than rebuilding a fresh
-// interest. One session per user is active at a time - creating a new one ends the
+// topic. One session per user is active at a time - creating a new one ends the
 // previous. When the client decides the session is over (time budget reached or
 // the queue exhausted) it PATCHes status='ended' and returns home.
 
@@ -645,8 +645,8 @@ func (h *Handler) CreateSession(w http.ResponseWriter, r *http.Request) {
 	uid := userID(r)
 	var body struct {
 		DurationMin int      `json:"duration_min"`
-		Themes      []string `json:"themes"` // interest slugs; empty = all followed sources
-		Mixes       []string `json:"mixes"`  // mix slugs; each expands to its member interests (#86)
+		Themes      []string `json:"themes"`   // topic slugs; empty = all followed sources
+		Sections    []string `json:"sections"` // section slugs; each expands to its member topics (#86)
 	}
 	if !decode(w, r, &body) {
 		return
@@ -655,7 +655,7 @@ func (h *Handler) CreateSession(w http.ResponseWriter, r *http.Request) {
 		body.DurationMin = 15
 	}
 
-	items, err := h.buildSessionQueue(r.Context(), uid, body.DurationMin, body.Themes, body.Mixes)
+	items, err := h.buildSessionQueue(r.Context(), uid, body.DurationMin, body.Themes, body.Sections)
 	if err != nil {
 		serverError(w, h.log, "build session", err)
 		return
@@ -730,17 +730,17 @@ func (h *Handler) UpdateSession(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
 }
 
-// buildSessionQueue resolves themes (interest slugs) and mixes (mix slugs, each
-// expanding to its member interests' sources, #86), pulls the candidate pool +
+// buildSessionQueue resolves themes (topic slugs) and sections (section slugs, each
+// expanding to its member topics' sources, #86), pulls the candidate pool +
 // behavioral stats, runs the ranker for the single duration (fed as both bounds
 // so the existing predict/selectivity path is unchanged), and attaches each
-// item's interest. Returns an empty slice when the selection resolves to no sources.
-func (h *Handler) buildSessionQueue(ctx context.Context, uid int64, durationMin int, themes, mixes []string) ([]session.Selected, error) {
+// item's topic. Returns an empty slice when the selection resolves to no sources.
+func (h *Handler) buildSessionQueue(ctx context.Context, uid int64, durationMin int, themes, sections []string) ([]session.Selected, error) {
 	var sourceIDs []int64
-	if len(themes) > 0 || len(mixes) > 0 {
+	if len(themes) > 0 || len(sections) > 0 {
 		set := map[int64]struct{}{}
 		if len(themes) > 0 {
-			ids, err := h.db.SourceIDsForInterests(ctx, uid, themes)
+			ids, err := h.db.SourceIDsForTopics(ctx, uid, themes)
 			if err != nil {
 				return nil, err
 			}
@@ -748,8 +748,8 @@ func (h *Handler) buildSessionQueue(ctx context.Context, uid int64, durationMin 
 				set[id] = struct{}{}
 			}
 		}
-		if len(mixes) > 0 {
-			ids, err := h.db.SourceIDsForMixes(ctx, uid, mixes)
+		if len(sections) > 0 {
+			ids, err := h.db.SourceIDsForSections(ctx, uid, sections)
 			if err != nil {
 				return nil, err
 			}
@@ -795,7 +795,7 @@ func (h *Handler) buildSessionQueue(ctx context.Context, uid int64, durationMin 
 	// a new sample; the stored queue makes resume stable).
 	rng := mrand.New(mrand.NewSource(time.Now().UnixNano()))
 	items := session.Allocate(pool, now, target, rng)
-	h.attachInterests(ctx, uid, items)
+	h.attachTopics(ctx, uid, items)
 	return items, nil
 }
 
@@ -823,7 +823,7 @@ func (h *Handler) rehydrateSession(ctx context.Context, uid int64, itemIDs []int
 		}
 		out = append(out, session.SelectFor(c, now))
 	}
-	h.attachInterests(ctx, uid, out)
+	h.attachTopics(ctx, uid, out)
 	return out, nil
 }
 
@@ -853,10 +853,10 @@ func (h *Handler) sourceStats(ctx context.Context, uid int64) (map[int64]session
 	return stats, nil
 }
 
-// attachInterests fills each item's interest identity for the card's identity line (#86:
-// a source's one interest). Interestless sources (interest_id NULL) stay nil and render
+// attachTopics fills each item's topic identity for the card's identity line (#86:
+// a source's one topic). Topicless sources (topic_id NULL) stay nil and render
 // source-only.
-func (h *Handler) attachInterests(ctx context.Context, uid int64, items []session.Selected) {
+func (h *Handler) attachTopics(ctx context.Context, uid int64, items []session.Selected) {
 	if len(items) == 0 {
 		return
 	}
@@ -864,15 +864,15 @@ func (h *Handler) attachInterests(ctx context.Context, uid int64, items []sessio
 	for _, it := range items {
 		ids = append(ids, it.Item.SourceID)
 	}
-	interestOf, err := h.db.InterestsForSources(ctx, uid, ids)
+	topicOf, err := h.db.TopicsForSources(ctx, uid, ids)
 	if err != nil {
-		h.log.Warn("resolve interests", "err", err)
+		h.log.Warn("resolve topics", "err", err)
 		return
 	}
 	for i := range items {
-		if f, ok := interestOf[items[i].Item.SourceID]; ok {
+		if f, ok := topicOf[items[i].Item.SourceID]; ok {
 			fc := f
-			items[i].Interest = &fc
+			items[i].Topic = &fc
 		}
 	}
 }
@@ -956,7 +956,7 @@ func (h *Handler) ItemEvent(w http.ResponseWriter, r *http.Request) {
 	_ = h.db.LogEvent(r.Context(), uid, body.Type, &iid, nil, body.SessionID, "")
 	// Wire Like -> the auto Liked collection (#57). Additive membership only: the
 	// `like` state + event above are the untouched engagement signal; adding to
-	// Liked is organization and never interests the ranker. A membership hiccup must
+	// Liked is organization and never topics the ranker. A membership hiccup must
 	// not fail the like, so it's a warn, not a hard error.
 	if body.Type == "like" {
 		if err := h.db.AddItemToBuiltinCollection(r.Context(), uid, store.SlugLiked, itemID); err != nil {
@@ -973,7 +973,7 @@ func (h *Handler) ItemEvent(w http.ResponseWriter, r *http.Request) {
 //   - Dwell is written ONLY to the append-only `events` log (type "dwell"), never
 //     to item_state. The ranker reads item_state (SourceSkipStats) and content
 //     duration (SourceAvgDuration); it never reads the events log, so dwell can
-//     never enter ranking or re-rank the interest. It is raw material for user-owned
+//     never enter ranking or re-rank the topic. It is raw material for user-owned
 //     stats (#24) and the future pacing signal (#5).
 //   - The client only sends dwell when the fast-scroll check-in setting is on;
 //     off = no measurement. There is no other consumer.
@@ -1004,7 +1004,7 @@ func (h *Handler) ItemDwell(w http.ResponseWriter, r *http.Request) {
 // --- full-text content (#98) ---
 
 // ItemContent returns the best reader body for an item, fetching + extracting it
-// on demand for interests that ship no full content (#98). Fisher's rule: attempt the
+// on demand for topics that ship no full content (#98). Fisher's rule: attempt the
 // in-app render first, fall back to "open original". Resolution:
 //
 //   - a stored body (content_source rss|fetched): return it as-is.

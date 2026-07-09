@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { Pencil, Settings, Copy, Check, Mail, Ban, EyeOff } from "lucide-react";
-import { api, parseScoring, type Interest, type Source, type SourceItem, type SourceStats, type ScoringConfig } from "@/api/client";
+import { api, parseScoring, type Topic, type Source, type SourceItem, type SourceStats, type ScoringConfig } from "@/api/client";
 import { bucketOf, REP_LEVEL, REP_PROSE, REP_LABEL, compareToAverage, type Bucket } from "@/lib/represent";
 import { RepresentationPicker } from "@/components/RepresentationPicker";
 import { resolveSourceArchive, itemEligible } from "@/lib/archive";
@@ -41,7 +41,7 @@ export default function SourcePage() {
   const sourceId = Number(id);
 
   const [sources, setSources] = useState<Source[] | null>(null);
-  const [interests, setInterests] = useState<Interest[]>([]);
+  const [topics, setTopics] = useState<Topic[]>([]);
   const [stats, setStats] = useState<Record<number, SourceStats>>({});
   const [posts, setPosts] = useState<SourceItem[] | null>(null);
   const [err, setErr] = useState("");
@@ -53,7 +53,7 @@ export default function SourcePage() {
   const [renameDraft, setRenameDraft] = useState("");
   const [controlsOpen, setControlsOpen] = useState(false);
   const [kwDraft, setKwDraft] = useState("");
-  const [interestOpen, setInterestOpen] = useState(false);
+  const [topicOpen, setTopicOpen] = useState(false);
   const [resetOpen, setResetOpen] = useState(false);
   const [urlOpen, setUrlOpen] = useState(false);
   const [urlDraft, setUrlDraft] = useState("");
@@ -61,9 +61,9 @@ export default function SourcePage() {
 
   const source = useMemo(() => (sources ? sources.find((s) => s.id === sourceId) ?? null : null), [sources, sourceId]);
   const st = stats[sourceId];
-  const interest = useMemo(
-    () => interests.find((i) => i.slug === (source?.interest_slug ?? "")) ?? null,
-    [interests, source?.interest_slug],
+  const topic = useMemo(
+    () => topics.find((i) => i.slug === (source?.topic_slug ?? "")) ?? null,
+    [topics, source?.topic_slug],
   );
 
   function reload() {
@@ -75,7 +75,7 @@ export default function SourcePage() {
   useEffect(() => {
     reload();
     reloadStats();
-    api.interests().then(setInterests).catch(() => {});
+    api.topics().then(setTopics).catch(() => {});
   }, []);
   useEffect(() => {
     if (sourceId) api.sourceItems(sourceId).then(setPosts).catch(() => {});
@@ -93,10 +93,10 @@ export default function SourcePage() {
   const combine = (source?.archive_combine ?? "and") as "and" | "or";
   const lengthPrefer = scoring.length?.prefer ?? null;
 
-  // Resolve Archive-After: source override > interest default > global (21d).
+  // Resolve Archive-After: source override > topic default > global (21d).
   const srcDays = source?.archive_after_days ?? 0;
-  const intDays = interest?.archive_after_days ?? 0;
-  const arch = resolveSourceArchive(srcDays, intDays, interest?.name);
+  const intDays = topic?.archive_after_days ?? 0;
+  const arch = resolveSourceArchive(srcDays, intDays, topic?.name);
   const resolvedDays = arch.days;
 
   // Averages across every source, for the "vs your average source" sublines. The
@@ -122,7 +122,7 @@ export default function SourcePage() {
   const shown30 = st?.shown_30 ?? 0;
   const openPct30 = shown30 ? (st?.opened_30 ?? 0) / shown30 : 0;
   // The one threshold-crossing insight for this source (matches the pill shown on
-  // the interest page); StatIcon marks the stat line the pill was derived from.
+  // the topic page); StatIcon marks the stat line the pill was derived from.
   const insight = sourceInsight(st, bands);
   const resolvedSince = (st?.shown_since ?? 0) + (st?.missed_since ?? 0);
 
@@ -147,7 +147,7 @@ export default function SourcePage() {
   }
 
   // statIcon marks a stat line when it's the source of the active insight pill, so
-  // a user seeing "92% invisible" on the interest page finds the matching line here.
+  // a user seeing "92% invisible" on the topic page finds the matching line here.
   function statIcon(kind: InsightKind) {
     if (!insight || insight.kind !== kind) return null;
     // open with a "down" tone = you open little of it - a ban glyph reads truer.
@@ -199,9 +199,9 @@ export default function SourcePage() {
   function setLengthPrefer(p: "longer" | "shorter" | null) {
     saveScoring({ ...scoring, length: p ? { prefer: p } : null });
   }
-  async function chooseInterest(slug: string) {
-    setInterestOpen(false);
-    await api.setSourceInterest(sourceId, slug).catch(() => {});
+  async function chooseTopic(slug: string) {
+    setTopicOpen(false);
+    await api.setSourceTopic(sourceId, slug).catch(() => {});
     reload();
   }
   async function resetMeta() {
@@ -228,7 +228,7 @@ export default function SourcePage() {
   }
   async function del() {
     await api.deleteSource(sourceId).catch(() => {});
-    nav(source?.interest_slug ? `/interests/${source.interest_slug}` : "/sources");
+    nav(source?.topic_slug ? `/topics/${source.topic_slug}` : "/sources");
   }
   function copyUrl() {
     if (source?.feed_url) navigator.clipboard?.writeText(source.feed_url).catch(() => {});
@@ -248,8 +248,8 @@ export default function SourcePage() {
   }
   if (!source) return <p className="lib2-subtitle">Loading…</p>;
 
-  const backTo = source.interest_slug ? `/interests/${source.interest_slug}` : "/sources";
-  const backLabel = interest?.name ?? "Library";
+  const backTo = source.topic_slug ? `/topics/${source.topic_slug}` : "/sources";
+  const backLabel = topic?.name ?? "Library";
 
   return (
     <div className="mgmt src-page">
@@ -365,13 +365,13 @@ export default function SourcePage() {
         )}
       </div>
 
-      {/* --- interest (read-only + change) --- */}
+      {/* --- topic (read-only + change) --- */}
       <div className="mgmt-sechead">
-        <span className="mgmt-seclabel">Interest</span>
+        <span className="mgmt-seclabel">Topic</span>
       </div>
       <p className="fc-line">
-        This source is in <b>{interest?.name ?? "no interest"}</b>.{" "}
-        <button className="mgmt-inline" onClick={() => setInterestOpen(true)}>
+        This source is in <b>{topic?.name ?? "no topic"}</b>.{" "}
+        <button className="mgmt-inline" onClick={() => setTopicOpen(true)}>
           change
         </button>
       </p>
@@ -450,7 +450,7 @@ export default function SourcePage() {
           scope="source"
           value={srcDays}
           intDays={intDays}
-          interestName={interest?.name}
+          topicName={topic?.name}
           onChange={pickArchive}
           keepCount={keepCount}
           combine={combine}
@@ -499,17 +499,17 @@ export default function SourcePage() {
         </div>
       </Dialog>
 
-      <Dialog open={interestOpen} onClose={() => setInterestOpen(false)} kicker="Move to interest">
+      <Dialog open={topicOpen} onClose={() => setTopicOpen(false)} kicker="Move to topic">
         <div className="dlg-opts">
-          {interests.map((i) => (
-            <button key={i.slug} className={`dlg-opt ${source.interest_slug === i.slug ? "on" : ""}`} onClick={() => chooseInterest(i.slug)}>
+          {topics.map((i) => (
+            <button key={i.slug} className={`dlg-opt ${source.topic_slug === i.slug ? "on" : ""}`} onClick={() => chooseTopic(i.slug)}>
               <span className="dlg-radio" aria-hidden />
               <span className="dlg-name">{i.name}</span>
             </button>
           ))}
-          <button className={`dlg-opt ${!source.interest_slug ? "on" : ""}`} onClick={() => chooseInterest("")}>
+          <button className={`dlg-opt ${!source.topic_slug ? "on" : ""}`} onClick={() => chooseTopic("")}>
             <span className="dlg-radio" aria-hidden />
-            <span className="dlg-name">No interest</span>
+            <span className="dlg-name">No topic</span>
           </button>
         </div>
       </Dialog>

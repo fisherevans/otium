@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { api, type Interest, type Source, type SourceItem } from "@/api/client";
+import { api, type Topic, type Source, type SourceItem } from "@/api/client";
 import { relTime, fmtDateLong, ageDays } from "@/lib/format";
 import { freshness, FRESHNESS_HALF_LIFE_DAYS } from "@/lib/freshness";
 import { resolveSourceArchive, itemEligible } from "@/lib/archive";
@@ -41,7 +41,7 @@ export default function SourceArticlesPage() {
   const sourceId = Number(id);
 
   const [source, setSource] = useState<Source | null>(null);
-  const [interest, setInterest] = useState<Interest | null>(null);
+  const [topic, setTopic] = useState<Topic | null>(null);
   const [items, setItems] = useState<SourceItem[] | null>(null);
   const [content, setContent] = useState<SourceItem | null>(null);
   const [filter, setFilter] = useState<Filter>("none");
@@ -52,13 +52,13 @@ export default function SourceArticlesPage() {
     api.sources().then((ss) => {
       const s = ss.find((x) => x.id === sourceId) ?? null;
       setSource(s);
-      if (s?.interest_slug) api.interests().then((is) => setInterest(is.find((i) => i.slug === s.interest_slug) ?? null)).catch(() => {});
+      if (s?.topic_slug) api.topics().then((is) => setTopic(is.find((i) => i.slug === s.topic_slug) ?? null)).catch(() => {});
     }).catch(() => {});
     api.sourceItems(sourceId).then(setItems).catch(() => {});
   }, [sourceId]);
 
   const keywords = (source?.archive_keywords ?? "").split(",").map((k) => k.trim().toLowerCase()).filter(Boolean);
-  const resolvedDays = resolveSourceArchive(source?.archive_after_days ?? 0, interest?.archive_after_days ?? 0).days;
+  const resolvedDays = resolveSourceArchive(source?.archive_after_days ?? 0, topic?.archive_after_days ?? 0).days;
 
   function eligible(it: SourceItem): boolean {
     return itemEligible(it.published_at, resolvedDays, keywords, `${it.title} ${it.summary}`);

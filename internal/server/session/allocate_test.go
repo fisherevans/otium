@@ -10,7 +10,7 @@ import (
 
 func acand(sourceID int64, repr float64, ageDays float64, srcArchive, intArchive int, now time.Time) store.Candidate {
 	c := store.Candidate{SourceWeight: repr,
-		SourceArchiveAfterDays: srcArchive, InterestArchiveAfterDays: intArchive}
+		SourceArchiveAfterDays: srcArchive, TopicArchiveAfterDays: intArchive}
 	c.SourceID = sourceID // promoted from the embedded Item
 	c.PublishedAt = now.Add(-time.Duration(ageDays*24) * time.Hour)
 	return c
@@ -22,10 +22,10 @@ func TestResolveArchiveAfter(t *testing.T) {
 		t.Fatalf("no override should resolve to global %d, got %d", store.GlobalArchiveAfterDays, got)
 	}
 	if got := resolveArchiveAfter(acand(1, 1, 0, 0, 7, now)); got != 7 {
-		t.Fatalf("interest default should apply, got %d", got)
+		t.Fatalf("topic default should apply, got %d", got)
 	}
 	if got := resolveArchiveAfter(acand(1, 1, 0, 3, 7, now)); got != 3 {
-		t.Fatalf("source override should win over interest, got %d", got)
+		t.Fatalf("source override should win over topic, got %d", got)
 	}
 	if got := resolveArchiveAfter(acand(1, 1, 0, evergreen, 7, now)); got != evergreen {
 		t.Fatalf("source evergreen override should win, got %d", got)

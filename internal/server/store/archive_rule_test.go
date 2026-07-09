@@ -30,7 +30,9 @@ func mkSourceWithItems(t *testing.T, db *DB, n int) (ctx context.Context, uid, s
 	return ctx, u.ID, s.ID
 }
 
-func itemExtID(i int) string { return "ext-" + time.Duration(i).String() + "-" + string(rune('a'+i%26)) + "-" + itoa(i) }
+func itemExtID(i int) string {
+	return "ext-" + time.Duration(i).String() + "-" + string(rune('a'+i%26)) + "-" + itoa(i)
+}
 
 func itoa(i int) string {
 	if i == 0 {
@@ -82,7 +84,7 @@ func TestOnDeckMirrorsKeepCount(t *testing.T) {
 }
 
 // TestResolvedArchiveRuleRoundTrips checks the importer's rule resolver sees the
-// stored count + combine and the source>interest>global age chain.
+// stored count + combine and the source>topic>global age chain.
 func TestResolvedArchiveRuleRoundTrips(t *testing.T) {
 	db, err := Open(":memory:")
 	if err != nil {

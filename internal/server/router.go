@@ -48,19 +48,19 @@ func NewRouter(h *handler.Handler, authMiddleware func(http.Handler) http.Handle
 			r.Post("/sources/resolve-youtube", h.ResolveYouTube)
 			r.Post("/sources/search-youtube", h.SearchYouTube)
 
-			r.Get("/interests", h.ListInterests)
-			r.Post("/interests", h.CreateInterest)
-			r.Patch("/interests/{id}", h.UpdateInterest)
-			r.Put("/interests/{id}/sources", h.SetInterestSources)
-			r.Get("/interests/{id}/items", h.InterestItems)
+			r.Get("/topics", h.ListTopics)
+			r.Post("/topics", h.CreateTopic)
+			r.Patch("/topics/{id}", h.UpdateTopic)
+			r.Put("/topics/{id}/sources", h.SetTopicSources)
+			r.Get("/topics/{id}/items", h.TopicItems)
 
-			// Mixes (#86): a user-created overlay grouping interests (many-to-many).
-			r.Get("/mixes", h.ListMixes)
-			r.Post("/mixes", h.CreateMix)
-			r.Get("/mixes/{id}", h.MixBrowse)
-			r.Patch("/mixes/{id}", h.UpdateMix)
-			r.Delete("/mixes/{id}", h.DeleteMix)
-			r.Put("/mixes/{id}/interests", h.SetMixInterests)
+			// Sections (#86): a user-created overlay grouping topics (many-to-many).
+			r.Get("/sections", h.ListSections)
+			r.Post("/sections", h.CreateSection)
+			r.Get("/sections/{id}", h.SectionBrowse)
+			r.Patch("/sections/{id}", h.UpdateSection)
+			r.Delete("/sections/{id}", h.DeleteSection)
+			r.Put("/sections/{id}/topics", h.SetSectionTopics)
 
 			r.Get("/sources", h.ListSources)
 			r.Get("/sources/stats", h.SourceStats)
@@ -70,7 +70,7 @@ func NewRouter(h *handler.Handler, authMiddleware func(http.Handler) http.Handle
 			r.Post("/sources/{id}/reset", h.ResetSourceMetadata)
 			r.Post("/sources/{id}/import-backlog", h.ImportBacklog)
 			r.Put("/sources/{id}/feed-url", h.ReplaceSourceFeedURL)
-			r.Put("/sources/{id}/interest", h.SetSourceInterest)
+			r.Put("/sources/{id}/topic", h.SetSourceTopic)
 			r.Get("/sources/{id}/items", h.SourceItems)
 
 			r.Get("/insights", h.Insights)
@@ -91,7 +91,7 @@ func NewRouter(h *handler.Handler, authMiddleware func(http.Handler) http.Handle
 			r.Get("/sessions/current", h.CurrentSession)
 			r.Patch("/sessions/{id}", h.UpdateSession)
 			// On-demand full-text (#98): fetch + readability-extract the article body
-			// for teaser-only interests, cached into items.content. Powers #96's actions.
+			// for teaser-only topics, cached into items.content. Powers #96's actions.
 			r.Get("/items/{id}/content", h.ItemContent)
 			r.Post("/items/{id}/event", h.ItemEvent)
 			// Dwell (#68): append-only engagement measurement, never into the ranker.

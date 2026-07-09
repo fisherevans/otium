@@ -1,8 +1,8 @@
-// Archive-After vocabulary (session engine v2, #115). A source/interest expires an
+// Archive-After vocabulary (session engine v2, #115). A source/topic expires an
 // item from eligibility once it's older than this window. The value is stored as
 // an int: N days, plus two sentinels - 0 means "inherit" (the source falls back to
-// its interest, the interest to the global default) and -1 means "evergreen" (never
-// archive). One place so the interest page, the source page, and their modals all
+// its topic, the topic to the global default) and -1 means "evergreen" (never
+// archive). One place so the topic page, the source page, and their modals all
 // speak the same options and labels.
 import { ageDays } from "./format";
 
@@ -78,14 +78,14 @@ export function archiveValue(days: number): string {
 export interface ResolvedArchive {
   days: number; // effective window (-1 = evergreen)
   value: string; // "3 weeks", "never"
-  origin: "source" | "interest" | "global";
+  origin: "source" | "topic" | "global";
   originLabel: string; // "this source", "the Local default", "the global default"
   inherited: boolean;
 }
 
-// resolveSourceArchive walks the source -> interest -> global chain. srcDays/intDays
+// resolveSourceArchive walks the source -> topic -> global chain. srcDays/intDays
 // are the raw stored values (0 = inherit, -1 = evergreen, N = days).
-export function resolveSourceArchive(srcDays: number, intDays: number, interestName?: string): ResolvedArchive {
+export function resolveSourceArchive(srcDays: number, intDays: number, topicName?: string): ResolvedArchive {
   if (srcDays !== 0) {
     return { days: srcDays, value: archiveValue(srcDays), origin: "source", originLabel: "this source", inherited: false };
   }
@@ -93,18 +93,18 @@ export function resolveSourceArchive(srcDays: number, intDays: number, interestN
     return {
       days: intDays,
       value: archiveValue(intDays),
-      origin: "interest",
-      originLabel: interestName ? `the ${interestName} default` : "the interest default",
+      origin: "topic",
+      originLabel: topicName ? `the ${topicName} default` : "the topic default",
       inherited: true,
     };
   }
   return { days: GLOBAL_ARCHIVE_DAYS, value: archiveValue(GLOBAL_ARCHIVE_DAYS), origin: "global", originLabel: "the global default", inherited: true };
 }
 
-// resolveInterestArchive walks the interest -> global chain.
-export function resolveInterestArchive(intDays: number): ResolvedArchive {
+// resolveTopicArchive walks the topic -> global chain.
+export function resolveTopicArchive(intDays: number): ResolvedArchive {
   if (intDays !== 0) {
-    return { days: intDays, value: archiveValue(intDays), origin: "interest", originLabel: "this interest", inherited: false };
+    return { days: intDays, value: archiveValue(intDays), origin: "topic", originLabel: "this topic", inherited: false };
   }
   return { days: GLOBAL_ARCHIVE_DAYS, value: archiveValue(GLOBAL_ARCHIVE_DAYS), origin: "global", originLabel: "the global default", inherited: true };
 }

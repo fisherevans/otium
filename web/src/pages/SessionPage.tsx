@@ -7,7 +7,7 @@ import { Player } from "@/components/Player";
 import { SavePicker } from "@/components/SavePicker";
 import { ScoreBreakdownSheet } from "@/components/ScoreBreakdown";
 import { SourceSheet } from "@/components/SourceSheet";
-import { InterestPill, CardSource, Byline, Blurb, Media } from "@/components/CardParts";
+import { TopicPill, CardSource, Byline, Blurb, Media } from "@/components/CardParts";
 import { ShareActions } from "@/components/ReaderActions";
 import { Heart, Bookmark, BookOpen, Play, ExternalLink } from "lucide-react";
 import { cardRender, isMedia, isVideo } from "@/lib/render";
@@ -22,7 +22,7 @@ function contentKind(item: Item): "video" | "audio" | "read" {
 }
 
 // #67/#79: the session is durable. This page drives entirely off the backend
-// session identified by the URL id - it does NOT rebuild a interest. On load it
+// session identified by the URL id - it does NOT rebuild a topic. On load it
 // resumes the active session (its stored queue + cursor); as the user advances it
 // persists the cursor. When the session is over (elapsed >= the single duration,
 // or the queue is exhausted) it does NOT yank the user out (#79): the current
@@ -305,7 +305,7 @@ export default function SessionPage() {
               if (!wasEngaged) api.itemEvent(left.item.id, "skip", id).catch(() => {});
               // Dwell measurement + the fast-scroll nudge are gated by the setting.
               // Dwell is append-only raw material (never re-ranks); the nudge is a
-              // check-in, not a interest change.
+              // check-in, not a topic change.
               if (fastCheckin.current) {
                 api.recordDwell(left.item.id, id, dwellMs, wasEngaged).catch(() => {});
                 // A fast, unengaged pass = scrolling past without consuming.
@@ -551,7 +551,7 @@ export default function SessionPage() {
         </span>
       </div>
 
-      {/* #68: the fast-scroll check-in. A nudge toward self-honesty, never a interest
+      {/* #68: the fast-scroll check-in. A nudge toward self-honesty, never a topic
           change - "Keep going" just dismisses; "Something else" ends the session
           and returns home. Neither re-ranks or re-fetches. */}
       {checkin === "fast" && (
@@ -599,9 +599,9 @@ export default function SessionPage() {
                 )}
               </div>
 
-              {/* Fixed card order (#96): Interest pill -> Source -> Title ->
+              {/* Fixed card order (#96): Topic pill -> Source -> Title ->
                   Author·Date -> Hero -> Preview blurb -> callout buttons. */}
-              <InterestPill interest={it.interest} />
+              <TopicPill topic={it.topic} />
               <CardSource sel={it} onSource={() => setSourceSel(it)} />
               <h3 className="card-title">{it.item.title}</h3>
               <Byline item={it.item} sourceTitle={it.source_title} />

@@ -39,7 +39,7 @@ func TestEffectiveEqualsIntended(t *testing.T) {
 }
 
 // TestRepresentationScalesIntended: a source weighted higher contributes a larger
-// intended (share) score for the same age - representation drives the mix share.
+// intended (share) score for the same age - representation drives the section share.
 func TestRepresentationScalesIntended(t *testing.T) {
 	now := time.Date(2026, 7, 7, 12, 0, 0, 0, time.UTC)
 	lo := ItemIntendedScore(cand(1, 2, now), now)
@@ -56,12 +56,12 @@ func TestHalfLifeResolutionHierarchy(t *testing.T) {
 		t.Fatalf("no override resolves to 0 (global fallback), got %v", got)
 	}
 	feedOnly := cand(1, 7, now)
-	feedOnly.InterestHalfLifeDays = 14
+	feedOnly.TopicHalfLifeDays = 14
 	if got := halfLifeOf(feedOnly); got != 14 {
-		t.Fatalf("interest half-life should apply, got %v", got)
+		t.Fatalf("topic half-life should apply, got %v", got)
 	}
 	both := cand(1, 7, now)
-	both.InterestHalfLifeDays = 14
+	both.TopicHalfLifeDays = 14
 	both.SourceHalfLifeDays = 7
 	if got := halfLifeOf(both); got != 7 {
 		t.Fatalf("source override should win, got %v", got)

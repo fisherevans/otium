@@ -1,6 +1,6 @@
 // Parse a YouTube video id from an item URL so a video item can play inline
 // (#51) via a youtube-nocookie embed instead of navigating to youtube.com.
-// Handles the shapes RSS interests actually ship: watch?v=, youtu.be/, /embed/,
+// Handles the shapes RSS topics actually ship: watch?v=, youtu.be/, /embed/,
 // /shorts/, /v/, /live/. Returns null when the URL isn't a recognizable
 // YouTube video (caller falls back to "open original").
 //

@@ -13,7 +13,7 @@ export default function ImportPage() {
   const [cands, setCands] = useState<ImportCandidate[]>([]);
   const [format, setFormat] = useState("");
   const [keep, setKeep] = useState<boolean[]>([]);
-  const [makeInterests, setMakeInterests] = useState(true);
+  const [makeTopics, setMakeTopics] = useState(true);
   const [paste, setPaste] = useState("");
   const [err, setErr] = useState("");
   const [busy, setBusy] = useState(false);
@@ -29,7 +29,7 @@ export default function ImportPage() {
     try {
       const r = await api.parseImport(body);
       if (r.count === 0) {
-        setErr("Nothing recognized in that file. Expected OPML, a YouTube Takeout CSV, or a list of interest URLs.");
+        setErr("Nothing recognized in that file. Expected OPML, a YouTube Takeout CSV, or a list of topic URLs.");
         return;
       }
       setCands(r.candidates);
@@ -51,7 +51,7 @@ export default function ImportPage() {
     setBusy(true);
     const chosen = cands.filter((_, i) => keep[i]);
     try {
-      const r = await api.commitImport(chosen, makeInterests && hasCategories);
+      const r = await api.commitImport(chosen, makeTopics && hasCategories);
       setResult(r);
     } catch (e: any) {
       setErr(String(e.message ?? e));
@@ -67,10 +67,10 @@ export default function ImportPage() {
         <p style={{ color: "var(--ink-soft)" }}>
           {result.created} added
           {result.already_had > 0 && `, ${result.already_had} already followed`}
-          {result.interests_created > 0 && `, ${result.interests_created} interests created`}.
+          {result.topics_created > 0 && `, ${result.topics_created} topics created`}.
         </p>
         <p style={{ color: "var(--ink-faint)", fontSize: 13 }}>
-          Interests are refreshing in the background - items will fill in over the next minute or two.
+          Topics are refreshing in the background - items will fill in over the next minute or two.
         </p>
         <button className="btn" onClick={() => nav("/")}>
           Build a session
@@ -87,7 +87,7 @@ export default function ImportPage() {
       <h1 className="display">Import your follows</h1>
       <p className="sub">
         Drop a <b>YouTube Takeout</b> (the raw <b>.zip</b> is fine — it's unpacked for you), an{" "}
-        <b>OPML</b> file (Feedly, podcast apps, any RSS reader), or paste a list of interest URLs.
+        <b>OPML</b> file (Feedly, podcast apps, any RSS reader), or paste a list of topic URLs.
       </p>
 
       {cands.length === 0 ? (
@@ -129,9 +129,9 @@ export default function ImportPage() {
           </div>
           {hasCategories && (
             <label className="row" style={{ cursor: "pointer" }}>
-              <input type="checkbox" checked={makeInterests} onChange={(e) => setMakeInterests(e.target.checked)} />
+              <input type="checkbox" checked={makeTopics} onChange={(e) => setMakeTopics(e.target.checked)} />
               <div className="title">
-                <b>Turn folders into interests</b>
+                <b>Turn folders into topics</b>
                 <span>Uses your OPML folders as otium themes</span>
               </div>
             </label>

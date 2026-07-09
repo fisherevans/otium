@@ -5,7 +5,7 @@ import {
   archiveValue,
   decomposeArchive,
   isCustomArchive,
-  resolveInterestArchive,
+  resolveTopicArchive,
   resolveSourceArchive,
 } from "@/lib/archive";
 
@@ -18,17 +18,17 @@ export function ArchiveChoice({
   scope,
   value,
   intDays,
-  interestName,
+  topicName,
   onChange,
   keepCount,
   combine,
   onKeepCount,
   onCombine,
 }: {
-  scope: "source" | "interest";
+  scope: "source" | "topic";
   value: number; // current archive_after_days
-  intDays?: number; // the interest's own value, for a source's inherit resolution
-  interestName?: string;
+  intDays?: number; // the topic's own value, for a source's inherit resolution
+  topicName?: string;
   onChange: (days: number) => void;
   // Source-only rule-based archive (#124): keep-latest-N count + how it combines
   // with the age window. Rendered only when onKeepCount is supplied.
@@ -37,17 +37,17 @@ export function ArchiveChoice({
   onKeepCount?: (n: number) => void;
   onCombine?: (c: "and" | "or") => void;
 }) {
-  const seedDays = value > 0 ? value : scope === "source" ? resolveSourceArchive(0, intDays ?? 0, interestName).days : resolveInterestArchive(0).days;
+  const seedDays = value > 0 ? value : scope === "source" ? resolveSourceArchive(0, intDays ?? 0, topicName).days : resolveTopicArchive(0).days;
   const seed = decomposeArchive(seedDays);
   const [showCustom, setShowCustom] = useState(isCustomArchive(value));
   const [n, setN] = useState(seed.n);
   const [unit, setUnit] = useState(seed.unit);
 
-  const inherit = scope === "source" ? resolveSourceArchive(0, intDays ?? 0, interestName) : resolveInterestArchive(0);
+  const inherit = scope === "source" ? resolveSourceArchive(0, intDays ?? 0, topicName) : resolveTopicArchive(0);
   const customActive = showCustom || isCustomArchive(value);
   // The age rule is active (and the AND/OR combine matters) unless it resolves to
   // evergreen - then only the count rule limits what's on deck.
-  const ageActive = resolveSourceArchive(value, intDays ?? 0, interestName).days !== -1;
+  const ageActive = resolveSourceArchive(value, intDays ?? 0, topicName).days !== -1;
 
   function unitDays(u: string): number {
     return ARCHIVE_UNITS.find((x) => x.key === u)?.days ?? 1;

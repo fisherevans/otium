@@ -28,7 +28,7 @@ const (
 
 	skimFactor       = 0.4   // user typically spends ~40% of an item's length
 	articleEffSec    = 40.0  // effective time for a duration-less item (an article)
-	defaultAvgEffSec = 120.0 // fallback when we know nothing about the mix
+	defaultAvgEffSec = 120.0 // fallback when we know nothing about the section
 )
 
 // SourceStat is the per-source content signal used for session-size prediction.
@@ -51,16 +51,16 @@ var defaultDurationSec = map[string]int{
 }
 
 // Selected is one item chosen for the session, with the ranker's rationale.
-// Interest is the item's primary interest identity, filled by the handler after
-// the allocator runs; nil for an interestless source.
+// Topic is the item's primary topic identity, filled by the handler after
+// the allocator runs; nil for an topicless source.
 type Selected struct {
-	Item        store.Item         `json:"item"`
-	SourceTitle string             `json:"source_title"`
-	Interest    *store.InterestRef `json:"interest,omitempty"`
-	Score       float64            `json:"score"`
-	EstDuration int                `json:"est_duration_sec"`
-	Reason      string             `json:"reason"`
-	Breakdown   ScoreBreakdown     `json:"breakdown"`
+	Item        store.Item      `json:"item"`
+	SourceTitle string          `json:"source_title"`
+	Topic       *store.TopicRef `json:"topic,omitempty"`
+	Score       float64         `json:"score"`
+	EstDuration int             `json:"est_duration_sec"`
+	Reason      string          `json:"reason"`
+	Breakdown   ScoreBreakdown  `json:"breakdown"`
 }
 
 // ScoreBreakdown is the per-factor decomposition shown as "why this item" (#18).
@@ -101,7 +101,7 @@ func SelectFor(c store.Candidate, now time.Time) Selected {
 	return selectedFrom(c, now)
 }
 
-// PredictItems estimates how many items fit the time budget: budget over the mix's
+// PredictItems estimates how many items fit the time budget: budget over the section's
 // effective time-per-item (content length blended with the skim factor). Used to
 // size the allocator's queue, not to rank.
 func PredictItems(durationMin int, pool []store.Candidate, stats map[int64]SourceStat) int {
@@ -155,14 +155,14 @@ func sourceWeight(c store.Candidate) float64 {
 	return c.SourceWeight
 }
 
-// halfLifeOf resolves the freshness half-life for a candidate (source > interest >
+// halfLifeOf resolves the freshness half-life for a candidate (source > topic >
 // global). Retained for the freshness score; Archive-After governs eligibility
 // separately (allocate.go).
 func halfLifeOf(c store.Candidate) float64 {
 	if c.SourceHalfLifeDays > 0 {
 		return c.SourceHalfLifeDays
 	}
-	return c.InterestHalfLifeDays
+	return c.TopicHalfLifeDays
 }
 
 // freshness decays an item by age; halfLifeDays 0 falls back to the global default.

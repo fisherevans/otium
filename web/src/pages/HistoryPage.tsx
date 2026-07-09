@@ -6,7 +6,7 @@ import { Player } from "@/components/Player";
 import { relTime } from "@/lib/format";
 
 // Personal history (#83): "articles I've read versus just articles I've been
-// shown." A findability/lookup surface reached from the library - NOT a interest.
+// shown." A findability/lookup surface reached from the library - NOT a topic.
 // It reads item_state (shown vs engaged) and never writes it, so browsing here
 // can't perturb ranking. Bounded list + explicit "load more"; calm, no infinite
 // scroll, no counts-as-pressure.

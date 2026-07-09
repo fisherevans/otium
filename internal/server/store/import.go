@@ -105,7 +105,7 @@ func (db *DB) ImportStatusFor(ctx context.Context, sourceID int64) (ImportStatus
 }
 
 // ResolvedArchiveDays resolves a source's effective Archive-After window (source >
-// interest > global), matching session.resolveArchiveAfter: -1 = evergreen, N =
+// topic > global), matching session.resolveArchiveAfter: -1 = evergreen, N =
 // days. Used to bound how far back a backlog import fetches.
 func (db *DB) ResolvedArchiveDays(ctx context.Context, sourceID int64) (int, error) {
 	var days int
@@ -113,7 +113,7 @@ func (db *DB) ResolvedArchiveDays(ctx context.Context, sourceID int64) (int, err
 		`SELECT CASE WHEN s.archive_after_days != 0 THEN s.archive_after_days
 		             WHEN fi.archive_after_days != 0 THEN fi.archive_after_days
 		             ELSE %d END
-		 FROM sources s LEFT JOIN interests fi ON fi.id = s.interest_id WHERE s.id = ?`,
+		 FROM sources s LEFT JOIN topics fi ON fi.id = s.topic_id WHERE s.id = ?`,
 		GlobalArchiveAfterDays)
 	err := db.sql.QueryRowContext(ctx, q, sourceID).Scan(&days)
 	if err == sql.ErrNoRows {
@@ -131,7 +131,7 @@ type ArchiveRule struct {
 	Combine   string
 }
 
-// ResolvedArchiveRule resolves a source's effective archive rule (source > interest
+// ResolvedArchiveRule resolves a source's effective archive rule (source > topic
 // > global for the age window; the count/combine are per-source), matching
 // session.eligible + the #124 count rule.
 func (db *DB) ResolvedArchiveRule(ctx context.Context, sourceID int64) (ArchiveRule, error) {
@@ -141,7 +141,7 @@ func (db *DB) ResolvedArchiveRule(ctx context.Context, sourceID int64) (ArchiveR
 		             WHEN fi.archive_after_days != 0 THEN fi.archive_after_days
 		             ELSE %d END,
 		        s.archive_keep_count, s.archive_combine
-		 FROM sources s LEFT JOIN interests fi ON fi.id = s.interest_id WHERE s.id = ?`,
+		 FROM sources s LEFT JOIN topics fi ON fi.id = s.topic_id WHERE s.id = ?`,
 		GlobalArchiveAfterDays)
 	err := db.sql.QueryRowContext(ctx, q, sourceID).Scan(&r.Days, &r.KeepCount, &r.Combine)
 	if err == sql.ErrNoRows {

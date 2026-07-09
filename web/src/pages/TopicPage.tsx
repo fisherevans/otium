@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { Pencil, Plus, Mail, Ban, EyeOff } from "lucide-react";
-import { api, type Interest, type Mix, type Source, type SourceStats } from "@/api/client";
+import { api, type Topic, type Section, type Source, type SourceStats } from "@/api/client";
 import { FEED_ICONS, feedIcon } from "@/lib/feedIcons";
-import { archiveValue, resolveInterestArchive } from "@/lib/archive";
+import { archiveValue, resolveTopicArchive } from "@/lib/archive";
 import { cadencePhrase } from "@/lib/cadence";
 import { engagementBadge, openRateBands } from "@/lib/stats";
 import { ArchiveChoice } from "@/components/ArchiveChoice";
@@ -11,8 +11,8 @@ import { bucketOf, REP_LEVEL, REP_LABEL } from "@/lib/represent";
 import { Dialog } from "@/components/Dialog";
 import { AddSourceWizard } from "@/components/AddSourceWizard";
 
-// The Interest page (session engine v2, mockup #3). One interest shown plainly:
-// identity (name + icon, edited in a dialog), which mix it lives in, its default
+// The Topic page (session engine v2, mockup #3). One topic shown plainly:
+// identity (name + icon, edited in a dialog), which section it lives in, its default
 // archival period (edited in a dialog), and its sources with the engagement +
 // representation facts that characterize each. Sources drill into their own page.
 
@@ -36,15 +36,15 @@ function BadgeIcon({ tone }: { tone: "up" | "down" | "mute" }) {
   return <EyeOff size={12} strokeWidth={1.9} aria-hidden />;
 }
 
-export default function InterestPage() {
+export default function TopicPage() {
   const nav = useNavigate();
   const { slug } = useParams();
 
-  const [interests, setInterests] = useState<Interest[] | null>(null);
+  const [topics, setTopics] = useState<Topic[] | null>(null);
   const [sources, setSources] = useState<Source[]>([]);
   const [stats, setStats] = useState<Record<number, SourceStats>>({});
-  const [mixes, setMixes] = useState<Mix[]>([]);
-  const [memberMixIds, setMemberMixIds] = useState<Set<number>>(new Set());
+  const [sections, setSections] = useState<Section[]>([]);
+  const [memberSectionIds, setMemberSectionIds] = useState<Set<number>>(new Set());
   const [err, setErr] = useState("");
 
   const [archiveOpen, setArchiveOpen] = useState(false);
@@ -54,10 +54,10 @@ export default function InterestPage() {
   // #126/#127: the stepped add-source wizard. ytAvailable gates the YouTube type.
   const [ytAvailable, setYtAvailable] = useState(false);
 
-  const interest = useMemo(() => (interests ? interests.find((f) => f.slug === slug) ?? null : null), [interests, slug]);
+  const topic = useMemo(() => (topics ? topics.find((f) => f.slug === slug) ?? null : null), [topics, slug]);
 
-  function reloadInterests() {
-    api.interests().then(setInterests).catch((e) => setErr(String(e.message ?? e)));
+  function reloadTopics() {
+    api.topics().then(setTopics).catch((e) => setErr(String(e.message ?? e)));
   }
   function reloadSources() {
     // Guard against a null body (Go marshals an empty slice as JSON null): a null
@@ -65,108 +65,108 @@ export default function InterestPage() {
     api.sources().then((s) => setSources(s ?? [])).catch(() => {});
   }
   useEffect(() => {
-    reloadInterests();
+    reloadTopics();
     reloadSources();
-    api.mixes().then(setMixes).catch(() => setMixes([]));
+    api.sections().then(setSections).catch(() => setSections([]));
     api.sourceStats().then(setStats).catch(() => {});
     api.getConfig().then((c) => setYtAvailable(c.youtube_available)).catch(() => {});
   }, []);
 
   useEffect(() => {
-    if (!interest || mixes.length === 0) {
-      setMemberMixIds(new Set());
+    if (!topic || sections.length === 0) {
+      setMemberSectionIds(new Set());
       return;
     }
     let cancelled = false;
     (async () => {
       const ids = new Set<number>();
       await Promise.all(
-        mixes.map(async (m) => {
-          const b = await api.mixBrowse(m.id).catch(() => null);
-          if (b && b.interests.some((f) => f.id === interest.id)) ids.add(m.id);
+        sections.map(async (m) => {
+          const b = await api.sectionBrowse(m.id).catch(() => null);
+          if (b && b.topics.some((f) => f.id === topic.id)) ids.add(m.id);
         }),
       );
-      if (!cancelled) setMemberMixIds(ids);
+      if (!cancelled) setMemberSectionIds(ids);
     })();
     return () => {
       cancelled = true;
     };
-  }, [interest?.id, mixes]);
+  }, [topic?.id, sections]);
 
   useEffect(() => {
-    if (interest) setEditName(interest.name);
-  }, [interest?.id]);
+    if (topic) setEditName(topic.name);
+  }, [topic?.id]);
 
-  const interestSources = useMemo(() => {
+  const topicSources = useMemo(() => {
     if (!slug) return [];
     return sources
-      .filter((s) => s.interest_slug === slug)
+      .filter((s) => s.topic_slug === slug)
       .sort((a, b) => b.weight - a.weight || a.title.localeCompare(b.title));
   }, [sources, slug]);
 
   // Open-rate percentile bands across the whole library (stats holds every source),
-  // so a source's pill reflects where it ranks among all of them, not this interest.
+  // so a source's pill reflects where it ranks among all of them, not this topic.
   const bands = useMemo(() => openRateBands(Object.values(stats)), [stats]);
 
   async function pickArchive(days: number) {
-    if (!interest) return;
+    if (!topic) return;
     // Don't close on pick: ArchiveChoice fires onChange live (e.g. while adjusting a
     // custom window), so the dialog stays open and the user dismisses it with Done.
-    await api.updateInterest(interest.id, { archive_after_days: days }).catch(() => {});
-    reloadInterests();
+    await api.updateTopic(topic.id, { archive_after_days: days }).catch(() => {});
+    reloadTopics();
   }
   async function saveEdit() {
-    if (!interest) return;
+    if (!topic) return;
     const name = editName.trim();
     setEditOpen(false);
-    if (name && name !== interest.name) {
-      await api.updateInterest(interest.id, { name }).catch(() => {});
-      reloadInterests();
+    if (name && name !== topic.name) {
+      await api.updateTopic(topic.id, { name }).catch(() => {});
+      reloadTopics();
     }
   }
   async function chooseIcon(key: string) {
-    if (!interest) return;
-    const next = interest.icon === key ? "" : key;
-    await api.updateInterest(interest.id, { icon: next }).catch(() => {});
-    reloadInterests();
+    if (!topic) return;
+    const next = topic.icon === key ? "" : key;
+    await api.updateTopic(topic.id, { icon: next }).catch(() => {});
+    reloadTopics();
   }
   async function setHalfLife(days: number) {
-    if (!interest) return;
-    await api.updateInterest(interest.id, { half_life_days: days }).catch(() => {});
-    reloadInterests();
+    if (!topic) return;
+    await api.updateTopic(topic.id, { half_life_days: days }).catch(() => {});
+    reloadTopics();
   }
   function onSourceAdded() {
     reloadSources();
-    reloadInterests();
+    reloadTopics();
     api.sourceStats().then(setStats).catch(() => {});
   }
 
-  if (interests && !interest) {
+  if (topics && !topic) {
     return (
       <div className="mgmt">
         <button className="mgmt-back" onClick={() => nav("/sources")}>
           ← Library
         </button>
-        <p className="lib2-empty">That interest doesn't exist.</p>
+        <p className="lib2-empty">That topic doesn't exist.</p>
       </div>
     );
   }
-  if (!interest) return <p className="lib2-subtitle">Loading…</p>;
+  if (!topic) return <p className="lib2-subtitle">Loading…</p>;
 
-  const Icon = feedIcon(interest.icon);
-  const intArch = resolveInterestArchive(interest.archive_after_days ?? 0);
-  const memberMixes = mixes.filter((m) => memberMixIds.has(m.id));
-  const mixLine =
-    memberMixes.length === 0
-      ? `${interest.name} is not in a mix.`
-      : `${interest.name} is a part of the ${memberMixes.map((m) => m.name).join(" and ")} ${memberMixes.length === 1 ? "mix" : "mixes"}.`;
+  const Icon = feedIcon(topic.icon);
+  const intArch = resolveTopicArchive(topic.archive_after_days ?? 0);
+  const memberSections = sections.filter((m) => memberSectionIds.has(m.id));
+  const sectionLine =
+    memberSections.length === 0
+      ? `${topic.name} is not in a section.`
+      : `${topic.name} is a part of the ${memberSections.map((m) => m.name).join(" and ")} ${memberSections.length === 1 ? "section" : "sections"}.`;
 
   return (
     <div className="mgmt">
       <button className="mgmt-back" onClick={() => nav("/sources")}>
         ← Library
       </button>
-      <div className="mgmt-kicker">Manage Interest</div>
+      <div className="mgmt-kicker">Manage Topic</div>
       <div className="mgmt-titlerow">
         <h1 className="mgmt-title int-title">
           {Icon ? (
@@ -174,17 +174,17 @@ export default function InterestPage() {
               <Icon size={28} strokeWidth={1.6} />
             </span>
           ) : null}
-          {interest.name}
+          {topic.name}
         </h1>
-        <button className="mgmt-edit" onClick={() => (setEditName(interest.name), setEditOpen(true))}>
+        <button className="mgmt-edit" onClick={() => (setEditName(topic.name), setEditOpen(true))}>
           <Pencil size={13} strokeWidth={1.9} aria-hidden /> edit
         </button>
       </div>
       {err && <p className="err">{err}</p>}
 
-      <p className="int-prose">{mixLine}</p>
+      <p className="int-prose">{sectionLine}</p>
       <p className="int-prose">
-        The default archival period for {interest.name} sources is{" "}
+        The default archival period for {topic.name} sources is{" "}
         <button className="mgmt-inline" onClick={() => setArchiveOpen(true)}>
           {intArch.value}
         </button>
@@ -198,11 +198,11 @@ export default function InterestPage() {
         </button>
       </div>
 
-      {interestSources.length === 0 ? (
+      {topicSources.length === 0 ? (
         <p className="fc-sub">No sources yet - add one above.</p>
       ) : (
         <div className="isrc-list">
-          {interestSources.map((s) => {
+          {topicSources.map((s) => {
             const st = stats[s.id];
             const badge = engagementBadge(st, bands);
             const b = bucketOf(s.weight);
@@ -236,12 +236,12 @@ export default function InterestPage() {
       )}
 
       {/* --- dialogs --- */}
-      <Dialog open={editOpen} onClose={() => setEditOpen(false)} kicker="Edit interest">
+      <Dialog open={editOpen} onClose={() => setEditOpen(false)} kicker="Edit topic">
         <div className="dlg-sub">Name</div>
         <input className="field" value={editName} autoFocus onChange={(e) => setEditName(e.target.value)} onKeyDown={(e) => e.key === "Enter" && saveEdit()} />
         <div className="dlg-sub">Icon</div>
         <div className="icon-grid">
-          <button className={`icon-cell ${!interest.icon ? "on" : ""}`} onClick={() => chooseIcon("")} aria-label="No icon">
+          <button className={`icon-cell ${!topic.icon ? "on" : ""}`} onClick={() => chooseIcon("")} aria-label="No icon">
             <span className="introw-dot" />
           </button>
           {FEED_ICONS.map((def) => {
@@ -249,7 +249,7 @@ export default function InterestPage() {
             return (
               <button
                 key={def.key}
-                className={`icon-cell ${interest.icon === def.key ? "on" : ""}`}
+                className={`icon-cell ${topic.icon === def.key ? "on" : ""}`}
                 onClick={() => chooseIcon(def.key)}
                 aria-label={def.label}
                 title={def.label}
@@ -260,7 +260,7 @@ export default function InterestPage() {
           })}
         </div>
         <div className="dlg-sub">Freshness half-life</div>
-        <p className="caphint">How fast articles in {interest.name} lose ranking as they age. 0 = use the global default.</p>
+        <p className="caphint">How fast articles in {topic.name} lose ranking as they age. 0 = use the global default.</p>
         <div className="dlg-opts">
           {[
             { d: 0, label: "Global default" },
@@ -271,7 +271,7 @@ export default function InterestPage() {
           ].map((h) => (
             <button
               key={h.d}
-              className={`dlg-opt ${(interest.half_life_days ?? 0) === h.d ? "on" : ""}`}
+              className={`dlg-opt ${(topic.half_life_days ?? 0) === h.d ? "on" : ""}`}
               onClick={() => setHalfLife(h.d)}
             >
               <span className="dlg-radio" aria-hidden />
@@ -287,8 +287,8 @@ export default function InterestPage() {
       </Dialog>
 
       <Dialog open={archiveOpen} onClose={() => setArchiveOpen(false)} kicker="Default archival period">
-        <p className="caphint">Sources in {interest.name} inherit this unless they set their own.</p>
-        <ArchiveChoice scope="interest" value={interest.archive_after_days ?? 0} onChange={pickArchive} />
+        <p className="caphint">Sources in {topic.name} inherit this unless they set their own.</p>
+        <ArchiveChoice scope="topic" value={topic.archive_after_days ?? 0} onChange={pickArchive} />
         <div className="dlg-actions">
           <button className="btn" onClick={() => setArchiveOpen(false)}>
             Done
@@ -296,10 +296,10 @@ export default function InterestPage() {
         </div>
       </Dialog>
 
-      {interest && (
+      {topic && (
         <AddSourceWizard
           open={addOpen}
-          interest={interest}
+          topic={topic}
           ytAvailable={ytAvailable}
           onClose={() => setAddOpen(false)}
           onAdded={onSourceAdded}

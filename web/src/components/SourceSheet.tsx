@@ -14,7 +14,7 @@ import { RepresentationControl } from "./RepresentationControl";
 //   - View source history - the source's raw recent items (reuses SourceItems),
 //     so you can see what else it puts out without leaving the session.
 //   - Manage source settings - navigates to the full source page (/sources/:id)
-//     for cap, interest membership, archive, delete.
+//     for cap, topic membership, archive, delete.
 //
 // The internal `source` state seeds the weight bucket and also backstops the
 // title through the sheet's exit animation (the parent clears the passed title

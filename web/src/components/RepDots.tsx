@@ -1,7 +1,7 @@
 import { REP_LEVEL, type Bucket } from "@/lib/represent";
 
 // The 1-5 representation dot scale, keyed by bucket, in the management-page style
-// (.rep-dots). One component so the source page, interest page, and the in-session
+// (.rep-dots). One component so the source page, topic page, and the in-session
 // ··· menu all render representation identically (#120).
 export function RepDots({ bucket }: { bucket: Bucket }) {
   const level = REP_LEVEL[bucket];

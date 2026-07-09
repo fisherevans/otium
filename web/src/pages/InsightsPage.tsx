@@ -1,17 +1,17 @@
 import { useEffect, useMemo, useState } from "react";
-import { api, type Interest, type InsightsResponse, type InsightsSource } from "@/api/client";
+import { api, type Topic, type InsightsResponse, type InsightsSource } from "@/api/client";
 import { BUCKETS, REP_BLABEL, bucketOf, type Bucket } from "@/lib/represent";
 import { feedIcon } from "@/lib/feedIcons";
 import { BottomSheet } from "@/components/BottomSheet";
 
-// The insights view (#49): each source's live effective share of the interest, paired
+// The insights view (#49): each source's live effective share of the topic, paired
 // with how much of it you skip. A source that is a big slice you mostly skip is
 // the prune candidate. Read-only insight - the only writes are the explicit
 // weight/archive actions from a row.
 
 type Sort = "share" | "inefficiency";
 
-// A source counts as a prune candidate when it is a meaningful slice of the interest
+// A source counts as a prune candidate when it is a meaningful slice of the topic
 // AND you skip most of it. Kept deliberately subtle (no alarm) per EXPERIENCE.
 const PRUNE_SHARE = 0.05;
 const PRUNE_SKIP = 0.5;
@@ -82,7 +82,7 @@ function Donut({ sources }: { sources: InsightsSource[] }) {
 
   return (
     <div className="insights-donut-wrap">
-      <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} role="img" aria-label="Interest share by source">
+      <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} role="img" aria-label="Topic share by source">
         {single ? (
           <circle cx={cx} cy={cy} r={(rO + rI) / 2} fill="none" stroke={slices[0].shade} strokeWidth={rO - rI} />
         ) : (
@@ -103,8 +103,8 @@ function Donut({ sources }: { sources: InsightsSource[] }) {
 }
 
 export default function InsightsPage() {
-  const [interests, setInterests] = useState<Interest[]>([]);
-  const [scope, setScope] = useState<string | null>(null); // null = all interests; else interest slug
+  const [topics, setTopics] = useState<Topic[]>([]);
+  const [scope, setScope] = useState<string | null>(null); // null = all topics; else topic slug
   const [data, setData] = useState<InsightsResponse | null>(null);
   const [sort, setSort] = useState<Sort>("share");
   const [err, setErr] = useState("");
@@ -118,7 +118,7 @@ export default function InsightsPage() {
       .catch((e) => setErr(String(e.message ?? e)));
   }
   useEffect(() => {
-    api.interests().then(setInterests).catch(() => {});
+    api.topics().then(setTopics).catch(() => {});
   }, []);
   useEffect(() => {
     load();
@@ -167,18 +167,18 @@ export default function InsightsPage() {
 
   return (
     <div>
-      <h1 className="display">Interest insights</h1>
+      <h1 className="display">Topic insights</h1>
       <p className="sub">
-        What each source actually is in your interest right now, next to how much of it you skip. A big slice you mostly
+        What each source actually is in your topic right now, next to how much of it you skip. A big slice you mostly
         skip is worth turning down.
       </p>
 
-      {/* scope: all interests <-> within one interest */}
+      {/* scope: all topics <-> within one topic */}
       <div className="lib-filter">
         <button className={`lib-fchip ${!scope ? "on" : ""}`} onClick={() => setScope(null)}>
-          All interests
+          All topics
         </button>
-        {interests.map((f) => {
+        {topics.map((f) => {
           const Ic = feedIcon(f.icon);
           return (
             <button key={f.slug} className={`lib-fchip ${scope === f.slug ? "on" : ""}`} onClick={() => setScope(f.slug)}>
@@ -210,7 +210,7 @@ export default function InsightsPage() {
 
           <div className="insights-list">
             {sources.map((s) => {
-              const Ic = feedIcon(s.interest?.icon);
+              const Ic = feedIcon(s.topic?.icon);
               const prune = isPrune(s);
               const fillW = (s.effective_share / maxShare) * 100;
               // The "ghost" extension shows where the source *wants* to be (intended)
@@ -254,7 +254,7 @@ export default function InsightsPage() {
         {sheet && (
           <div className="insights-sheet">
             <div className="insight">
-              <b>{pct(sheet.effective_share)}</b> of your interest
+              <b>{pct(sheet.effective_share)}</b> of your topic
               {sheet.intended_share > sheet.effective_share * 1.15 && (
                 <>
                   {" "}

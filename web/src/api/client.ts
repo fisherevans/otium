@@ -9,14 +9,14 @@ export interface Me {
   name: string;
 }
 
-export interface Interest {
+export interface Topic {
   id: number;
   name: string;
   slug: string;
   color: string;
   icon: string; // flat glyph key (see lib/feedIcons); "" = unset
-  half_life_days: number; // per-interest freshness half-life in days; 0 = global default (#17)
-  // Default archival window for this interest's sources (#115): 0 = inherit the
+  half_life_days: number; // per-topic freshness half-life in days; 0 = global default (#17)
+  // Default archival window for this topic's sources (#115): 0 = inherit the
   // global default, -1 = evergreen (never archive), N = archive items older than N
   // days. Not returned by the list endpoint yet, so treat absent as 0 (inherit).
   archive_after_days?: number;
@@ -24,10 +24,10 @@ export interface Interest {
   source_count?: number;
 }
 
-// Compact interest identity attached to a session item (#44). Null/absent when the
-// item's source belongs to no interest (e.g. a YouTube channel) - the card then
+// Compact topic identity attached to a session item (#44). Null/absent when the
+// item's source belongs to no topic (e.g. a YouTube channel) - the card then
 // renders source-only.
-export interface InterestRef {
+export interface TopicRef {
   name: string;
   slug: string;
   color: string;
@@ -44,19 +44,19 @@ export interface Source {
   weight: number;
   state: string;
   per_session_cap: number;
-  half_life_days: number; // per-source freshness half-life override; 0 = inherit interest/global (#76)
+  half_life_days: number; // per-source freshness half-life override; 0 = inherit topic/global (#76)
   added_at: string;
   last_fetch_at?: string;
   fetch_error?: string;
-  // The one interest this source belongs to (#86). interest_id is null/absent when
-  // interestless; interest_slug is the denormalized slug for the UI ("" when interestless).
-  interest_id?: number | null;
-  interest_slug?: string;
+  // The one topic this source belongs to (#86). topic_id is null/absent when
+  // topicless; topic_slug is the denormalized slug for the UI ("" when topicless).
+  topic_id?: number | null;
+  topic_slug?: string;
   item_count?: number;
   unseen_count?: number;
   skip_pct?: number;
   posts_per_day?: number;
-  // Archive After (#115): 0 = inherit the interest/global default, -1 = evergreen,
+  // Archive After (#115): 0 = inherit the topic/global default, -1 = evergreen,
   // N = archive items older than N days. Auto-archive keywords (#118) is a
   // comma-separated string ("a, b, c"). Neither is returned by the list endpoint
   // yet, so treat absent archive_after_days as 0 (inherit) and keywords as "".
@@ -183,7 +183,7 @@ export interface HistoryItem extends Item {
 // recommendation (#19), never a silent score cut (#109).
 export interface ScoreBreakdown {
   weight: number; // source weight multiplier (0.25..5, default 1)
-  rarity: number; // relative-rarity boost (1 = as common as your interest gets, up to 2 for the rarest)
+  rarity: number; // relative-rarity boost (1 = as common as your topic gets, up to 2 for the rarest)
   freshness: number; // age decay (1 = brand new → 0 as it ages)
   effective_score: number; // weight × rarity × freshness
   cadence_per_day: number; // source posts/day over the window (its rank among your sources drives rarity)
@@ -193,7 +193,7 @@ export interface ScoreBreakdown {
 export interface Selected {
   item: Item;
   source_title: string;
-  interest?: InterestRef | null; // primary interest identity; absent for a interestless source
+  topic?: TopicRef | null; // primary topic identity; absent for a topicless source
   score: number;
   est_duration_sec: number;
   reason: string;
@@ -238,18 +238,18 @@ export interface ParseResult {
 export interface CommitResult {
   created: number;
   already_had: number;
-  interests_created: number;
+  topics_created: number;
   refreshing: boolean;
 }
 
-// Interest "insights" view (#49). Per source: its live effective share of the interest
+// Topic "insights" view (#49). Per source: its live effective share of the topic
 // (current freshness-decayed ranker score incl. skip penalty, normalized) paired
 // with intended_share (same, minus the skip penalty) and skip_pct. A big
 // intended slice you mostly skip is the inefficiency signal.
 export interface InsightsSource {
   source_id: number;
   source_title: string;
-  interest: InterestRef | null; // primary interest; null for a interestless source
+  topic: TopicRef | null; // primary topic; null for a topicless source
   effective_share: number; // 0..1, sums to 1 across sources
   intended_share: number; // 0..1, "wants to be" (no skip penalty)
   skip_pct: number; // 0..1
@@ -257,8 +257,8 @@ export interface InsightsSource {
   weight: number; // current multiplier (map via bucketOf for the control)
 }
 
-export interface InsightsInterest {
-  interest: InterestRef | null; // null = interestless bucket
+export interface InsightsTopic {
+  topic: TopicRef | null; // null = topicless bucket
   effective_share: number;
   intended_share: number;
   source_count: number;
@@ -266,10 +266,10 @@ export interface InsightsInterest {
 }
 
 export interface InsightsResponse {
-  scope: "all" | "interest";
-  interest?: string; // slug, when scope === "interest"
+  scope: "all" | "topic";
+  topic?: string; // slug, when scope === "topic"
   sources: InsightsSource[];
-  interests: InsightsInterest[];
+  topics: InsightsTopic[];
   totals: { source_count: number; item_count: number };
 }
 
@@ -314,29 +314,29 @@ export interface CollectionItem extends Item {
 // "published" by its publish time. Both newest-first. Default saved.
 export type CollectionSort = "saved" | "published";
 
-// A mix (#86): a user-created overlay gathering several interests (many-to-many).
-// interest_count is the denormalized membership size.
-export interface Mix {
+// A section (#86): a user-created overlay gathering several topics (many-to-many).
+// topic_count is the denormalized membership size.
+export interface Section {
   id: number;
   name: string;
   slug: string;
   icon: string; // flat glyph key (see lib/feedIcons); "" = unset
   sort: number;
   created_at: string;
-  interest_count: number;
+  topic_count: number;
 }
 
-// MixBrowse is GET /mixes/{id}: the mix's member interests and the sources
-// aggregated across them (Mix -> Interest -> Source).
-export interface MixBrowse {
-  interests: Interest[];
+// SectionBrowse is GET /sections/{id}: the section's member topics and the sources
+// aggregated across them (Section -> Topic -> Source).
+export interface SectionBrowse {
+  topics: Topic[];
   sources: Source[];
 }
 
 // User settings (#68). fast_scroll_checkin gates the dwell/engagement
 // measurement + the fast-scroll check-in nudge. Off = the old explicit-only
-// behavior: no dwell measured, no nudge. (The #76 multi-interest half-life rule was
-// removed in #86 - a source now has exactly one interest, so there's nothing to pick.)
+// behavior: no dwell measured, no nudge. (The #76 multi-topic half-life rule was
+// removed in #86 - a source now has exactly one topic, so there's nothing to pick.)
 export interface Settings {
   fast_scroll_checkin: boolean;
 }
@@ -348,8 +348,8 @@ export interface Settings {
 // maps them to a system font stack / grayscale ink so styling stays on-theme.
 export type FontKey = "charter" | "book" | "didot" | "grotesk";
 export type InkKey = "ink" | "graphite" | "soft" | "mute";
-// #97: the interest pill ink can also be "interest" (keep the interest's own color tint).
-export type InterestInkKey = InkKey | "interest";
+// #97: the topic pill ink can also be "topic" (keep the topic's own color tint).
+export type TopicInkKey = InkKey | "topic";
 // #97: curated byline delimiter glyph keys.
 export type DelimKey = "dot" | "pipe" | "slash" | "space";
 export interface ReaderPrefs {
@@ -364,13 +364,13 @@ export interface ReaderPrefs {
 export interface CardPrefs {
   meta_size: number; // #97 author line size, px
   source_size: number; // source label, px
-  interest_tag_size: number; // interest pill name, px
+  topic_tag_size: number; // topic pill name, px
   date_size: number; // date, px
   hero_show: boolean; // show the hero/media block
   hero_color: boolean; // true = color; false = grayscale/dither
-  // #97 per-element weight (300-700) + ink. Interest ink allows "interest" (keep tint).
-  interest_weight: number;
-  interest_ink: InterestInkKey;
+  // #97 per-element weight (300-700) + ink. Topic ink allows "topic" (keep tint).
+  topic_weight: number;
+  topic_ink: TopicInkKey;
   source_weight: number;
   source_ink: InkKey;
   author_weight: number;
@@ -440,10 +440,10 @@ async function req<T>(method: string, path: string, body?: unknown): Promise<T> 
 export const api = {
   me: () => req<Me>("GET", "/users/me"),
 
-  interests: () => req<Interest[]>("GET", "/interests"),
-  createInterest: (name: string, color?: string) =>
-    req<Interest>("POST", "/interests", { name, color: color ?? "" }),
-  updateInterest: (
+  topics: () => req<Topic[]>("GET", "/topics"),
+  createTopic: (name: string, color?: string) =>
+    req<Topic>("POST", "/topics", { name, color: color ?? "" }),
+  updateTopic: (
     id: number,
     patch: {
       name?: string;
@@ -452,21 +452,21 @@ export const api = {
       half_life_days?: number;
       archive_after_days?: number; // #115: 0 inherit-global, -1 evergreen, N days
     },
-  ) => req<{ ok: boolean }>("PATCH", `/interests/${id}`, patch),
-  setInterestSources: (interestId: number, sourceIds: number[]) =>
-    req<{ ok: boolean }>("PUT", `/interests/${interestId}/sources`, { source_ids: sourceIds }),
+  ) => req<{ ok: boolean }>("PATCH", `/topics/${id}`, patch),
+  setTopicSources: (topicId: number, sourceIds: number[]) =>
+    req<{ ok: boolean }>("PUT", `/topics/${topicId}/sources`, { source_ids: sourceIds }),
 
-  // Mixes (#86): a user-created overlay grouping interests (many-to-many). CRUD +
-  // interest-assignment + a browse endpoint (its interests + aggregated sources).
-  mixes: () => req<Mix[]>("GET", "/mixes"),
-  createMix: (name: string, icon?: string) =>
-    req<Mix>("POST", "/mixes", { name, icon: icon ?? "" }),
-  updateMix: (id: number, patch: { name?: string; icon?: string }) =>
-    req<{ ok: boolean }>("PATCH", `/mixes/${id}`, patch),
-  deleteMix: (id: number) => req<{ ok: boolean }>("DELETE", `/mixes/${id}`),
-  setMixInterests: (id: number, interestIds: number[]) =>
-    req<{ ok: boolean }>("PUT", `/mixes/${id}/interests`, { interest_ids: interestIds }),
-  mixBrowse: (id: number) => req<MixBrowse>("GET", `/mixes/${id}`),
+  // Sections (#86): a user-created overlay grouping topics (many-to-many). CRUD +
+  // topic-assignment + a browse endpoint (its topics + aggregated sources).
+  sections: () => req<Section[]>("GET", "/sections"),
+  createSection: (name: string, icon?: string) =>
+    req<Section>("POST", "/sections", { name, icon: icon ?? "" }),
+  updateSection: (id: number, patch: { name?: string; icon?: string }) =>
+    req<{ ok: boolean }>("PATCH", `/sections/${id}`, patch),
+  deleteSection: (id: number) => req<{ ok: boolean }>("DELETE", `/sections/${id}`),
+  setSectionTopics: (id: number, topicIds: number[]) =>
+    req<{ ok: boolean }>("PUT", `/sections/${id}/topics`, { topic_ids: topicIds }),
+  sectionBrowse: (id: number) => req<SectionBrowse>("GET", `/sections/${id}`),
 
   sources: () => req<Source[]>("GET", "/sources"),
   // Per-source stats bundle (#116), keyed by source id. One call covers the whole
@@ -509,9 +509,9 @@ export const api = {
     },
   ) => req<{ ok: boolean }>("PATCH", `/sources/${id}`, patch),
   deleteSource: (id: number) => req<{ ok: boolean }>("DELETE", `/sources/${id}`),
-  // Set the source's one interest (#86). Empty slug clears it (interestless).
-  setSourceInterest: (id: number, interestSlug: string) =>
-    req<{ ok: boolean }>("PUT", `/sources/${id}/interest`, { interest_slug: interestSlug }),
+  // Set the source's one topic (#86). Empty slug clears it (topicless).
+  setSourceTopic: (id: number, topicSlug: string) =>
+    req<{ ok: boolean }>("PUT", `/sources/${id}/topic`, { topic_slug: topicSlug }),
   // Clear the user's engagement state for a source (#119) - every item unread
   // again. olderThan (RFC3339) resets only items published before it; omit to
   // reset everything.
@@ -521,23 +521,23 @@ export const api = {
   replaceSourceFeedURL: (id: number, feedUrl: string) =>
     req<{ ok: boolean }>("PUT", `/sources/${id}/feed-url`, { feed_url: feedUrl }),
   sourceItems: (id: number) => req<SourceItem[]>("GET", `/sources/${id}/items`),
-  // --- #66 interest-mgmt-pages block (interest page recent posts) ---
-  feedItems: (interestId: number) => req<Item[]>("GET", `/interests/${interestId}/items`),
+  // --- #66 topic-mgmt-pages block (topic page recent posts) ---
+  feedItems: (topicId: number) => req<Item[]>("GET", `/topics/${topicId}/items`),
   // --- end #66 block ---
 
-  insights: (interestSlug?: string) =>
-    req<InsightsResponse>("GET", `/insights${interestSlug ? `?interest=${encodeURIComponent(interestSlug)}` : ""}`),
+  insights: (topicSlug?: string) =>
+    req<InsightsResponse>("GET", `/insights${topicSlug ? `?topic=${encodeURIComponent(topicSlug)}` : ""}`),
 
   // Durable sessions (#67 + #69). createSession builds + stores the queue for a
   // single duration; currentSession resumes the active one (204 -> undefined);
   // updateSession advances the cursor or ends it.
-  createSession: (durationMin: number, themes: string[], mixes: string[] = []) =>
-    req<SessionResponse>("POST", "/sessions", { duration_min: durationMin, themes, mixes }),
+  createSession: (durationMin: number, themes: string[], sections: string[] = []) =>
+    req<SessionResponse>("POST", "/sessions", { duration_min: durationMin, themes, sections }),
   currentSession: () => req<SessionResponse | undefined>("GET", "/sessions/current"),
   updateSession: (id: string, patch: { cursor?: number; status?: "ended" }) =>
     req<{ ok: boolean }>("PATCH", `/sessions/${id}`, patch),
   // On-demand full-text (#98): the best reader body for an item, fetched +
-  // readability-extracted server-side for teaser-only interests and cached. Returns
+  // readability-extracted server-side for teaser-only topics and cached. Returns
   // content_source=external (content "") when the item isn't extractable.
   itemContent: (id: number) => req<ItemContent>("GET", `/items/${id}/content`),
   itemEvent: (id: number, type: string, sessionId?: string) =>
@@ -595,9 +595,9 @@ export const api = {
     if (!res.ok) throw new Error((await res.json().catch(() => ({}))).message || `${res.status}`);
     return res.json();
   },
-  commitImport: (sources: ImportCandidate[], createInterestsFromFolders: boolean) =>
+  commitImport: (sources: ImportCandidate[], createTopicsFromFolders: boolean) =>
     req<CommitResult>("POST", "/import/commit", {
       sources,
-      create_interests_from_folders: createInterestsFromFolders,
+      create_topics_from_folders: createTopicsFromFolders,
     }),
 };

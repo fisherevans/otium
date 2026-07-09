@@ -21,10 +21,10 @@ CREATE TABLE IF NOT EXISTS users (
     created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
--- An interest is a theme/collection the user consumes ("Comedy", "Local News",
+-- An topic is a theme/collection the user consumes ("Comedy", "Local News",
 -- "Music"). It is a saved grouping of sources, not a folder - the session
--- builder targets one or more interests. (Renamed from `feeds`, #111.)
-CREATE TABLE IF NOT EXISTS interests (
+-- builder targets one or more topics. (Renamed from `feeds`, #111.)
+CREATE TABLE IF NOT EXISTS topics (
     id          INTEGER PRIMARY KEY AUTOINCREMENT,
     user_id     INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     name        TEXT NOT NULL,
@@ -34,13 +34,13 @@ CREATE TABLE IF NOT EXISTS interests (
     -- render the color swatch instead. Added additively via migrate() for
     -- databases created before this column existed.
     icon        TEXT NOT NULL DEFAULT '',
-    -- per-interest ranker overrides (#17). Added additively via migrate() for
+    -- per-topic ranker overrides (#17). Added additively via migrate() for
     -- databases created before these columns existed.
-    -- freshness half-life for this interest's items, in days; 0 = use the global
+    -- freshness half-life for this topic's items, in days; 0 = use the global
     -- default (session.freshnessHalfLifeDays).
     half_life_days REAL NOT NULL DEFAULT 0,
     -- Archive After (session engine v2, #115): the default expiration window in
-    -- days for this interest's sources. 0 = use the global default; -1 = evergreen
+    -- days for this topic's sources. 0 = use the global default; -1 = evergreen
     -- (never archive); N = archive articles older than N days. A source's own
     -- archive_after_days overrides this. Replaces user-facing half-life.
     archive_after_days INTEGER NOT NULL DEFAULT 0,
@@ -60,13 +60,13 @@ CREATE TABLE IF NOT EXISTS sources (
     feed_url      TEXT NOT NULL,
     homepage_url  TEXT NOT NULL DEFAULT '',
     icon_url      TEXT NOT NULL DEFAULT '',
-    -- The one interest this source belongs to (#86). A source belongs to exactly
-    -- one interest (or none - NULL - for an interestless source that renders
-    -- source-only). This replaced the source<->interest many-to-many (feed_sources,
-    -- kept legacy below). Nullable so an interestless source is representable; the
+    -- The one topic this source belongs to (#86). A source belongs to exactly
+    -- one topic (or none - NULL - for an topicless source that renders
+    -- source-only). This replaced the source<->topic many-to-many (feed_sources,
+    -- kept legacy below). Nullable so an topicless source is representable; the
     -- UI's picker requires one. Added additively via migrate() and back-populated
     -- from feed_sources. (Renamed from feed_id, #111.)
-    interest_id   INTEGER REFERENCES interests(id) ON DELETE SET NULL,
+    topic_id   INTEGER REFERENCES topics(id) ON DELETE SET NULL,
     -- weight buckets map to multipliers in code: very_low .25, low .5,
     -- normal 1, high 2, favorite 5.
     weight        REAL NOT NULL DEFAULT 1.0,
@@ -83,13 +83,13 @@ CREATE TABLE IF NOT EXISTS sources (
     -- databases created before this column existed.
     half_life_days REAL NOT NULL DEFAULT 0,
     -- Archive After (session engine v2, #115): expiration window in days. 0 =
-    -- inherit the interest default; -1 = evergreen (never archive); N = archive
-    -- articles older than N days. Source override > interest default > global.
+    -- inherit the topic default; -1 = evergreen (never archive); N = archive
+    -- articles older than N days. Source override > topic default > global.
     archive_after_days INTEGER NOT NULL DEFAULT 0,
     -- Auto-archive keywords (#118): comma-separated, case-insensitive. An item
     -- whose title or summary contains any of these is ineligible (auto-archived).
     archive_keywords TEXT NOT NULL DEFAULT '',
-    -- Rule-based auto-archive (#124), per-source only (interests/global stay
+    -- Rule-based auto-archive (#124), per-source only (topics/global stay
     -- age-only). archive_keep_count is the keep-latest-N rule: 0 = off, N = keep
     -- only the newest N eligible items (a rolling window that refills from the
     -- backlog as items are consumed). archive_combine is how the age and count
@@ -105,30 +105,30 @@ CREATE TABLE IF NOT EXISTS sources (
     fetch_error   TEXT NOT NULL DEFAULT '',
     UNIQUE (user_id, feed_url)
 );
--- NOTE: the idx_sources_interest index is created in migrate() (store.go), NOT
--- here. A pre-existing `sources` table (from before interest_id) is skipped by
--- CREATE TABLE IF NOT EXISTS, so interest_id doesn't exist until migrate()'s
--- ensureColumn adds it - an index on interest_id here would fail on apply against
+-- NOTE: the idx_sources_topic index is created in migrate() (store.go), NOT
+-- here. A pre-existing `sources` table (from before topic_id) is skipped by
+-- CREATE TABLE IF NOT EXISTS, so topic_id doesn't exist until migrate()'s
+-- ensureColumn adds it - an index on topic_id here would fail on apply against
 -- a legacy DB. Same reason as the sessions status index below.
 
--- LEGACY (pre-#86): the source<->interest many-to-many. Superseded by
--- sources.interest_id (a source now belongs to exactly one interest). Left in
+-- LEGACY (pre-#86): the source<->topic many-to-many. Superseded by
+-- sources.topic_id (a source now belongs to exactly one topic). Left in
 -- place, unused by the app, as a rollback safety net - migrate() reads it once to
--- populate sources.interest_id and never writes it again. Its column keeps the
+-- populate sources.topic_id and never writes it again. Its column keeps the
 -- historical name feed_id (#111 renamed the concept but froze this legacy table).
 -- Do NOT drop it; do NOT read it in new code.
 CREATE TABLE IF NOT EXISTS feed_sources (
-    feed_id   INTEGER NOT NULL REFERENCES interests(id) ON DELETE CASCADE,
+    feed_id   INTEGER NOT NULL REFERENCES topics(id) ON DELETE CASCADE,
     source_id INTEGER NOT NULL REFERENCES sources(id) ON DELETE CASCADE,
     PRIMARY KEY (feed_id, source_id)
 );
 
--- A mix is a user-created overlay that gathers several INTERESTS under one name
--- ("News" = Local + International). Many-to-many: an interest can be in several
--- mixes (#86). Distinct from an interest (which groups sources) and a collection
--- (which groups items). Mixes are purely organizational - the session builder can
--- target a mix by expanding it to its member interests. (Renamed from `groups`, #111.)
-CREATE TABLE IF NOT EXISTS mixes (
+-- A section is a user-created overlay that gathers several TOPICS under one name
+-- ("News" = Local + International). Many-to-many: an topic can be in several
+-- sections (#86). Distinct from an topic (which groups sources) and a collection
+-- (which groups items). Sections are purely organizational - the session builder can
+-- target a section by expanding it to its member topics. (Renamed from `groups`, #111.)
+CREATE TABLE IF NOT EXISTS sections (
     id         INTEGER PRIMARY KEY AUTOINCREMENT,
     user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
     name       TEXT NOT NULL,
@@ -140,12 +140,12 @@ CREATE TABLE IF NOT EXISTS mixes (
     UNIQUE (user_id, slug)
 );
 
--- Membership: which interests belong to a mix. The UNIQUE (mix_id, interest_id) PK
--- makes re-adding an interest an idempotent no-op. (Renamed from `group_feeds`, #111.)
-CREATE TABLE IF NOT EXISTS mix_interests (
-    mix_id      INTEGER NOT NULL REFERENCES mixes(id) ON DELETE CASCADE,
-    interest_id INTEGER NOT NULL REFERENCES interests(id) ON DELETE CASCADE,
-    PRIMARY KEY (mix_id, interest_id)
+-- Membership: which topics belong to a section. The UNIQUE (section_id, topic_id) PK
+-- makes re-adding an topic an idempotent no-op. (Renamed from `group_feeds`, #111.)
+CREATE TABLE IF NOT EXISTS section_topics (
+    section_id      INTEGER NOT NULL REFERENCES sections(id) ON DELETE CASCADE,
+    topic_id INTEGER NOT NULL REFERENCES topics(id) ON DELETE CASCADE,
+    PRIMARY KEY (section_id, topic_id)
 );
 
 -- A normalized content event from a source.

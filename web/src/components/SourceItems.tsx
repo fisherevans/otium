@@ -4,7 +4,7 @@ import { BottomSheet } from "./BottomSheet";
 import { relDate } from "@/lib/format";
 
 // See-in-context drill-in (#43.4 / #38 surfaced in-session). Lists the source's
-// recent raw items so you can see where the current item sits in the interest -
+// recent raw items so you can see where the current item sits in the topic -
 // what came before/after it, how active the source is. Read-only: this is
 // orientation, not consumption, so it emits no seen/open/skip events.
 export function SourceItems({
@@ -34,15 +34,15 @@ export function SourceItems({
   }, [open, sourceId]);
 
   return (
-    <BottomSheet open={open} onClose={onClose} variant="tall" kicker="Raw interest">
+    <BottomSheet open={open} onClose={onClose} variant="tall" kicker="Raw topic">
       <div className="src-items">
         {err && <p className="err">{err}</p>}
-        {!err && items === null && <p className="src-items-load">loading interest…</p>}
+        {!err && items === null && <p className="src-items-load">loading topic…</p>}
         {items && items.length === 0 && <p className="src-items-load">No recent items.</p>}
         {items?.map((it) => (
           <button
             key={it.id}
-            className={`interest-item ${it.id === currentItemId ? "here" : ""}`}
+            className={`topic-item ${it.id === currentItemId ? "here" : ""}`}
             onClick={() => onOpen(it)}
           >
             <b>{it.title}</b>

@@ -15,7 +15,7 @@ type Dest = {
 const DESTS: Dest[] = [
   { icon: Settings, label: "Settings", desc: "Preferences and ranking behavior.", to: "/settings" },
   { icon: Palette, label: "Appearance", desc: "Reader typography, cards, and session presets.", to: "/settings/appearance" },
-  { icon: PieChart, label: "Insights", desc: "What each source actually is in your interest.", to: "/insights" },
+  { icon: PieChart, label: "Insights", desc: "What each source actually is in your topic.", to: "/insights" },
   { icon: Download, label: "Import", desc: "Bring your follows in from OPML or Takeout.", to: "/import" },
 ];
 

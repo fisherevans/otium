@@ -34,7 +34,7 @@ func Open(path string) (*DB, error) {
 	}
 	sdb.SetMaxOpenConns(1) // single writer; avoids SQLITE_BUSY under WAL for a homelab load
 	// #111 vocabulary rename must run BEFORE schema.sql, or its CREATE TABLE IF NOT
-	// EXISTS interests/mixes would make empty new-named tables beside the old data.
+	// EXISTS topics/sections would make empty new-named tables beside the old data.
 	if err := renameLegacyConcepts(sdb); err != nil {
 		sdb.Close()
 		return nil, fmt.Errorf("rename legacy concepts: %w", err)
@@ -50,9 +50,9 @@ func Open(path string) (*DB, error) {
 	return &DB{sql: sdb}, nil
 }
 
-// renameLegacyConcepts performs the #111 vocabulary rename (feed->interest,
-// group->mix) on an EXISTING database, in place, BEFORE schema.sql runs. If it
-// ran after, schema.sql's CREATE TABLE IF NOT EXISTS interests/mixes would create
+// renameLegacyConcepts performs the #111 vocabulary rename (feed->topic,
+// group->section) on an EXISTING database, in place, BEFORE schema.sql runs. If it
+// ran after, schema.sql's CREATE TABLE IF NOT EXISTS topics/sections would create
 // empty new-named tables beside the old data. Each step is guarded on the old
 // object existing and the new one not, so it runs exactly once per DB and no-ops
 // on a fresh DB (nothing to rename) and on every boot thereafter. The legacy
@@ -105,7 +105,12 @@ func renameLegacyConcepts(sdb *sql.DB) error {
 		}
 		return nil
 	}
-	// Tables. group_feeds -> mix_interests (its columns are renamed after).
+	// Two historical vocabulary renames, applied in order, each step guarded so it
+	// runs once. Column renames must happen while the table still carries its
+	// intermediate name, so the sequence is: all #111 table renames, #111 columns,
+	// then all #128 table renames, #128 columns.
+
+	// #111: feeds->interests, groups->mixes, group_feeds->mix_interests.
 	for _, r := range []struct{ from, to string }{
 		{"feeds", "interests"},
 		{"groups", "mixes"},
@@ -115,7 +120,6 @@ func renameLegacyConcepts(sdb *sql.DB) error {
 			return err
 		}
 	}
-	// Columns.
 	if err := renameColumn("sources", "feed_id", "interest_id"); err != nil {
 		return err
 	}
@@ -125,8 +129,31 @@ func renameLegacyConcepts(sdb *sql.DB) error {
 	if err := renameColumn("mix_interests", "feed_id", "interest_id"); err != nil {
 		return err
 	}
-	// The interest-named index is (re)created in migrate(); drop the old-named one.
 	if _, err := sdb.ExecContext(ctx, `DROP INDEX IF EXISTS idx_sources_feed`); err != nil {
+		return err
+	}
+
+	// #128: interests->topics, mixes->sections, mix_interests->section_topics.
+	for _, r := range []struct{ from, to string }{
+		{"interests", "topics"},
+		{"mixes", "sections"},
+		{"mix_interests", "section_topics"},
+	} {
+		if err := renameTable(r.from, r.to); err != nil {
+			return err
+		}
+	}
+	if err := renameColumn("sources", "interest_id", "topic_id"); err != nil {
+		return err
+	}
+	if err := renameColumn("section_topics", "mix_id", "section_id"); err != nil {
+		return err
+	}
+	if err := renameColumn("section_topics", "interest_id", "topic_id"); err != nil {
+		return err
+	}
+	// The topic-named index is (re)created in migrate(); drop both old-named ones.
+	if _, err := sdb.ExecContext(ctx, `DROP INDEX IF EXISTS idx_sources_interest`); err != nil {
 		return err
 	}
 	return nil
@@ -138,19 +165,19 @@ func renameLegacyConcepts(sdb *sql.DB) error {
 // SQLite has no ADD COLUMN IF NOT EXISTS, so each add is guarded on
 // pragma_table_info. Every migration here must be safe to run on every boot.
 func migrate(sdb *sql.DB) error {
-	if err := ensureColumn(sdb, "interests", "icon", `ALTER TABLE interests ADD COLUMN icon TEXT NOT NULL DEFAULT ''`); err != nil {
+	if err := ensureColumn(sdb, "topics", "icon", `ALTER TABLE topics ADD COLUMN icon TEXT NOT NULL DEFAULT ''`); err != nil {
 		return err
 	}
-	if err := ensureColumn(sdb, "interests", "half_life_days", `ALTER TABLE interests ADD COLUMN half_life_days REAL NOT NULL DEFAULT 0`); err != nil {
+	if err := ensureColumn(sdb, "topics", "half_life_days", `ALTER TABLE topics ADD COLUMN half_life_days REAL NOT NULL DEFAULT 0`); err != nil {
 		return err
 	}
-	// #120: the per-interest "diversity" cap is gone (engine v2 never read it, and
+	// #120: the per-topic "diversity" cap is gone (engine v2 never read it, and
 	// its only editor was removed). Drop the now-inert column where it still exists.
-	if err := dropColumnIfExists(sdb, "interests", "diversity"); err != nil {
+	if err := dropColumnIfExists(sdb, "topics", "diversity"); err != nil {
 		return err
 	}
 	// Archive After (session engine v2, #115): expiration window in days.
-	if err := ensureColumn(sdb, "interests", "archive_after_days", `ALTER TABLE interests ADD COLUMN archive_after_days INTEGER NOT NULL DEFAULT 0`); err != nil {
+	if err := ensureColumn(sdb, "topics", "archive_after_days", `ALTER TABLE topics ADD COLUMN archive_after_days INTEGER NOT NULL DEFAULT 0`); err != nil {
 		return err
 	}
 	if err := ensureColumn(sdb, "sources", "archive_after_days", `ALTER TABLE sources ADD COLUMN archive_after_days INTEGER NOT NULL DEFAULT 0`); err != nil {
@@ -194,7 +221,7 @@ func migrate(sdb *sql.DB) error {
 			}
 		}
 	}
-	// Per-source freshness half-life override (#76): source override > interest > global.
+	// Per-source freshness half-life override (#76): source override > topic > global.
 	if err := ensureColumn(sdb, "sources", "half_life_days", `ALTER TABLE sources ADD COLUMN half_life_days REAL NOT NULL DEFAULT 0`); err != nil {
 		return err
 	}
@@ -208,7 +235,7 @@ func migrate(sdb *sql.DB) error {
 	if err := ensureColumn(sdb, "items", "content_source", `ALTER TABLE items ADD COLUMN content_source TEXT NOT NULL DEFAULT ''`); err != nil {
 		return err
 	}
-	// One-time backfill (#98): an existing non-empty body came from the interest, so
+	// One-time backfill (#98): an existing non-empty body came from the topic, so
 	// mark it 'rss'. WHERE content_source = '' makes it idempotent - it only fills
 	// rows still at the default and never fights a later fetched/external marking.
 	if err := backfillContentSource(sdb); err != nil {
@@ -224,22 +251,22 @@ func migrate(sdb *sql.DB) error {
 	if err := ensureColumn(sdb, "sessions", "status", `ALTER TABLE sessions ADD COLUMN status TEXT NOT NULL DEFAULT 'active'`); err != nil {
 		return err
 	}
-	// One-interest model (#86): sources.interest_id. SQLite permits ADD COLUMN with a
+	// One-topic model (#86): sources.topic_id. SQLite permits ADD COLUMN with a
 	// REFERENCES clause only when the added column's default is NULL, which this is.
-	if err := ensureColumn(sdb, "sources", "interest_id", `ALTER TABLE sources ADD COLUMN interest_id INTEGER REFERENCES interests(id) ON DELETE SET NULL`); err != nil {
+	if err := ensureColumn(sdb, "sources", "topic_id", `ALTER TABLE sources ADD COLUMN topic_id INTEGER REFERENCES topics(id) ON DELETE SET NULL`); err != nil {
 		return err
 	}
 	// Index created here (not schema.sql) so it runs AFTER the status column is
 	// ensured on a pre-existing sessions table. See schema.sql note. Guarded on
 	// the table existing so migrate() stays safe against a partial DB (e.g. a
-	// test that sets up only the interests table), matching ensureColumn's contract.
+	// test that sets up only the topics table), matching ensureColumn's contract.
 	if err := ensureIndexIfTable(sdb, "sessions", `CREATE INDEX IF NOT EXISTS idx_sessions_user_status ON sessions(user_id, status)`); err != nil {
 		return err
 	}
-	// Mix tier (#86): mixes + mix_interests. CREATE TABLE IF NOT EXISTS is safe on
-	// every boot; forward FK references (users/interests) are resolved at write time, so
+	// Section tier (#86): sections + section_topics. CREATE TABLE IF NOT EXISTS is safe on
+	// every boot; forward FK references (users/topics) are resolved at write time, so
 	// creating these before those tables exist (a partial test DB) is fine.
-	if _, err := sdb.Exec(`CREATE TABLE IF NOT EXISTS mixes (
+	if _, err := sdb.Exec(`CREATE TABLE IF NOT EXISTS sections (
 		id         INTEGER PRIMARY KEY AUTOINCREMENT,
 		user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
 		name       TEXT NOT NULL,
@@ -251,22 +278,22 @@ func migrate(sdb *sql.DB) error {
 	)`); err != nil {
 		return err
 	}
-	if _, err := sdb.Exec(`CREATE TABLE IF NOT EXISTS mix_interests (
-		mix_id INTEGER NOT NULL REFERENCES mixes(id) ON DELETE CASCADE,
-		interest_id  INTEGER NOT NULL REFERENCES interests(id) ON DELETE CASCADE,
-		PRIMARY KEY (mix_id, interest_id)
+	if _, err := sdb.Exec(`CREATE TABLE IF NOT EXISTS section_topics (
+		section_id INTEGER NOT NULL REFERENCES sections(id) ON DELETE CASCADE,
+		topic_id  INTEGER NOT NULL REFERENCES topics(id) ON DELETE CASCADE,
+		PRIMARY KEY (section_id, topic_id)
 	)`); err != nil {
 		return err
 	}
-	// Back-populate sources.interest_id from the single legacy feed_sources membership
+	// Back-populate sources.topic_id from the single legacy feed_sources membership
 	// (#86). Idempotent: only fills rows still NULL, so it never fights a later
 	// picker change. Guarded on both tables existing (a partial test DB may have
 	// neither). feed_sources is left intact for rollback; this is its last reader.
-	if err := populateSourceInterestID(sdb); err != nil {
+	if err := populateSourceTopicID(sdb); err != nil {
 		return err
 	}
 	// Index on the migrated column, created after the column is guaranteed present.
-	return ensureIndexIfTable(sdb, "sources", `CREATE INDEX IF NOT EXISTS idx_sources_interest ON sources(interest_id)`)
+	return ensureIndexIfTable(sdb, "sources", `CREATE INDEX IF NOT EXISTS idx_sources_topic ON sources(topic_id)`)
 }
 
 // ensureIndexIfTable creates an index only when its table exists, so migrate()
@@ -285,12 +312,12 @@ func ensureIndexIfTable(sdb *sql.DB, table, ddl string) error {
 	return err
 }
 
-// populateSourceInterestID back-fills sources.interest_id from the legacy feed_sources
-// table (#86): each source's single membership becomes its one interest. WHERE
-// interest_id IS NULL makes it idempotent (a re-run touches nothing) and non-
+// populateSourceTopicID back-fills sources.topic_id from the legacy feed_sources
+// table (#86): each source's single membership becomes its one topic. WHERE
+// topic_id IS NULL makes it idempotent (a re-run touches nothing) and non-
 // destructive to any assignment made through the new picker. Guarded on both
 // tables so it no-ops on a partial DB.
-func populateSourceInterestID(sdb *sql.DB) error {
+func populateSourceTopicID(sdb *sql.DB) error {
 	for _, t := range []string{"sources", "feed_sources"} {
 		var n int
 		if err := sdb.QueryRowContext(context.Background(),
@@ -302,16 +329,16 @@ func populateSourceInterestID(sdb *sql.DB) error {
 		}
 	}
 	// feed_sources is a frozen legacy table (#86) - its column stays feed_id even
-	// though the target sources.interest_id was renamed. Read the legacy column.
+	// though the target sources.topic_id was renamed. Read the legacy column.
 	_, err := sdb.Exec(`UPDATE sources
-		SET interest_id = (SELECT fs.feed_id FROM feed_sources fs WHERE fs.source_id = sources.id LIMIT 1)
-		WHERE interest_id IS NULL`)
+		SET topic_id = (SELECT fs.feed_id FROM feed_sources fs WHERE fs.source_id = sources.id LIMIT 1)
+		WHERE topic_id IS NULL`)
 	return err
 }
 
 // backfillContentSource marks every existing item that already has a body as
 // 'rss' (#98): before this column existed, a non-empty content came from the
-// interest. WHERE content_source = ” makes it idempotent and non-destructive - it
+// topic. WHERE content_source = ” makes it idempotent and non-destructive - it
 // only touches rows still at the default, so a later fetched/external marking is
 // never clobbered. Guarded on the items table existing so it no-ops on a partial
 // DB. Runs after the items.content and items.content_source columns are ensured.
@@ -396,20 +423,20 @@ func (db *DB) UpsertUserByUsername(ctx context.Context, username, email string) 
 	return &u, nil
 }
 
-// --- interests ---
+// --- topics ---
 
-func (db *DB) ListInterests(ctx context.Context, userID int64) ([]Interest, error) {
+func (db *DB) ListTopics(ctx context.Context, userID int64) ([]Topic, error) {
 	rows, err := db.sql.QueryContext(ctx,
 		`SELECT f.id, f.name, f.slug, f.color, f.icon, f.half_life_days, f.archive_after_days, f.sort, f.created_at,
-		        (SELECT COUNT(*) FROM sources s WHERE s.interest_id = f.id) AS source_count
-		 FROM interests f WHERE f.user_id = ? ORDER BY f.sort, f.name`, userID)
+		        (SELECT COUNT(*) FROM sources s WHERE s.topic_id = f.id) AS source_count
+		 FROM topics f WHERE f.user_id = ? ORDER BY f.sort, f.name`, userID)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	var out []Interest
+	var out []Topic
 	for rows.Next() {
-		var f Interest
+		var f Topic
 		var created string
 		if err := rows.Scan(&f.ID, &f.Name, &f.Slug, &f.Color, &f.Icon, &f.HalfLifeDays, &f.ArchiveAfterDays, &f.Sort, &created, &f.SourceCount); err != nil {
 			return nil, err
@@ -420,23 +447,23 @@ func (db *DB) ListInterests(ctx context.Context, userID int64) ([]Interest, erro
 	return out, rows.Err()
 }
 
-func (db *DB) CreateInterest(ctx context.Context, userID int64, name, slug, color string) (*Interest, error) {
+func (db *DB) CreateTopic(ctx context.Context, userID int64, name, slug, color string) (*Topic, error) {
 	res, err := db.sql.ExecContext(ctx,
-		`INSERT INTO interests (user_id, name, slug, color) VALUES (?, ?, ?, ?)`,
+		`INSERT INTO topics (user_id, name, slug, color) VALUES (?, ?, ?, ?)`,
 		userID, name, slug, color)
 	if err != nil {
 		return nil, err
 	}
 	id, _ := res.LastInsertId()
-	return &Interest{ID: id, UserID: userID, Name: name, Slug: slug, Color: color}, nil
+	return &Topic{ID: id, UserID: userID, Name: name, Slug: slug, Color: color}, nil
 }
 
-// GetOrCreateInterest returns the interest with this slug, creating it if absent. Used
-// by import to turn OPML folders into interests without duplicating.
-func (db *DB) GetOrCreateInterest(ctx context.Context, userID int64, name, slug, color string) (*Interest, error) {
-	var f Interest
+// GetOrCreateTopic returns the topic with this slug, creating it if absent. Used
+// by import to turn OPML folders into topics without duplicating.
+func (db *DB) GetOrCreateTopic(ctx context.Context, userID int64, name, slug, color string) (*Topic, error) {
+	var f Topic
 	err := db.sql.QueryRowContext(ctx,
-		`SELECT id, name, slug, color FROM interests WHERE user_id = ? AND slug = ?`, userID, slug).
+		`SELECT id, name, slug, color FROM topics WHERE user_id = ? AND slug = ?`, userID, slug).
 		Scan(&f.ID, &f.Name, &f.Slug, &f.Color)
 	if err == nil {
 		return &f, nil
@@ -444,34 +471,34 @@ func (db *DB) GetOrCreateInterest(ctx context.Context, userID int64, name, slug,
 	if err != sql.ErrNoRows {
 		return nil, err
 	}
-	return db.CreateInterest(ctx, userID, name, slug, color)
+	return db.CreateTopic(ctx, userID, name, slug, color)
 }
 
-// Videos interest (#53): the auto-grouping bucket for untagged YouTube sources.
+// Videos topic (#53): the auto-grouping bucket for untagged YouTube sources.
 const (
-	videosInterestName = "Videos"
-	videosInterestSlug = "videos"
-	videosInterestIcon = "film" // Clapperboard glyph; see web/src/lib/feedIcons.ts
+	videosTopicName = "Videos"
+	videosTopicSlug = "videos"
+	videosTopicIcon = "film" // Clapperboard glyph; see web/src/lib/feedIcons.ts
 	// videosBackfillKey gates the one-time untagged-YouTube grouping so it runs
-	// exactly once and never re-mixes sources Fisher later pulls out by hand.
+	// exactly once and never re-sections sources Fisher later pulls out by hand.
 	videosBackfillKey = "videos_backfill_done"
 )
 
-// GetOrCreateVideosInterest returns the user's Videos interest, creating it (with the
+// GetOrCreateVideosTopic returns the user's Videos topic, creating it (with the
 // film icon) if absent. Idempotent via the (user_id, slug) unique constraint;
-// if the interest already exists its name/icon are left untouched so a later manual
+// if the topic already exists its name/icon are left untouched so a later manual
 // rename or re-icon survives.
-func (db *DB) GetOrCreateVideosInterest(ctx context.Context, userID int64) (*Interest, error) {
+func (db *DB) GetOrCreateVideosTopic(ctx context.Context, userID int64) (*Topic, error) {
 	if _, err := db.sql.ExecContext(ctx,
-		`INSERT INTO interests (user_id, name, slug, icon) VALUES (?, ?, ?, ?)
+		`INSERT INTO topics (user_id, name, slug, icon) VALUES (?, ?, ?, ?)
 		 ON CONFLICT(user_id, slug) DO NOTHING`,
-		userID, videosInterestName, videosInterestSlug, videosInterestIcon); err != nil {
+		userID, videosTopicName, videosTopicSlug, videosTopicIcon); err != nil {
 		return nil, err
 	}
-	var f Interest
+	var f Topic
 	err := db.sql.QueryRowContext(ctx,
-		`SELECT id, name, slug, color, icon FROM interests WHERE user_id = ? AND slug = ?`,
-		userID, videosInterestSlug).Scan(&f.ID, &f.Name, &f.Slug, &f.Color, &f.Icon)
+		`SELECT id, name, slug, color, icon FROM topics WHERE user_id = ? AND slug = ?`,
+		userID, videosTopicSlug).Scan(&f.ID, &f.Name, &f.Slug, &f.Color, &f.Icon)
 	if err != nil {
 		return nil, err
 	}
@@ -479,24 +506,24 @@ func (db *DB) GetOrCreateVideosInterest(ctx context.Context, userID int64) (*Int
 	return &f, nil
 }
 
-// BackfillVideosInterest is a one-time, marker-guarded migration (#53): it ensures
-// the Videos interest exists and assigns every youtube-kind source that currently
-// belongs to NO interest to it. Guarded by the kv 'videos_backfill_done' flag so it
-// runs exactly once per user and never re-mixes sources later pulled out.
+// BackfillVideosTopic is a one-time, marker-guarded migration (#53): it ensures
+// the Videos topic exists and assigns every youtube-kind source that currently
+// belongs to NO topic to it. Guarded by the kv 'videos_backfill_done' flag so it
+// runs exactly once per user and never re-sections sources later pulled out.
 // Returns the number of sources assigned (0 on every run after the first).
-func (db *DB) BackfillVideosInterest(ctx context.Context, userID int64) (int, error) {
+func (db *DB) BackfillVideosTopic(ctx context.Context, userID int64) (int, error) {
 	if _, done, err := db.kvGet(ctx, userID, videosBackfillKey); err != nil {
 		return 0, err
 	} else if done {
 		return 0, nil
 	}
-	f, err := db.GetOrCreateVideosInterest(ctx, userID)
+	f, err := db.GetOrCreateVideosTopic(ctx, userID)
 	if err != nil {
 		return 0, err
 	}
 	res, err := db.sql.ExecContext(ctx,
-		`UPDATE sources SET interest_id = ?
-		 WHERE user_id = ? AND kind = 'youtube' AND interest_id IS NULL`,
+		`UPDATE sources SET topic_id = ?
+		 WHERE user_id = ? AND kind = 'youtube' AND topic_id IS NULL`,
 		f.ID, userID)
 	if err != nil {
 		return 0, err
@@ -547,9 +574,9 @@ const (
 // dwell/engagement measurement + the fast-scroll check-in nudge (#68). Default
 // on; off = the old explicit-signals-only behavior (no dwell measured, no nudge).
 //
-// The #76 multi-interest half-life rule was deleted in #86: a source now belongs to
-// exactly one interest, so half-life resolution is simply source override > that one
-// interest > global - there is no "which interest" ambiguity left to configure.
+// The #76 multi-topic half-life rule was deleted in #86: a source now belongs to
+// exactly one topic, so half-life resolution is simply source override > that one
+// topic > global - there is no "which topic" ambiguity left to configure.
 type Settings struct {
 	FastScrollCheckin bool `json:"fast_scroll_checkin"`
 }
@@ -577,10 +604,10 @@ func (db *DB) SetFastScrollCheckin(ctx context.Context, userID int64, on bool) e
 	return db.kvSet(ctx, userID, settingFastScrollCheckin, v)
 }
 
-// UpdateInterest patches a interest's presentation fields (name, color, icon), the
-// per-interest freshness half-life override, and the Archive-After default. Only
+// UpdateTopic patches a topic's presentation fields (name, color, icon), the
+// per-topic freshness half-life override, and the Archive-After default. Only
 // non-nil fields are applied. Scoped to the owning user.
-func (db *DB) UpdateInterest(ctx context.Context, userID, id int64, name, color, icon *string, halfLifeDays *float64, archiveAfterDays *int) error {
+func (db *DB) UpdateTopic(ctx context.Context, userID, id int64, name, color, icon *string, halfLifeDays *float64, archiveAfterDays *int) error {
 	var sets []string
 	var args []any
 	if name != nil {
@@ -599,7 +626,7 @@ func (db *DB) UpdateInterest(ctx context.Context, userID, id int64, name, color,
 		sets = append(sets, "half_life_days = ?")
 		args = append(args, *halfLifeDays)
 	}
-	// Archive After default for this interest's sources (#115).
+	// Archive After default for this topic's sources (#115).
 	if archiveAfterDays != nil {
 		sets = append(sets, "archive_after_days = ?")
 		args = append(args, *archiveAfterDays)
@@ -609,21 +636,21 @@ func (db *DB) UpdateInterest(ctx context.Context, userID, id int64, name, color,
 	}
 	args = append(args, id, userID)
 	_, err := db.sql.ExecContext(ctx,
-		`UPDATE interests SET `+strings.Join(sets, ", ")+` WHERE id = ? AND user_id = ?`, args...)
+		`UPDATE topics SET `+strings.Join(sets, ", ")+` WHERE id = ? AND user_id = ?`, args...)
 	return err
 }
 
-// InterestsForSources resolves the one interest each of the given sources belongs to
+// TopicsForSources resolves the one topic each of the given sources belongs to
 // (#86), for the session card's identity line and the insights rollup. A source with
-// a interest maps to that interest's InterestRef; a interestless source (interest_id NULL) is absent
+// a topic maps to that topic's TopicRef; a topicless source (topic_id NULL) is absent
 // from the map (the card then renders source-only).
-func (db *DB) InterestsForSources(ctx context.Context, userID int64, sourceIDs []int64) (map[int64]InterestRef, error) {
-	out := map[int64]InterestRef{}
+func (db *DB) TopicsForSources(ctx context.Context, userID int64, sourceIDs []int64) (map[int64]TopicRef, error) {
+	out := map[int64]TopicRef{}
 	if len(sourceIDs) == 0 {
 		return out, nil
 	}
 	q := `SELECT s.id, f.name, f.slug, f.color, f.icon
-	      FROM sources s JOIN interests f ON f.id = s.interest_id
+	      FROM sources s JOIN topics f ON f.id = s.topic_id
 	      WHERE s.user_id = ? AND s.id IN (` + placeholders(len(sourceIDs)) + `)`
 	args := []any{userID}
 	for _, id := range sourceIDs {
@@ -636,7 +663,7 @@ func (db *DB) InterestsForSources(ctx context.Context, userID int64, sourceIDs [
 	defer rows.Close()
 	for rows.Next() {
 		var sid int64
-		var f InterestRef
+		var f TopicRef
 		if err := rows.Scan(&sid, &f.Name, &f.Slug, &f.Color, &f.Icon); err != nil {
 			return nil, err
 		}
@@ -645,10 +672,10 @@ func (db *DB) InterestsForSources(ctx context.Context, userID int64, sourceIDs [
 	return out, rows.Err()
 }
 
-// SetSourceInterest sets the one interest a source belongs to (#86), by slug. An empty
-// slug clears the interest (interestless). An unknown slug is a no-op that leaves the
+// SetSourceTopic sets the one topic a source belongs to (#86), by slug. An empty
+// slug clears the topic (topicless). An unknown slug is a no-op that leaves the
 // source unchanged. Scoped to the owning user.
-func (db *DB) SetSourceInterest(ctx context.Context, userID, sourceID int64, slug string) error {
+func (db *DB) SetSourceTopic(ctx context.Context, userID, sourceID int64, slug string) error {
 	var owner int64
 	if err := db.sql.QueryRowContext(ctx, `SELECT user_id FROM sources WHERE id = ?`, sourceID).Scan(&owner); err != nil {
 		return err
@@ -658,12 +685,12 @@ func (db *DB) SetSourceInterest(ctx context.Context, userID, sourceID int64, slu
 	}
 	if slug == "" {
 		_, err := db.sql.ExecContext(ctx,
-			`UPDATE sources SET interest_id = NULL WHERE id = ? AND user_id = ?`, sourceID, userID)
+			`UPDATE sources SET topic_id = NULL WHERE id = ? AND user_id = ?`, sourceID, userID)
 		return err
 	}
-	var interestID int64
+	var topicID int64
 	err := db.sql.QueryRowContext(ctx,
-		`SELECT id FROM interests WHERE user_id = ? AND slug = ?`, userID, slug).Scan(&interestID)
+		`SELECT id FROM topics WHERE user_id = ? AND slug = ?`, userID, slug).Scan(&topicID)
 	if err == sql.ErrNoRows {
 		return nil // unknown slug: leave the source as-is
 	}
@@ -671,16 +698,16 @@ func (db *DB) SetSourceInterest(ctx context.Context, userID, sourceID int64, slu
 		return err
 	}
 	_, err = db.sql.ExecContext(ctx,
-		`UPDATE sources SET interest_id = ? WHERE id = ? AND user_id = ?`, interestID, sourceID, userID)
+		`UPDATE sources SET topic_id = ? WHERE id = ? AND user_id = ?`, topicID, sourceID, userID)
 	return err
 }
 
-// AssignSourceInterest sets a source's one interest by interest id (#86). Used by import and
-// the Videos backfill, which already hold the interest id. No-op guards live in the
+// AssignSourceTopic sets a source's one topic by topic id (#86). Used by import and
+// the Videos backfill, which already hold the topic id. No-op guards live in the
 // callers; this is a plain scoped update.
-func (db *DB) AssignSourceInterest(ctx context.Context, sourceID, interestID int64) error {
+func (db *DB) AssignSourceTopic(ctx context.Context, sourceID, topicID int64) error {
 	_, err := db.sql.ExecContext(ctx,
-		`UPDATE sources SET interest_id = ? WHERE id = ?`, interestID, sourceID)
+		`UPDATE sources SET topic_id = ? WHERE id = ?`, topicID, sourceID)
 	return err
 }
 
@@ -700,31 +727,31 @@ func (db *DB) CreateSourceImport(ctx context.Context, s *Source) (id int64, crea
 		id, _ = res.LastInsertId()
 		return id, true, nil
 	}
-	// Already existed - fetch its id so it can still be added to a interest.
+	// Already existed - fetch its id so it can still be added to a topic.
 	err = db.sql.QueryRowContext(ctx,
 		`SELECT id FROM sources WHERE user_id = ? AND feed_url = ?`, s.UserID, s.FeedURL).Scan(&id)
 	return id, false, err
 }
 
-// SetInterestSources sets this interest as the one interest for exactly the given sources
-// (#86). Because a source belongs to a single interest, this both clears the interest's
-// previous members (interest_id -> NULL) and claims the listed ones - assigning a
-// source here removes it from whatever interest it was in before. Scoped to the user.
-func (db *DB) SetInterestSources(ctx context.Context, userID, interestID int64, sourceIDs []int64) error {
+// SetTopicSources sets this topic as the one topic for exactly the given sources
+// (#86). Because a source belongs to a single topic, this both clears the topic's
+// previous members (topic_id -> NULL) and claims the listed ones - assigning a
+// source here removes it from whatever topic it was in before. Scoped to the user.
+func (db *DB) SetTopicSources(ctx context.Context, userID, topicID int64, sourceIDs []int64) error {
 	tx, err := db.sql.BeginTx(ctx, nil)
 	if err != nil {
 		return err
 	}
 	defer tx.Rollback()
-	// Release the current members of this interest.
+	// Release the current members of this topic.
 	if _, err := tx.ExecContext(ctx,
-		`UPDATE sources SET interest_id = NULL WHERE interest_id = ? AND user_id = ?`, interestID, userID); err != nil {
+		`UPDATE sources SET topic_id = NULL WHERE topic_id = ? AND user_id = ?`, topicID, userID); err != nil {
 		return err
 	}
-	// Claim the listed sources for this interest.
+	// Claim the listed sources for this topic.
 	for _, sid := range sourceIDs {
 		if _, err := tx.ExecContext(ctx,
-			`UPDATE sources SET interest_id = ? WHERE id = ? AND user_id = ?`, interestID, sid, userID); err != nil {
+			`UPDATE sources SET topic_id = ? WHERE id = ? AND user_id = ?`, topicID, sid, userID); err != nil {
 			return err
 		}
 	}
@@ -738,7 +765,7 @@ func (db *DB) ListSources(ctx context.Context, userID int64) ([]Source, error) {
 		`SELECT s.id, s.kind, s.title, s.feed_url, s.homepage_url, s.icon_url, s.weight,
 		        s.state, s.trial_until, s.per_session_cap, s.half_life_days, s.archive_after_days, s.archive_keywords,
 		        s.archive_keep_count, s.archive_combine, s.scoring_config, s.added_at, s.last_fetch_at, s.fetch_error,
-		        s.interest_id, f.slug,
+		        s.topic_id, f.slug,
 		        (SELECT COUNT(*) FROM items i WHERE i.source_id = s.id) AS item_count,
 		        (SELECT COUNT(*) FROM items i WHERE i.source_id = s.id
 		           AND NOT EXISTS (SELECT 1 FROM item_state st WHERE st.item_id = i.id AND st.user_id = ?)) AS unseen_count,
@@ -748,7 +775,7 @@ func (db *DB) ListSources(ctx context.Context, userID int64) ([]Source, error) {
 		         WHERE i2.source_id = s.id AND st.user_id = ?) AS skip_pct,
 		        (SELECT COUNT(*) / 30.0 FROM items i3
 		         WHERE i3.source_id = s.id AND i3.published_at >= datetime('now', '-30 days')) AS posts_per_day
-		 FROM sources s LEFT JOIN interests f ON f.id = s.interest_id
+		 FROM sources s LEFT JOIN topics f ON f.id = s.topic_id
 		 WHERE s.user_id = ? ORDER BY s.title`, userID, userID, userID)
 	if err != nil {
 		return nil, err
@@ -772,19 +799,19 @@ type rowScanner interface {
 func scanSource(r rowScanner) (*Source, error) {
 	var s Source
 	var added string
-	var trialUntil, lastFetch, interestSlug sql.NullString
-	var interestID sql.NullInt64
+	var trialUntil, lastFetch, topicSlug sql.NullString
+	var topicID sql.NullInt64
 	if err := r.Scan(&s.ID, &s.Kind, &s.Title, &s.FeedURL, &s.HomepageURL, &s.IconURL, &s.Weight,
 		&s.State, &trialUntil, &s.PerSessionCap, &s.HalfLifeDays, &s.ArchiveAfterDays, &s.ArchiveKeywords,
 		&s.ArchiveKeepCount, &s.ArchiveCombine, &s.ScoringConfig, &added, &lastFetch, &s.FetchError,
-		&interestID, &interestSlug,
+		&topicID, &topicSlug,
 		&s.ItemCount, &s.UnseenCount, &s.SkipPct, &s.PostsPerDay); err != nil {
 		return nil, err
 	}
-	if interestID.Valid {
-		s.InterestID = &interestID.Int64
+	if topicID.Valid {
+		s.TopicID = &topicID.Int64
 	}
-	s.InterestSlug = interestSlug.String
+	s.TopicSlug = topicSlug.String
 	s.AddedAt = parseTime(added)
 	if trialUntil.Valid {
 		t := parseTime(trialUntil.String)
@@ -913,9 +940,9 @@ func (db *DB) SourcesToFetch(ctx context.Context, userID int64) ([]Source, error
 // count stays accurate.
 //
 // For an item that already exists, it backfills content when the stored content
-// is empty (#58): pre-#58 items - and items ingested before a interest started
+// is empty (#58): pre-#58 items - and items ingested before a topic started
 // shipping content:encoded - gain their full body on the next re-fetch, without
-// clobbering an already-populated body or touching any other column. Interests
+// clobbering an already-populated body or touching any other column. Topics
 // truncate to ~15 recent entries, so this reaches exactly the recent,
 // session-surfaced items; older ones age out still empty, which is fine.
 //
@@ -940,8 +967,8 @@ func (db *DB) UpsertItem(ctx context.Context, it *Item) (bool, error) {
 		return true, nil // genuinely new insert
 	}
 	// Existing row: backfill content only when it's empty and we actually have a
-	// body to write. The interest shipped it, so mark it 'rss' in the same update -
-	// this reclaims an item earlier resolved to 'external' if the interest later starts
+	// body to write. The topic shipped it, so mark it 'rss' in the same update -
+	// this reclaims an item earlier resolved to 'external' if the topic later starts
 	// carrying the body. Once content is non-empty the WHERE guard makes it a no-op.
 	if it.Content != "" {
 		if _, err := db.sql.ExecContext(ctx,
@@ -1040,20 +1067,20 @@ func (db *DB) ListSourceItemsWithState(ctx context.Context, userID, sourceID int
 	return out, rows.Err()
 }
 
-// ListRecentItemsByInterest returns recent items across every source in a interest
-// (by id), newest first. Backs the interest page's "recent posts" section (#66):
+// ListRecentItemsByTopic returns recent items across every source in a topic
+// (by id), newest first. Backs the topic page's "recent posts" section (#66):
 // one query instead of fanning sourceItems per source. Read-only orientation -
-// no seen/skip events, like ListRecentItemsBySource. Interest id (not slug) so the
-// route param name stays consistent with the sibling /interests/{id}/sources route
+// no seen/skip events, like ListRecentItemsBySource. Topic id (not slug) so the
+// route param name stays consistent with the sibling /topics/{id}/sources route
 // (chi conflicts on mismatched wildcard names).
-func (db *DB) ListRecentItemsByInterest(ctx context.Context, userID, interestID int64, limit int) ([]Item, error) {
+func (db *DB) ListRecentItemsByTopic(ctx context.Context, userID, topicID int64, limit int) ([]Item, error) {
 	rows, err := db.sql.QueryContext(ctx,
 		`SELECT i.id, i.source_id, i.url, i.title, i.summary, i.content, i.content_source, i.author, i.thumbnail_url,
 		        i.media_type, i.duration_sec, i.published_at, i.fetched_at
 		 FROM items i
 		 JOIN sources s ON s.id = i.source_id
-		 WHERE s.user_id = ? AND s.interest_id = ?
-		 ORDER BY i.published_at DESC LIMIT ?`, userID, interestID, limit)
+		 WHERE s.user_id = ? AND s.topic_id = ?
+		 ORDER BY i.published_at DESC LIMIT ?`, userID, topicID, limit)
 	if err != nil {
 		return nil, err
 	}
@@ -1064,9 +1091,9 @@ func (db *DB) ListRecentItemsByInterest(ctx context.Context, userID, interestID 
 // candidateCols builds the shared projection for Candidates, InsightsItems, and
 // CandidatesByIDs: item + source facts, the source's own half-life override
 // (s.half_life_days, #76), the accumulated-history cadence inputs
-// (win_count/win_span), and the source's one-interest ranker overrides (half-life +
-// diversity, #86). Since a source belongs to exactly one interest, the resolution is
-// a direct lookup on s.interest_id - no multi-interest rule. A interestless source (interest_id
+// (win_count/win_span), and the source's one-topic ranker overrides (half-life +
+// diversity, #86). Since a source belongs to exactly one topic, the resolution is
+// a direct lookup on s.topic_id - no multi-topic rule. A topicless source (topic_id
 // NULL) COALESCEs to 0 (global defaults). All callers must select these in this
 // order so scanCandidates can read any result set. The two ? placeholders are the
 // cadence-window bound, twice; arg alignment is identical across callers.
@@ -1079,8 +1106,8 @@ func candidateCols() string {
 	             (SELECT COALESCE(julianday('now') - julianday(MIN(i2.published_at)), 0)
 	                FROM items i2 WHERE i2.source_id = s.id
 	                AND i2.published_at >= datetime('now', ?)) AS win_span,
-	             COALESCE((SELECT f.half_life_days FROM interests f WHERE f.id = s.interest_id), 0) AS interest_half_life,
-	             COALESCE((SELECT f.archive_after_days FROM interests f WHERE f.id = s.interest_id), 0) AS interest_archive_after,
+	             COALESCE((SELECT f.half_life_days FROM topics f WHERE f.id = s.topic_id), 0) AS topic_half_life,
+	             COALESCE((SELECT f.archive_after_days FROM topics f WHERE f.id = s.topic_id), 0) AS topic_archive_after,
 	             s.archive_keep_count, s.archive_combine, s.scoring_config,
 	             ROW_NUMBER() OVER (PARTITION BY i.source_id ORDER BY i.published_at DESC, i.id DESC) AS recency_rank`
 }
@@ -1096,8 +1123,8 @@ const (
 // cadencePerDay estimates a source's posting rate from its ACCUMULATED stored
 // items: count within the window over the observed span (now - earliest item in
 // the window), not the fixed window. otium stores every item it ever fetches, so
-// this history accrues past a interest's ~10-15 entry truncation. Dividing by the
-// observed span rather than the full window keeps a high-volume source whose interest
+// this history accrues past a topic's ~10-15 entry truncation. Dividing by the
+// observed span rather than the full window keeps a high-volume source whose topic
 // only exposes a recent slice from reading as rare once even a little history has
 // accumulated (the NPR-labeled-rare bug). No thin-history floor (#110): a source
 // we've seen little of reads at its actual low rate so it ranks as rare among the
@@ -1119,7 +1146,7 @@ func cadencePerDay(count int, spanDays float64, windowDays int) float64 {
 
 // scanCandidates reads the candidateCols projection into Candidates, computing
 // each source's cadence from its accumulated stored history (windowDays sets the
-// rarity window) and carrying the resolved primary-interest overrides.
+// rarity window) and carrying the resolved primary-topic overrides.
 func scanCandidates(rows *sql.Rows, windowDays int) ([]Candidate, error) {
 	var out []Candidate
 	for rows.Next() {
@@ -1130,14 +1157,14 @@ func scanCandidates(rows *sql.Rows, windowDays int) ([]Candidate, error) {
 		if err := rows.Scan(&c.ID, &c.SourceID, &c.URL, &c.Title, &c.Summary, &c.Content, &c.ContentSource, &c.Author, &c.ThumbnailURL,
 			&c.MediaType, &c.DurationSec, &pub, &fetched,
 			&c.SourceTitle, &c.SourceWeight, &c.PerSessionCap, &c.SourceHalfLifeDays, &c.SourceArchiveAfterDays, &c.SourceArchiveKeywords,
-			&winCount, &winSpan, &halfLife, &c.InterestArchiveAfterDays,
+			&winCount, &winSpan, &halfLife, &c.TopicArchiveAfterDays,
 			&c.SourceArchiveKeepCount, &c.SourceArchiveCombine, &c.ScoringConfig, &c.RecencyRank); err != nil {
 			return nil, err
 		}
 		c.PublishedAt = parseTime(pub)
 		c.FetchedAt = parseTime(fetched)
 		c.SourceCadence = cadencePerDay(winCount, winSpan, windowDays)
-		c.InterestHalfLifeDays = halfLife
+		c.TopicHalfLifeDays = halfLife
 		out = append(out, c)
 	}
 	return out, rows.Err()
@@ -1201,14 +1228,14 @@ func (db *DB) InsightsItems(ctx context.Context, userID int64, sourceIDs []int64
 	return scanCandidates(rows, cadenceDays)
 }
 
-// SourceIDsForInterests resolves interest slugs to the set of source ids in them (#86:
-// a source's one interest).
-func (db *DB) SourceIDsForInterests(ctx context.Context, userID int64, slugs []string) ([]int64, error) {
+// SourceIDsForTopics resolves topic slugs to the set of source ids in them (#86:
+// a source's one topic).
+func (db *DB) SourceIDsForTopics(ctx context.Context, userID int64, slugs []string) ([]int64, error) {
 	if len(slugs) == 0 {
 		return nil, nil
 	}
 	q := `SELECT s.id FROM sources s
-	      JOIN interests f ON f.id = s.interest_id
+	      JOIN topics f ON f.id = s.topic_id
 	      WHERE f.user_id = ? AND f.slug IN (` + placeholders(len(slugs)) + `)`
 	args := []any{userID}
 	for _, s := range slugs {
@@ -1290,7 +1317,7 @@ func scanItems(rows *sql.Rows) ([]Item, error) {
 }
 
 // SkipStat is a source's recent engagement: how many of its items the user has
-// been shown vs. how many they skipped. Interests skip-rate downweighting.
+// been shown vs. how many they skipped. Topics skip-rate downweighting.
 type SkipStat struct {
 	Shown   int
 	Skipped int
@@ -1298,7 +1325,7 @@ type SkipStat struct {
 
 // SourceAvgDuration returns each source's average *content* duration (seconds)
 // over its most recent `window` items that carry a known duration. This is the
-// empirical "time per item" for a interest - a comedy-shorts channel averages ~90s,
+// empirical "time per item" for a topic - a comedy-shorts channel averages ~90s,
 // a longform channel ~20 min - used to predict how many items a time budget can
 // hold. Sources whose items carry no duration (articles) are absent from the
 // map; the caller supplies a read/skim default for those.
@@ -1406,8 +1433,8 @@ type SourceStatsView struct {
 
 // SourceStatsAll returns the stats bundle for every one of the user's sources in a
 // single pass. on_deck and missed_since resolve the effective Archive-After window
-// per source (source override > interest default > global, -1 = evergreen), so the
-// "N on deck" figure tracks what a session would actually surface after a per-interest
+// per source (source override > topic default > global, -1 = evergreen), so the
+// "N on deck" figure tracks what a session would actually surface after a per-topic
 // archival change - not a fixed global window. (Keyword auto-archive is still applied
 // only by the ranker; it's a rare finer adjustment.) per_day is items over the span.
 func (db *DB) SourceStatsAll(ctx context.Context, userID int64) (map[int64]SourceStatsView, error) {
@@ -1460,7 +1487,7 @@ func (db *DB) SourceStatsAll(ctx context.Context, userID int64) (map[int64]Sourc
 	        COALESCE(julianday('now') - julianday(MIN(ist.published_at)), 0) AS span_days
 	 FROM ist
 	 JOIN sources s ON s.id = ist.source_id
-	 LEFT JOIN interests fi ON fi.id = s.interest_id
+	 LEFT JOIN topics fi ON fi.id = s.topic_id
 	 GROUP BY ist.source_id`
 	rows, err := db.sql.QueryContext(ctx, q, userID, userID)
 	if err != nil {
@@ -1494,8 +1521,8 @@ func (db *DB) SourceStatsAll(ctx context.Context, userID int64) (map[int64]Sourc
 }
 
 // GlobalArchiveAfterDays is the default Archive-After eligibility window (days) when
-// neither a source nor its interest sets one. Single source of truth: the session
-// allocator resolves the same source>interest>global chain in Go and references
+// neither a source nor its topic sets one. Single source of truth: the session
+// allocator resolves the same source>topic>global chain in Go and references
 // this const, and SourceStatsAll resolves it in SQL - they must not diverge.
 const GlobalArchiveAfterDays = 21
 

@@ -124,21 +124,21 @@ func TestClampTypography(t *testing.T) {
 }
 
 // #97: per-element weight clamps to [300,700]; per-element ink is a curated enum
-// (interest ink additionally allows "interest"); delim is an enum; delim_gap clamps.
+// (topic ink additionally allows "topic"); delim is an enum; delim_gap clamps.
 func TestClampPerElementMeta(t *testing.T) {
 	db, uid := newTestDB(t)
 	ctx := context.Background()
-	patch := []byte(`{"card":{"interest_weight":999,"interest_ink":"neon","source_weight":100,` +
+	patch := []byte(`{"card":{"topic_weight":999,"topic_ink":"neon","source_weight":100,` +
 		`"author_ink":"bogus","date_weight":800,"delim":"emoji","delim_gap":99}}`)
 	got, err := db.UpdatePreferences(ctx, uid, patch)
 	if err != nil {
 		t.Fatalf("update: %v", err)
 	}
-	if got.Card.InterestWeight != 700 {
-		t.Fatalf("interest_weight not clamped to 700: %v", got.Card.InterestWeight)
+	if got.Card.TopicWeight != 700 {
+		t.Fatalf("topic_weight not clamped to 700: %v", got.Card.TopicWeight)
 	}
-	if got.Card.InterestInk != "interest" {
-		t.Fatalf("unknown interest_ink should fall back to interest: %q", got.Card.InterestInk)
+	if got.Card.TopicInk != "topic" {
+		t.Fatalf("unknown topic_ink should fall back to topic: %q", got.Card.TopicInk)
 	}
 	if got.Card.SourceWeight != 300 {
 		t.Fatalf("source_weight not clamped to 300: %v", got.Card.SourceWeight)
@@ -156,18 +156,18 @@ func TestClampPerElementMeta(t *testing.T) {
 		t.Fatalf("delim_gap not clamped to 16: %v", got.Card.DelimGap)
 	}
 
-	// A valid interest ink override + delim glyph persists.
-	got, err = db.UpdatePreferences(ctx, uid, []byte(`{"card":{"interest_ink":"graphite","delim":"pipe"}}`))
+	// A valid topic ink override + delim glyph persists.
+	got, err = db.UpdatePreferences(ctx, uid, []byte(`{"card":{"topic_ink":"graphite","delim":"pipe"}}`))
 	if err != nil {
 		t.Fatalf("update2: %v", err)
 	}
-	if got.Card.InterestInk != "graphite" || got.Card.Delim != "pipe" {
-		t.Fatalf("valid interest_ink/delim should persist: %q %q", got.Card.InterestInk, got.Card.Delim)
+	if got.Card.TopicInk != "graphite" || got.Card.Delim != "pipe" {
+		t.Fatalf("valid topic_ink/delim should persist: %q %q", got.Card.TopicInk, got.Card.Delim)
 	}
 }
 
 // #97: a pre-#97 blob (shared meta_weight/meta_ink, no per-element keys) folds the
-// customized shared value into the author + date parts on read, leaving interest +
+// customized shared value into the author + date parts on read, leaving topic +
 // source at their designed defaults. A default shared value leaves everything
 // at the designed per-element defaults.
 func TestMigrateLegacyMeta(t *testing.T) {
@@ -188,11 +188,11 @@ func TestMigrateLegacyMeta(t *testing.T) {
 		if got.Card.AuthorInk != "ink" || got.Card.DateInk != "ink" {
 			t.Fatalf("author/date ink should inherit legacy ink: %q %q", got.Card.AuthorInk, got.Card.DateInk)
 		}
-		if got.Card.InterestWeight != 600 || got.Card.SourceWeight != 600 {
-			t.Fatalf("interest/source weight should keep designed defaults: %v %v", got.Card.InterestWeight, got.Card.SourceWeight)
+		if got.Card.TopicWeight != 600 || got.Card.SourceWeight != 600 {
+			t.Fatalf("topic/source weight should keep designed defaults: %v %v", got.Card.TopicWeight, got.Card.SourceWeight)
 		}
-		if got.Card.InterestInk != "interest" || got.Card.SourceInk != "soft" {
-			t.Fatalf("interest/source ink should keep designed defaults: %q %q", got.Card.InterestInk, got.Card.SourceInk)
+		if got.Card.TopicInk != "topic" || got.Card.SourceInk != "soft" {
+			t.Fatalf("topic/source ink should keep designed defaults: %q %q", got.Card.TopicInk, got.Card.SourceInk)
 		}
 	})
 
