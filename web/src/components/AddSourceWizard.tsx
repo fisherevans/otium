@@ -1,8 +1,9 @@
 import { useState } from "react";
 import { api, type Interest, type ScoringConfig } from "@/api/client";
-import { BUCKETS, REP_FREQ, REP_HINT, type Bucket } from "@/lib/represent";
+import { type Bucket } from "@/lib/represent";
 import { Dialog } from "@/components/Dialog";
 import { ArchiveChoice } from "@/components/ArchiveChoice";
+import { RepresentationPicker } from "@/components/RepresentationPicker";
 
 // AddSourceWizard (#127): a three-step add-source flow.
 //   1. pick the source type
@@ -265,17 +266,7 @@ export function AddSourceWizard({
           )}
 
           <div className="dlg-sub">Representation</div>
-          <div className="dlg-opts">
-            {BUCKETS.slice()
-              .reverse()
-              .map((b) => (
-                <button key={b} className={`dlg-opt ${bucket === b ? "on" : ""}`} onClick={() => setBucket(b)}>
-                  <span className="dlg-radio" aria-hidden />
-                  <span className="dlg-name">{REP_FREQ[b]}</span>
-                  <span className="dlg-sub">{REP_HINT[b]}</span>
-                </button>
-              ))}
-          </div>
+          <RepresentationPicker value={bucket} onChange={setBucket} />
 
           <div className="dlg-sub">Archive after</div>
           <ArchiveChoice

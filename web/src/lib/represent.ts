@@ -21,19 +21,19 @@ export function bucketOf(w: number): Bucket {
 // REP_LEVEL: 1-5 density for the dot indicator. REP_HINT: one-line context under
 // each option. REP_PROSE / REP_LABEL: the source-page sentence + all-caps tag.
 export const REP_BLABEL: Record<Bucket, string> = {
-  very_low: "v.low",
-  low: "low",
+  very_low: "least",
+  low: "less",
   normal: "normal",
-  high: "high",
-  favorite: "fav",
+  high: "more",
+  favorite: "most",
 };
 
 export const REP_FREQ: Record<Bucket, string> = {
-  very_low: "Rarely",
+  very_low: "Least",
   low: "Less",
   normal: "Normal",
   high: "More",
-  favorite: "Favorite",
+  favorite: "Most",
 };
 
 export const REP_LEVEL: Record<Bucket, number> = {
@@ -45,27 +45,27 @@ export const REP_LEVEL: Record<Bucket, number> = {
 };
 
 export const REP_HINT: Record<Bucket, string> = {
-  very_low: "Only once in a while",
-  low: "Surface less often",
+  very_low: "Surfaces the least of your sources",
+  low: "Surfaces less often",
   normal: "Default frequency",
-  high: "Surface more often",
-  favorite: "Always near the top",
+  high: "Surfaces more often",
+  favorite: "Surfaces the most of your sources",
 };
 
 export const REP_PROSE: Record<Bucket, string> = {
-  favorite: "presented much more often than other sources",
+  favorite: "presented the most - well above your other sources",
   high: "presented more frequently than other sources",
   normal: "presented about as often as other sources",
   low: "presented less often than other sources",
-  very_low: "presented only rarely",
+  very_low: "presented the least of your sources",
 };
 
 export const REP_LABEL: Record<Bucket, string> = {
-  favorite: "MUCH MORE REPRESENTATION",
+  favorite: "MOST REPRESENTATION",
   high: "MORE REPRESENTATION",
   normal: "NORMAL REPRESENTATION",
   low: "LESS REPRESENTATION",
-  very_low: "MUCH LESS REPRESENTATION",
+  very_low: "LEAST REPRESENTATION",
 };
 
 // compareToAverage renders the source-page comparative subline: "about the same as

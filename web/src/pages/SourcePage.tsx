@@ -2,7 +2,8 @@ import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { Pencil, Settings, Copy, Check, Mail, Ban, EyeOff } from "lucide-react";
 import { api, parseScoring, type Interest, type Source, type SourceItem, type SourceStats, type ScoringConfig } from "@/api/client";
-import { bucketOf, BUCKETS, REP_FREQ, REP_HINT, REP_LEVEL, REP_PROSE, REP_LABEL, compareToAverage, type Bucket } from "@/lib/represent";
+import { bucketOf, REP_LEVEL, REP_PROSE, REP_LABEL, compareToAverage, type Bucket } from "@/lib/represent";
+import { RepresentationPicker } from "@/components/RepresentationPicker";
 import { resolveSourceArchive, itemEligible } from "@/lib/archive";
 import { sourceInsight, openRateBands, type InsightKind } from "@/lib/stats";
 import { scaleCadence, cadenceCount } from "@/lib/cadence";
@@ -443,15 +444,7 @@ export default function SourcePage() {
 
       <Dialog open={controlsOpen} onClose={() => setControlsOpen(false)} kicker="Feed controls">
         <div className="dlg-sub">Representation</div>
-        <div className="dlg-opts">
-          {BUCKETS.slice().reverse().map((b) => (
-            <button key={b} className={`dlg-opt ${bucket === b ? "on" : ""}`} onClick={() => setWeight(b)}>
-              <span className="dlg-radio" aria-hidden />
-              <span className="dlg-name">{REP_FREQ[b]}</span>
-              <span className="dlg-sub">{REP_HINT[b]}</span>
-            </button>
-          ))}
-        </div>
+        <RepresentationPicker value={bucket} onChange={setWeight} />
         <div className="dlg-sub">Archive after</div>
         <ArchiveChoice
           scope="source"
