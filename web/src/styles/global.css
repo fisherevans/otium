@@ -4022,3 +4022,18 @@ button.id-source.lead {
   font-family: var(--grot); font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase;
   color: var(--ink-mute); margin: 10px 0 2px;
 }
+
+/* #133/#134: end-session control + recap. */
+.session-end {
+  background: none; border: none; cursor: pointer;
+  font-family: var(--grot); font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase;
+  color: var(--ink-mute); padding: 0 0 0 12px; white-space: nowrap;
+}
+.session-end:active { color: var(--ink); }
+.recap { text-align: center; padding: 4px 2px 8px; }
+.recap-lead { font-family: var(--serif); font-size: 20px; line-height: 1.35; margin-bottom: 14px; }
+.recap-stats { list-style: none; padding: 0; margin: 0 0 14px; display: flex; flex-direction: column; gap: 6px; }
+.recap-stats li { font-size: 16px; color: var(--ink); }
+.recap-close { color: var(--ink-mute); font-style: italic; margin-bottom: 18px; }
+.recap-actions { display: flex; flex-direction: column; align-items: center; gap: 12px; }
+.recap-actions .btn { width: 100%; }

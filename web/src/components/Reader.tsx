@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import { ExternalLink, Bookmark } from "lucide-react";
+import { ExternalLink } from "lucide-react";
 import type { Item } from "@/api/client";
 import { BottomSheet } from "./BottomSheet";
 import { ReaderHeaderActions } from "./ReaderActions";
@@ -74,15 +74,13 @@ export function Reader({
               </button>
             </div>
           ) : (
+            // #133: the top header actions (like / save / open) are the single set of
+            // controls - the old duplicate bottom bar was removed. A quiet end-of-read
+            // "open source" remains (it's the one action that fits at the article's end
+            // and isn't the reader's primary gesture).
             <>
               <div className="reader-body" dangerouslySetInnerHTML={{ __html: rendered.html }} />
               <div className="reader-foot">
-                {onSave && (
-                  <button className="reader-open" onClick={onSave}>
-                    <Bookmark size={15} strokeWidth={1.75} aria-hidden />
-                    Save
-                  </button>
-                )}
                 <button className="reader-open" onClick={onOpen}>
                   <ExternalLink size={15} strokeWidth={1.75} aria-hidden />
                   Open source

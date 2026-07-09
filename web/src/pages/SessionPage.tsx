@@ -6,6 +6,7 @@ import { ReaderPage } from "@/components/ReaderPage";
 import { Player } from "@/components/Player";
 import { SavePicker } from "@/components/SavePicker";
 import { ScoreBreakdownSheet } from "@/components/ScoreBreakdown";
+import { Dialog } from "@/components/Dialog";
 import { SourceSheet } from "@/components/SourceSheet";
 import { TopicPill, CardSource, Byline, Blurb, Media } from "@/components/CardParts";
 import { ShareActions } from "@/components/ReaderActions";
@@ -50,6 +51,7 @@ export default function SessionPage() {
   const [liked, setLiked] = useState<Set<number>>(new Set());
   const [saveItem, setSaveItem] = useState<Item | null>(null); // Save picker target (#57)
   const [menuOpen, setMenuOpen] = useState(false);
+  const [recapOpen, setRecapOpen] = useState(false); // #134: end-of-session recap
   const [breakdown, setBreakdown] = useState<Selected | null>(null);
   const [content, setContent] = useState<Selected | null>(null); // the in-app content surface (#51)
   const [sourceSel, setSourceSel] = useState<Selected | null>(null); // source context menu target (#75)
@@ -667,12 +669,59 @@ export default function SessionPage() {
           in every context. The reader overlay covers this while reading. */}
       <div className="session-foot">
         <span className="session-time">
-          {mins(elapsed)} / {duration}m
+          {Math.max(0, Math.round((durationSec - elapsed) / 60))} min left
         </span>
         <div className="session-progress" aria-hidden>
           <div className="session-progress-fill" style={{ width: `${progress * 100}%` }} />
         </div>
+        {/* #133: end on your terms, any time. Opens the recap, never a race. */}
+        <button className="session-end" onClick={() => setRecapOpen(true)}>
+          End session
+        </button>
       </div>
+
+      {/* #134: the end-of-session recap - intentional completion, never failure. */}
+      <Dialog open={recapOpen} onClose={() => setRecapOpen(false)} kicker="Session">
+        {(() => {
+          const openedItems = items.filter((s) => opened.current.has(s.item.id));
+          const spent = Math.max(1, Math.round(elapsed / 60));
+          const videoCount = openedItems.filter((s) => isVideo(s.item)).length;
+          const sourceCount = new Set(openedItems.map((s) => s.item.source_id)).size;
+          const stat = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
+          return (
+            <div className="recap">
+              <p className="recap-lead">
+                You spent <b>{spent}</b> {spent === 1 ? "minute" : "minutes"} intentionally.
+              </p>
+              <ul className="recap-stats">
+                <li>{stat(openedItems.length - videoCount, "article opened", "articles opened")}</li>
+                {videoCount > 0 && <li>{stat(videoCount, "video watched", "videos watched")}</li>}
+                <li>{stat(sourceCount, "source explored", "sources explored")}</li>
+                {liked.size > 0 && <li>{stat(liked.size, "liked", "liked")}</li>}
+              </ul>
+              <p className="recap-close">You're caught up enough. Come back when you like.</p>
+              <div className="recap-actions">
+                <button className="btn" onClick={goHome}>
+                  Start a new session
+                </button>
+                <button
+                  className="intent-link"
+                  onClick={() => {
+                    setDuration((d) => d + 5);
+                    setOverIdx(null);
+                    setRecapOpen(false);
+                  }}
+                >
+                  extend 5 more minutes
+                </button>
+                <button className="intent-link" onClick={() => setRecapOpen(false)}>
+                  keep reading
+                </button>
+              </div>
+            </div>
+          );
+        })()}
+      </Dialog>
 
       <ItemActions
         selected={atEnd ? null : cur}
