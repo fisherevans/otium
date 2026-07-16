@@ -3,6 +3,7 @@ package store
 import (
 	"context"
 	"database/sql"
+	"strings"
 	"time"
 )
 
@@ -25,6 +26,7 @@ type EnrichCandidate struct {
 	SourceKind  string
 	MediaType   string
 	DurationSec int
+	AspectRatio float64
 	URL         string
 }
 
@@ -35,11 +37,11 @@ type EnrichTask struct {
 	Attempts int
 }
 
-const enrichCandidateCols = `i.id, s.kind, i.media_type, i.duration_sec, i.url`
+const enrichCandidateCols = `i.id, s.kind, i.media_type, i.duration_sec, i.aspect_ratio, i.url`
 
 func scanCandidate(row interface{ Scan(...any) error }) (EnrichCandidate, error) {
 	var c EnrichCandidate
-	err := row.Scan(&c.ID, &c.SourceKind, &c.MediaType, &c.DurationSec, &c.URL)
+	err := row.Scan(&c.ID, &c.SourceKind, &c.MediaType, &c.DurationSec, &c.AspectRatio, &c.URL)
 	return c, err
 }
 
@@ -146,11 +148,58 @@ func (db *DB) FailEnrichment(ctx context.Context, itemID int64, kind string, err
 	return err
 }
 
+// AspectBackfillItem is a YouTube video item still missing its frame aspect ratio.
+// VideoID comes straight from external_id (yt:video:<id>), so no URL parsing.
+type AspectBackfillItem struct {
+	ID      int64
+	VideoID string
+}
+
+// ItemsMissingAspect returns up to `limit` YouTube short/long items with no
+// aspect_ratio yet, oldest id first. Powers the one-time backfill: the enrichment
+// sweep is forward-only from a cursor, so it won't revisit already-enriched items -
+// this batches them through the API (50/call) instead.
+func (db *DB) ItemsMissingAspect(ctx context.Context, limit int) ([]AspectBackfillItem, error) {
+	rows, err := db.sql.QueryContext(ctx,
+		`SELECT i.id, i.external_id
+		 FROM items i JOIN sources s ON s.id = i.source_id
+		 WHERE s.kind = 'youtube' AND i.media_type IN ('short','long') AND i.aspect_ratio = 0
+		 ORDER BY i.id LIMIT ?`, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []AspectBackfillItem
+	for rows.Next() {
+		var id int64
+		var ext string
+		if err := rows.Scan(&id, &ext); err != nil {
+			return nil, err
+		}
+		vid := strings.TrimPrefix(ext, "yt:video:")
+		if vid == ext || vid == "" {
+			continue // not a yt:video: external id
+		}
+		out = append(out, AspectBackfillItem{ID: id, VideoID: vid})
+	}
+	return out, rows.Err()
+}
+
+// SetItemAspect writes a video item's frame aspect ratio (backfill path).
+func (db *DB) SetItemAspect(ctx context.Context, id int64, aspect float64) error {
+	_, err := db.sql.ExecContext(ctx, `UPDATE items SET aspect_ratio=? WHERE id=?`, aspect, id)
+	return err
+}
+
 // SetItemDuration is how an enricher applies fetched video length: sets duration and
 // (unless the item was a livestream) re-buckets short/long from the real duration.
-func (db *DB) SetItemDuration(ctx context.Context, itemID int64, durationSec int, mediaType string) error {
+// aspect is the frame aspect ratio (w/h); it's only written when > 0 so a fallback
+// path with no aspect data (the watch-page scraper) never clobbers a known value.
+func (db *DB) SetItemDuration(ctx context.Context, itemID int64, durationSec int, mediaType string, aspect float64) error {
 	_, err := db.sql.ExecContext(ctx,
-		`UPDATE items SET duration_sec=?, media_type=? WHERE id=?`, durationSec, mediaType, itemID)
+		`UPDATE items SET duration_sec=?, media_type=?,
+		        aspect_ratio = CASE WHEN ? > 0 THEN ? ELSE aspect_ratio END
+		 WHERE id=?`, durationSec, mediaType, aspect, aspect, itemID)
 	return err
 }
 

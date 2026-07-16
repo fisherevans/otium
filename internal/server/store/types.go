@@ -151,13 +151,17 @@ type Item struct {
 	// ContentSource is the reader body's provenance (#98): '' (pending) | rss |
 	// fetched | external. Lets the card/reader pick content-aware actions (read
 	// in-app vs open original vs watch) without inspecting the HTML.
-	ContentSource string    `json:"content_source"`
-	Author        string    `json:"author"`
-	ThumbnailURL  string    `json:"thumbnail_url"`
-	MediaType     string    `json:"media_type"` // short | long | article | audio | live | unknown
-	DurationSec   int       `json:"duration_sec"`
-	PublishedAt   time.Time `json:"published_at"`
-	FetchedAt     time.Time `json:"fetched_at"`
+	ContentSource string `json:"content_source"`
+	Author        string `json:"author"`
+	ThumbnailURL  string `json:"thumbnail_url"`
+	MediaType     string `json:"media_type"` // short | long | article | audio | live | unknown
+	DurationSec   int    `json:"duration_sec"`
+	// AspectRatio is the video frame's width/height (1.778 = 16:9, 0.5625 = 9:16),
+	// from the YouTube API player embedHtml. Drives vertical-vs-landscape layout
+	// independent of the short/long duration bucket. 0 = unknown (client defaults).
+	AspectRatio float64   `json:"aspect_ratio"`
+	PublishedAt time.Time `json:"published_at"`
+	FetchedAt   time.Time `json:"fetched_at"`
 }
 
 // CollectionItem is an item paired with the timestamp it was added to a

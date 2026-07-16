@@ -115,6 +115,7 @@ func ToItem(v Video, sourceID int64) *store.Item {
 		ThumbnailURL:  v.ThumbnailURL,
 		MediaType:     mt,
 		DurationSec:   v.DurationSec,
+		AspectRatio:   v.AspectRatio,
 		PublishedAt:   v.PublishedAt,
 	}
 }

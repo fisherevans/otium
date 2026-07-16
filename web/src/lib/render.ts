@@ -25,6 +25,21 @@ export function isVideo(item: Item): boolean {
   return VIDEO.has(item.media_type);
 }
 
+// videoAspect resolves the frame width/height for layout. Prefers the real
+// API-derived aspect_ratio; falls back to the duration bucket (short == vertical)
+// only until enrichment fills the true value, then 16:9 as a last resort.
+export function videoAspect(item: Item): number {
+  if (item.aspect_ratio && item.aspect_ratio > 0) return item.aspect_ratio;
+  if (item.media_type === "short") return 9 / 16;
+  return 16 / 9;
+}
+
+// isVertical drives the compact tall-frame layout. Near-square and wider read as
+// landscape (full-width); only genuinely portrait frames get the vertical treatment.
+export function isVertical(item: Item): boolean {
+  return isVideo(item) && videoAspect(item) < 0.95;
+}
+
 // A synchronous best-guess render state from the item payload alone.
 export function cardRender(item: Item): ItemRender {
   if (isMedia(item)) return "external"; // video/audio -> watch / open original

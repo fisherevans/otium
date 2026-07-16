@@ -134,6 +134,10 @@ func main() {
 	if ytClient != nil {
 		h.SetYouTubeImportEnabled(true)
 		go youtube.NewImportWorker(db, ytClient, log).Run(ctx)
+		// One-time aspect-ratio backfill for pre-existing video items (multimedia
+		// overhaul): the enrichment sweep is forward-only, so it won't revisit them.
+		// Self-terminating + idempotent, so it's safe every startup.
+		go youtube.BackfillAspects(ctx, db, ytClient, log)
 	}
 
 	go func() {

@@ -4,6 +4,7 @@ import { api, type Item, type Selected, type Source } from "@/api/client";
 import { BottomSheet } from "./BottomSheet";
 import { bucketOf, REP_LABEL } from "@/lib/represent";
 import { RepDots } from "./RepDots";
+import { isMedia } from "@/lib/render";
 
 // The "…" overflow for the current session item (#43), restyled to match the
 // management surfaces (#120): the item's rank score with a chronological note (a
@@ -67,10 +68,13 @@ export function ItemActions({
       </div>
 
       <div className="sheet-rows">
-        <button className="sheet-row" onClick={onRead}>
-          <span>Read in app</span>
-          <span className="sheet-chev">▸</span>
-        </button>
+        {/* Media plays inline in the card - no in-app reader to open. */}
+        {!isMedia(item) && (
+          <button className="sheet-row" onClick={onRead}>
+            <span>Read in app</span>
+            <span className="sheet-chev">▸</span>
+          </button>
+        )}
         {onSave && (
           <button className="sheet-row" onClick={() => onSave(item)}>
             <span>Save to collection</span>

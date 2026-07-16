@@ -225,6 +225,13 @@ func migrate(sdb *sql.DB) error {
 	if err := ensureColumn(sdb, "sources", "half_life_days", `ALTER TABLE sources ADD COLUMN half_life_days REAL NOT NULL DEFAULT 0`); err != nil {
 		return err
 	}
+	// Video frame aspect ratio (multimedia overhaul): drives vertical-vs-landscape
+	// inline layout off real geometry, not the short/long duration bucket. The
+	// enricher backfills existing video items (it now wants any youtube video with
+	// aspect_ratio=0).
+	if err := ensureColumn(sdb, "items", "aspect_ratio", `ALTER TABLE items ADD COLUMN aspect_ratio REAL NOT NULL DEFAULT 0`); err != nil {
+		return err
+	}
 	// items.content (#58): full article body as raw HTML, rendered in the reader.
 	if err := ensureColumn(sdb, "items", "content", `ALTER TABLE items ADD COLUMN content TEXT NOT NULL DEFAULT ''`); err != nil {
 		return err
@@ -1135,24 +1142,25 @@ func (db *DB) UpsertItem(ctx context.Context, it *Item) (bool, error) {
 // UpsertItem (insert-or-nothing first, so RowsAffected stays truthful).
 func (db *DB) UpsertYouTubeItem(ctx context.Context, it *Item) (bool, error) {
 	res, err := db.sql.ExecContext(ctx,
-		`INSERT INTO items (source_id, external_id, url, title, summary, content, content_source, author, thumbnail_url, media_type, duration_sec, published_at)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		`INSERT INTO items (source_id, external_id, url, title, summary, content, content_source, author, thumbnail_url, media_type, duration_sec, aspect_ratio, published_at)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		 ON CONFLICT(source_id, external_id) DO NOTHING`,
 		it.SourceID, it.ExternalID, it.URL, it.Title, it.Summary, it.Content, it.ContentSource, it.Author, it.ThumbnailURL,
-		def(it.MediaType, "unknown"), it.DurationSec, it.PublishedAt.UTC().Format(time.RFC3339))
+		def(it.MediaType, "unknown"), it.DurationSec, it.AspectRatio, it.PublishedAt.UTC().Format(time.RFC3339))
 	if err != nil {
 		return false, err
 	}
 	if n, _ := res.RowsAffected(); n > 0 {
 		return true, nil // genuinely new insert
 	}
-	// Existing row: refresh authoritative API metadata. Duration/media_type only when
-	// the API actually returned a duration (>0); thumbnail always; summary/content
-	// only to fill an empty body (don't clobber an edited/existing one).
+	// Existing row: refresh authoritative API metadata. Duration/media_type/aspect only
+	// when the API actually returned them (>0); thumbnail always; summary/content only
+	// to fill an empty body (don't clobber an edited/existing one).
 	_, err = db.sql.ExecContext(ctx,
 		`UPDATE items SET
 		   duration_sec   = CASE WHEN ? > 0 THEN ? ELSE duration_sec END,
 		   media_type     = CASE WHEN ? > 0 THEN ? ELSE media_type END,
+		   aspect_ratio   = CASE WHEN ? > 0 THEN ? ELSE aspect_ratio END,
 		   thumbnail_url  = CASE WHEN ? <> '' THEN ? ELSE thumbnail_url END,
 		   summary        = CASE WHEN summary = '' AND ? <> '' THEN ? ELSE summary END,
 		   content        = CASE WHEN content = '' AND ? <> '' THEN ? ELSE content END,
@@ -1160,6 +1168,7 @@ func (db *DB) UpsertYouTubeItem(ctx context.Context, it *Item) (bool, error) {
 		 WHERE source_id = ? AND external_id = ?`,
 		it.DurationSec, it.DurationSec,
 		it.DurationSec, def(it.MediaType, "unknown"),
+		it.AspectRatio, it.AspectRatio,
 		it.ThumbnailURL, it.ThumbnailURL,
 		it.Summary, it.Summary,
 		it.Content, it.Content,
@@ -1245,7 +1254,7 @@ func (db *DB) ListRecentItemsByTopic(ctx context.Context, userID, topicID int64,
 // cadence-window bound, twice; arg alignment is identical across callers.
 func candidateCols() string {
 	return `i.id, i.source_id, i.url, i.title, i.summary, i.content, i.content_source, i.author, i.thumbnail_url,
-	             i.media_type, i.duration_sec, i.published_at, i.fetched_at,
+	             i.media_type, i.duration_sec, i.aspect_ratio, i.published_at, i.fetched_at,
 	             s.title, s.weight, s.per_session_cap, s.half_life_days, s.archive_after_days, s.archive_keywords,
 	             (SELECT COUNT(*) FROM items i2 WHERE i2.source_id = s.id
 	                AND i2.published_at >= datetime('now', ?)) AS win_count,
@@ -1301,7 +1310,7 @@ func scanCandidates(rows *sql.Rows, windowDays int) ([]Candidate, error) {
 		var winCount int
 		var winSpan, halfLife float64
 		if err := rows.Scan(&c.ID, &c.SourceID, &c.URL, &c.Title, &c.Summary, &c.Content, &c.ContentSource, &c.Author, &c.ThumbnailURL,
-			&c.MediaType, &c.DurationSec, &pub, &fetched,
+			&c.MediaType, &c.DurationSec, &c.AspectRatio, &pub, &fetched,
 			&c.SourceTitle, &c.SourceWeight, &c.PerSessionCap, &c.SourceHalfLifeDays, &c.SourceArchiveAfterDays, &c.SourceArchiveKeywords,
 			&winCount, &winSpan, &halfLife, &c.TopicArchiveAfterDays,
 			&c.SourceArchiveKeepCount, &c.SourceArchiveCombine, &c.ScoringConfig, &c.RecencyRank); err != nil {

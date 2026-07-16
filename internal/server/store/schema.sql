@@ -182,6 +182,7 @@ CREATE TABLE IF NOT EXISTS items (
     -- short | long | article | audio | live | unknown
     media_type    TEXT NOT NULL DEFAULT 'unknown',
     duration_sec  INTEGER NOT NULL DEFAULT 0,        -- 0 = unknown, estimated at rank time
+    aspect_ratio  REAL NOT NULL DEFAULT 0,           -- video frame w/h (1.778=16:9, 0.5625=9:16); 0 = unknown
     published_at  TEXT NOT NULL,
     fetched_at    TEXT NOT NULL DEFAULT (datetime('now')),
     UNIQUE (source_id, external_id)

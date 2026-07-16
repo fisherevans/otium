@@ -41,22 +41,33 @@ func NewYouTube(log *slog.Logger, api *youtube.Client) *YouTube {
 func (y *YouTube) Kind() string { return "youtube_metadata" }
 
 func (y *YouTube) Wants(c store.EnrichCandidate) bool {
-	if c.SourceKind != "youtube" || c.URL == "" || c.DurationSec > 0 {
+	if c.SourceKind != "youtube" || c.URL == "" {
 		return false
 	}
-	// A live item has no fixed length; only the short/long buckets carry a duration.
-	return c.MediaType == "short" || c.MediaType == "long"
+	// Only the short/long buckets carry a duration; a live item has no fixed length.
+	if c.MediaType != "short" && c.MediaType != "long" {
+		return false
+	}
+	// Missing duration always wants enriching. Missing aspect_ratio wants it too,
+	// but only on the API path - the watch-page scraper can't read frame dimensions,
+	// so gating on aspect there would loop forever.
+	return c.DurationSec == 0 || (y.api != nil && c.AspectRatio == 0)
 }
 
 var lengthRe = regexp.MustCompile(`"lengthSeconds":"(\d+)"`)
 
-// commitDuration re-buckets short/long from the real length and stores it.
-func (y *YouTube) commitDuration(ctx context.Context, db *store.DB, itemID int64, sec int) (Result, error) {
+// commitDuration re-buckets short/long from the real length and stores it with the
+// frame aspect ratio. A successful API fetch that couldn't read dimensions falls
+// back to 16:9 so aspect is always non-zero afterward (Wants stops re-firing).
+func (y *YouTube) commitDuration(ctx context.Context, db *store.DB, itemID int64, sec int, aspect float64) (Result, error) {
 	mt := "long"
 	if sec <= 90 {
 		mt = "short"
 	}
-	if err := db.SetItemDuration(ctx, itemID, sec, mt); err != nil {
+	if aspect == 0 {
+		aspect = 16.0 / 9.0
+	}
+	if err := db.SetItemDuration(ctx, itemID, sec, mt, aspect); err != nil {
 		return Result{Retryable: true}, err // DB hiccup - safe to retry
 	}
 	return Result{}, nil
@@ -75,7 +86,7 @@ func (y *YouTube) enrichAPI(ctx context.Context, db *store.DB, c store.EnrichCan
 	if vid == "" {
 		return Result{Retryable: false}, errors.New("no video id in url")
 	}
-	sec, err := y.api.VideoDuration(ctx, vid)
+	sec, aspect, err := y.api.VideoMeta(ctx, vid)
 	if err != nil {
 		var te *youtube.TransientError
 		if errors.As(err, &te) {
@@ -88,7 +99,7 @@ func (y *YouTube) enrichAPI(ctx context.Context, db *store.DB, c store.EnrichCan
 		// upcoming/live item with no fixed length. Nothing to retry.
 		return Result{Retryable: false}, errors.New("no duration from api (private/removed/live)")
 	}
-	return y.commitDuration(ctx, db, c.ID, sec)
+	return y.commitDuration(ctx, db, c.ID, sec, aspect)
 }
 
 // videoIDFromURL extracts the video id from a watch, youtu.be, or /shorts/ URL.
@@ -154,12 +165,13 @@ func (y *YouTube) enrichScrape(ctx context.Context, db *store.DB, c store.Enrich
 	}
 
 	// Re-bucket short vs long from the real length (URL-detected shorts already are
-	// short; a plain video under ~90s becomes short too).
+	// short; a plain video under ~90s becomes short too). The scraper can't read
+	// frame dimensions, so aspect is left untouched (0 -> no write).
 	mt := "long"
 	if sec <= 90 {
 		mt = "short"
 	}
-	if err := db.SetItemDuration(ctx, c.ID, sec, mt); err != nil {
+	if err := db.SetItemDuration(ctx, c.ID, sec, mt, 0); err != nil {
 		return Result{Retryable: true}, err // DB hiccup - safe to retry
 	}
 	return Result{}, nil

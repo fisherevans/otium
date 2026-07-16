@@ -40,6 +40,11 @@ type Video struct {
 	DurationSec  int
 	ViewCount    int64
 	LikeCount    int64
+	// AspectRatio is width/height of the actual frame (1.778 = 16:9 landscape,
+	// 0.5625 = 9:16 vertical), read from the API `player` embedHtml. This is the
+	// authoritative "is it vertical" signal - independent of the short/long
+	// duration bucket (a long-form video can be vertical). 0 = not yet known.
+	AspectRatio float64
 }
 
 // ChannelIDFromFeedURL pulls the UC... channel id out of a YouTube RSS feed_url
@@ -285,11 +290,19 @@ func (c *Client) LatestUploads(ctx context.Context, channelID string, max int) (
 // VideoDuration returns one video's duration in seconds via videos.list (1 unit).
 // Used by the API-backed duration enricher for items that arrived without one.
 func (c *Client) VideoDuration(ctx context.Context, videoID string) (int, error) {
+	sec, _, err := c.VideoMeta(ctx, videoID)
+	return sec, err
+}
+
+// VideoMeta returns one video's duration (seconds) and frame aspect ratio via a
+// single videos.list call (1 unit). aspect is 0 when the API didn't ship usable
+// player dimensions.
+func (c *Client) VideoMeta(ctx context.Context, videoID string) (sec int, aspect float64, err error) {
 	vids := []Video{{ID: videoID}}
 	if err := c.FillDetails(ctx, vids); err != nil {
-		return 0, err
+		return 0, 0, err
 	}
-	return vids[0].DurationSec, nil
+	return vids[0].DurationSec, vids[0].AspectRatio, nil
 }
 
 // TransientError marks an error the caller should retry (network / 5xx / quota).
@@ -388,7 +401,11 @@ func (c *Client) FillDetails(ctx context.Context, vids []Video) error {
 		ids[i] = v.ID
 	}
 	p := url.Values{}
-	p.Set("part", "contentDetails,statistics")
+	// player + maxHeight makes the API compute an embedHtml whose width/height
+	// reflect the true frame aspect ratio (405x720 for a vertical, 1280x720 for
+	// 16:9) - the one reliable server-side signal for vertical-vs-landscape.
+	p.Set("part", "contentDetails,statistics,player")
+	p.Set("maxHeight", "720")
 	p.Set("id", strings.Join(ids, ","))
 	p.Set("maxResults", "50")
 	var out struct {
@@ -401,6 +418,9 @@ func (c *Client) FillDetails(ctx context.Context, vids []Video) error {
 				ViewCount string `json:"viewCount"`
 				LikeCount string `json:"likeCount"`
 			} `json:"statistics"`
+			Player struct {
+				EmbedHTML string `json:"embedHtml"`
+			} `json:"player"`
 		} `json:"items"`
 	}
 	if err := c.get(ctx, "videos", p, &out); err != nil {
@@ -418,8 +438,28 @@ func (c *Client) FillDetails(ctx context.Context, vids []Video) error {
 		vids[i].DurationSec = ParseISODuration(it.ContentDetails.Duration)
 		vids[i].ViewCount = atoi64(it.Statistics.ViewCount)
 		vids[i].LikeCount = atoi64(it.Statistics.LikeCount)
+		vids[i].AspectRatio = aspectFromEmbed(it.Player.EmbedHTML)
 	}
 	return nil
+}
+
+// embedDimRe pulls width/height out of the API's player.embedHtml
+// (`<iframe width="405" height="720" ...>`).
+var embedDimRe = regexp.MustCompile(`width="(\d+)"\s+height="(\d+)"`)
+
+// aspectFromEmbed computes width/height from the API embedHtml. Returns 0 when the
+// dimensions can't be read (caller keeps the unknown state / applies a default).
+func aspectFromEmbed(html string) float64 {
+	m := embedDimRe.FindStringSubmatch(html)
+	if m == nil {
+		return 0
+	}
+	w, _ := strconv.Atoi(m[1])
+	h, _ := strconv.Atoi(m[2])
+	if w <= 0 || h <= 0 {
+		return 0
+	}
+	return float64(w) / float64(h)
 }
 
 // ParseISODuration parses an ISO-8601 duration (PT#H#M#S, YouTube's contentDetails

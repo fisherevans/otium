@@ -151,6 +151,9 @@ export interface Item {
   thumbnail_url: string;
   media_type: string;
   duration_sec: number;
+  // Video frame width/height (1.778 = 16:9, 0.5625 = 9:16); 0 = unknown. Drives
+  // vertical-vs-landscape inline layout off real geometry, not the short/long bucket.
+  aspect_ratio: number;
   published_at: string;
   fetched_at: string;
 }

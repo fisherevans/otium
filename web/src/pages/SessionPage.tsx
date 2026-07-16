@@ -3,15 +3,15 @@ import { useNavigate, useParams } from "react-router-dom";
 import { api, type Item, type ItemContent, type ItemRender, type Selected } from "@/api/client";
 import { ItemActions } from "@/components/ItemActions";
 import { ReaderPage } from "@/components/ReaderPage";
-import { Player } from "@/components/Player";
 import { SavePicker } from "@/components/SavePicker";
 import { ScoreBreakdownSheet } from "@/components/ScoreBreakdown";
 import { Dialog } from "@/components/Dialog";
 import { SourceSheet } from "@/components/SourceSheet";
 import { TopicPill, CardSource, Byline, Blurb, Media } from "@/components/CardParts";
+import { InlineMedia } from "@/components/InlineMedia";
 import { ShareActions } from "@/components/ReaderActions";
 import { Heart, Bookmark, BookOpen, Play, ExternalLink } from "lucide-react";
-import { cardRender, isMedia, isVideo } from "@/lib/render";
+import { cardRender, isMedia, isVideo, isVertical } from "@/lib/render";
 import { mins } from "@/lib/format";
 
 // Which in-app content surface an item opens into (#51). Video/audio play in
@@ -316,6 +316,9 @@ export default function SessionPage() {
           if (!en.isIntersecting) continue;
           const idx = Number((en.target as HTMLElement).dataset.idx);
           if (Number.isNaN(idx)) continue;
+          // Leaving a card flushes any inline watch/read time it accrued (#135):
+          // media plays in-card with no open/close event to hang the flush on.
+          if (idx !== prevIdx.current) stopRead();
           setCurrent(idx);
           // Finalize the item we just moved past.
           if (idx > prevIdx.current) {
@@ -424,11 +427,12 @@ export default function SessionPage() {
   }
 
   // The content-aware primary engagement (#96). full_text -> reader page;
-  // video/audio -> Player; preview/external article -> original in a new tab.
+  // media plays inline in the card (no modal), so a body tap there is a no-op -
+  // the embedded player owns interaction; preview/external -> original in a new tab.
   function engage(sel: Selected) {
+    if (isMedia(sel.item)) return;
     const r = renderOf(sel.item);
     if (r === "full_text") openContent(sel);
-    else if (isMedia(sel.item)) openContent(sel);
     else openExternal(sel);
   }
 
@@ -469,6 +473,7 @@ export default function SessionPage() {
     api.recordRead(t.itemId, id ?? "", ms, false, t.kind).catch(() => {});
   }
   function openContent(sel: Selected) {
+    if (isMedia(sel.item)) return; // media plays inline in the card, never in a surface
     recordOpen(sel);
     startRead(sel);
     setContent(sel);
@@ -624,9 +629,14 @@ export default function SessionPage() {
         {shownItems.map((it, i) => {
           const primary = primaryFor(it);
           const render = renderOf(it.item);
+          // Media on the focused card plays inline (no modal); off-screen cards stay
+          // lightweight thumbnails. A vertical frame gets the compact chrome layout.
+          const activeMedia = i === current && isMedia(it.item);
+          const vert = activeMedia && isVertical(it.item);
+          const audioCard = activeMedia && it.item.media_type === "audio";
           return (
             <div
-              className={`snap ${i === current ? "" : "away"}`}
+              className={`snap ${i === current ? "" : "away"} ${activeMedia ? "media-card" : ""} ${vert ? "vertical" : ""} ${audioCard ? "audio-card" : ""}`}
               key={`${it.item.id}-${i}`}
               data-idx={i}
               ref={(el) => {
@@ -661,10 +671,35 @@ export default function SessionPage() {
               <CardSource sel={it} onSource={() => setSourceSel(it)} />
               <h3 className="card-title">{it.item.title}</h3>
               <Byline item={it.item} sourceTitle={it.source_title} />
-              <Media item={it.item} />
-              <Blurb item={it.item} />
 
-              {i === current && (
+              {activeMedia ? (
+                // The focused media card: the player is embedded and paused (one tap
+                // to play), sized by real aspect ratio; it owns its own action row.
+                <div
+                  className="card-media"
+                  onPointerDown={(e) => e.stopPropagation()}
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  <InlineMedia
+                    item={it.item}
+                    liked={liked.has(it.item.id)}
+                    onLike={like}
+                    onSave={() => save(it)}
+                    onOpenOriginal={() => openExternal(it)}
+                    onFirstPlay={() => {
+                      recordOpen(it);
+                      startRead(it);
+                    }}
+                  />
+                </div>
+              ) : (
+                <>
+                  <Media item={it.item} />
+                  <Blurb item={it.item} />
+                </>
+              )}
+
+              {i === current && !isMedia(it.item) && (
                 <div
                   className="card-callout"
                   onPointerDown={(e) => e.stopPropagation()}
@@ -797,8 +832,8 @@ export default function SessionPage() {
 
       <ScoreBreakdownSheet sel={breakdown} open={breakdown !== null} onClose={() => setBreakdown(null)} />
 
-      {/* In-app content surfaces (#51/#85): text reads in the pushed ReaderPage,
-          video/audio play in the Player sheet. */}
+      {/* In-app reader (#51/#85): text reads in the pushed ReaderPage. Media plays
+          inline in its card (no modal) - the old Player sheet is retired. */}
       <ReaderPage
         item={shown && shownKind === "read" ? shown.item : null}
         sourceTitle={shown?.source_title}
@@ -806,16 +841,6 @@ export default function SessionPage() {
         open={content !== null && shownKind === "read"}
         onClose={closeContent}
         onOpen={() => shown && openExternal(shown)}
-        onSave={() => shown && setSaveItem(shown.item)}
-        liked={shown ? liked.has(shown.item.id) : false}
-        onLike={() => shown && likeItem(shown.item)}
-      />
-      <Player
-        item={shown && shownKind !== "read" ? shown.item : null}
-        sourceTitle={shown?.source_title}
-        open={content !== null && shownKind !== "read"}
-        onClose={closeContent}
-        onOpenOriginal={() => shown && openExternal(shown)}
         onSave={() => shown && setSaveItem(shown.item)}
         liked={shown ? liked.has(shown.item.id) : false}
         onLike={() => shown && likeItem(shown.item)}

@@ -4086,3 +4086,207 @@ button.id-source.lead {
 
 /* Library landing: two add-buttons in the title row. */
 .mgmt-actions { display: flex; gap: 6px; align-items: center; }
+
+/* ===========================================================================
+   Inline multimedia (multimedia overhaul): the focused feed card embeds the real
+   player, pre-loaded and paused, sized by the true frame aspect ratio. No modal.
+   =========================================================================== */
+
+/* The media card gives its player the space; the title/byline stay compact so the
+   frame + action row fit within one viewport-tall card without scrolling. */
+.snap.media-card {
+  padding-top: 12px;
+  padding-bottom: 12px;
+}
+.card-media {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  flex: 1 1 auto;
+  justify-content: center;
+}
+.inline-media {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+.inline-media.v {
+  align-items: center;
+}
+.im-stage {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+.inline-media.v .im-stage {
+  align-items: center;
+  width: 100%;
+}
+
+/* The player frame: aspect ratio from the --ar var. Landscape bleeds past the
+   card's 20px padding to full width (max viewing area); vertical is bounded by
+   height and centered, width following the aspect. */
+.im-frame {
+  position: relative;
+  aspect-ratio: var(--ar, 1.7778);
+  background: var(--paper-3);
+  border: 1.5px solid var(--rule-hard);
+  overflow: hidden;
+}
+.inline-media.h .im-frame {
+  width: calc(100% + 40px);
+  margin: 2px -20px 0;
+  max-height: 64vh;
+}
+.inline-media.v .im-frame {
+  height: min(72dvh, 72vh);
+  max-width: 100%;
+  margin: 2px 0 0;
+}
+.im-frame iframe {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border: 0;
+  display: block;
+}
+.im-nofit {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Audio: compact hero art + native controls + a teaser blurb (audio leaves room
+   for text; the full transcript/notes is behind the toggle). */
+.im-audio {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  align-items: center;
+}
+.im-audio-art {
+  width: 132px;
+  height: 132px;
+  object-fit: cover;
+  border: 1.5px solid var(--rule-hard);
+  filter: var(--pref-hero-filter, grayscale(1) contrast(1.05));
+}
+/* Audio has no big frame, so keep the title tight to leave room for controls +
+   blurb + actions on shorter screens. */
+.snap.audio-card .card-title {
+  -webkit-line-clamp: 2;
+}
+.snap.audio-card .im-audio {
+  gap: 10px;
+}
+.im-audio audio {
+  width: 100%;
+}
+.im-audio-blurb {
+  margin: 0;
+  color: var(--ink-soft);
+  font-size: 15px;
+  line-height: 1.45;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/* Action row under the player: notes toggle + like/save/share/open-original. */
+.im-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-top: 12px;
+}
+.im-act {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 9px;
+  border: none;
+  background: none;
+  color: var(--ink-soft);
+  cursor: pointer;
+  font-family: var(--mono);
+  font-size: 13px;
+}
+.im-act:active {
+  color: var(--ink);
+}
+.im-act.on {
+  color: var(--ink);
+}
+.im-notes-toggle {
+  padding: 8px 12px;
+  border: 1px solid var(--rule-hard);
+  border-radius: 7px;
+  margin-right: 2px;
+}
+.im-orig {
+  margin-left: auto;
+}
+
+/* Show-notes / transcript: the inline-media becomes an absolute overlay over the
+   whole card (the card is position:relative), so the player sticks cleanly at the
+   top and the description scrolls below it - WITHOUT remounting the iframe (a class
+   toggle only), so playback never pauses. The overlay covers the title chrome. */
+.inline-media.notes {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  display: block; /* block flow (not the fixed-height flex column) so the tall notes
+                     panel scrolls instead of shrinking the sticky player to nothing */
+  overflow-y: auto;
+  background: var(--paper);
+  padding: 10px 20px 28px;
+  -webkit-overflow-scrolling: touch;
+}
+.inline-media.notes .im-stage {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  background: var(--paper);
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--hair);
+}
+.inline-media.notes.v .im-frame {
+  height: min(40dvh, 40vh); /* shrink the sticky player so notes have room */
+  margin-inline: auto;
+}
+.inline-media.notes.h .im-frame {
+  aspect-ratio: auto;
+  height: 34vh;
+}
+.im-notes-panel {
+  padding: 14px 0 8px;
+}
+.im-notes-title {
+  font-family: var(--grot);
+  font-size: 12px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink-mute);
+  margin-bottom: 8px;
+}
+
+/* Vertical cards strip chrome to the minimum so the tall frame dominates:
+   one-line title, no byline/topic-pill/reason. */
+.snap.media-card.vertical {
+  padding-top: 8px;
+  padding-bottom: 8px;
+}
+.snap.media-card.vertical .card-title {
+  -webkit-line-clamp: 1;
+  font-size: 17px;
+  margin-bottom: 6px;
+}
+.snap.media-card.vertical .card-byline,
+.snap.media-card.vertical .topic-pill,
+.snap.media-card.vertical .card-top .reason {
+  display: none;
+}

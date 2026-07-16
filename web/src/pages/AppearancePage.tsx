@@ -34,6 +34,7 @@ const SAMPLE: Selected = {
     thumbnail_url: HERO,
     media_type: "article",
     duration_sec: 0,
+    aspect_ratio: 0,
     published_at: REL_TWO_DAYS,
     fetched_at: REL_TWO_DAYS,
   },
