@@ -44,12 +44,18 @@ export function BottomSheet({
   const [mounted, setMounted] = useState(open);
   const [up, setUp] = useState(false);
   const [exitUp, setExitUp] = useState(false);
+  const [exitRight, setExitRight] = useState(false);
   const sheetRef = useRef<HTMLDivElement>(null);
+  // Swipe-right-to-dismiss (the "back" gesture) is enabled on the tall reading
+  // sheets (Reader/Player) - horizontal is unambiguous there since the body only
+  // scrolls vertically. Bottom sheets keep their vertical drag only.
+  const allowRight = variant === "tall";
 
   useEffect(() => {
     if (open) {
       setMounted(true);
       setExitUp(false); // a fresh open always enters (and by default leaves) downward
+      setExitRight(false);
       const id = requestAnimationFrame(() => setUp(true));
       return () => cancelAnimationFrame(id);
     }
@@ -81,6 +87,7 @@ export function BottomSheet({
     atTop: boolean;
     atBottom: boolean;
     active: boolean;
+    axis: "x" | "y" | null;
     captured: boolean;
     pointerId: number;
   } | null>(null);
@@ -102,6 +109,7 @@ export function BottomSheet({
       atTop: !sc || sc.scrollTop <= 0,
       atBottom: !sc || sc.scrollHeight - sc.clientHeight - sc.scrollTop <= 1,
       active: false,
+      axis: null,
       captured: false,
       pointerId: e.pointerId,
     };
@@ -113,18 +121,25 @@ export function BottomSheet({
     const dy = e.clientY - d.startY;
     const dx = e.clientX - d.startX;
     if (!d.active) {
-      // Wait for a clear vertical intent; abandon on a dominant horizontal move
-      // (that's a swipe/scroll, not a dismiss).
-      if (Math.abs(dy) < 8 || Math.abs(dy) <= Math.abs(dx)) {
-        if (Math.abs(dx) > 10 && Math.abs(dx) > Math.abs(dy)) drag.current = null;
+      // Commit an axis once intent is clear. A clear rightward swipe (the "back"
+      // gesture) dismisses the reader; otherwise fall back to the vertical drag.
+      if (allowRight && dx > 10 && dx > Math.abs(dy) * 1.2) {
+        d.axis = "x";
+        d.active = true;
+      } else if (Math.abs(dy) >= 8 && Math.abs(dy) > Math.abs(dx)) {
+        const canDrag = d.fromHeader || (dy > 0 && d.atTop) || (dy < 0 && d.atBottom);
+        if (!canDrag) {
+          drag.current = null; // it's a real body scroll - let it be
+          return;
+        }
+        d.axis = "y";
+        d.active = true;
+      } else if (Math.abs(dx) > 10 && Math.abs(dx) > Math.abs(dy)) {
+        drag.current = null; // dominant horizontal but not a right-dismiss (leftward / not the reader)
         return;
+      } else {
+        return; // not enough movement to tell yet
       }
-      const canDrag = d.fromHeader || (dy > 0 && d.atTop) || (dy < 0 && d.atBottom);
-      if (!canDrag) {
-        drag.current = null; // it's a real body scroll - let it be
-        return;
-      }
-      d.active = true;
     }
     if (!d.captured) {
       try {
@@ -137,7 +152,7 @@ export function BottomSheet({
     const el = sheetRef.current;
     if (el) {
       el.style.transition = "none";
-      el.style.transform = `translateY(${dy}px)`;
+      el.style.transform = d.axis === "x" ? `translateX(${Math.max(0, dx)}px)` : `translateY(${dy}px)`;
     }
   }
 
@@ -147,8 +162,19 @@ export function BottomSheet({
     const el = sheetRef.current;
     if (!d || !d.active || !el) return;
     const dy = e.clientY - d.startY;
+    const dx = e.clientX - d.startX;
     el.style.transition = ""; // hand motion back to the CSS transition
-    if (dy >= CLOSE_DIST) {
+    if (d.axis === "x") {
+      if (dx >= CLOSE_DIST) {
+        el.style.transform = "";
+        setExitRight(true);
+        onClose(); // swiped right past threshold → leave to the right
+      } else {
+        requestAnimationFrame(() => {
+          if (sheetRef.current) sheetRef.current.style.transform = "";
+        });
+      }
+    } else if (dy >= CLOSE_DIST) {
       el.style.transform = "";
       onClose(); // dragged down past threshold → leave downward (default)
     } else if (dy <= -CLOSE_DIST) {
@@ -181,7 +207,7 @@ export function BottomSheet({
     <div className={`sheet-scrim ${up ? "up" : ""}`} onClick={onClose}>
       <div
         ref={sheetRef}
-        className={`sheet ${variant === "tall" ? "sheet-tall" : ""} ${wide ? "sheet-wide" : ""} ${up ? "up" : ""} ${exitUp ? "exit-up" : ""}`}
+        className={`sheet ${variant === "tall" ? "sheet-tall" : ""} ${wide ? "sheet-wide" : ""} ${up ? "up" : ""} ${exitUp ? "exit-up" : ""} ${exitRight ? "exit-right" : ""}`}
         role="dialog"
         aria-modal="true"
         onClick={(e) => e.stopPropagation()}

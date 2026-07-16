@@ -2341,6 +2341,8 @@ h1.display {
   overflow-y: auto;
   overscroll-behavior: contain;
   -webkit-overflow-scrolling: touch;
+  /* Vertical stays scroll; horizontal is handed to JS for the swipe-right dismiss. */
+  touch-action: pan-y;
 }
 .reader-title {
   font-family: var(--serif);
@@ -2850,6 +2852,11 @@ h1.display {
    while the sheet is open (it enters and holds at translateY(0)). */
 .sheet.exit-up:not(.up) {
   transform: translateY(-101%);
+}
+/* Swipe-right dismiss (the reader "back" gesture): the sheet leaves to the right
+   instead of downward. Same override pattern as exit-up. */
+.sheet.exit-right:not(.up) {
+  transform: translateX(101%);
 }
 /* Footer is just the flat-icon actions now (no branding line): right-align, and
    lay each button out as icon + label. */
