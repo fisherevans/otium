@@ -17,3 +17,12 @@ createRoot(document.getElementById("root")!).render(
     </BrowserRouter>
   </StrictMode>,
 );
+
+// PWA: register the service worker in production only (it would fight Vite HMR in
+// dev). Makes otium installable ("Add to Home Screen" -> standalone app) and serves
+// the immutable assets from cache. Failures are non-fatal - the app runs without it.
+if (import.meta.env.PROD && "serviceWorker" in navigator) {
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register("/sw.js").catch(() => {});
+  });
+}
