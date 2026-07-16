@@ -690,6 +690,8 @@ export default function SessionPage() {
                       recordOpen(it);
                       startRead(it);
                     }}
+                    onNext={next}
+                    onPrev={prev}
                   />
                 </div>
               ) : (

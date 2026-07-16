@@ -51,3 +51,31 @@ export function embedUrl(id: string, opts?: { autoplay?: boolean }): string {
   if (opts?.autoplay) p.set("autoplay", "1");
   return `https://www.youtube-nocookie.com/embed/${id}?${p.toString()}`;
 }
+
+// loadYouTubeIframeAPI loads the YouTube IFrame Player API once and resolves to the
+// global `YT` namespace. The API gives us programmatic play/pause + state events,
+// which is what lets a transparent gesture overlay drive playback (tap = play/pause)
+// AND own swipe-to-navigate over the video - a raw cross-origin iframe consumes all
+// pointer events and can't be told to play, so an overlay alone can't work.
+let ytApiPromise: Promise<any> | null = null;
+export function loadYouTubeIframeAPI(): Promise<any> {
+  const w = window as any;
+  if (w.YT?.Player) return Promise.resolve(w.YT);
+  if (!ytApiPromise) {
+    ytApiPromise = new Promise((resolve) => {
+      const prev = w.onYouTubeIframeAPIReady;
+      w.onYouTubeIframeAPIReady = () => {
+        prev?.();
+        resolve(w.YT);
+      };
+      if (!document.querySelector('script[data-yt-iframe-api]')) {
+        const tag = document.createElement("script");
+        tag.src = "https://www.youtube.com/iframe_api";
+        tag.async = true;
+        tag.dataset.ytIframeApi = "1";
+        document.head.appendChild(tag);
+      }
+    });
+  }
+  return ytApiPromise;
+}
