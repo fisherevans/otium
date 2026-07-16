@@ -4165,6 +4165,19 @@ button.id-source.lead {
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
 }
+/* Our poster over YouTube's unstarted branding: the item thumbnail + a calm play
+   button. Below the gesture overlay so a tap still plays. */
+.im-poster {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  background-color: var(--paper-3);
+  background-size: cover;
+  background-position: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
 /* The calm play affordance (decorative - the overlay beneath owns the tap). */
 .im-play {
   display: flex;
@@ -4180,18 +4193,74 @@ button.id-source.lead {
 }
 .im-fs {
   position: absolute;
-  top: 8px;
-  right: 8px;
-  z-index: 3;
+  bottom: 10px;
+  right: 10px;
+  z-index: 4;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 34px;
-  height: 34px;
-  border: none;
-  border-radius: 7px;
-  background: rgba(20, 19, 17, 0.5);
+  width: 40px;
+  height: 40px;
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  border-radius: 8px;
+  background: rgba(20, 19, 17, 0.62);
   color: #fff;
+  cursor: pointer;
+}
+.im-fs:active {
+  background: rgba(20, 19, 17, 0.8);
+}
+
+/* Fullscreen: the frame fills the viewport and we draw our own controls (YouTube's
+   are off via controls:0, which also hides its exit button). */
+.im-frame.fs,
+.im-frame:fullscreen {
+  width: 100% !important;
+  height: 100% !important;
+  max-height: none !important;
+  aspect-ratio: auto !important;
+  margin: 0 !important;
+  border: 0;
+  background: #000;
+}
+.im-fsctl {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 16px calc(14px + env(safe-area-inset-bottom, 0px));
+  background: linear-gradient(to top, rgba(0, 0, 0, 0.7), rgba(0, 0, 0, 0));
+  color: #fff;
+}
+.im-fsc-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border: none;
+  background: none;
+  color: #fff;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.im-time {
+  font-family: var(--mono);
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.85);
+  min-width: 38px;
+  text-align: center;
+  flex-shrink: 0;
+}
+.im-scrub {
+  flex: 1;
+  min-width: 0;
+  accent-color: #fff;
+  height: 3px;
   cursor: pointer;
 }
 .im-nofit {
