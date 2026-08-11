@@ -157,3 +157,12 @@ git log --grep '#14' --oneline                    # every commit in issue 14
 - The `db/` schema is embedded into the `store` package (`schema.sql`), applied
   idempotently on boot. There is no migrate Job - just additive
   `CREATE … IF NOT EXISTS`. A destructive migration would need real thought.
+
+## Changelog
+
+This repo keeps a `changelog/` - a per-entry record of **deliberate changes and the
+why behind them** (features, structural/deploy changes, removals). When you make a
+meaningful change, add an entry in the **same PR as the work**; the why is the point,
+so a future agent doesn't have to reverse-engineer it from a diff. Format and
+when-to-write rules are in [changelog/README.md](changelog/README.md). This mirrors
+the homelab-wide practice defined in nottingham-cloud's `agent/changelog.md`.
