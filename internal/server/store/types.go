@@ -41,10 +41,12 @@ type Source struct {
 	// (newest, no facets), which is byte-identical to today's pure-recency order.
 	ScoringConfig string `json:"scoring_config,omitempty"`
 	// Auto-archive keywords (#118): comma-separated, case-insensitive.
-	ArchiveKeywords string     `json:"archive_keywords"`
-	AddedAt         time.Time  `json:"added_at"`
-	LastFetchAt     *time.Time `json:"last_fetch_at,omitempty"`
-	FetchError      string     `json:"fetch_error,omitempty"`
+	ArchiveKeywords string `json:"archive_keywords"`
+	// Auto-archive categories (#142): newline-separated, case-insensitive.
+	ArchiveCategories string     `json:"archive_categories"`
+	AddedAt           time.Time  `json:"added_at"`
+	LastFetchAt       *time.Time `json:"last_fetch_at,omitempty"`
+	FetchError        string     `json:"fetch_error,omitempty"`
 	// The one topic this source belongs to (#86). TopicID is nil for a topicless
 	// source; TopicSlug is the denormalized slug for the UI ("" when topicless).
 	TopicID     *int64  `json:"topic_id,omitempty"`
@@ -159,7 +161,11 @@ type Item struct {
 	// AspectRatio is the video frame's width/height (1.778 = 16:9, 0.5625 = 9:16),
 	// from the YouTube API player embedHtml. Drives vertical-vs-landscape layout
 	// independent of the short/long duration bucket. 0 = unknown (client defaults).
-	AspectRatio float64   `json:"aspect_ratio"`
+	AspectRatio float64 `json:"aspect_ratio"`
+	// Categories are the item's RSS <category> tags (#142). Populated on the card
+	// so the "filter this out" menu can offer each one; also drives category-based
+	// auto-archive. Only new (post-#142) items carry these. Omitted when empty.
+	Categories  []string  `json:"categories,omitempty"`
 	PublishedAt time.Time `json:"published_at"`
 	FetchedAt   time.Time `json:"fetched_at"`
 }
@@ -232,6 +238,10 @@ type Candidate struct {
 	// SourceArchiveKeywords is the source's comma-separated auto-archive keyword
 	// list (#118): an item matching any keyword is ineligible.
 	SourceArchiveKeywords string
+	// SourceArchiveCategories is the source's newline-separated auto-archive
+	// category list (#142): an item whose RSS categories match any of these is
+	// ineligible. Cleaner than keywords for structured noise (Obituaries, etc.).
+	SourceArchiveCategories string
 	// Rule-based archive (#124): the source's keep-latest-N count rule (0 = off)
 	// and how it combines with the age rule ("and" | "or"). Per-source only.
 	SourceArchiveKeepCount int

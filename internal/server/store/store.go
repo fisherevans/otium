@@ -187,6 +187,13 @@ func migrate(sdb *sql.DB) error {
 	if err := ensureColumn(sdb, "sources", "archive_keywords", `ALTER TABLE sources ADD COLUMN archive_keywords TEXT NOT NULL DEFAULT ''`); err != nil {
 		return err
 	}
+	// Auto-archive categories + per-item RSS categories (#142).
+	if err := ensureColumn(sdb, "sources", "archive_categories", `ALTER TABLE sources ADD COLUMN archive_categories TEXT NOT NULL DEFAULT ''`); err != nil {
+		return err
+	}
+	if err := ensureColumn(sdb, "items", "categories", `ALTER TABLE items ADD COLUMN categories TEXT NOT NULL DEFAULT ''`); err != nil {
+		return err
+	}
 	// Rule-based per-source auto-archive (#124): keep-latest-N count + how it
 	// combines with the age rule. Defaults reproduce today's age-only behavior.
 	if err := ensureColumn(sdb, "sources", "archive_keep_count", `ALTER TABLE sources ADD COLUMN archive_keep_count INTEGER NOT NULL DEFAULT 0`); err != nil {
@@ -916,7 +923,7 @@ func (db *DB) SetTopicSources(ctx context.Context, userID, topicID int64, source
 func (db *DB) ListSources(ctx context.Context, userID int64) ([]Source, error) {
 	rows, err := db.sql.QueryContext(ctx,
 		`SELECT s.id, s.kind, s.title, s.feed_url, s.homepage_url, s.icon_url, s.weight,
-		        s.state, s.trial_until, s.per_session_cap, s.half_life_days, s.archive_after_days, s.archive_keywords,
+		        s.state, s.trial_until, s.per_session_cap, s.half_life_days, s.archive_after_days, s.archive_keywords, s.archive_categories,
 		        s.archive_keep_count, s.archive_combine, s.scoring_config, s.added_at, s.last_fetch_at, s.fetch_error,
 		        s.topic_id, f.slug,
 		        (SELECT COUNT(*) FROM items i WHERE i.source_id = s.id) AS item_count,
@@ -955,7 +962,7 @@ func scanSource(r rowScanner) (*Source, error) {
 	var trialUntil, lastFetch, topicSlug sql.NullString
 	var topicID sql.NullInt64
 	if err := r.Scan(&s.ID, &s.Kind, &s.Title, &s.FeedURL, &s.HomepageURL, &s.IconURL, &s.Weight,
-		&s.State, &trialUntil, &s.PerSessionCap, &s.HalfLifeDays, &s.ArchiveAfterDays, &s.ArchiveKeywords,
+		&s.State, &trialUntil, &s.PerSessionCap, &s.HalfLifeDays, &s.ArchiveAfterDays, &s.ArchiveKeywords, &s.ArchiveCategories,
 		&s.ArchiveKeepCount, &s.ArchiveCombine, &s.ScoringConfig, &added, &lastFetch, &s.FetchError,
 		&topicID, &topicSlug,
 		&s.ItemCount, &s.UnseenCount, &s.SkipPct, &s.PostsPerDay); err != nil {
@@ -997,16 +1004,17 @@ func (db *DB) CreateSource(ctx context.Context, s *Source) (*Source, error) {
 // optional args and adding the #124 archive/scoring knobs on top would have made
 // call sites unreadable.
 type SourcePatch struct {
-	Weight           *float64
-	State            *string
-	Cap              *int
-	HalfLifeDays     *float64
-	Title            *string
-	ArchiveAfterDays *int    // #115: 0 inherit, -1 evergreen, N days
-	ArchiveKeywords  *string // #118: comma-separated
-	ArchiveKeepCount *int    // #124: keep-latest-N, 0 = off
-	ArchiveCombine   *string // #124: "and" | "or"
-	ScoringConfig    *string // #124: scoring JSON; "" = default (newest, no facets)
+	Weight            *float64
+	State             *string
+	Cap               *int
+	HalfLifeDays      *float64
+	Title             *string
+	ArchiveAfterDays  *int    // #115: 0 inherit, -1 evergreen, N days
+	ArchiveKeywords   *string // #118: comma-separated
+	ArchiveCategories *string // #142: newline-separated category blocklist
+	ArchiveKeepCount  *int    // #124: keep-latest-N, 0 = off
+	ArchiveCombine    *string // #124: "and" | "or"
+	ScoringConfig     *string // #124: scoring JSON; "" = default (newest, no facets)
 }
 
 // UpdateSource applies a SourcePatch: only the patch's non-nil fields are written.
@@ -1040,6 +1048,9 @@ func (db *DB) UpdateSource(ctx context.Context, userID, id int64, p SourcePatch)
 	if p.ArchiveKeywords != nil {
 		set("archive_keywords", *p.ArchiveKeywords)
 	}
+	if p.ArchiveCategories != nil {
+		set("archive_categories", *p.ArchiveCategories)
+	}
 	// Rule-based archive + scoring (#124).
 	if p.ArchiveKeepCount != nil {
 		set("archive_keep_count", *p.ArchiveKeepCount)
@@ -1057,6 +1068,62 @@ func (db *DB) UpdateSource(ctx context.Context, userID, id int64, p SourcePatch)
 	_, err := db.sql.ExecContext(ctx,
 		`UPDATE sources SET `+strings.Join(sets, ", ")+` WHERE id = ? AND user_id = ?`, args...)
 	return err
+}
+
+// AddItemSourceArchiveFilters appends categories and/or keywords to the archive
+// blocklists of the source that owns itemID (#142), for the "filter this out"
+// card menu. Categories join with newlines (values contain commas), keywords with
+// commas (matching #118). Both are case-insensitively deduped against what's
+// already there, so re-muting is a no-op. Scoped to the owning user. Returns the
+// affected source id so the caller can report/refresh.
+func (db *DB) AddItemSourceArchiveFilters(ctx context.Context, userID, itemID int64, categories, keywords []string) (int64, error) {
+	var sourceID int64
+	var curCats, curKws string
+	err := db.sql.QueryRowContext(ctx,
+		`SELECT s.id, s.archive_categories, s.archive_keywords
+		 FROM items i JOIN sources s ON s.id = i.source_id
+		 WHERE i.id = ? AND s.user_id = ?`, itemID, userID).Scan(&sourceID, &curCats, &curKws)
+	if err != nil {
+		return 0, err
+	}
+	newCats := appendDedup(splitCategories(curCats), categories)
+	newKws := appendDedup(splitCSV(curKws), keywords)
+	if _, err := db.sql.ExecContext(ctx,
+		`UPDATE sources SET archive_categories = ?, archive_keywords = ? WHERE id = ? AND user_id = ?`,
+		strings.Join(newCats, "\n"), strings.Join(newKws, ", "), sourceID, userID); err != nil {
+		return 0, err
+	}
+	return sourceID, nil
+}
+
+// splitCSV splits a comma-separated list, trimming and dropping empties.
+func splitCSV(s string) []string {
+	var out []string
+	for _, v := range strings.Split(s, ",") {
+		if v = strings.TrimSpace(v); v != "" {
+			out = append(out, v)
+		}
+	}
+	return out
+}
+
+// appendDedup adds each of adds to base unless a case-insensitive equal is already
+// present, preserving order and the original casing of existing entries.
+func appendDedup(base, adds []string) []string {
+	seen := make(map[string]bool, len(base))
+	for _, b := range base {
+		seen[strings.ToLower(strings.TrimSpace(b))] = true
+	}
+	for _, a := range adds {
+		a = strings.TrimSpace(a)
+		k := strings.ToLower(a)
+		if a == "" || seen[k] {
+			continue
+		}
+		seen[k] = true
+		base = append(base, a)
+	}
+	return base
 }
 
 func (db *DB) DeleteSource(ctx context.Context, userID, id int64) error {
@@ -1106,13 +1173,39 @@ func (db *DB) SourcesToFetch(ctx context.Context, userID int64) ([]Source, error
 // NOTHING preserves the exact rows-affected isNew derivation. Interaction state
 // lives in item_state/events, never in items, so a backfill can't disturb
 // seen/skip history.
+// joinCategories / splitCategories move an item's RSS categories (#142) between
+// the []string on the struct and the newline-joined TEXT column. Empty/whitespace
+// entries are dropped; a nil/empty slice stores as "".
+func joinCategories(cats []string) string {
+	out := make([]string, 0, len(cats))
+	for _, c := range cats {
+		if c = strings.TrimSpace(c); c != "" {
+			out = append(out, c)
+		}
+	}
+	return strings.Join(out, "\n")
+}
+
+func splitCategories(s string) []string {
+	if strings.TrimSpace(s) == "" {
+		return nil
+	}
+	var out []string
+	for _, c := range strings.Split(s, "\n") {
+		if c = strings.TrimSpace(c); c != "" {
+			out = append(out, c)
+		}
+	}
+	return out
+}
+
 func (db *DB) UpsertItem(ctx context.Context, it *Item) (bool, error) {
 	res, err := db.sql.ExecContext(ctx,
-		`INSERT INTO items (source_id, external_id, url, title, summary, content, content_source, author, thumbnail_url, media_type, duration_sec, published_at)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		`INSERT INTO items (source_id, external_id, url, title, summary, content, content_source, author, thumbnail_url, media_type, duration_sec, categories, published_at)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		 ON CONFLICT(source_id, external_id) DO NOTHING`,
 		it.SourceID, it.ExternalID, it.URL, it.Title, it.Summary, it.Content, it.ContentSource, it.Author, it.ThumbnailURL,
-		def(it.MediaType, "unknown"), it.DurationSec, it.PublishedAt.UTC().Format(time.RFC3339))
+		def(it.MediaType, "unknown"), it.DurationSec, joinCategories(it.Categories), it.PublishedAt.UTC().Format(time.RFC3339))
 	if err != nil {
 		return false, err
 	}
@@ -1142,11 +1235,11 @@ func (db *DB) UpsertItem(ctx context.Context, it *Item) (bool, error) {
 // UpsertItem (insert-or-nothing first, so RowsAffected stays truthful).
 func (db *DB) UpsertYouTubeItem(ctx context.Context, it *Item) (bool, error) {
 	res, err := db.sql.ExecContext(ctx,
-		`INSERT INTO items (source_id, external_id, url, title, summary, content, content_source, author, thumbnail_url, media_type, duration_sec, aspect_ratio, published_at)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		`INSERT INTO items (source_id, external_id, url, title, summary, content, content_source, author, thumbnail_url, media_type, duration_sec, aspect_ratio, categories, published_at)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		 ON CONFLICT(source_id, external_id) DO NOTHING`,
 		it.SourceID, it.ExternalID, it.URL, it.Title, it.Summary, it.Content, it.ContentSource, it.Author, it.ThumbnailURL,
-		def(it.MediaType, "unknown"), it.DurationSec, it.AspectRatio, it.PublishedAt.UTC().Format(time.RFC3339))
+		def(it.MediaType, "unknown"), it.DurationSec, it.AspectRatio, joinCategories(it.Categories), it.PublishedAt.UTC().Format(time.RFC3339))
 	if err != nil {
 		return false, err
 	}
@@ -1254,8 +1347,8 @@ func (db *DB) ListRecentItemsByTopic(ctx context.Context, userID, topicID int64,
 // cadence-window bound, twice; arg alignment is identical across callers.
 func candidateCols() string {
 	return `i.id, i.source_id, i.url, i.title, i.summary, i.content, i.content_source, i.author, i.thumbnail_url,
-	             i.media_type, i.duration_sec, i.aspect_ratio, i.published_at, i.fetched_at,
-	             s.title, s.weight, s.per_session_cap, s.half_life_days, s.archive_after_days, s.archive_keywords,
+	             i.media_type, i.duration_sec, i.aspect_ratio, i.categories, i.published_at, i.fetched_at,
+	             s.title, s.weight, s.per_session_cap, s.half_life_days, s.archive_after_days, s.archive_keywords, s.archive_categories,
 	             (SELECT COUNT(*) FROM items i2 WHERE i2.source_id = s.id
 	                AND i2.published_at >= datetime('now', ?)) AS win_count,
 	             (SELECT COALESCE(julianday('now') - julianday(MIN(i2.published_at)), 0)
@@ -1306,16 +1399,17 @@ func scanCandidates(rows *sql.Rows, windowDays int) ([]Candidate, error) {
 	var out []Candidate
 	for rows.Next() {
 		var c Candidate
-		var pub, fetched string
+		var pub, fetched, cats string
 		var winCount int
 		var winSpan, halfLife float64
 		if err := rows.Scan(&c.ID, &c.SourceID, &c.URL, &c.Title, &c.Summary, &c.Content, &c.ContentSource, &c.Author, &c.ThumbnailURL,
-			&c.MediaType, &c.DurationSec, &c.AspectRatio, &pub, &fetched,
-			&c.SourceTitle, &c.SourceWeight, &c.PerSessionCap, &c.SourceHalfLifeDays, &c.SourceArchiveAfterDays, &c.SourceArchiveKeywords,
+			&c.MediaType, &c.DurationSec, &c.AspectRatio, &cats, &pub, &fetched,
+			&c.SourceTitle, &c.SourceWeight, &c.PerSessionCap, &c.SourceHalfLifeDays, &c.SourceArchiveAfterDays, &c.SourceArchiveKeywords, &c.SourceArchiveCategories,
 			&winCount, &winSpan, &halfLife, &c.TopicArchiveAfterDays,
 			&c.SourceArchiveKeepCount, &c.SourceArchiveCombine, &c.ScoringConfig, &c.RecencyRank); err != nil {
 			return nil, err
 		}
+		c.Categories = splitCategories(cats)
 		c.PublishedAt = parseTime(pub)
 		c.FetchedAt = parseTime(fetched)
 		c.SourceCadence = cadencePerDay(winCount, winSpan, windowDays)

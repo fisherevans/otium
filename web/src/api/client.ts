@@ -154,6 +154,9 @@ export interface Item {
   // Video frame width/height (1.778 = 16:9, 0.5625 = 9:16); 0 = unknown. Drives
   // vertical-vs-landscape inline layout off real geometry, not the short/long bucket.
   aspect_ratio: number;
+  // RSS <category> tags for the item (#142). Present on new items; the card's
+  // "filter this out" menu offers each one as a mute. Omitted when the item has none.
+  categories?: string[];
   published_at: string;
   fetched_at: string;
 }
@@ -570,6 +573,14 @@ export const api = {
   // from reading-time averages).
   recordRead: (id: number, sessionId: string, ms: number, external: boolean, kind: string) =>
     req<{ ok: boolean }>("POST", `/items/${id}/read`, { session_id: sessionId, ms, external, kind }),
+  // #142: filter noise from an item's source straight from the card - mute one or
+  // more of its RSS categories and/or add a title/summary keyword. Both append
+  // (deduped) to that source's auto-archive blocklists; applies to future sessions.
+  filterFromItem: (id: number, filters: { categories?: string[]; keywords?: string[] }) =>
+    req<{ ok: boolean; source_id: number }>("POST", `/items/${id}/filter`, {
+      categories: filters.categories ?? [],
+      keywords: filters.keywords ?? [],
+    }),
   fetchNow: () => req<{ new_items: number }>("POST", "/fetch"),
   // #135: descriptive "how you read" summary for the You page.
   readingStats: () => req<ReadingStats>("GET", "/reading-stats"),

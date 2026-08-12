@@ -159,7 +159,11 @@ func normalize(s store.Source, e *gofeed.Item) *store.Item {
 		Author:       authorName(e),
 		ThumbnailURL: thumbnail(e),
 		DurationSec:  dur,
-		PublishedAt:  pub,
+		// RSS <category> tags (#142): drives category-based auto-archive + the
+		// "filter this out" card menu. gofeed maps both RSS <category> and Atom
+		// <category term=...> into Categories.
+		Categories:  e.Categories,
+		PublishedAt: pub,
 	}
 	it.MediaType = classify(s, e, dur)
 	// content_source provenance (#98): a feed that shipped a body is 'rss'; an

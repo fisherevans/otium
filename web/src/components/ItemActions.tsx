@@ -32,6 +32,14 @@ export function ItemActions({
   const sourceId = item?.source_id ?? 0;
   const [source, setSource] = useState<Source | null>(null);
 
+  // #142: "filter this out" - mute the item's RSS categories or add a word filter
+  // to its source, straight from the card. `muted` tracks what's been muted this
+  // open so the chip shows confirmed; `note` is the calm confirmation line.
+  const [muted, setMuted] = useState<string[]>([]);
+  const [kwOpen, setKwOpen] = useState(false);
+  const [kw, setKw] = useState("");
+  const [note, setNote] = useState("");
+
   useEffect(() => {
     if (!open || !sourceId) return;
     api
@@ -40,7 +48,42 @@ export function ItemActions({
       .catch(() => {});
   }, [open, sourceId]);
 
+  // Reset the filter UI each time the sheet opens on a fresh item.
+  useEffect(() => {
+    setMuted([]);
+    setKwOpen(false);
+    setKw("");
+    setNote("");
+  }, [open, item?.id]);
+
   if (!item) return null;
+
+  const sourceLabel = selected?.source_title ?? source?.title ?? "this source";
+  async function muteCategory(cat: string) {
+    if (!item || muted.includes(cat)) return;
+    setMuted((m) => [...m, cat]);
+    try {
+      await api.filterFromItem(item.id, { categories: [cat] });
+      setNote(`Muted “${cat}” from ${sourceLabel} - new posts in it won't surface.`);
+    } catch {
+      setMuted((m) => m.filter((c) => c !== cat));
+      setNote("Couldn't save that filter - try again.");
+    }
+  }
+  async function addKeyword() {
+    const word = kw.trim();
+    if (!item || !word) return;
+    try {
+      await api.filterFromItem(item.id, { keywords: [word] });
+      setNote(`Muted posts from ${sourceLabel} with “${word}” in the title.`);
+      setKw("");
+      setKwOpen(false);
+    } catch {
+      setNote("Couldn't save that filter - try again.");
+    }
+  }
+
+  const categories = item.categories ?? [];
 
   const bucket = source ? bucketOf(source.weight) : "normal";
   const score = selected?.score ?? 0;
@@ -85,6 +128,52 @@ export function ItemActions({
           <span>View source</span>
           <span className="sheet-chev">▸</span>
         </button>
+      </div>
+
+      {/* #142: filter this kind of post out of future sessions. Tap a category to
+          mute it, or add a word from the title - both apply to this source going
+          forward (obituaries, legal notices, and the like). */}
+      <div className="ia-filter">
+        <div className="ia-filter-label">Filter out of future sessions</div>
+        {categories.length > 0 ? (
+          <div className="ia-filter-chips">
+            {categories.map((c) => {
+              const done = muted.includes(c);
+              return (
+                <button
+                  key={c}
+                  className={`ia-fchip ${done ? "done" : ""}`}
+                  disabled={done}
+                  onClick={() => muteCategory(c)}
+                >
+                  {done ? `✓ ${c}` : c}
+                </button>
+              );
+            })}
+          </div>
+        ) : (
+          <p className="ia-filter-empty">This post carries no category tags to filter on.</p>
+        )}
+        {!kwOpen ? (
+          <button className="ia-filter-word" onClick={() => setKwOpen(true)}>
+            or filter by a word in the title…
+          </button>
+        ) : (
+          <div className="ia-kw">
+            <input
+              className="field"
+              placeholder="word or phrase in the title"
+              value={kw}
+              autoFocus
+              onChange={(e) => setKw(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && addKeyword()}
+            />
+            <button className="btn" onClick={addKeyword} disabled={!kw.trim()}>
+              Mute
+            </button>
+          </div>
+        )}
+        {note && <p className="ia-filter-note">{note}</p>}
       </div>
     </BottomSheet>
   );

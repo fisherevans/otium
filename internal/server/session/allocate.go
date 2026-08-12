@@ -44,7 +44,7 @@ func resolveArchiveAfter(c store.Candidate) int {
 // (Candidate.RecencyRank), so as items are consumed the backlog slides up to refill
 // the window - a rolling keep-latest-N, not a static published-at slice.
 func eligible(c store.Candidate, now time.Time) bool {
-	if keywordArchived(c) {
+	if keywordArchived(c) || categoryArchived(c) {
 		return false
 	}
 	win := resolveArchiveAfter(c)
@@ -87,6 +87,34 @@ func keywordArchived(c store.Candidate) bool {
 		kw = strings.TrimSpace(strings.ToLower(kw))
 		if kw != "" && strings.Contains(hay, kw) {
 			return true
+		}
+	}
+	return false
+}
+
+// categoryArchived reports whether any of the item's RSS categories matches the
+// source's auto-archive category blocklist (#142), case-insensitively. A blocklist
+// entry matches when it appears as a substring of an item category, so blocking
+// "Obituaries" also catches a source that tags "Obituaries / Life Lines". The
+// blocklist is newline-separated (category values legitimately contain commas,
+// e.g. "Food + Drink"); item categories come from gofeed's <category> parsing.
+func categoryArchived(c store.Candidate) bool {
+	if c.SourceArchiveCategories == "" || len(c.Categories) == 0 {
+		return false
+	}
+	lowered := make([]string, len(c.Categories))
+	for i, cat := range c.Categories {
+		lowered[i] = strings.ToLower(cat)
+	}
+	for _, blocked := range strings.Split(c.SourceArchiveCategories, "\n") {
+		blocked = strings.TrimSpace(strings.ToLower(blocked))
+		if blocked == "" {
+			continue
+		}
+		for _, cat := range lowered {
+			if strings.Contains(cat, blocked) {
+				return true
+			}
 		}
 	}
 	return false

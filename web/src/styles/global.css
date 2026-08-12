@@ -2425,6 +2425,85 @@ h1.display {
   font-size: 13px;
 }
 
+/* #142: "filter this out" section in the item ··· sheet - mute the item's RSS
+   categories or add a word filter for the source. */
+.ia-filter {
+  border-top: 1px solid var(--hair);
+  margin-top: 4px;
+  padding-top: 14px;
+}
+.ia-filter-label {
+  font-family: var(--grot);
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ink-mute);
+  margin-bottom: 10px;
+}
+.ia-filter-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+.ia-fchip {
+  padding: 7px 12px;
+  background: var(--paper-2);
+  border: 1.5px solid var(--rule);
+  border-radius: 999px;
+  font-family: var(--grot);
+  font-size: 13px;
+  color: var(--ink);
+  cursor: pointer;
+}
+.ia-fchip:active {
+  background: var(--paper-3);
+}
+.ia-fchip.done {
+  background: var(--ink);
+  border-color: var(--ink);
+  color: var(--paper);
+}
+.ia-filter-empty {
+  font-family: var(--serif);
+  font-size: 14px;
+  color: var(--ink-mute);
+  font-style: italic;
+  margin-bottom: 8px;
+}
+.ia-filter-word {
+  background: none;
+  border: 0;
+  padding: 4px 0;
+  font-family: var(--grot);
+  font-size: 12px;
+  color: var(--ink-mute);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+.ia-kw {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin-top: 4px;
+}
+.ia-kw .field {
+  flex: 1;
+}
+.ia-kw .btn {
+  flex: 0 0 auto;
+  width: auto;
+  padding: 10px 16px;
+}
+.ia-filter-note {
+  font-family: var(--serif);
+  font-size: 13px;
+  color: var(--ink-soft);
+  margin-top: 10px;
+  line-height: 1.4;
+}
+
 /* ---- in-app reader (#41) ---- */
 .reader {
   flex: 1;

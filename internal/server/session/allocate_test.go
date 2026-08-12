@@ -125,6 +125,55 @@ func TestKeywordArchive(t *testing.T) {
 	}
 }
 
+func TestCategoryArchive(t *testing.T) {
+	now := time.Date(2026, 7, 7, 12, 0, 0, 0, time.UTC)
+	base := func() store.Candidate {
+		c := acand(1, 1, 1, 0, 0, now)
+		c.Title = "Nancy N. Thayer"
+		return c
+	}
+
+	// Exact category match (case-insensitive) blocks the item.
+	c := base()
+	c.Categories = []string{"Obituaries", "obituary"}
+	c.SourceArchiveCategories = "obituaries"
+	if eligible(c, now) {
+		t.Fatal("category match should make the item ineligible")
+	}
+
+	// A substring blocklist stem also matches, so "obituar" catches "Obituaries".
+	c = base()
+	c.Categories = []string{"Obituaries"}
+	c.SourceArchiveCategories = "obituar"
+	if eligible(c, now) {
+		t.Fatal("substring category match should make the item ineligible")
+	}
+
+	// Newline-separated blocklist; one of several entries matches.
+	c = base()
+	c.Categories = []string{"Legal Notices", "Notice to Creditors"}
+	c.SourceArchiveCategories = "Obituaries\nLegal Notices"
+	if eligible(c, now) {
+		t.Fatal("one matching blocklist entry should make the item ineligible")
+	}
+
+	// No category match -> stays eligible; a real news item survives.
+	c = base()
+	c.Categories = []string{"Government & Politics", "Election 2026"}
+	c.SourceArchiveCategories = "Obituaries\nLegal Notices"
+	if !eligible(c, now) {
+		t.Fatal("non-matching categories should stay eligible")
+	}
+
+	// Empty blocklist or empty categories never blocks.
+	c = base()
+	c.Categories = []string{"Obituaries"}
+	c.SourceArchiveCategories = ""
+	if !eligible(c, now) {
+		t.Fatal("empty blocklist should not block")
+	}
+}
+
 func TestEligibilityCountRule(t *testing.T) {
 	now := time.Date(2026, 7, 7, 12, 0, 0, 0, time.UTC)
 	// Count-only (evergreen age): keep the latest 2 unseen items.

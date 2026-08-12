@@ -95,6 +95,11 @@ CREATE TABLE IF NOT EXISTS sources (
     -- Auto-archive keywords (#118): comma-separated, case-insensitive. An item
     -- whose title or summary contains any of these is ineligible (auto-archived).
     archive_keywords TEXT NOT NULL DEFAULT '',
+    -- Auto-archive categories (#142): newline-separated, case-insensitive. An item
+    -- carrying an RSS <category> that contains any of these is ineligible. Cleaner
+    -- than keyword matching for structured noise (Obituaries, Legal Notices, ...)
+    -- which WordPress feeds tag explicitly. Added additively via migrate().
+    archive_categories TEXT NOT NULL DEFAULT '',
     -- Rule-based auto-archive (#124), per-source only (topics/global stay
     -- age-only). archive_keep_count is the keep-latest-N rule: 0 = off, N = keep
     -- only the newest N eligible items (a rolling window that refills from the
@@ -183,6 +188,11 @@ CREATE TABLE IF NOT EXISTS items (
     media_type    TEXT NOT NULL DEFAULT 'unknown',
     duration_sec  INTEGER NOT NULL DEFAULT 0,        -- 0 = unknown, estimated at rank time
     aspect_ratio  REAL NOT NULL DEFAULT 0,           -- video frame w/h (1.778=16:9, 0.5625=9:16); 0 = unknown
+    -- RSS <category> tags for the item (#142), newline-separated. Populated at
+    -- ingest from gofeed item.Categories; drives category-based auto-archive and
+    -- the "filter this out" card menu. Empty for pre-#142 rows (upsert is
+    -- insert-only, so only new items carry it). Added additively via migrate().
+    categories    TEXT NOT NULL DEFAULT '',
     published_at  TEXT NOT NULL,
     fetched_at    TEXT NOT NULL DEFAULT (datetime('now')),
     UNIQUE (source_id, external_id)

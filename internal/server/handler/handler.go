@@ -418,16 +418,17 @@ func (h *Handler) UpdateSource(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var body struct {
-		Weight           *float64 `json:"weight"`
-		Bucket           *string  `json:"weight_bucket"`
-		State            *string  `json:"state"`
-		Cap              *int     `json:"per_session_cap"`
-		HalfLifeDays     *float64 `json:"half_life_days"`
-		Title            *string  `json:"title"`
-		ArchiveAfterDays *int     `json:"archive_after_days"` // #115: 0 inherit, -1 evergreen, N days
-		ArchiveKeywords  *string  `json:"archive_keywords"`   // #118: comma-separated
-		ArchiveKeepCount *int     `json:"archive_keep_count"` // #124: keep-latest-N, 0 = off
-		ArchiveCombine   *string  `json:"archive_combine"`    // #124: "and" | "or"
+		Weight            *float64 `json:"weight"`
+		Bucket            *string  `json:"weight_bucket"`
+		State             *string  `json:"state"`
+		Cap               *int     `json:"per_session_cap"`
+		HalfLifeDays      *float64 `json:"half_life_days"`
+		Title             *string  `json:"title"`
+		ArchiveAfterDays  *int     `json:"archive_after_days"` // #115: 0 inherit, -1 evergreen, N days
+		ArchiveKeywords   *string  `json:"archive_keywords"`   // #118: comma-separated
+		ArchiveCategories *string  `json:"archive_categories"` // #142: newline-separated category blocklist
+		ArchiveKeepCount  *int     `json:"archive_keep_count"` // #124: keep-latest-N, 0 = off
+		ArchiveCombine    *string  `json:"archive_combine"`    // #124: "and" | "or"
 		// #124 scoring: a structured object, re-serialized to the stored JSON after
 		// validation. Send null/omit to leave unchanged; send an empty object or
 		// {"direction":"newest"} to reset to the default (stored as "").
@@ -437,11 +438,12 @@ func (h *Handler) UpdateSource(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	patch := store.SourcePatch{
-		State:            body.State,
-		Cap:              body.Cap,
-		Title:            body.Title,
-		ArchiveKeywords:  body.ArchiveKeywords,
-		ArchiveAfterDays: body.ArchiveAfterDays,
+		State:             body.State,
+		Cap:               body.Cap,
+		Title:             body.Title,
+		ArchiveKeywords:   body.ArchiveKeywords,
+		ArchiveCategories: body.ArchiveCategories,
+		ArchiveAfterDays:  body.ArchiveAfterDays,
 	}
 	patch.Weight = body.Weight
 	if body.Bucket != nil {
@@ -969,6 +971,38 @@ func (h *Handler) ItemEvent(w http.ResponseWriter, r *http.Request) {
 	iid := itemID
 	_ = h.db.LogEvent(r.Context(), uid, body.Type, &iid, nil, body.SessionID, "")
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
+}
+
+// FilterFromItem (#142) adds an auto-archive rule to the item's source straight
+// from the card's "filter this out" menu: mute one or more of the item's RSS
+// categories, and/or add a title/summary keyword. Both append (deduped) to the
+// source's existing blocklists, so the rule applies to that source going forward
+// without replacing what's already there. Applies to future session builds - it
+// does not retroactively pull items from the current queue.
+func (h *Handler) FilterFromItem(w http.ResponseWriter, r *http.Request) {
+	uid := userID(r)
+	itemID, err := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	if err != nil {
+		badRequest(w, "bad item id")
+		return
+	}
+	var body struct {
+		Categories []string `json:"categories"`
+		Keywords   []string `json:"keywords"`
+	}
+	if !decode(w, r, &body) {
+		return
+	}
+	if len(body.Categories) == 0 && len(body.Keywords) == 0 {
+		badRequest(w, "nothing to filter")
+		return
+	}
+	sourceID, err := h.db.AddItemSourceArchiveFilters(r.Context(), uid, itemID, body.Categories, body.Keywords)
+	if err != nil {
+		serverError(w, h.log, "filter from item", err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true, "source_id": sourceID})
 }
 
 // ItemDwell records per-item dwell (#68) - how long the item was engaged before
