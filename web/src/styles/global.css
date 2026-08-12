@@ -443,6 +443,108 @@ h1.display {
   margin-bottom: 8px;
 }
 
+/* #142: step-2 sections as tactile tiles (same family as the time chips) rather
+   than form checkboxes - the old checkbox rows read as a settings form, not a
+   calm choice. Tap to fill; ink-fill = selected. */
+.sec-tile {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  width: 100%;
+  padding: 15px 16px;
+  background: var(--paper-2);
+  border: 1.5px solid var(--rule);
+  text-align: left;
+  cursor: pointer;
+}
+.sec-tile.on {
+  background: var(--ink);
+  border-color: var(--ink);
+}
+.sec-tile.everything {
+  margin-top: 18px;
+}
+.sec-tile-name {
+  font-family: var(--serif);
+  font-size: 18px;
+  color: var(--ink);
+}
+.sec-tile-meta {
+  font-family: var(--grot);
+  font-size: 10px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ink-mute);
+}
+.sec-tile.on .sec-tile-name,
+.sec-tile.on .sec-tile-meta {
+  color: var(--paper);
+}
+.sec-tiles {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+/* a hairline "or choose sections" divider between the Everything tile and the grid */
+.sec-divider {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 16px 2px 12px;
+  font-family: var(--grot);
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ink-mute);
+}
+.sec-divider::before,
+.sec-divider::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: var(--hair);
+}
+
+/* topic fine-tune: inline pill toggles, on by default; tap to drop for the
+   session. Struck + faded when off, so "what's excluded" is legible at a glance. */
+.topic-tune { margin-top: 16px; }
+.topic-tune-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  border-bottom: 1px solid var(--hair);
+  padding-bottom: 6px;
+  margin-bottom: 10px;
+}
+.topic-tune-head .pick-group-label {
+  border: 0;
+  padding: 0;
+  margin: 0;
+}
+.topic-group { margin-bottom: 12px; }
+.topic-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.topic-chip {
+  padding: 7px 13px;
+  background: var(--ink);
+  border: 1.5px solid var(--ink);
+  border-radius: 999px;
+  font-family: var(--grot);
+  font-size: 13px;
+  color: var(--paper);
+  cursor: pointer;
+}
+.topic-chip.off {
+  background: transparent;
+  border-color: var(--rule);
+  color: var(--ink-mute);
+  text-decoration: line-through;
+}
+
 /* --- theme chips --- */
 .chips {
   display: flex;

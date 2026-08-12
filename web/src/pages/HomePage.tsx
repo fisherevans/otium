@@ -231,80 +231,89 @@ export default function HomePage() {
             <button className="intent-back" onClick={() => setStep(1)} aria-label="Back to length">
               ← {minutesLabel(minutes ?? 0)}
             </button>
-            <h1 className="display">Choose a section</h1>
-            <p className="sub">One or more sections, or everything you follow.</p>
+            <h1 className="display">What to read</h1>
+            <p className="sub">Everything you follow, or pick a few sections.</p>
           </div>
 
-          <ul className="pick-list">
-            <li>
-              <button
-                className={`pick-row primary ${effectiveEverything ? "on" : ""}`}
-                onClick={pickEverything}
-                role="checkbox"
-                aria-checked={effectiveEverything}
-              >
-                <span className={`pick-check ${effectiveEverything ? "on" : ""}`} aria-hidden />
-                <span className="pick-name">Everything you follow</span>
-              </button>
-            </li>
-          </ul>
+          {/* #142: sections as tactile tiles (same language as the time chips),
+              not form checkboxes. "Everything" is a distinct full-width tile that's
+              the default; picking any section turns it off. */}
+          <button
+            className={`sec-tile everything ${effectiveEverything ? "on" : ""}`}
+            onClick={pickEverything}
+            role="checkbox"
+            aria-checked={effectiveEverything}
+          >
+            <span className="sec-tile-name">Everything you follow</span>
+            <span className="sec-tile-meta">all your sources</span>
+          </button>
 
           {sections.length > 0 && (
-            <div className="pick-group">
-              <div className="pick-group-label">Sections</div>
-              <ul className="pick-list">
+            <>
+              <div className="sec-divider">
+                <span>or choose sections</span>
+              </div>
+              <div className="sec-tiles">
                 {sections.map((m) => {
                   const on = !everything && pickedSections.includes(m.slug);
                   return (
-                    <li key={m.slug}>
-                      <button className={`pick-row ${on ? "on" : ""}`} onClick={() => toggleSection(m.slug)} role="checkbox" aria-checked={on}>
-                        <span className={`pick-check ${on ? "on" : ""}`} aria-hidden />
-                        <span className="pick-name">{m.name}</span>
-                        <span className="pick-meta">{m.topic_count === 1 ? "1 topic" : `${m.topic_count} topics`}</span>
-                      </button>
-                    </li>
+                    <button
+                      key={m.slug}
+                      className={`sec-tile ${on ? "on" : ""}`}
+                      onClick={() => toggleSection(m.slug)}
+                      role="checkbox"
+                      aria-checked={on}
+                    >
+                      <span className="sec-tile-name">{m.name}</span>
+                      <span className="sec-tile-meta">{m.topic_count === 1 ? "1 topic" : `${m.topic_count} topics`}</span>
+                    </button>
                   );
                 })}
-              </ul>
-            </div>
+              </div>
+            </>
           )}
 
-          {/* Customize: uncheck individual topics inside the chosen sections. */}
+          {/* Fine-tune: topics inside the chosen sections as inline pill toggles -
+              tap to drop one for this session. No separate mode/page. */}
           {!effectiveEverything && scopedTopics.length > 0 && (
-            <div className="pick-customize">
+            <div className="topic-tune">
               {!customizing ? (
                 <button className="intent-link" onClick={() => setCustomizing(true)}>
-                  customize topics…
+                  fine-tune topics ({scopedTopics.length})
                 </button>
               ) : (
                 <>
-                  <div className="pick-group-label">Topics ({keptTopics.length} of {scopedTopics.length})</div>
+                  <div className="topic-tune-head">
+                    <span className="pick-group-label">Topics · {keptTopics.length} of {scopedTopics.length} on</span>
+                    <button className="intent-link" onClick={() => (setCustomizing(false), setExcluded([]))}>
+                      done
+                    </button>
+                  </div>
                   {pickedSections.map((slug) => {
                     const list = topicsBySection.get(slug) ?? [];
                     const sec = sections.find((s) => s.slug === slug);
                     if (list.length === 0) return null;
                     return (
-                      <div className="pick-group" key={slug}>
-                        <div className="pick-group-sublabel">{sec?.name}</div>
-                        <ul className="pick-list">
+                      <div className="topic-group" key={slug}>
+                        {pickedSections.length > 1 && <div className="pick-group-sublabel">{sec?.name}</div>}
+                        <div className="topic-chips">
                           {list.map((t) => {
                             const on = !excluded.includes(t.slug);
                             return (
-                              <li key={t.slug}>
-                                <button className={`pick-row ${on ? "on" : ""}`} onClick={() => toggleExclude(t.slug)} role="checkbox" aria-checked={on}>
-                                  <span className={`pick-check ${on ? "on" : ""}`} aria-hidden />
-                                  <span className="pick-name">{t.name}</span>
-                                </button>
-                              </li>
+                              <button
+                                key={t.slug}
+                                className={`topic-chip ${on ? "on" : "off"}`}
+                                onClick={() => toggleExclude(t.slug)}
+                                aria-pressed={on}
+                              >
+                                {t.name}
+                              </button>
                             );
                           })}
-                        </ul>
+                        </div>
                       </div>
                     );
                   })}
-                  <button className="intent-link" onClick={() => (setCustomizing(false), setExcluded([]))}>
-                    done customizing
-                  </button>
                 </>
               )}
             </div>
