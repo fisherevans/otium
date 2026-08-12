@@ -1,5 +1,5 @@
 import { useMemo, type CSSProperties } from "react";
-import { ExternalLink, Bookmark, Heart } from "lucide-react";
+import { ExternalLink, Bookmark } from "lucide-react";
 import type { Item } from "@/api/client";
 import { BottomSheet } from "./BottomSheet";
 import { ReaderHeaderActions } from "./ReaderActions";
@@ -15,8 +15,7 @@ import { parseYouTubeId, embedUrl } from "@/lib/youtube";
 // once invoked. "Open original" is the secondary path (source page / app).
 //
 // The open engagement signal is owned by SessionPage (recordOpen fires it once
-// when the surface is invoked); this component emits nothing itself. Liking IS
-// owned here now (#1): the heart in the header/foot mirrors the reader's.
+// when the surface is invoked); this component emits nothing itself.
 //
 // #4: video maximizes the viewing area. The sheet widens past the reading column
 // (wide) so a landscape frame gets far more width than the old 640px column; a
@@ -63,8 +62,6 @@ export function Player({
   onClose,
   onOpenOriginal,
   onSave,
-  liked,
-  onLike,
 }: {
   item: Item | null;
   sourceTitle?: string;
@@ -73,9 +70,6 @@ export function Player({
   onOpenOriginal: () => void;
   // When present, a "Save" affordance opens the collection picker (#57).
   onSave?: () => void;
-  // Like from within the player (#1); omitted on surfaces that don't wire it.
-  liked?: boolean;
-  onLike?: () => void;
 }) {
   const isVideo = item ? ["short", "long", "live"].includes(item.media_type) : false;
   const isAudio = item?.media_type === "audio";
@@ -108,8 +102,6 @@ export function Player({
             item={item}
             onSave={onSave}
             onOpen={onOpenOriginal}
-            liked={onLike ? !!liked : undefined}
-            onLike={onLike}
           />
         ) : undefined
       }
@@ -152,12 +144,6 @@ export function Player({
           {hasBody && <div className="reader-body" dangerouslySetInnerHTML={{ __html: desc.html }} />}
 
           <div className="reader-foot">
-            {onLike && (
-              <button className={`reader-open ${liked ? "on" : ""}`} onClick={onLike}>
-                <Heart size={15} strokeWidth={1.75} fill={liked ? "currentColor" : "none"} aria-hidden />
-                {liked ? "Liked" : "Like"}
-              </button>
-            )}
             {onSave && (
               <button className="reader-open" onClick={onSave}>
                 <Bookmark size={15} strokeWidth={1.75} aria-hidden />

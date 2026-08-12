@@ -22,11 +22,11 @@ function contentKind(item: Item): "video" | "audio" | "read" {
 const FILTERS: { key: HistoryFilter; label: string }[] = [
   { key: "shown", label: "Shown" },
   { key: "read", label: "Read" },
-  { key: "liked", label: "Liked" },
   { key: "saved", label: "Saved" },
 ];
 
-// Human label for the raw item_state.state on each row.
+// Human label for the raw item_state.state on each row. `liked` is retired
+// (#142) but legacy rows may still carry it, so the label stays.
 const STATE_LABEL: Record<string, string> = {
   surfaced: "Shown",
   opened: "Read",
@@ -40,8 +40,7 @@ const PAGE = 50;
 
 const SUB: Record<HistoryFilter, string> = {
   shown: "Everything that's surfaced in a session, newest first.",
-  read: "Items you opened, liked, or saved - what you actually engaged with.",
-  liked: "Items you liked.",
+  read: "Items you opened or saved - what you actually engaged with.",
   saved: "Items you set aside to save.",
 };
 

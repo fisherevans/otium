@@ -1,15 +1,12 @@
 import { useEffect, useState } from "react";
-import { api, collectionDisplayName, LIKED_SLUG, type Collection, type Item } from "@/api/client";
+import { api, collectionDisplayName, type Collection, type Item } from "@/api/client";
 import { BottomSheet } from "./BottomSheet";
 
 // Save picker (#57): the deliberate "set this aside" path. A calm sheet of
 // collections with a checkmark per membership; tapping toggles it. "+ New
 // collection" creates one inline and drops the item straight in. Saving here
 // is organization only - it fires no engagement event and never re-ranks.
-//
-// The Liked collection is intentionally omitted: liking is the separate one-tap
-// path on the action bar, not a save target. Everything else (Saved, Watch
-// Later, and user lists) is a valid destination.
+// Every collection (Saved, Watch Later, and user lists) is a valid destination.
 export function SavePicker({
   item,
   open,
@@ -34,7 +31,7 @@ export function SavePicker({
     setLoading(true);
     api
       .collections(item.id)
-      .then((list) => setCols(list.filter((c) => c.slug !== LIKED_SLUG)))
+      .then(setCols)
       .catch((e) => setErr(String(e.message ?? e)))
       .finally(() => setLoading(false));
   }, [open, item]);

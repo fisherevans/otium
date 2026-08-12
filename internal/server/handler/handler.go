@@ -935,14 +935,14 @@ func (h *Handler) ItemEvent(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	var body struct {
-		Type      string `json:"type"` // seen | open | like | skip | save | dismiss
+		Type      string `json:"type"` // seen | open | skip | save | dismiss
 		SessionID string `json:"session_id"`
 	}
 	if !decode(w, r, &body) {
 		return
 	}
 	// `seen` = the item actually reached the user in the paced queue. Mark it
-	// surfaced without downgrading a stronger state (a liked item stays liked).
+	// surfaced without downgrading a stronger state (a saved item stays saved).
 	if body.Type == "seen" {
 		if err := h.db.MarkSurfaced(r.Context(), uid, []int64{itemID}); err != nil {
 			serverError(w, h.log, "mark seen", err)
@@ -951,23 +951,10 @@ func (h *Handler) ItemEvent(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusOK, map[string]any{"ok": true})
 		return
 	}
-	// `unlike` toggles OFF the Like: it removes the item from the auto Liked
-	// collection (#57) and nothing else. It deliberately does NOT touch item_state
-	// or fire a skip - un-liking is organization, not an engagement signal, so the
-	// ranker's like/skip semantics are unchanged. Logged to the append-only event
-	// stream (which the ranker doesn't read) for completeness.
-	if body.Type == "unlike" {
-		if err := h.db.RemoveItemFromBuiltinCollection(r.Context(), uid, store.SlugLiked, itemID); err != nil {
-			serverError(w, h.log, "unlike", err)
-			return
-		}
-		iid := itemID
-		_ = h.db.LogEvent(r.Context(), uid, "unlike", &iid, nil, body.SessionID, "")
-		writeJSON(w, http.StatusOK, map[string]any{"ok": true})
-		return
-	}
+	// Liking is retired (#142) - `like`/`unlike` are gone. The remaining explicit
+	// signals are open/skip/save/dismiss.
 	stateFor := map[string]string{
-		"open": "opened", "like": "liked", "skip": "skipped",
+		"open": "opened", "skip": "skipped",
 		"save": "saved", "dismiss": "dismissed",
 	}
 	st, ok := stateFor[body.Type]
@@ -981,15 +968,6 @@ func (h *Handler) ItemEvent(w http.ResponseWriter, r *http.Request) {
 	}
 	iid := itemID
 	_ = h.db.LogEvent(r.Context(), uid, body.Type, &iid, nil, body.SessionID, "")
-	// Wire Like -> the auto Liked collection (#57). Additive membership only: the
-	// `like` state + event above are the untouched engagement signal; adding to
-	// Liked is organization and never topics the ranker. A membership hiccup must
-	// not fail the like, so it's a warn, not a hard error.
-	if body.Type == "like" {
-		if err := h.db.AddItemToBuiltinCollection(r.Context(), uid, store.SlugLiked, itemID); err != nil {
-			h.log.Warn("add to liked collection", "err", err)
-		}
-	}
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
 }
 

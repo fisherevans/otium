@@ -35,8 +35,7 @@ function itemStamp(it: CollectionItem, sort: CollectionSort): string {
 // items with a Saved-date / Published-date sort toggle (#89). Each item opens
 // the in-app reader/player and can be removed. User lists can be created,
 // renamed, and deleted; builtins can't. The builtins keep backend slugs
-// (saved / watch-later / liked) but display as Saved / Read Later / Favorites
-// via collectionDisplayName (#89).
+// (saved / watch-later) but Read Later displays via collectionDisplayName (#89).
 //
 // This is organization, not consumption: opening an item here doesn't build a
 // session or emit engagement events. Calm by default - a quiet count, no badges.
@@ -220,7 +219,7 @@ export default function CollectionsPage({ embedded = false }: { embedded?: boole
         {embedded ? <span /> : <h1 className="display">Collections</h1>}
         <button className="lib-fsbtn" onClick={() => setCreating((c) => !c)}>{creating ? "Cancel" : "New"}</button>
       </div>
-      <p className="sub">Lists you've set items aside into. Saved and Read Later are always here; Favorites fills as you like.</p>
+      <p className="sub">Lists you've set items aside into. Saved and Read Later are always here; make your own for anything else.</p>
 
       {err && <p className="err">{err}</p>}
 

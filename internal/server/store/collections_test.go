@@ -36,7 +36,7 @@ func collBySlug(t *testing.T, cols []Collection, slug string) Collection {
 	return Collection{}
 }
 
-// TestEnsureBuiltinCollectionsIdempotent verifies the three builtins are seeded
+// TestEnsureBuiltinCollectionsIdempotent verifies the builtins are seeded
 // once, are order-stable, and re-seeding is a no-op (no dupes, no error).
 func TestEnsureBuiltinCollectionsIdempotent(t *testing.T) {
 	db, err := Open(":memory:")
@@ -59,11 +59,11 @@ func TestEnsureBuiltinCollectionsIdempotent(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(cols) != 3 {
-		t.Fatalf("want 3 builtins, got %d: %+v", len(cols), cols)
+	if len(cols) != 2 {
+		t.Fatalf("want 2 builtins, got %d: %+v", len(cols), cols)
 	}
-	// Order is Saved, Watch Later, Liked (seed order).
-	wantOrder := []string{SlugSaved, SlugWatchLater, SlugLiked}
+	// Order is Saved, Watch Later (seed order); Liked is retired (#142).
+	wantOrder := []string{SlugSaved, SlugWatchLater}
 	for i, c := range cols {
 		if c.Slug != wantOrder[i] {
 			t.Fatalf("order[%d] = %q, want %q", i, c.Slug, wantOrder[i])
@@ -115,8 +115,8 @@ func TestCollectionMembership(t *testing.T) {
 	if c := collBySlug(t, cols, SlugSaved); c.Contains == nil || !*c.Contains {
 		t.Fatalf("Saved should contain item1: %+v", c)
 	}
-	if c := collBySlug(t, cols, SlugLiked); c.Contains == nil || *c.Contains {
-		t.Fatalf("Liked should not contain item1: %+v", c)
+	if c := collBySlug(t, cols, SlugWatchLater); c.Contains == nil || *c.Contains {
+		t.Fatalf("Watch Later should not contain item1: %+v", c)
 	}
 	if c := collBySlug(t, mustList(t, db, u.ID, item2), SlugSaved); c.Contains == nil || *c.Contains {
 		t.Fatalf("Saved should not contain item2: %+v", c)
@@ -138,55 +138,6 @@ func TestCollectionMembership(t *testing.T) {
 	items, _ = db.CollectionItems(ctx, u.ID, saved.ID, SortSaved)
 	if len(items) != 1 || items[0].ID != item2 {
 		t.Fatalf("after remove want [item2], got %+v", items)
-	}
-}
-
-// TestLikeWiringToLikedCollection locks the Like -> Liked membership behavior
-// used by the ItemEvent handler: AddItemToBuiltinCollection seeds Liked if
-// absent and adds; the remove path takes it back out. Neither touches
-// item_state, so the ranker's like/skip signal is unaffected (asserted here).
-func TestLikeWiringToLikedCollection(t *testing.T) {
-	db, err := Open(":memory:")
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer db.Close()
-	ctx := context.Background()
-	u, err := db.UpsertUserByUsername(ctx, "tester", "")
-	if err != nil {
-		t.Fatal(err)
-	}
-	item := seedItem(t, db, u.ID, "liked-one")
-
-	// Add to Liked without pre-seeding builtins - the wiring must seed on demand.
-	if err := db.AddItemToBuiltinCollection(ctx, u.ID, SlugLiked, item); err != nil {
-		t.Fatal(err)
-	}
-	liked := collBySlug(t, mustList(t, db, u.ID, item), SlugLiked)
-	if liked.Contains == nil || !*liked.Contains {
-		t.Fatalf("Liked should contain the liked item: %+v", liked)
-	}
-	if liked.ItemCount != 1 {
-		t.Fatalf("Liked count = %d, want 1", liked.ItemCount)
-	}
-
-	// The like membership must NOT have written item_state (that's the ranker's
-	// signal, which #57 must leave alone).
-	var stateRows int
-	if err := db.sql.QueryRowContext(ctx, `SELECT COUNT(*) FROM item_state WHERE user_id = ? AND item_id = ?`, u.ID, item).Scan(&stateRows); err != nil {
-		t.Fatal(err)
-	}
-	if stateRows != 0 {
-		t.Fatalf("adding to Liked wrote %d item_state rows; must write 0", stateRows)
-	}
-
-	// Un-like removes membership, still no item_state.
-	if err := db.RemoveItemFromBuiltinCollection(ctx, u.ID, SlugLiked, item); err != nil {
-		t.Fatal(err)
-	}
-	liked = collBySlug(t, mustList(t, db, u.ID, item), SlugLiked)
-	if liked.Contains == nil || *liked.Contains {
-		t.Fatalf("Liked should no longer contain the item: %+v", liked)
 	}
 }
 
@@ -321,8 +272,8 @@ func TestBuiltinsProtected(t *testing.T) {
 	if err := db.DeleteCollection(ctx, u.ID, c.ID); err != nil {
 		t.Fatalf("delete user list: %v", err)
 	}
-	if len(mustList(t, db, u.ID, 0)) != 3 {
-		t.Fatal("after deleting the user list only the 3 builtins should remain")
+	if len(mustList(t, db, u.ID, 0)) != 2 {
+		t.Fatal("after deleting the user list only the 2 builtins should remain")
 	}
 }
 

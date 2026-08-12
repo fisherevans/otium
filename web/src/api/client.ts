@@ -185,7 +185,7 @@ export interface ItemContent {
 // --- #83 personal-history block ---
 // One history filter: the slice of item_state to browse. "shown" = everything
 // surfaced in a session; "read" = engaged (opened/liked/saved); then liked/saved.
-export type HistoryFilter = "shown" | "read" | "liked" | "saved";
+export type HistoryFilter = "shown" | "read" | "saved";
 
 // HistoryItem is an Item plus the user's interaction on it (#83). state is the
 // current item_state.state; interacted_at is when the interaction that put it in
@@ -309,19 +309,13 @@ export interface Collection {
   contains?: boolean;
 }
 
-// The Liked collection is driven exclusively by the Like button, so the Save
-// picker hides it - saving is the deliberate path, liking is the one-tap path.
-export const LIKED_SLUG = "liked";
-
-// Display relabel (#89): built-ins keep their backend slugs but read as
-// "Favorites" (liked) and "Read Later" (watch-later) everywhere in the UI.
-// Saved and user lists show their stored name. One place so the browse view and
-// the Save picker never disagree on a name.
+// Display relabel (#89): the watch-later builtin keeps its backend slug but reads
+// as "Read Later" everywhere in the UI. Saved and user lists show their stored
+// name. One place so the browse view and the Save picker never disagree on a
+// name. (The "liked"/Favorites builtin is retired, #142 - the server no longer
+// returns it.)
 export function collectionDisplayName(c: Collection): string {
-  if (c.kind === "builtin") {
-    if (c.slug === "liked") return "Favorites";
-    if (c.slug === "watch-later") return "Read Later";
-  }
+  if (c.kind === "builtin" && c.slug === "watch-later") return "Read Later";
   return c.name;
 }
 

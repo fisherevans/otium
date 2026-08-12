@@ -8,30 +8,32 @@ import (
 )
 
 // Collection kinds and the reserved builtin slugs. Builtins are seeded per user
-// and protected: they can't be renamed or deleted. Liked is driven by the Like
-// button (membership follows like/unlike); Saved and Watch Later are populated
-// through the Save picker.
+// and protected: they can't be renamed or deleted. Saved and Watch Later are
+// populated through the Save picker.
+//
+// SlugLiked is retired (#142): liking as a concept is gone. The slug constant
+// stays so ListCollections can hide any pre-existing "liked" collection from the
+// UI without a destructive migration - old rows remain in the DB, just unseen.
 const (
 	CollectionKindBuiltin = "builtin"
 	CollectionKindUser    = "user"
 
 	SlugSaved      = "saved"
 	SlugWatchLater = "watch-later"
-	SlugLiked      = "liked"
+	SlugLiked      = "liked" // retired; kept only to filter legacy rows out of the UI
 )
 
 // builtinCollections is the seed set, in display order (Sort follows the index).
 var builtinCollections = []struct{ name, slug string }{
 	{"Saved", SlugSaved},
 	{"Watch Later", SlugWatchLater},
-	{"Liked", SlugLiked},
 }
 
 // ErrCollectionProtected is returned when a rename/delete targets a builtin
 // collection (or a collection the user doesn't own). Handlers map it to 400.
 var ErrCollectionProtected = errors.New("collection is protected (builtin) or not found")
 
-// EnsureBuiltinCollections seeds the three builtins for a user idempotently. The
+// EnsureBuiltinCollections seeds the builtins for a user idempotently. The
 // ON CONFLICT DO NOTHING on (user_id, slug) makes it safe to call on every
 // collections request; a rename of a builtin's name would be preserved (we only
 // insert when absent).
@@ -62,8 +64,10 @@ func (db *DB) ListCollections(ctx context.Context, userID, itemID int64) ([]Coll
 		sel += `, 0 AS contains`
 	}
 	args = append(args, userID)
+	// Hide the retired "liked"/Favorites builtin (#142) without deleting its rows:
+	// a legacy account may still have the collection and its memberships.
 	q := sel + `
-	     FROM collections c WHERE c.user_id = ?
+	     FROM collections c WHERE c.user_id = ? AND c.slug != 'liked'
 	     ORDER BY CASE c.kind WHEN 'builtin' THEN 0 ELSE 1 END, c.sort, c.created_at, c.id`
 
 	rows, err := db.sql.QueryContext(ctx, q, args...)
@@ -227,44 +231,5 @@ func (db *DB) RemoveItemFromCollection(ctx context.Context, userID, collectionID
 	}
 	_, err := db.sql.ExecContext(ctx,
 		`DELETE FROM collection_items WHERE collection_id = ? AND item_id = ?`, collectionID, itemID)
-	return err
-}
-
-// builtinCollectionID returns the id of a user's builtin collection by slug,
-// seeding the builtins first so it exists. Used to wire the Like button to the
-// Liked collection.
-func (db *DB) builtinCollectionID(ctx context.Context, userID int64, slug string) (int64, error) {
-	if err := db.EnsureBuiltinCollections(ctx, userID); err != nil {
-		return 0, err
-	}
-	var id int64
-	err := db.sql.QueryRowContext(ctx,
-		`SELECT id FROM collections WHERE user_id = ? AND slug = ?`, userID, slug).Scan(&id)
-	return id, err
-}
-
-// AddItemToBuiltinCollection adds an item to a builtin (by slug), seeding the
-// builtins if absent. This is the Like -> Liked wiring: membership only, no
-// engagement event and no item_state change, so the ranker's like/skip signal
-// is untouched.
-func (db *DB) AddItemToBuiltinCollection(ctx context.Context, userID int64, slug string, itemID int64) error {
-	id, err := db.builtinCollectionID(ctx, userID, slug)
-	if err != nil {
-		return err
-	}
-	_, err = db.sql.ExecContext(ctx,
-		`INSERT OR IGNORE INTO collection_items (collection_id, item_id) VALUES (?, ?)`, id, itemID)
-	return err
-}
-
-// RemoveItemFromBuiltinCollection removes an item from a builtin (by slug). The
-// un-like path: removes Liked membership without touching item_state.
-func (db *DB) RemoveItemFromBuiltinCollection(ctx context.Context, userID int64, slug string, itemID int64) error {
-	id, err := db.builtinCollectionID(ctx, userID, slug)
-	if err != nil {
-		return err
-	}
-	_, err = db.sql.ExecContext(ctx,
-		`DELETE FROM collection_items WHERE collection_id = ? AND item_id = ?`, id, itemID)
 	return err
 }

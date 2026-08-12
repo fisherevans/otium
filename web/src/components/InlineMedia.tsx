@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent } from "react";
-import { ExternalLink, Bookmark, Heart, FileText, ChevronLeft, Play, Pause, Maximize2, Minimize2 } from "lucide-react";
+import { ExternalLink, Bookmark, FileText, ChevronLeft, Play, Pause, Maximize2, Minimize2 } from "lucide-react";
 import type { Item } from "@/api/client";
 import { ShareActions } from "./ReaderActions";
 import { renderSummary } from "@/lib/html";
@@ -33,8 +33,6 @@ function fmtTime(s: number): string {
 // the feed from a swipe over the video.
 export function InlineMedia({
   item,
-  liked,
-  onLike,
   onSave,
   onOpenOriginal,
   onFirstPlay,
@@ -42,8 +40,6 @@ export function InlineMedia({
   onPrev,
 }: {
   item: Item;
-  liked?: boolean;
-  onLike?: () => void;
   onSave?: () => void;
   onOpenOriginal: () => void;
   onFirstPlay?: () => void;
@@ -307,11 +303,6 @@ export function InlineMedia({
             <button className={`im-act im-notes-toggle ${notes ? "on" : ""}`} onClick={() => setNotes((n) => !n)}>
               {notes ? <ChevronLeft size={16} strokeWidth={1.9} aria-hidden /> : <FileText size={16} strokeWidth={1.75} aria-hidden />}
               {notesLabel}
-            </button>
-          )}
-          {onLike && (
-            <button className={`im-act ${liked ? "on" : ""}`} onClick={onLike} aria-label={liked ? "Unlike" : "Like"}>
-              <Heart size={18} strokeWidth={1.75} fill={liked ? "currentColor" : "none"} aria-hidden />
             </button>
           )}
           {onSave && (

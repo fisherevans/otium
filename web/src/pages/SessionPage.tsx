@@ -10,7 +10,7 @@ import { SourceSheet } from "@/components/SourceSheet";
 import { TopicPill, CardSource, Byline, Blurb, Media } from "@/components/CardParts";
 import { InlineMedia } from "@/components/InlineMedia";
 import { ShareActions } from "@/components/ReaderActions";
-import { Heart, Bookmark, BookOpen, Play, ExternalLink } from "lucide-react";
+import { Bookmark, BookOpen, Play, ExternalLink } from "lucide-react";
 import { cardRender, isMedia, isVideo, isVertical } from "@/lib/render";
 import { mins } from "@/lib/format";
 
@@ -33,7 +33,7 @@ function contentKind(item: Item): "video" | "audio" | "read" {
 type Checkin = null | "fast";
 
 // Mindfulness check-in tuning (#68/#137). The nudge is pattern-based, not
-// speed-based: pass this many cards in a row without opening ANY (open/click/like/
+// speed-based: pass this many cards in a row without opening ANY (open/click/
 // save) before the calm check-in surfaces. Deliberately high - a real "scrolling
 // past everything" run, not a few skipped headlines. Any engagement resets it.
 const FAST_STREAK = 8;
@@ -48,7 +48,6 @@ export default function SessionPage() {
   const [themes, setThemes] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState("");
-  const [liked, setLiked] = useState<Set<number>>(new Set());
   const [saveItem, setSaveItem] = useState<Item | null>(null); // Save picker target (#57)
   const [menuOpen, setMenuOpen] = useState(false);
   const [recapOpen, setRecapOpen] = useState(false); // #134: end-of-session recap
@@ -88,7 +87,7 @@ export default function SessionPage() {
   const shownAt = useRef(Date.now());
   const fastStreak = useRef(0);
   const shownIds = useRef<Set<number>>(new Set());
-  const engaged = useRef<Set<number>>(new Set()); // ids that got open/like/save
+  const engaged = useRef<Set<number>>(new Set()); // ids that got open/save
   const opened = useRef<Set<number>>(new Set()); // ids that fired an `open` event (dedupe, #51)
   // #135 active-reading timer: the in-app read/watch currently being timed.
   const readTimer = useRef<{ itemId: number; kind: string; openedAt: number; hiddenMs: number; hiddenSince: number | null } | null>(null);
@@ -332,7 +331,8 @@ export default function SessionPage() {
               const wasEngaged = engaged.current.has(left.item.id);
               // Advancing forward without engaging is a skip (next == skip). This
               // is an EXPLICIT curation signal - always fired, independent of the
-              // dwell setting.
+              // dwell setting. Engagement = opened the reader/player, clicked
+              // through, or saved.
               if (!wasEngaged) api.itemEvent(left.item.id, "skip", id).catch(() => {});
               // Dwell measurement + the fast-scroll nudge are gated by the setting.
               // Dwell is append-only raw material (never re-ranks); the nudge is a
@@ -348,7 +348,7 @@ export default function SessionPage() {
                   fastStreak.current += 1;
                   if (fastStreak.current >= FAST_STREAK && !checkin) setCheckin("fast");
                 } else {
-                  fastStreak.current = 0;
+                  fastStreak.current = 0; // any engagement (open/save) resets it
                 }
               }
             }
@@ -410,8 +410,7 @@ export default function SessionPage() {
     if (!p) return;
     const dx = e.clientX - p.x;
     const dy = e.clientY - p.y;
-    // A dominant leftward drag on the focused card advances it (liking is an
-    // explicit heart-button tap, not a gesture).
+    // A dominant leftward drag on the focused card advances it.
     if (i === current && dx <= -SWIPE_DIST && Math.abs(dx) >= Math.abs(dy) * SWIPE_DOMINANCE) {
       p.moved = true; // keep cardClick from treating the follow-up click as a tap
       next();
@@ -496,19 +495,6 @@ export default function SessionPage() {
     api.recordRead(sel.item.id, id ?? "", 0, true, readKind(sel.item)).catch(() => {});
     window.open(sel.item.url, "_blank", "noopener");
   }
-  function likeItem(it: Item) {
-    engaged.current.add(it.id);
-    const willLike = !liked.has(it.id);
-    setLiked((s) => {
-      const n = new Set(s);
-      willLike ? n.add(it.id) : n.delete(it.id);
-      return n;
-    });
-    api.itemEvent(it.id, willLike ? "like" : "unlike", id).catch(() => {});
-  }
-  function like() {
-    if (cur) likeItem(cur.item);
-  }
   function save(sel: Selected) {
     engaged.current.add(sel.item.id);
     setSaveItem(sel.item);
@@ -538,8 +524,8 @@ export default function SessionPage() {
   }
 
   // Desktop keyboard navigation (#4): arrows page the reel, space/enter opens
-  // the focused item, L likes it, backspace returns to intent. Inert while a
-  // sheet or the reader is open (they own their own keys) or while typing.
+  // the focused item, backspace returns to intent. Inert while a sheet or the
+  // reader is open (they own their own keys) or while typing.
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
       if (content || menuOpen || breakdown || saveItem || sourceSel || checkin) return;
@@ -563,13 +549,6 @@ export default function SessionPage() {
           if (cur && !atEnd) {
             e.preventDefault();
             engage(cur);
-          }
-          break;
-        case "l":
-        case "L":
-          if (cur && !atEnd) {
-            e.preventDefault();
-            like();
           }
           break;
         case "Backspace":
@@ -682,8 +661,6 @@ export default function SessionPage() {
                 >
                   <InlineMedia
                     item={it.item}
-                    liked={liked.has(it.item.id)}
-                    onLike={like}
                     onSave={() => save(it)}
                     onOpenOriginal={() => openExternal(it)}
                     onFirstPlay={() => {
@@ -710,13 +687,6 @@ export default function SessionPage() {
                   <button className="callout-primary" onClick={primary.onClick}>
                     <primary.Icon size={16} strokeWidth={1.9} aria-hidden />
                     {primary.label}
-                  </button>
-                  <button
-                    className={`callout-act ${liked.has(it.item.id) ? "on" : ""}`}
-                    onClick={like}
-                    aria-label={liked.has(it.item.id) ? "Unlike" : "Like"}
-                  >
-                    <Heart size={18} strokeWidth={1.75} fill={liked.has(it.item.id) ? "currentColor" : "none"} aria-hidden />
                   </button>
                   <button className="callout-act" onClick={() => save(it)} aria-label="Save">
                     <Bookmark size={18} strokeWidth={1.75} aria-hidden />
@@ -788,7 +758,6 @@ export default function SessionPage() {
                 <li>{stat(openedItems.length - videoCount, "article opened", "articles opened")}</li>
                 {videoCount > 0 && <li>{stat(videoCount, "video watched", "videos watched")}</li>}
                 <li>{stat(sourceCount, "source explored", "sources explored")}</li>
-                {liked.size > 0 && <li>{stat(liked.size, "liked", "liked")}</li>}
               </ul>
               <p className="recap-close">You're caught up enough. Come back when you like.</p>
               <div className="recap-actions">
@@ -844,8 +813,6 @@ export default function SessionPage() {
         onClose={closeContent}
         onOpen={() => shown && openExternal(shown)}
         onSave={() => shown && setSaveItem(shown.item)}
-        liked={shown ? liked.has(shown.item.id) : false}
-        onLike={() => shown && likeItem(shown.item)}
       />
 
       {/* Source context menu (#75): tapping the source name on a card opens this -
