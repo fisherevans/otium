@@ -153,37 +153,55 @@ export function ReaderPage({
     return () => window.removeEventListener("keydown", onKey);
   }, [open, onClose]);
 
-  // Swipe right anywhere to go back to the feed (#120): track the finger, then
-  // animate off past ~90px or spring back. touch-action:pan-y (CSS) lets vertical
-  // scroll pass through while horizontal drags come here.
+  // Swipe right anywhere to go back to the feed (#120, hardened #142). The old
+  // version was flaky: any early vertical drift permanently killed the gesture
+  // (start=null), so a swipe that dipped a few pixels down first - common while
+  // reading - simply didn't register, forcing the back button. And with no
+  // pointer capture, a drag that left the element lost its release on desktop.
+  //
+  // Now the axis is decided ONCE, when travel first crosses a small slop, by
+  // whichever axis dominates - and it sticks for the rest of the gesture. A
+  // rightward-dominant move locks into "swipe" (and captures the pointer so the
+  // rest of the drag can't be lost); a vertical-dominant move locks into "scroll"
+  // and we never touch it, so native scrolling is untouched. touch-action:pan-y
+  // (CSS) still lets vertical panning through.
   const start = useRef<{ x: number; y: number } | null>(null);
-  const tracking = useRef(false);
+  const mode = useRef<"undecided" | "swipe" | "scroll">("undecided");
+  const SLOP = 8; // px of travel before we commit to an axis
   function onPointerDown(e: ReactPointerEvent) {
     start.current = { x: e.clientX, y: e.clientY };
-    tracking.current = false;
+    mode.current = "undecided";
   }
   function onPointerMove(e: ReactPointerEvent) {
     const s = start.current;
-    if (!s) return;
+    if (!s || mode.current === "scroll") return;
     const dx = e.clientX - s.x;
     const dy = e.clientY - s.y;
-    if (!tracking.current) {
-      if (dx > 8 && Math.abs(dx) > Math.abs(dy) * 1.3) {
-        tracking.current = true;
+    if (mode.current === "undecided") {
+      if (Math.max(Math.abs(dx), Math.abs(dy)) < SLOP) return; // not enough travel yet
+      // Commit to the dominant axis. Rightward + horizontal-dominant is a back
+      // swipe; anything else is a scroll we leave alone.
+      if (dx > 0 && Math.abs(dx) >= Math.abs(dy)) {
+        mode.current = "swipe";
         setDragging(true);
-      } else if (Math.abs(dy) > 12) {
-        start.current = null; // it's a vertical scroll - let it be
+        try {
+          e.currentTarget.setPointerCapture(e.pointerId); // don't lose the release
+        } catch {
+          /* capture is best-effort */
+        }
+      } else {
+        mode.current = "scroll";
         return;
       }
     }
-    if (tracking.current) setDrag(Math.max(0, dx));
+    if (mode.current === "swipe") setDrag(Math.max(0, dx));
   }
   function onPointerUp() {
-    const wasTracking = tracking.current;
-    tracking.current = false;
+    const wasSwiping = mode.current === "swipe";
+    mode.current = "undecided";
     start.current = null;
     setDragging(false);
-    if (!wasTracking) return;
+    if (!wasSwiping) return;
     setDrag((d) => {
       if (d != null && d > 90) {
         window.setTimeout(onClose, 200); // let the slide-out play, then unmount
