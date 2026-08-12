@@ -592,26 +592,15 @@ h1.display {
 }
 /* Progress + time-left, pinned at the very bottom (#120): the same spot the
    reader keeps its reading progress, so "how far through" is always here. */
+/* #142: the foot is just a quiet "end on your terms" affordance now - no timer,
+   no progress bar (watching the clock made reading a race). Centered + a hairline
+   so it reads as a calm footer, not a call to action. */
 .session-foot {
   flex: 0 0 auto;
-}
-.session-time {
-  display: block;
-  text-align: right;
-  padding: 4px 16px 5px;
-  font-family: var(--mono);
-  font-size: 11px;
-  color: var(--ink-mute);
-  white-space: nowrap;
-}
-.session-progress {
-  height: 6px;
-  background: var(--paper-3);
-  overflow: hidden;
-}
-.session-progress-fill {
-  height: 100%;
-  background: var(--ink);
+  display: flex;
+  justify-content: center;
+  border-top: 1px solid var(--hair);
+  padding: 7px 16px 8px;
 }
 
 .stage {
@@ -4060,9 +4049,26 @@ button.id-source.lead {
 .session-end {
   background: none; border: none; cursor: pointer;
   font-family: var(--grot); font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase;
-  color: var(--ink-mute); padding: 0 0 0 12px; white-space: nowrap;
+  color: var(--ink-mute); padding: 0; white-space: nowrap;
 }
 .session-end:active { color: var(--ink); }
+
+/* #142: the session-over hub - extend / start new / end, all first-class. */
+.session-over-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 100%;
+  max-width: 320px;
+  margin: 22px auto 0;
+}
+.session-over-actions .btn { width: 100%; }
+.extend-row {
+  display: flex;
+  gap: 10px;
+}
+.extend-row .btn { flex: 1; }
+
 .recap { text-align: center; padding: 4px 2px 8px; }
 .recap-lead { font-family: var(--serif); font-size: 20px; line-height: 1.35; margin-bottom: 14px; }
 .recap-stats { list-style: none; padding: 0; margin: 0 0 14px; display: flex; flex-direction: column; gap: 6px; }

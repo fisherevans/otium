@@ -91,6 +91,9 @@ export default function SessionPage() {
   const opened = useRef<Set<number>>(new Set()); // ids that fired an `open` event (dedupe, #51)
   // #135 active-reading timer: the in-app read/watch currently being timed.
   const readTimer = useRef<{ itemId: number; kind: string; openedAt: number; hiddenMs: number; hiddenSince: number | null } | null>(null);
+  // #142: running total of in-app read/watch time this session, for the recap
+  // ("how long you actually spent in the articles"). Accrued as each read closes.
+  const readMsTotal = useRef(0);
   const lastContent = useRef<Selected | null>(null); // retains the surface item through the exit anim
   const prevIdx = useRef(0);
   const endedServer = useRef(false); // did we already mark the session ended server-side
@@ -146,6 +149,7 @@ export default function SessionPage() {
     shownIds.current = new Set();
     engaged.current = new Set();
     opened.current = new Set();
+    readMsTotal.current = 0;
     api
       .currentSession()
       .then((s) => {
@@ -469,6 +473,7 @@ export default function SessionPage() {
     if (!t) return;
     const hidden = t.hiddenMs + (t.hiddenSince !== null ? Date.now() - t.hiddenSince : 0);
     const ms = Math.max(0, Date.now() - t.openedAt - hidden);
+    readMsTotal.current += ms;
     api.recordRead(t.itemId, id ?? "", ms, false, t.kind).catch(() => {});
   }
   function openContent(sel: Selected) {
@@ -512,6 +517,16 @@ export default function SessionPage() {
   function dismissCheckin() {
     setCheckin(null);
     fastStreak.current = 0;
+  }
+  // #142: add more time from the session-over hub. Unfreezes the reel and drops
+  // the user back where they were (the item we froze at) with the extra minutes,
+  // so "add time" feels like the session simply continued.
+  function extend(more: number) {
+    const back = overIdx;
+    setDuration((d) => d + more);
+    setOverIdx(null);
+    setRecapOpen(false);
+    if (back !== null) requestAnimationFrame(() => scrollTo(Math.min(back, items.length - 1)));
   }
 
   // The primary callout button per render state (#96): label + icon + action.
@@ -573,7 +588,6 @@ export default function SessionPage() {
     );
   }
 
-  const progress = Math.min(1, elapsed / durationSec);
   const shownItems = overIdx !== null ? items.slice(0, visibleCount) : items;
 
   return (
@@ -713,39 +727,51 @@ export default function SessionPage() {
             itemEls.current[visibleCount] = el;
           }}
         >
-          <div className="center" style={{ padding: "20px 0" }}>
+          {/* #142: the session-over hub. When time's up it's not a hard stop -
+              add more time, start fresh, or end and see the recap. All three are
+              first-class here (extend is not buried as a fine-print link). */}
+          <div className="center session-over" style={{ padding: "20px 0" }}>
             <p className="display">{overIdx !== null ? "That's your session." : "That's everything new."}</p>
             <p>
               {overIdx !== null
-                ? `About ${mins(elapsed)} spent - that's the time you asked for.`
+                ? `About ${mins(elapsed)} of reading - the time you set aside.`
                 : `You're caught up on ${themes.length ? themes.join(", ") : "everything you follow"}.`}
             </p>
-            <button className="btn" onClick={goHome}>Start a new session</button>
+            <div className="session-over-actions">
+              {overIdx !== null && (
+                <div className="extend-row">
+                  <button className="btn ghost" onClick={() => extend(5)}>+5 min</button>
+                  <button className="btn ghost" onClick={() => extend(10)}>+10 min</button>
+                </div>
+              )}
+              <button className="btn" onClick={goHome}>Start a new session</button>
+              <button className="btn" onClick={() => setRecapOpen(true)}>End session</button>
+            </div>
           </div>
         </div>
       </div>
 
-      {/* Progress + time-left pinned at the bottom (#120), the same spot the reader
-          keeps its reading progress - so "how far through" is always bottom-of-screen
-          in every context. The reader overlay covers this while reading. */}
+      {/* #142: no timer, no progress bar. Watching the countdown while swiping
+          added stress and made reading feel like a race against the clock - the
+          exact opposite of the intent. The time budget still runs in the
+          background (it surfaces the session-over hub when it's up); we just don't
+          show it ticking. All that stays here is a quiet way to end on your own
+          terms, any time - which opens the recap. */}
       <div className="session-foot">
-        <span className="session-time">
-          {Math.max(0, Math.round((durationSec - elapsed) / 60))} min left
-        </span>
-        <div className="session-progress" aria-hidden>
-          <div className="session-progress-fill" style={{ width: `${progress * 100}%` }} />
-        </div>
-        {/* #133: end on your terms, any time. Opens the recap, never a race. */}
         <button className="session-end" onClick={() => setRecapOpen(true)}>
           End session
         </button>
       </div>
 
-      {/* #134: the end-of-session recap - intentional completion, never failure. */}
-      <Dialog open={recapOpen} onClose={() => setRecapOpen(false)} kicker="Session">
+      {/* #134/#142: the end-of-session recap report - intentional completion,
+          never failure. Reached from "End session" (here or on the over-hub). It
+          reports what the time went to: articles opened, videos watched, sources
+          explored, and how long was actually spent reading in-app. */}
+      <Dialog open={recapOpen} onClose={() => setRecapOpen(false)} kicker="Session recap">
         {(() => {
           const openedItems = items.filter((s) => opened.current.has(s.item.id));
           const spent = Math.max(1, Math.round(elapsed / 60));
+          const readMin = Math.round(readMsTotal.current / 60000);
           const videoCount = openedItems.filter((s) => isVideo(s.item)).length;
           const sourceCount = new Set(openedItems.map((s) => s.item.source_id)).size;
           const stat = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
@@ -758,24 +784,15 @@ export default function SessionPage() {
                 <li>{stat(openedItems.length - videoCount, "article opened", "articles opened")}</li>
                 {videoCount > 0 && <li>{stat(videoCount, "video watched", "videos watched")}</li>}
                 <li>{stat(sourceCount, "source explored", "sources explored")}</li>
+                {readMin > 0 && <li>{stat(readMin, "minute reading in-app", "minutes reading in-app")}</li>}
               </ul>
               <p className="recap-close">You're caught up enough. Come back when you like.</p>
               <div className="recap-actions">
                 <button className="btn" onClick={goHome}>
                   Start a new session
                 </button>
-                <button
-                  className="intent-link"
-                  onClick={() => {
-                    setDuration((d) => d + 5);
-                    setOverIdx(null);
-                    setRecapOpen(false);
-                  }}
-                >
-                  extend 5 more minutes
-                </button>
                 <button className="intent-link" onClick={() => setRecapOpen(false)}>
-                  keep reading
+                  back to reading
                 </button>
               </div>
             </div>
