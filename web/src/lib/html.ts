@@ -94,9 +94,55 @@ export interface RenderedSummary {
   empty: boolean;
 }
 
+// imageKey normalizes an image URL to an identity that ignores the resolution
+// variant (#142): WordPress feeds ship the SAME photo twice - the prepended
+// featured image (`-1024x681`) and the in-body figure (`-1200x798`) - at
+// different `-WIDTHxHEIGHT` sizes, so a raw-src compare misses the duplicate.
+// Strip the size suffix and the query/hash so both map to one key.
+function imageKey(src: string): string {
+  try {
+    const u = new URL(src, window.location.origin);
+    u.search = "";
+    u.hash = "";
+    const path = u.pathname.replace(/-\d+x\d+(?=\.[a-z0-9]+$)/i, "");
+    return u.host + path;
+  } catch {
+    return src.trim();
+  }
+}
+
+// dedupeImages drops repeated copies of the same photo, keeping the captioned
+// one when there is a choice (it's the more informative version). A removed image
+// takes its wrapping <figure> with it when that figure carries nothing else.
+function dedupeImages(doc: Document): void {
+  const groups = new Map<string, HTMLImageElement[]>();
+  for (const img of Array.from(doc.querySelectorAll("img"))) {
+    const key = imageKey(img.getAttribute("src") ?? "");
+    if (!key) continue;
+    (groups.get(key) ?? groups.set(key, []).get(key)!).push(img);
+  }
+  const captioned = (img: HTMLImageElement) => {
+    const fig = img.closest("figure");
+    return !!(fig && fig.querySelector("figcaption"));
+  };
+  for (const group of groups.values()) {
+    if (group.length < 2) continue;
+    const keep = group.find(captioned) ?? group[0];
+    for (const img of group) {
+      if (img === keep) continue;
+      const fig = img.closest("figure");
+      if (fig && !fig.querySelector("figcaption") && fig.querySelectorAll("img, iframe, video").length <= 1) {
+        fig.remove();
+      } else {
+        img.remove();
+      }
+    }
+  }
+}
+
 export function renderSummary(raw: string | undefined): RenderedSummary {
   if (!raw || !raw.trim()) return { html: "", empty: true };
-  const html = DOMPurify.sanitize(raw, {
+  const clean = DOMPurify.sanitize(raw, {
     ALLOWED_TAGS,
     ALLOWED_ATTR,
     ADD_ATTR: ["target", "rel"], // keep the rel/target the hook adds
@@ -104,9 +150,11 @@ export function renderSummary(raw: string | undefined): RenderedSummary {
     // javascript:/data: URIs on links are blocked by DOMPurify's default URI
     // policy; only http(s)/mailto (and data: images) survive.
   });
+  const doc = new DOMParser().parseFromString(clean, "text/html");
+  dedupeImages(doc);
+  const html = doc.body.innerHTML;
   // A body is "empty" only if it has neither text nor media - an image- or
   // video-only article still renders (#142), it just carries no prose.
-  const doc = new DOMParser().parseFromString(html, "text/html");
   const text = doc.body.textContent?.trim() ?? "";
   const hasMedia = doc.body.querySelector("img, picture, iframe") !== null;
   return { html, empty: text.length === 0 && !hasMedia };

@@ -118,7 +118,14 @@ export function ReaderPage({
     return () => {
       cancelled = true;
     };
-  }, [open, itemId, preloaded, item]);
+    // Key on the item's identity, NOT the item/preloaded object refs (#142): the
+    // parent re-renders every second (the session's elapsed ticker) with fresh
+    // refs, and depending on them re-ran this effect ~1/s, re-setting the body -
+    // which re-parsed the HTML and reloaded the images (the "flickering"). An
+    // item's content is stable for a given id, so `open` + `itemId` is enough; the
+    // closure captures the current item/preloaded when the id actually changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, itemId]);
 
   // Desktop keyboard controls (#4): backspace/escape closes back to the card,
   // space / arrows page the article. Active only while the reader is open.
