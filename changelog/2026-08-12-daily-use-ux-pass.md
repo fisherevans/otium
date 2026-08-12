@@ -22,9 +22,15 @@ A batch of changes from Fisher living in the app (issue #142):
   time).
 - **Reader swipe-back hardened.** Decides the gesture axis once at an 8px slop and
   captures the pointer, so a back-swipe no longer dies on early vertical drift.
-- **Start-session picker recomposed.** Sections are tap-to-fill tiles (like the time
-  chips); topics are inline pill toggles - the checkbox-form + separate customize
-  mode is gone.
+- **Start-session picker is a three-screen flow.** Time -> section -> topics+Begin,
+  each sparse enough to fit without scrolling. Sections are tactile tiles; tapping one
+  auto-advances (single-select). A "Select multiple" link switches to checkboxes + a
+  Next button. Topics fine-tune on their own screen as inline pills. Back button +
+  swipe-right move backward.
+- **Dark mode.** An always-available light/dark toggle in the header (both the main
+  chrome and the session chrome). The e-ink language inverted - light ink on warm-dark
+  paper - driven entirely by overriding the palette tokens under [data-theme="dark"];
+  persisted to localStorage and applied pre-paint (no flash).
 - **Category-based noise filtering.** New items store their RSS `<category>` tags;
   `sources.archive_categories` blocks matching items in `eligible()` (sibling of the
   #118 keyword rule); the card `···` menu surfaces the item's categories as one-tap

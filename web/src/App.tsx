@@ -1,6 +1,7 @@
 import { NavLink, Route, Routes, useLocation, useNavigate } from "react-router-dom";
 import { BookOpen, Library, Bookmark, User } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
+import { ThemeToggle } from "@/components/ThemeToggle";
 import HomePage from "@/pages/HomePage";
 import SessionPage from "@/pages/SessionPage";
 import CollectionsPage from "@/pages/CollectionsPage";
@@ -51,14 +52,20 @@ export default function App() {
               <span className="chrome-ic">←</span> intent
             </button>
             <span className="wordmark">otium</span>
-            <button className="chrome-btn right" onClick={() => nav("/sections")} aria-label="Go to library">
-              library
-            </button>
+            <span className="topbar-right">
+              <ThemeToggle />
+              <button className="chrome-btn right" onClick={() => nav("/sections")} aria-label="Go to library">
+                library
+              </button>
+            </span>
           </>
         ) : (
           <>
             <span className="wordmark">otium</span>
-            <span className="tagline">attention, on purpose</span>
+            <span className="topbar-right">
+              <span className="tagline">attention, on purpose</span>
+              <ThemeToggle />
+            </span>
           </>
         )}
       </header>
