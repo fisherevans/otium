@@ -82,13 +82,21 @@ export default function HomePage() {
     return m;
   }, [topics]);
 
-  // Topics in the currently-picked sections (the scope step 3 tunes).
-  const scopedTopics = useMemo(
-    () => pickedSections.flatMap((slug) => topicsBySection.get(slug) ?? []),
-    [pickedSections, topicsBySection],
+  const effectiveEverything = everything || pickedSections.length === 0;
+
+  // The sections whose topics step 3 tunes: the chosen ones, or ALL of them for
+  // "Everything you follow" (so it can still filter individual topics, grouped
+  // under their section headers). Ordered as `sections` for stable grouping.
+  const activeSectionSlugs = useMemo(
+    () => (effectiveEverything ? sections.map((s) => s.slug) : pickedSections),
+    [effectiveEverything, sections, pickedSections],
   );
 
-  const effectiveEverything = everything || pickedSections.length === 0;
+  // Topics in the active sections (the scope step 3 tunes).
+  const scopedTopics = useMemo(
+    () => activeSectionSlugs.flatMap((slug) => topicsBySection.get(slug) ?? []),
+    [activeSectionSlugs, topicsBySection],
+  );
 
   // Kept topic slugs (scope minus dropped).
   const keptTopics = useMemo(
@@ -121,12 +129,14 @@ export default function HomePage() {
   }
 
   // Unseen supply for the selection, to disable Begin when there's nothing new.
+  // Everything with nothing dropped counts every source (topicless included);
+  // otherwise it's the sources whose topic is still kept.
   const unseen = useMemo(() => {
-    if (effectiveEverything) return sources.reduce((n, s) => n + (s.unseen_count ?? 0), 0);
+    if (effectiveEverything && excluded.length === 0) return sources.reduce((n, s) => n + (s.unseen_count ?? 0), 0);
     const scope = keptTopics;
     const match = sources.filter((s) => s.topic_slug && scope.includes(s.topic_slug));
     return match.reduce((n, s) => n + (s.unseen_count ?? 0), 0);
-  }, [sources, effectiveEverything, keptTopics]);
+  }, [sources, effectiveEverything, excluded, keptTopics]);
   const nothingNew = sources.length > 0 && unseen === 0;
 
   async function begin() {
@@ -136,12 +146,12 @@ export default function HomePage() {
     try {
       let themes: string[] = [];
       let sectionSlugs: string[] = [];
-      if (!effectiveEverything) {
-        // Dropping a topic sends the kept ones as themes; an untouched selection
-        // sends the section slug so the server expands it (topicless sources too).
-        if (excluded.length > 0) themes = keptTopics;
-        else sectionSlugs = pickedSections;
-      }
+      // Dropping any topic sends the kept ones as themes (the excluded ones fall
+      // out) - this applies whether the base was a section or Everything. An
+      // untouched section selection sends the section slug so the server expands
+      // it (topicless sources too). Untouched Everything sends both empty.
+      if (excluded.length > 0) themes = keptTopics;
+      else if (!effectiveEverything) sectionSlugs = pickedSections;
       const resp = await api.createSession(minutes, themes, sectionSlugs);
       if (resp && resp.session_id) nav(`/session/${resp.session_id}`);
       else setErr("Nothing new to gather right now.");
@@ -330,26 +340,25 @@ export default function HomePage() {
             <button className="intent-back" onClick={() => setStep(2)} aria-label="Back to sections">
               ← {effectiveEverything ? "everything" : pickedSections.length === 1 ? sectionName(sections, pickedSections[0]) : `${pickedSections.length} sections`}
             </button>
-            <h1 className="display">{effectiveEverything ? "Ready" : "Fine-tune"}</h1>
-            <p className="sub">
-              {effectiveEverything
-                ? "Reading everything you follow."
-                : "Drop any topic you'd rather skip this session, or just begin."}
-            </p>
+            <h1 className="display">Fine-tune</h1>
+            <p className="sub">Drop any topic you'd rather skip this session, or just begin.</p>
           </div>
 
-          {!effectiveEverything && scopedTopics.length > 0 && (
+          {/* Topics grouped by their section header. For Everything this is every
+              section's topics (so you can still filter individually); for a picked
+              section (or sections) it's just those. Tap a pill to drop it. */}
+          {scopedTopics.length > 0 && (
             <div className="topic-tune open">
               <div className="topic-tune-head">
                 <span className="pick-group-label">Topics · {keptTopics.length} of {scopedTopics.length} on</span>
               </div>
-              {pickedSections.map((slug) => {
+              {activeSectionSlugs.map((slug) => {
                 const list = topicsBySection.get(slug) ?? [];
                 const sec = sections.find((s) => s.slug === slug);
                 if (list.length === 0) return null;
                 return (
                   <div className="topic-group" key={slug}>
-                    {pickedSections.length > 1 && <div className="pick-group-sublabel">{sec?.name}</div>}
+                    {activeSectionSlugs.length > 1 && <div className="pick-group-sublabel">{sec?.name}</div>}
                     <div className="topic-chips">
                       {list.map((t) => {
                         const on = !excluded.includes(t.slug);
@@ -377,8 +386,8 @@ export default function HomePage() {
             </p>
           )}
 
-          <button className="btn" onClick={begin} disabled={busy || nothingNew || (!effectiveEverything && keptTopics.length === 0)}>
-            {busy ? "Gathering…" : nothingNew ? "Nothing new right now" : "Begin"}
+          <button className="btn" onClick={begin} disabled={busy || nothingNew || (scopedTopics.length > 0 && keptTopics.length === 0)}>
+            {busy ? "Gathering…" : nothingNew ? "Nothing new right now" : scopedTopics.length > 0 && keptTopics.length === 0 ? "Pick a topic" : "Begin"}
           </button>
         </div>
       )}
