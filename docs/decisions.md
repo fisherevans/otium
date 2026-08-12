@@ -143,3 +143,31 @@ the product's identity, not a backlog:
 
 The risk for otium isn't under-featuring - it's getting talked into the features
 that killed the incumbents.
+
+## Daily-use UX pass (v0.67.0, #142)
+
+A batch of changes from living in the app, not a redesign. The reasoning worth keeping:
+
+- **Likes and Favorites removed entirely.** Liking added clutter and never got used;
+  "Favorites" was only the display name for the auto `liked` collection - one feature.
+  Curation is now collections-only (the deliberate Save), which is the altitude the
+  non-goals already endorse. Retired non-destructively: the ranker never read
+  `item_state='liked'`, and legacy `liked` collections are hidden, not deleted.
+- **Reader renders images (and safe video embeds).** The sanitizer stripped `img`/media,
+  so a text-first reader showed alt text only - and left the existing reader-images
+  preference (default on) inert. It now allows images + a YouTube/Vimeo iframe allowlist
+  (an arbitrary iframe is a phishing surface on our authed origin). Images stay e-ink
+  grayscale; video embeds stay in color, consistent with the media aesthetic.
+- **No visible timer during a session.** Watching the countdown/progress-bar tick made
+  reading a race - the opposite of the intent. The time budget still runs and still
+  surfaces the session-over screen; it's just not shown ticking. When time's up, the end
+  is a hub (extend +5/+10, start new, end-and-recap), never a hard stop.
+- **Category-based auto-archive (and a filter-from-card menu).** WordPress feeds (Seven
+  Days, VTDigger) tag obituaries / in-memoriam / legal + public notices with clean RSS
+  `<category>` values that don't collide with the news taxonomy - far more reliable than
+  title/summary keyword matching. This is deliberately the SAME class as the existing
+  per-source keyword auto-archive (#118): a source-level noise filter using the
+  *publisher's* tags, not user-applied per-item tags and not a general rules/automation
+  engine. That keeps it on the right side of the "no librarian tooling" non-goal - it
+  reduces noise in the finite session, it doesn't turn otium into an inbox with filters.
+  The card's `···` menu just surfaces the item's own categories as one-tap mutes.

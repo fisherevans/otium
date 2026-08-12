@@ -147,6 +147,12 @@ git log --grep '#14' --oneline                    # every commit in issue 14
   N=days); an item past the resolved window is ineligible. Plus per-source
   auto-archive **keywords** (`sources.archive_keywords`, #118): a title/summary match
   drops the item. Both live in `session.eligible()`.
+- **Category auto-archive** (#142) is the sibling of keyword auto-archive (#118):
+  `sources.archive_categories` (newline-separated) blocks items whose RSS `<category>`
+  tags match, checked in `session.eligible()` alongside keywords. Per-item categories
+  (`items.categories`) come from gofeed at ingest and are **new-items-only** - the upsert
+  is insert-only, so items ingested before #142 have empty categories and won't be caught
+  by a category rule (or show category chips in the card menu) until re-fetched as new.
 - **No skip penalty** (#109). shown/skipped are tracked for the stats surfaces and
   the future "you skip this a lot" recommendation (#19), never for scoring.
   `GET /sources/stats` exposes the per-source engagement bundle.
