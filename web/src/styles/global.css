@@ -2389,6 +2389,32 @@ h1.display {
   margin: 4px 0 16px;
   filter: grayscale(1) contrast(1.05);
 }
+/* #142: figures carry the caption with the photo; keep them within the column
+   and the img-display toggle applies (the img inside inherits it). */
+.reader-body figure {
+  display: var(--pref-reader-img-display, block);
+  margin: 8px 0 18px;
+}
+.reader-body figure img {
+  margin: 0 0 6px;
+}
+.reader-body figcaption {
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--ink-faint, var(--ink-soft));
+  font-style: italic;
+}
+/* #142: embedded video (host-allowlisted iframe). Kept in color - video is the
+   one place full-color content is intentional (see the media aesthetic note). */
+.reader-body iframe {
+  display: var(--pref-reader-img-display, block);
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  height: auto;
+  border: 1.5px solid var(--rule-hard);
+  margin: 8px 0 18px;
+  background: var(--paper-3);
+}
 .reader-body a {
   color: var(--ink);
   text-decoration: underline;
