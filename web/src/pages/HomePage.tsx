@@ -226,7 +226,7 @@ export default function HomePage() {
       )}
 
       {step === 2 && (
-        <div className="intent-step slide-up" key="step-section">
+        <div className="intent-step slide-up step-sections" key="step-section">
           <div className="intent-head">
             <button className="intent-back" onClick={() => setStep(1)} aria-label="Back to length">
               ← {minutesLabel(minutes ?? 0)}

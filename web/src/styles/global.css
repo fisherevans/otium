@@ -445,13 +445,21 @@ h1.display {
 
 /* #142: step-2 sections as tactile tiles (same family as the time chips) rather
    than form checkboxes - the old checkbox rows read as a settings form, not a
-   calm choice. Tap to fill; ink-fill = selected. */
+   calm choice. Tap to fill; ink-fill = selected. Kept compact so the whole
+   picker fits without scrolling (Fisher: every choice visible at once). */
+.step-sections .display {
+  font-size: 34px;
+  margin-bottom: 2px;
+}
+.step-sections .sub {
+  margin-bottom: 0;
+}
 .sec-tile {
   display: flex;
   flex-direction: column;
-  gap: 3px;
+  gap: 1px;
   width: 100%;
-  padding: 15px 16px;
+  padding: 11px 14px;
   background: var(--paper-2);
   border: 1.5px solid var(--rule);
   text-align: left;
@@ -462,11 +470,11 @@ h1.display {
   border-color: var(--ink);
 }
 .sec-tile.everything {
-  margin-top: 18px;
+  margin-top: 14px;
 }
 .sec-tile-name {
   font-family: var(--serif);
-  font-size: 18px;
+  font-size: 16px;
   color: var(--ink);
 }
 .sec-tile-meta {
@@ -483,14 +491,17 @@ h1.display {
 .sec-tiles {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 10px;
+  gap: 8px;
+  /* guaranteed gap before Begin even when the list is tall enough to eat the
+     auto-margin (so the button never abuts a tile). */
+  margin-bottom: 18px;
 }
 /* a hairline "or choose sections" divider between the Everything tile and the grid */
 .sec-divider {
   display: flex;
   align-items: center;
   gap: 12px;
-  margin: 16px 2px 12px;
+  margin: 12px 2px 10px;
   font-family: var(--grot);
   font-size: 10px;
   letter-spacing: 0.14em;
@@ -507,7 +518,7 @@ h1.display {
 
 /* topic fine-tune: inline pill toggles, on by default; tap to drop for the
    session. Struck + faded when off, so "what's excluded" is legible at a glance. */
-.topic-tune { margin-top: 16px; }
+.topic-tune { margin-top: 2px; margin-bottom: 18px; }
 .topic-tune-head {
   display: flex;
   align-items: center;
@@ -522,19 +533,19 @@ h1.display {
   padding: 0;
   margin: 0;
 }
-.topic-group { margin-bottom: 12px; }
+.topic-group { margin-bottom: 10px; }
 .topic-chips {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
 }
 .topic-chip {
-  padding: 7px 13px;
+  padding: 6px 12px;
   background: var(--ink);
   border: 1.5px solid var(--ink);
   border-radius: 999px;
   font-family: var(--grot);
-  font-size: 13px;
+  font-size: 12px;
   color: var(--paper);
   cursor: pointer;
 }
