@@ -335,7 +335,7 @@ export default function HomePage() {
       )}
 
       {step === 3 && (
-        <div className="intent-step slide-up step-sections" key="step-topics">
+        <div className="intent-step slide-up step-sections step-tune" key="step-topics">
           <div className="intent-head">
             <button className="intent-back" onClick={() => setStep(2)} aria-label="Back to sections">
               ← {effectiveEverything ? "everything" : pickedSections.length === 1 ? sectionName(sections, pickedSections[0]) : `${pickedSections.length} sections`}

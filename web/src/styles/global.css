@@ -86,7 +86,11 @@ button {
 .app {
   max-width: 640px;
   margin: 0 auto;
-  min-height: 100%;
+  /* #142: bound the shell to the viewport so .content scrolls INTERNALLY (fixed
+     header + scrolling content + fixed bottom nav). This lets a screen pin a
+     button to the bottom while its content scrolls above it - e.g. Begin on the
+     Everything fine-tune screen. */
+  height: 100%;
   display: flex;
   flex-direction: column;
   padding-bottom: env(safe-area-inset-bottom);
@@ -138,8 +142,10 @@ button {
 
 .content {
   flex: 1;
-  padding: 14px 20px 96px;
+  padding: 14px 20px 24px;
   min-height: 0;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
 }
 /* focused session route: no padding, no bottom nav - the session fills it */
 .content-session {
@@ -573,6 +579,18 @@ h1.display {
    session. Struck + faded when off, so "what's excluded" is legible at a glance. */
 .topic-tune { margin-top: 2px; margin-bottom: 18px; }
 .topic-tune.open { margin-top: 16px; }
+
+/* #142: on the fine-tune screen (esp. "Everything", which can list many topics)
+   the topic list scrolls inside .content while Begin stays pinned to the bottom -
+   never scroll to reach it. The paper-colored fade lets pills scroll cleanly
+   under the pinned button. */
+.step-tune .topic-tune { margin-bottom: 0; }
+.step-tune .btn {
+  position: sticky;
+  bottom: 0;
+  margin-top: 14px;
+  box-shadow: 0 -14px 16px -6px var(--paper);
+}
 .topic-tune-head {
   display: flex;
   align-items: center;
