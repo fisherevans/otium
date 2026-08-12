@@ -198,14 +198,16 @@ export default function HomePage() {
         <div className="intent-step" key="step-time">
           <div className="intent-head">
             <h1 className="display">How long?</h1>
-            <p className="sub">Pick a length. Otium builds a finite session to fit.</p>
+            <p className="sub">{custom ? "Set a length, then choose what to read." : "Tap a length to choose what to read."}</p>
           </div>
 
           {!custom ? (
             <>
+              {/* Tapping a preset picks it AND advances - same one-tap feel as the
+                  section screen. Custom is the only path that needs an explicit next. */}
               <div className="time-presets">
                 {prefs.presets.map((v) => (
-                  <button key={v} className={`time-chip ${minutes === v ? "on" : ""}`} onClick={() => setMinutes(v)}>
+                  <button key={v} className="time-chip" onClick={() => (setMinutes(v), setStep(2))}>
                     {minutesLabel(v)}
                   </button>
                 ))}
@@ -215,39 +217,40 @@ export default function HomePage() {
               </button>
             </>
           ) : (
-            <div className="time-custom">
-              <div className="time-readout">
-                <span className="big">{minutes ?? 0}</span>
-                <span className="unit">min</span>
+            <>
+              <div className="time-custom">
+                <div className="time-readout">
+                  <span className="big">{minutes ?? 0}</span>
+                  <span className="unit">min</span>
+                </div>
+                <input
+                  className="time-slider"
+                  type="range"
+                  min={MIN_MINUTES}
+                  max={MAX_MINUTES}
+                  step={STEP}
+                  value={minutes ?? MIN_MINUTES}
+                  onChange={(e) => setMinutes(Number(e.target.value))}
+                  aria-label="How long"
+                />
+                <input
+                  className="field time-number"
+                  type="number"
+                  min={MIN_MINUTES}
+                  max={MAX_MINUTES}
+                  value={minutes ?? MIN_MINUTES}
+                  onChange={(e) => setMinutes(Math.min(MAX_MINUTES, Math.max(MIN_MINUTES, Number(e.target.value) || MIN_MINUTES)))}
+                  aria-label="Minutes"
+                />
+                <button className="intent-link" onClick={() => setCustom(false)}>
+                  use a preset
+                </button>
               </div>
-              <input
-                className="time-slider"
-                type="range"
-                min={MIN_MINUTES}
-                max={MAX_MINUTES}
-                step={STEP}
-                value={minutes ?? MIN_MINUTES}
-                onChange={(e) => setMinutes(Number(e.target.value))}
-                aria-label="How long"
-              />
-              <input
-                className="field time-number"
-                type="number"
-                min={MIN_MINUTES}
-                max={MAX_MINUTES}
-                value={minutes ?? MIN_MINUTES}
-                onChange={(e) => setMinutes(Math.min(MAX_MINUTES, Math.max(MIN_MINUTES, Number(e.target.value) || MIN_MINUTES)))}
-                aria-label="Minutes"
-              />
-              <button className="intent-link" onClick={() => setCustom(false)}>
-                use a preset
+              <button className="btn" onClick={() => setStep(2)} disabled={minutes == null}>
+                Choose what to read →
               </button>
-            </div>
+            </>
           )}
-
-          <button className="btn" onClick={() => setStep(2)} disabled={minutes == null}>
-            Choose what to read →
-          </button>
         </div>
       )}
 
