@@ -152,11 +152,20 @@ export function InlineMedia({
   // iframe can't do this - it eats the events - which is the whole reason for the
   // IFrame API. In notes mode we only tap-toggle and let vertical drags scroll the
   // notes (touch-action: pan-y), so navigation is disabled there.
-  const TAP_SLOP = 10; // px of movement under which it's a tap, not a swipe
-  const SWIPE = 45; // px past which a drag navigates
-  const g = useRef<{ x: number; y: number } | null>(null);
+  //
+  // #149: navigation requires a deliberate *flick* - far enough AND fast enough.
+  // Distance alone misfired: pressing play janks the page while YouTube buffers,
+  // and if the finger drifts up during that freeze the release carried a big dy and
+  // got read as swipe-up -> next, so "press play" jumped to the next item. A flick
+  // is a quick gesture (< FLICK_MS); a slow drift over the same distance is not, and
+  // anything that isn't a flick is treated as a tap (play/pause). Tapping always
+  // plays; only an intentional fast swipe navigates.
+  const TAP_SLOP = 10; // px of movement under which it's unambiguously a tap
+  const SWIPE = 45; // px a flick must travel to navigate
+  const FLICK_MS = 400; // a navigation flick must complete within this
+  const g = useRef<{ x: number; y: number; t: number } | null>(null);
   function onDown(e: ReactPointerEvent) {
-    g.current = { x: e.clientX, y: e.clientY };
+    g.current = { x: e.clientX, y: e.clientY, t: e.timeStamp };
     // Capture the pointer so a swipe that leaves the overlay still delivers pointerup
     // here. Touch has implicit capture; mouse/desktop does not - without this a
     // swipe-off-the-element loses the release and never navigates.
@@ -172,17 +181,28 @@ export function InlineMedia({
     if (!d) return;
     const dx = e.clientX - d.x;
     const dy = e.clientY - d.y;
-    const tap = Math.abs(dx) < TAP_SLOP && Math.abs(dy) < TAP_SLOP;
-    if (tap) {
+    const dt = e.timeStamp - d.t;
+    // Notes mode: taps toggle play, vertical drags scroll the transcript (pan-y).
+    if (notes) {
+      if (Math.abs(dx) < TAP_SLOP && Math.abs(dy) < TAP_SLOP) togglePlay();
+      return;
+    }
+    // A navigation gesture must be a genuine flick: past the distance threshold AND
+    // quick. Everything else - a tap, a sloppy tap, or a slow freeze-drift - is
+    // play/pause, never an accidental jump to the next item.
+    const dist = Math.max(Math.abs(dx), Math.abs(dy));
+    const flick = dist >= SWIPE && dt <= FLICK_MS;
+    if (!flick) {
       togglePlay();
       return;
     }
-    if (notes) return; // notes mode: no navigation, drags scroll the text
     if (Math.abs(dy) >= Math.abs(dx)) {
-      if (dy <= -SWIPE) onNext?.(); // swipe up -> next
-      else if (dy >= SWIPE) onPrev?.(); // swipe down -> previous
+      if (dy <= -SWIPE) onNext?.(); // flick up -> next
+      else onPrev?.(); // flick down -> previous
     } else if (dx <= -SWIPE) {
-      onNext?.(); // swipe left -> next (feed consistency)
+      onNext?.(); // flick left -> next (feed consistency)
+    } else {
+      togglePlay(); // rightward flick has no nav target; treat as play/pause
     }
   }
 
