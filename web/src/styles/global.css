@@ -4450,6 +4450,10 @@ button.id-source.lead {
   max-width: 100%;
   margin: 2px 0 0;
 }
+.im-yt-mount {
+  position: absolute;
+  inset: 0;
+}
 .im-frame iframe,
 .im-yt {
   position: absolute;
@@ -4458,6 +4462,35 @@ button.id-source.lead {
   height: 100%;
   border: 0;
   display: block;
+}
+/* Subtle toggle to YouTube's native controls (#149). Top-right, out of the way of
+   YouTube's bottom control bar; deliberately quiet - a small translucent chip, not
+   the dark distracting block the old fullscreen button was. `.on` marks it active. */
+.im-ctltoggle {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 4;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border: 0;
+  border-radius: 7px;
+  background: rgba(20, 19, 17, 0.28);
+  color: rgba(255, 255, 255, 0.82);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+.im-ctltoggle:hover {
+  background: rgba(20, 19, 17, 0.42);
+  color: #fff;
+}
+.im-ctltoggle.on {
+  background: rgba(255, 255, 255, 0.86);
+  color: var(--ink, #141311);
 }
 /* Transparent gesture overlay over the player: taps toggle play/pause (via the
    IFrame API), swipes navigate the feed. Sits above the iframe so it - not YouTube -
