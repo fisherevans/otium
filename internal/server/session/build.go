@@ -54,9 +54,10 @@ var defaultDurationSec = map[string]int{
 // Topic is the item's primary topic identity, filled by the handler after
 // the allocator runs; nil for an topicless source.
 type Selected struct {
-	Item        store.Item      `json:"item"`
-	SourceTitle string          `json:"source_title"`
-	Topic       *store.TopicRef `json:"topic,omitempty"`
+	Item          store.Item      `json:"item"`
+	SourceTitle   string          `json:"source_title"`
+	SourceIconURL string          `json:"source_icon_url,omitempty"`
+	Topic         *store.TopicRef `json:"topic,omitempty"`
 	Score       float64         `json:"score"`
 	EstDuration int             `json:"est_duration_sec"`
 	Reason      string          `json:"reason"`

@@ -1,4 +1,4 @@
-import type { CSSProperties } from "react";
+import { useState, type CSSProperties } from "react";
 import type { Item, Selected } from "@/api/client";
 import { feedIcon } from "@/lib/feedIcons";
 import { clock, relTime, authorRedundant } from "@/lib/format";
@@ -81,8 +81,38 @@ export function CardSource({ sel, onSource }: { sel: Selected; onSource: () => v
         onSource();
       }}
     >
+      <SourceAvatar url={sel.source_icon_url} title={sel.source_title} color={sel.topic?.color} />
       {sel.source_title}
     </button>
+  );
+}
+
+// SourceAvatar (#149): a small circle to match what other feed apps show - the
+// creator's own framing (YouTube channel avatar, podcast cover art, RSS channel
+// image). Kept in color deliberately (like inline video): it's brand identity, not
+// content. When a source has no image we render a monogram in the topic's color
+// rather than reaching out to a favicon/avatar proxy, which would leak the follow
+// list to a third party. no-referrer keeps the same privacy posture as reader
+// images.
+export function SourceAvatar({ url, title, color }: { url?: string; title: string; color?: string }) {
+  const [broken, setBroken] = useState(false);
+  const letter = (title.trim()[0] || "?").toUpperCase();
+  if (url && !broken) {
+    return (
+      <img
+        className="src-avatar"
+        src={url}
+        alt=""
+        loading="lazy"
+        referrerPolicy="no-referrer"
+        onError={() => setBroken(true)}
+      />
+    );
+  }
+  return (
+    <span className="src-avatar mono" style={color ? { color, borderColor: color } : undefined} aria-hidden>
+      {letter}
+    </span>
   );
 }
 

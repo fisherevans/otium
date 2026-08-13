@@ -57,6 +57,17 @@ func (ing *Ingester) FetchSource(ctx context.Context, s store.Source) (int, erro
 		return 0, err
 	}
 
+	// Capture the feed's own channel image as the source avatar (podcast cover art,
+	// RSS channel <image>) when we don't already have one. This is the creator's
+	// framing - a circle to match what other feed apps show. Backfills on the next
+	// fetch for sources added before this existed; only fills an empty icon so a
+	// user-set or YouTube-resolved avatar is never overwritten.
+	if s.IconURL == "" && feed.Image != nil && feed.Image.URL != "" {
+		if err := ing.db.SetSourceIcon(ctx, s.ID, feed.Image.URL); err == nil {
+			s.IconURL = feed.Image.URL
+		}
+	}
+
 	fresh := 0
 	for _, e := range feed.Items {
 		it := normalize(s, e)

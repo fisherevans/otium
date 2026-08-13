@@ -217,6 +217,7 @@ export interface ScoreBreakdown {
 export interface Selected {
   item: Item;
   source_title: string;
+  source_icon_url?: string; // the source's circular avatar (channel/podcast/site image), if any
   topic?: TopicRef | null; // primary topic identity; absent for a topicless source
   score: number;
   est_duration_sec: number;

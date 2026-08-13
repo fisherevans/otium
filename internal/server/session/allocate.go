@@ -207,11 +207,12 @@ func Allocate(pool []store.Candidate, now time.Time, target int, rng *rand.Rand)
 // surface (#116/#120) replaces them.
 func selectedFrom(c store.Candidate, now time.Time) Selected {
 	return Selected{
-		Item:        c.Item,
-		SourceTitle: c.SourceTitle,
-		Score:       round2(freshness(c.PublishedAt, now, freshnessHalfLifeDays)),
-		EstDuration: estDuration(c),
-		Reason:      reasonOf(c, now),
-		Breakdown:   ScoreBreakdownFor(c, now),
+		Item:          c.Item,
+		SourceTitle:   c.SourceTitle,
+		SourceIconURL: c.SourceIconURL,
+		Score:         round2(freshness(c.PublishedAt, now, freshnessHalfLifeDays)),
+		EstDuration:   estDuration(c),
+		Reason:        reasonOf(c, now),
+		Breakdown:     ScoreBreakdownFor(c, now),
 	}
 }

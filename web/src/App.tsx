@@ -48,7 +48,20 @@ export default function App() {
       <header className={`topbar ${focused ? "session" : ""}`}>
         {focused ? (
           <>
-            <button className="chrome-btn left" onClick={() => nav("/")} aria-label="Back to intent">
+            <button
+              className="chrome-btn left"
+              onClick={() => {
+                // #149: leaving a session via the header is an "end", so surface the
+                // recap instead of silently navigating away. SessionPage listens and
+                // opens the recap (whose own buttons then go home or resume). If
+                // nothing handles it within a tick (not on a session), fall back to
+                // navigating.
+                let handled = false;
+                window.dispatchEvent(new CustomEvent("otium:request-end", { detail: { ack: () => (handled = true) } }));
+                if (!handled) nav("/");
+              }}
+              aria-label="Back to intent"
+            >
               <span className="chrome-ic">←</span> intent
             </button>
             <span className="wordmark">otium</span>

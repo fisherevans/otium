@@ -1,9 +1,10 @@
-import { useEffect, useMemo, useRef, useState, type UIEvent, type PointerEvent as ReactPointerEvent } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type UIEvent, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent } from "react";
 import { ChevronLeft, ExternalLink, Bookmark } from "lucide-react";
 import { api, type Item, type ItemContent } from "@/api/client";
 import { renderSummary } from "@/lib/html";
 import { fmtDate, readTime, authorRedundant } from "@/lib/format";
 import { ShareActions } from "./ReaderActions";
+import { ImageViewer } from "./ImageViewer";
 
 // The in-app reader as a PUSHED PAGE (#85), not a sheet. Opening full-text
 // content from the session slides in a full-screen page over everything; back
@@ -236,11 +237,34 @@ export function ReaderPage({
     if (s?.atBottom && onNext && atBottom()) {
       const dy = e.clientY - s.y;
       const dx = e.clientX - s.x;
-      if (dy <= -NEXT_SWIPE && Math.abs(dy) > Math.abs(dx)) onNext();
+      if (dy <= -NEXT_SWIPE && Math.abs(dy) > Math.abs(dx)) {
+        // Unmount the reader instantly rather than playing the slide-out. Otherwise
+        // the reader slides right AT THE SAME TIME as the feed scrolls up to the next
+        // card - two competing transitions. Vanishing here leaves only the feed's
+        // upward move visible, which is the one the user asked for.
+        setMounted(false);
+        onNext();
+      }
     }
   }
 
   const readEst = useMemo(() => (body ? readTime(body.html.replace(/<[^>]+>/g, " ")) : ""), [body]);
+
+  // #149: tapping an image in the article opens the full-screen zoomable viewer.
+  // The body is dangerouslySetInnerHTML, so we catch the click on the container and
+  // check the target. Stable (useCallback) so the memoized article element below
+  // keeps its reference and the flicker fix holds.
+  const [viewerSrc, setViewerSrc] = useState<string | null>(null);
+  const onBodyClick = useCallback((e: ReactMouseEvent) => {
+    const t = e.target as HTMLElement;
+    if (t.tagName === "IMG") {
+      const src = (t as HTMLImageElement).currentSrc || (t as HTMLImageElement).src;
+      if (src) {
+        e.preventDefault();
+        setViewerSrc(src);
+      }
+    }
+  }, []);
 
   // Memoize the article element itself, keyed only on the HTML string (#149). The
   // parent (SessionPage) re-renders every second for its active-time ticker, which
@@ -252,8 +276,8 @@ export function ReaderPage({
   // stay put. (The earlier #142 fix stopped the body from being *re-parsed*; this
   // stops it from being re-*committed*.)
   const articleBody = useMemo(
-    () => <div className="reader-body" dangerouslySetInnerHTML={{ __html: body?.html ?? "" }} />,
-    [body?.html],
+    () => <div className="reader-body" onClick={onBodyClick} dangerouslySetInnerHTML={{ __html: body?.html ?? "" }} />,
+    [body?.html, onBodyClick],
   );
 
   function onScroll(e: UIEvent<HTMLDivElement>) {
@@ -358,6 +382,9 @@ export function ReaderPage({
       <div className="rp-progress" aria-hidden>
         <div className="rp-progress-fill" style={{ transform: `scaleX(${progress})` }} />
       </div>
+
+      {/* #149: full-screen zoomable photo viewer for a tapped article image. */}
+      {viewerSrc && <ImageViewer src={viewerSrc} onClose={() => setViewerSrc(null)} />}
     </div>
   );
 }

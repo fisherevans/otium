@@ -216,6 +216,7 @@ type Session struct {
 type Candidate struct {
 	Item
 	SourceTitle   string
+	SourceIconURL string // the source's circular avatar (channel/podcast/site image), if any
 	SourceWeight  float64
 	PerSessionCap int
 	// SourceCadence is the source's average items/day over the recent window,

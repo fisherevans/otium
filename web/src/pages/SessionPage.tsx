@@ -276,6 +276,18 @@ export default function SessionPage() {
     return () => window.removeEventListener("popstate", onPop);
   }, []);
 
+  // #149: the header "← intent" asks to end the session. Every end route shows the
+  // recap (same as running out of time), so the stats are never skipped. We ack the
+  // event synchronously so the header knows it was handled and doesn't also navigate.
+  useEffect(() => {
+    const onEnd = (e: Event) => {
+      (e as CustomEvent).detail?.ack?.();
+      setRecapOpen(true);
+    };
+    window.addEventListener("otium:request-end", onEnd);
+    return () => window.removeEventListener("otium:request-end", onEnd);
+  }, []);
+
   // Persist the cursor as the user advances (debounced). The backend only accepts
   // a cursor write on an active session, so a late write is a harmless no-op.
   useEffect(() => {
@@ -603,7 +615,7 @@ export default function SessionPage() {
           break;
         case "Backspace":
           e.preventDefault();
-          goHome();
+          setRecapOpen(true); // #149: ending shows the recap, same as every other end route
           break;
       }
     }
@@ -649,7 +661,7 @@ export default function SessionPage() {
           <p>{fastStreak.current} cards passed without opening any.</p>
           <div className="checkin-actions">
             <button className="mini" onClick={dismissCheckin}>Keep going</button>
-            <button className="mini solid" onClick={goHome}>End session</button>
+            <button className="mini solid" onClick={() => { setCheckin(null); setRecapOpen(true); }}>End session</button>
           </div>
         </div>
       )}
@@ -706,7 +718,16 @@ export default function SessionPage() {
                 // to play), sized by real aspect ratio; it owns its own action row.
                 <div
                   className="card-media"
+                  // #149: fully isolate the media area from the card's swipe/tap
+                  // handlers. InlineMedia owns its own gestures (tap = play, flick =
+                  // navigate) and drives next/prev via props, so nothing here should
+                  // bubble to the card. Stopping only pointerdown+click let a tap on
+                  // "Show notes" or an action button leak a pointerUP to the card's
+                  // swipe detector (which read a stale press) and jump to the next
+                  // item. Bubble-phase stops: children handle first, then it ends here.
                   onPointerDown={(e) => e.stopPropagation()}
+                  onPointerMove={(e) => e.stopPropagation()}
+                  onPointerUp={(e) => e.stopPropagation()}
                   onClick={(e) => e.stopPropagation()}
                 >
                   <InlineMedia

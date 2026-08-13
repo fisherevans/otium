@@ -785,7 +785,10 @@ h1.display {
   display: flex;
   justify-content: center;
   border-top: 1px solid var(--hair);
-  padding: 7px 16px 8px;
+  /* #149: lift "End session" above the iOS home-indicator bar, which otherwise sits
+     on top of the tap target. env() is 0 on non-notched devices, so this is inert
+     there. */
+  padding: 7px 16px calc(8px + env(safe-area-inset-bottom, 0px));
 }
 
 .stage {
@@ -3599,6 +3602,34 @@ button.id-source.lead {
   /* #97: per-element source weight + ink (defaults 600 / soft). */
   font-weight: var(--pref-card-source-weight, 600);
   color: var(--pref-card-source-ink, var(--ink-soft));
+  /* #149: avatar + name on one baseline-ish row. */
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+/* #149: source avatar - a small circle carrying the creator's own framing, kept in
+   color (brand identity, like inline video). Monogram fallback for sources with no
+   image, tinted by the topic color. */
+.src-avatar {
+  flex: 0 0 auto;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  object-fit: cover;
+  background: var(--paper-3);
+  border: 1px solid var(--rule-soft, var(--rule));
+}
+.src-avatar.mono {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--sans, var(--serif));
+  font-weight: 700;
+  font-size: 11px;
+  line-height: 1;
+  color: var(--ink-soft);
+  border-color: currentColor;
+  background: color-mix(in srgb, currentColor 12%, var(--paper-2, var(--paper)));
 }
 .card-source:active {
   color: var(--ink);
@@ -4405,12 +4436,11 @@ button.id-source.lead {
   display: flex;
   flex-direction: column;
   min-height: 0;
-  flex: 1 1 auto;
-  /* Pin the player just under the byline instead of centering it in the leftover
-     card space - centering pushed the video far below the metadata, leaving a big
-     dead gap above it. Any slack now falls below the action row, where it reads as
-     calm margin rather than a disconnect. */
-  justify-content: flex-start;
+  /* Natural height, no grow. The parent .snap already centers its children
+     vertically (justify-content: center), so letting the media block size to its
+     content makes the whole card - metadata + player + actions - sit centered like
+     a text article, instead of the player growing to fill and stranding a dead gap.
+     The frame's own max-height keeps a tall video bounded. */
 }
 .inline-media {
   display: flex;
@@ -4579,6 +4609,7 @@ button.id-source.lead {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
+  justify-content: center; /* #149: same centered group on both orientations */
   gap: 6px;
   margin-top: 12px;
 }
@@ -4607,9 +4638,9 @@ button.id-source.lead {
   border-radius: 7px;
   margin-right: 2px;
 }
-.im-orig {
-  margin-left: auto;
-}
+/* #149: keep "Open original" in the centered group. It used to be pushed to the far
+   right (margin-left:auto), which made the horizontal layout look different from the
+   vertical one, where the row shrank to content and centered. */
 
 /* Show-notes / transcript: the inline-media becomes an absolute overlay over the
    whole card (the card is position:relative), so the player sticks cleanly at the
@@ -4669,4 +4700,49 @@ button.id-source.lead {
 .snap.media-card.vertical .topic-pill,
 .snap.media-card.vertical .card-top .reason {
   display: none;
+}
+
+/* ===========================================================================
+   Image viewer (#149): full-screen zoomable photo viewer for a tapped article
+   image. Above everything (the reader page is z-index ~40); its own dark scrim.
+   =========================================================================== */
+.reader-body img { cursor: zoom-in; }
+.imgviewer {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  touch-action: none;
+  -webkit-tap-highlight-color: transparent;
+}
+.imgviewer-img {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  user-select: none;
+  -webkit-user-drag: none;
+  will-change: transform;
+}
+.imgviewer-close {
+  position: absolute;
+  top: calc(12px + env(safe-area-inset-top, 0px));
+  right: 14px;
+  width: 40px;
+  height: 40px;
+  border: 0;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.45);
+  color: #fff;
+  cursor: pointer;
+  transition: opacity 0.3s ease;
+}
+.imgviewer-close.hidden {
+  opacity: 0;
+  pointer-events: none;
 }

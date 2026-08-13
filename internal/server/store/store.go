@@ -1277,6 +1277,15 @@ func (db *DB) MarkFetched(ctx context.Context, sourceID int64, fetchErr string) 
 	return err
 }
 
+// SetSourceIcon sets a source's avatar URL only when it's currently empty, so an
+// ingest-captured feed image never clobbers a user-set or YouTube-resolved icon.
+func (db *DB) SetSourceIcon(ctx context.Context, sourceID int64, url string) error {
+	_, err := db.sql.ExecContext(ctx,
+		`UPDATE sources SET icon_url = ? WHERE id = ? AND icon_url = ''`,
+		url, sourceID)
+	return err
+}
+
 // ItemWithState is an item plus the user's current engagement state on it, for the
 // source's article surfaces (#120): "" = unseen; else surfaced | opened | liked |
 // skipped | saved | dismissed. The displayed status (unread / presented / read /
@@ -1348,7 +1357,7 @@ func (db *DB) ListRecentItemsByTopic(ctx context.Context, userID, topicID int64,
 func candidateCols() string {
 	return `i.id, i.source_id, i.url, i.title, i.summary, i.content, i.content_source, i.author, i.thumbnail_url,
 	             i.media_type, i.duration_sec, i.aspect_ratio, i.categories, i.published_at, i.fetched_at,
-	             s.title, s.weight, s.per_session_cap, s.half_life_days, s.archive_after_days, s.archive_keywords, s.archive_categories,
+	             s.title, s.icon_url, s.weight, s.per_session_cap, s.half_life_days, s.archive_after_days, s.archive_keywords, s.archive_categories,
 	             (SELECT COUNT(*) FROM items i2 WHERE i2.source_id = s.id
 	                AND i2.published_at >= datetime('now', ?)) AS win_count,
 	             (SELECT COALESCE(julianday('now') - julianday(MIN(i2.published_at)), 0)
@@ -1404,7 +1413,7 @@ func scanCandidates(rows *sql.Rows, windowDays int) ([]Candidate, error) {
 		var winSpan, halfLife float64
 		if err := rows.Scan(&c.ID, &c.SourceID, &c.URL, &c.Title, &c.Summary, &c.Content, &c.ContentSource, &c.Author, &c.ThumbnailURL,
 			&c.MediaType, &c.DurationSec, &c.AspectRatio, &cats, &pub, &fetched,
-			&c.SourceTitle, &c.SourceWeight, &c.PerSessionCap, &c.SourceHalfLifeDays, &c.SourceArchiveAfterDays, &c.SourceArchiveKeywords, &c.SourceArchiveCategories,
+			&c.SourceTitle, &c.SourceIconURL, &c.SourceWeight, &c.PerSessionCap, &c.SourceHalfLifeDays, &c.SourceArchiveAfterDays, &c.SourceArchiveKeywords, &c.SourceArchiveCategories,
 			&winCount, &winSpan, &halfLife, &c.TopicArchiveAfterDays,
 			&c.SourceArchiveKeepCount, &c.SourceArchiveCombine, &c.ScoringConfig, &c.RecencyRank); err != nil {
 			return nil, err
