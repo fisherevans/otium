@@ -45,7 +45,7 @@ export default function YouPage() {
       <div className="lib-topbar">
         <h1 className="display">You</h1>
       </div>
-      <p className="sub">Settings and the quieter corners of otium.</p>
+      <p className="sub">Settings and the rest of otium.</p>
 
       {hasStats && rs && (
         <div className="you-stats">
@@ -114,7 +114,7 @@ export default function YouPage() {
         })}
       </div>
 
-      <p className="you-about">otium — attention, on purpose.</p>
+      <p className="you-about">otium - attention, on purpose.</p>
     </div>
   );
 }

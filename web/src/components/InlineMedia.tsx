@@ -1,17 +1,10 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent } from "react";
-import { ExternalLink, Bookmark, FileText, ChevronLeft, Play, Pause, Maximize2, Minimize2 } from "lucide-react";
+import { ExternalLink, Bookmark, FileText, ChevronLeft, Play } from "lucide-react";
 import type { Item } from "@/api/client";
 import { ShareActions } from "./ReaderActions";
 import { renderSummary } from "@/lib/html";
 import { parseYouTubeId, loadYouTubeIframeAPI } from "@/lib/youtube";
 import { videoAspect, isVertical, isVideo } from "@/lib/render";
-
-function fmtTime(s: number): string {
-  if (!s || !isFinite(s)) return "0:00";
-  const m = Math.floor(s / 60);
-  const sec = Math.floor(s % 60);
-  return `${m}:${sec.toString().padStart(2, "0")}`;
-}
 
 // InlineMedia is the in-feed player (multimedia overhaul). Media is consumed IN the
 // card - no modal. Video runs through the YouTube IFrame Player API (not a raw
@@ -20,8 +13,11 @@ function fmtTime(s: number): string {
 //   - one tap on the video plays/pauses it (single tap, with sound)
 //   - swipe up/down over the video navigates the feed (the Reels muscle memory)
 // A transparent gesture overlay sits over the player and interprets tap-vs-swipe;
-// native inline controls are hidden (a full overlay would cover them anyway), with a
-// fullscreen button handing off to the native player for scrubbing.
+// native inline controls are hidden (a full overlay would cover them anyway). There
+// is no in-card fullscreen button: iOS Safari can't fullscreen a div-wrapped
+// cross-origin iframe (requestFullscreen is a no-op there), so it was a dead,
+// distracting control on the primary device. "Open original" hands off to the
+// native YouTube player for fullscreen + scrubbing.
 //
 // Layout keys off the REAL frame aspect ratio (item.aspect_ratio): landscape bleeds
 // edge-to-edge, a vertical frame is height-bounded with stripped chrome. The "Show
@@ -68,14 +64,6 @@ export function InlineMedia({
   const hostRef = useRef<HTMLDivElement>(null);
   const frameRef = useRef<HTMLDivElement>(null);
   const playerRef = useRef<any>(null);
-
-  // Fullscreen is OUR mode, not YouTube's: we fullscreen the frame container (so this
-  // overlay comes with it) and render our own controls, because controls:0 also hides
-  // YouTube's native exit-fullscreen button. Inline stays chrome-free.
-  const [fs, setFs] = useState(false);
-  const [uiShown, setUiShown] = useState(true); // fullscreen control bar visibility
-  const [cur, setCur] = useState(0);
-  const [dur, setDur] = useState(0);
 
   function markPlayed() {
     if (played.current) return;
@@ -129,48 +117,6 @@ export function InlineMedia({
     else p.playVideo?.();
   }
 
-  function toggleFullscreen() {
-    const el = frameRef.current as any;
-    if (document.fullscreenElement) {
-      document.exitFullscreen?.();
-    } else {
-      (el?.requestFullscreen ?? el?.webkitRequestFullscreen)?.call(el);
-    }
-  }
-  function seek(t: number) {
-    playerRef.current?.seekTo?.(t, true);
-    setCur(t);
-  }
-
-  // Track fullscreen state (also catches the Android back-gesture exit).
-  useEffect(() => {
-    const onFs = () => {
-      setFs(document.fullscreenElement === frameRef.current);
-      setUiShown(true);
-    };
-    document.addEventListener("fullscreenchange", onFs);
-    return () => document.removeEventListener("fullscreenchange", onFs);
-  }, []);
-
-  // Poll playback position while fullscreen so our scrubber tracks the video.
-  useEffect(() => {
-    if (!fs) return;
-    const id = window.setInterval(() => {
-      const p = playerRef.current;
-      if (!p?.getCurrentTime) return;
-      setCur(p.getCurrentTime() || 0);
-      setDur(p.getDuration() || 0);
-    }, 400);
-    return () => window.clearInterval(id);
-  }, [fs]);
-
-  // Auto-hide the fullscreen control bar after inactivity while playing.
-  useEffect(() => {
-    if (!fs || !uiShown || !playing) return;
-    const id = window.setTimeout(() => setUiShown(false), 3200);
-    return () => window.clearTimeout(id);
-  }, [fs, uiShown, playing, cur]);
-
   // Gesture overlay: distinguish a tap (play/pause) from a swipe (navigate). A raw
   // iframe can't do this - it eats the events - which is the whole reason for the
   // IFrame API. In notes mode we only tap-toggle and let vertical drags scroll the
@@ -196,10 +142,6 @@ export function InlineMedia({
     const dx = e.clientX - d.x;
     const dy = e.clientY - d.y;
     const tap = Math.abs(dx) < TAP_SLOP && Math.abs(dy) < TAP_SLOP;
-    if (fs) {
-      if (tap) setUiShown((v) => !v); // fullscreen: tap toggles our control bar
-      return;
-    }
     if (tap) {
       togglePlay();
       return;
@@ -219,7 +161,7 @@ export function InlineMedia({
     <div className={`inline-media ${vertical ? "v" : "h"} ${notes ? "notes" : ""}`}>
       <div className="im-stage">
         {video && ytId ? (
-          <div ref={frameRef} className={`im-frame ${fs ? "fs" : ""}`} style={frameStyle}>
+          <div ref={frameRef} className="im-frame" style={frameStyle}>
             <div ref={hostRef} className="im-yt" />
             {/* Our own poster covers YouTube's unstarted branding (title / channel /
                 "Watch on YouTube" / big button) so the pre-play state is clean. The
@@ -229,16 +171,14 @@ export function InlineMedia({
                 className="im-poster"
                 style={item.thumbnail_url ? { backgroundImage: `url(${item.thumbnail_url})` } : undefined}
               >
-                {!fs && (
-                  <span className="im-play" aria-hidden>
-                    <Play size={30} strokeWidth={1.5} fill="currentColor" />
-                  </span>
-                )}
+                <span className="im-play" aria-hidden>
+                  <Play size={30} strokeWidth={1.5} fill="currentColor" />
+                </span>
               </div>
             )}
             <div
               className="im-gesture"
-              style={notes && !fs ? { touchAction: "pan-y" } : { touchAction: "none" }}
+              style={notes ? { touchAction: "pan-y" } : { touchAction: "none" }}
               onPointerDown={onDown}
               onPointerUp={onUp}
               role="button"
@@ -246,43 +186,12 @@ export function InlineMedia({
             >
               {/* Calm play affordance for the paused-mid-video state (controls:0 shows
                   nothing there); the unstarted poster keeps YouTube's own button. */}
-              {!playing && started && !fs && (
+              {!playing && started && (
                 <span className="im-play" aria-hidden>
                   <Play size={30} strokeWidth={1.5} fill="currentColor" />
                 </span>
               )}
             </div>
-
-            {/* Inline: one clear fullscreen affordance. Fullscreen: our own controls,
-                since controls:0 hides YouTube's (including its exit button). */}
-            {!fs ? (
-              <button className="im-fs" onClick={toggleFullscreen} aria-label="Fullscreen">
-                <Maximize2 size={18} strokeWidth={2} aria-hidden />
-              </button>
-            ) : (
-              uiShown && (
-                <div className="im-fsctl">
-                  <button className="im-fsc-btn" onClick={togglePlay} aria-label={playing ? "Pause" : "Play"}>
-                    {playing ? <Pause size={22} strokeWidth={1.8} aria-hidden /> : <Play size={22} strokeWidth={1.8} fill="currentColor" aria-hidden />}
-                  </button>
-                  <span className="im-time">{fmtTime(cur)}</span>
-                  <input
-                    className="im-scrub"
-                    type="range"
-                    min={0}
-                    max={dur || 0}
-                    step="any"
-                    value={Math.min(cur, dur || 0)}
-                    onChange={(e) => seek(Number(e.target.value))}
-                    aria-label="Seek"
-                  />
-                  <span className="im-time">{fmtTime(dur)}</span>
-                  <button className="im-fsc-btn" onClick={toggleFullscreen} aria-label="Exit fullscreen">
-                    <Minimize2 size={20} strokeWidth={1.9} aria-hidden />
-                  </button>
-                </div>
-              )
-            )}
           </div>
         ) : audio ? (
           <div className="im-audio">

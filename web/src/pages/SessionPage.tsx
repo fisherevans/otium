@@ -91,9 +91,18 @@ export default function SessionPage() {
   const opened = useRef<Set<number>>(new Set()); // ids that fired an `open` event (dedupe, #51)
   // #135 active-reading timer: the in-app read/watch currently being timed.
   const readTimer = useRef<{ itemId: number; kind: string; openedAt: number; hiddenMs: number; hiddenSince: number | null } | null>(null);
-  // #142: running total of in-app read/watch time this session, for the recap
-  // ("how long you actually spent in the articles"). Accrued as each read closes.
-  const readMsTotal = useRef(0);
+  // #149 recap accounting. In-app consumption time split by kind (article read vs
+  // video watch vs audio listen), so the recap can report each with its own total.
+  const readMsByKind = useRef<{ read: number; video: number; audio: number }>({ read: 0, video: 0, audio: 0 });
+  // Headlines advanced past without engaging (the "rest of the time" bucket), and
+  // the distinct sources a card was actually shown from this session.
+  const skipCount = useRef(0);
+  const exposedSources = useRef<Set<number>>(new Set());
+  // Session wall-clock start + time the tab was hidden (screen off / app switched),
+  // so the recap can separate "time away from otium" from active session time.
+  const sessionStart = useRef(Date.now());
+  const awayMs = useRef(0);
+  const awaySince = useRef<number | null>(null);
   const lastContent = useRef<Selected | null>(null); // retains the surface item through the exit anim
   const prevIdx = useRef(0);
   const endedServer = useRef(false); // did we already mark the session ended server-side
@@ -149,7 +158,12 @@ export default function SessionPage() {
     shownIds.current = new Set();
     engaged.current = new Set();
     opened.current = new Set();
-    readMsTotal.current = 0;
+    readMsByKind.current = { read: 0, video: 0, audio: 0 };
+    skipCount.current = 0;
+    exposedSources.current = new Set();
+    sessionStart.current = Date.now();
+    awayMs.current = 0;
+    awaySince.current = null;
     api
       .currentSession()
       .then((s) => {
@@ -285,15 +299,24 @@ export default function SessionPage() {
 
   // #135: pause the active-read timer while the tab is hidden (backgrounded /
   // screen locked), so "time spent" reflects real attention, not a left-open tab.
+  // #149: also accrue whole-session away time (tab hidden for any reason) so the
+  // recap can report "time away from otium" as its own line.
   useEffect(() => {
     function onVis() {
       const t = readTimer.current;
-      if (!t) return;
+      if (t) {
+        if (document.hidden) {
+          if (t.hiddenSince === null) t.hiddenSince = Date.now();
+        } else if (t.hiddenSince !== null) {
+          t.hiddenMs += Date.now() - t.hiddenSince;
+          t.hiddenSince = null;
+        }
+      }
       if (document.hidden) {
-        if (t.hiddenSince === null) t.hiddenSince = Date.now();
-      } else if (t.hiddenSince !== null) {
-        t.hiddenMs += Date.now() - t.hiddenSince;
-        t.hiddenSince = null;
+        if (awaySince.current === null) awaySince.current = Date.now();
+      } else if (awaySince.current !== null) {
+        awayMs.current += Date.now() - awaySince.current;
+        awaySince.current = null;
       }
     }
     document.addEventListener("visibilitychange", onVis);
@@ -337,7 +360,10 @@ export default function SessionPage() {
               // is an EXPLICIT curation signal - always fired, independent of the
               // dwell setting. Engagement = opened the reader/player, clicked
               // through, or saved.
-              if (!wasEngaged) api.itemEvent(left.item.id, "skip", id).catch(() => {});
+              if (!wasEngaged) {
+                api.itemEvent(left.item.id, "skip", id).catch(() => {});
+                skipCount.current += 1; // #149: a headline passed without opening
+              }
               // Dwell measurement + the fast-scroll nudge are gated by the setting.
               // Dwell is append-only raw material (never re-ranks); the nudge is a
               // check-in, not a topic change.
@@ -368,6 +394,7 @@ export default function SessionPage() {
           const it = items[idx];
           if (it && !shownIds.current.has(it.item.id)) {
             shownIds.current.add(it.item.id);
+            exposedSources.current.add(it.item.source_id); // #149: a source shown to you
             api.itemEvent(it.item.id, "seen", id).catch(() => {});
           }
         }
@@ -473,7 +500,8 @@ export default function SessionPage() {
     if (!t) return;
     const hidden = t.hiddenMs + (t.hiddenSince !== null ? Date.now() - t.hiddenSince : 0);
     const ms = Math.max(0, Date.now() - t.openedAt - hidden);
-    readMsTotal.current += ms;
+    const bucket = t.kind === "video" ? "video" : t.kind === "audio" ? "audio" : "read";
+    readMsByKind.current[bucket] += ms;
     api.recordRead(t.itemId, id ?? "", ms, false, t.kind).catch(() => {});
   }
   function openContent(sel: Selected) {
@@ -493,6 +521,13 @@ export default function SessionPage() {
       readerPushed.current = false;
       window.history.back(); // consume our pushed entry (fires popstate; the ref is already cleared)
     }
+  }
+  // #149: swipe-up at the bottom of the reader advances the feed as if the user
+  // scrolled to the next card - close the surface and move the reel forward one, so
+  // finishing an article flows straight into the next item without a back-then-swipe.
+  function readerNext() {
+    closeContent();
+    next();
   }
   function openExternal(sel: Selected) {
     recordOpen(sel);
@@ -605,15 +640,16 @@ export default function SessionPage() {
         </span>
       </div>
 
-      {/* #68: the fast-scroll check-in. A nudge toward self-honesty, never a topic
-          change - "Keep going" just dismisses; "Something else" ends the session
-          and returns home. Neither re-ranks or re-fetches. */}
+      {/* #68/#149: the fast-scroll check-in - a plain fact (how many cards went by
+          unopened) plus two neutral choices, never a topic change. "Keep going" just
+          dismisses; "End session" ends and returns home. Neither re-ranks or re-fetches.
+          It states the count and lets the reader decide - it doesn't editorialize. */}
       {checkin === "fast" && (
         <div className="checkin">
-          <p>You've passed by a lot without opening anything - keep going, or do something else?</p>
+          <p>{fastStreak.current} cards passed without opening any.</p>
           <div className="checkin-actions">
             <button className="mini" onClick={dismissCheckin}>Keep going</button>
-            <button className="mini solid" onClick={goHome}>Something else</button>
+            <button className="mini solid" onClick={goHome}>End session</button>
           </div>
         </div>
       )}
@@ -734,7 +770,7 @@ export default function SessionPage() {
             <p className="display">{overIdx !== null ? "That's your session." : "That's everything new."}</p>
             <p>
               {overIdx !== null
-                ? `About ${mins(elapsed)} of reading - the time you set aside.`
+                ? `The ${duration} minutes you set are up - ${mins(elapsed)} of reading so far.`
                 : `You're caught up on ${themes.length ? themes.join(", ") : "everything you follow"}.`}
             </p>
             <div className="session-over-actions">
@@ -763,30 +799,50 @@ export default function SessionPage() {
         </button>
       </div>
 
-      {/* #134/#142: the end-of-session recap report - intentional completion,
-          never failure. Reached from "End session" (here or on the over-hub). It
-          reports what the time went to: articles opened, videos watched, sources
-          explored, and how long was actually spent reading in-app. */}
+      {/* #149: the end-of-session recap - a plain account of where the time went,
+          nothing more. Each row is a fact (count + the time it took); rows with a
+          zero value are omitted, and the session total sits at the bottom. No
+          verdicts, no "come back when you like" - the numbers speak for themselves. */}
       <Dialog open={recapOpen} onClose={() => setRecapOpen(false)} kicker="Session recap">
         {(() => {
           const openedItems = items.filter((s) => opened.current.has(s.item.id));
-          const spent = Math.max(1, Math.round(elapsed / 60));
-          const readMin = Math.round(readMsTotal.current / 60000);
-          const videoCount = openedItems.filter((s) => isVideo(s.item)).length;
-          const sourceCount = new Set(openedItems.map((s) => s.item.source_id)).size;
-          const stat = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
+          const kind = (k: "video" | "audio" | "read") => openedItems.filter((s) => contentKind(s.item) === k).length;
+          const articleCount = kind("read");
+          const videoCount = kind("video");
+          const audioCount = kind("audio");
+          const activeSec = elapsed;
+          const awaySec = awayMs.current / 1000;
+          const r = readMsByKind.current;
+          const consumedSec = (r.read + r.video + r.audio) / 1000;
+          const browseSec = Math.max(0, activeSec - consumedSec);
+          const totalSec = activeSec + awaySec;
+          // Show a duration only when it rounds to at least a minute, so a row never
+          // reads "1 · <1 min". Rows themselves are dropped when their count is zero.
+          const dur = (sec: number) => (Math.round(sec / 60) >= 1 ? mins(sec) : null);
+          const rows: { label: string; count?: number; time?: string | null }[] = [];
+          if (articleCount >= 1) rows.push({ label: articleCount === 1 ? "Article opened" : "Articles opened", count: articleCount, time: dur(r.read / 1000) });
+          if (videoCount >= 1) rows.push({ label: videoCount === 1 ? "Video played" : "Videos played", count: videoCount, time: dur(r.video / 1000) });
+          if (audioCount >= 1) rows.push({ label: audioCount === 1 ? "Audio played" : "Audio played", count: audioCount, time: dur(r.audio / 1000) });
+          if (skipCount.current >= 1) rows.push({ label: "Headlines passed", count: skipCount.current, time: dur(browseSec) });
+          if (Math.round(awaySec / 60) >= 1) rows.push({ label: "Time away", time: mins(awaySec) });
+          if (exposedSources.current.size >= 1) rows.push({ label: "Sources", count: exposedSources.current.size });
           return (
             <div className="recap">
-              <p className="recap-lead">
-                You spent <b>{spent}</b> {spent === 1 ? "minute" : "minutes"} intentionally.
-              </p>
-              <ul className="recap-stats">
-                <li>{stat(openedItems.length - videoCount, "article opened", "articles opened")}</li>
-                {videoCount > 0 && <li>{stat(videoCount, "video watched", "videos watched")}</li>}
-                <li>{stat(sourceCount, "source explored", "sources explored")}</li>
-                {readMin > 0 && <li>{stat(readMin, "minute reading in-app", "minutes reading in-app")}</li>}
-              </ul>
-              <p className="recap-close">You're caught up enough. Come back when you like.</p>
+              <dl className="recap-stats">
+                {rows.map((row) => (
+                  <div className="recap-row" key={row.label}>
+                    <dt>{row.label}</dt>
+                    <dd>
+                      {row.count != null && <b>{row.count}</b>}
+                      {row.time && <span className="recap-time">{row.time}</span>}
+                    </dd>
+                  </div>
+                ))}
+                <div className="recap-row recap-total">
+                  <dt>Session</dt>
+                  <dd><b>{mins(totalSec)}</b></dd>
+                </div>
+              </dl>
               <div className="recap-actions">
                 <button className="btn" onClick={goHome}>
                   Start a new session
@@ -830,6 +886,7 @@ export default function SessionPage() {
         onClose={closeContent}
         onOpen={() => shown && openExternal(shown)}
         onSave={() => shown && setSaveItem(shown.item)}
+        onNext={readerNext}
       />
 
       {/* Source context menu (#75): tapping the source name on a card opens this -

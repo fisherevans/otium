@@ -42,7 +42,7 @@ export function HowItWorks({ defaultOpen = false }: { defaultOpen?: boolean }) {
               Otium assembles a finite session from those sources, balanced by <i>representation</i> so a source that posts
               hourly doesn't drown out one that posts monthly.
             </li>
-            <li>When your time's up, you're done. Missing things is okay - old items quietly expire.</li>
+            <li>When your time's up, the session ends. Unread items expire on their own, so nothing piles up to catch up on.</li>
           </ol>
         </div>
       )}

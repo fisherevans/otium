@@ -44,7 +44,7 @@ export default function SettingsPage() {
         <h1 className="display">Settings</h1>
       </div>
       <p className="sub">
-        otium measures to serve your intention, never to grow time-in-app. Everything here stays on your own instance.
+        otium tracks nothing for engagement or time-in-app. Everything here stays on your own instance.
       </p>
 
       {err && <p className="err">{err}</p>}
@@ -67,9 +67,9 @@ export default function SettingsPage() {
             <div className="settings-copy">
               <b>Fast-scroll check-in</b>
               <span>
-                If you're scrolling fast without opening, liking, or saving anything, otium shows a calm check-in - "want
-                to keep going, or do something else?" It's a nudge toward self-honesty. It never re-ranks or changes your
-                topic. Off: no dwell is measured and no check-in appears.
+                After a run of cards passed without opening, liking, or saving anything, otium surfaces a check-in with the
+                count and two options: keep going or end the session. It never re-ranks or changes your topic. Off: no dwell
+                is measured and no check-in appears.
               </span>
             </div>
             <button

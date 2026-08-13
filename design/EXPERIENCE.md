@@ -24,8 +24,8 @@ intent, it's wrong here by definition.
    deliberate taps, and only these shape **ranking**. Dwell/pace IS measured
    (refined 2026-07-04; see decisions.md "Intentionality & transparency") but
    only to surface a **visible check-in** when you're clearly flicking past
-   items without engaging ("want to keep going, or do something else?"), and it
-   is user-toggleable. The boundary is strict: dwell can trigger a question that
+   items without engaging (it states the count - "N cards passed without opening
+   any" - and offers "Keep going" / "End session"), and it is user-toggleable. The boundary is strict: dwell can trigger a question that
    serves your intent, but it **never** enters the ranker, silently re-ranks, or
    feeds you more. Measurement to serve intention: yes. Engagement optimization
    or behavioral surveillance: never.
@@ -259,13 +259,33 @@ The chosen theme restyles these, but the set is fixed:
 
 ## Voice & content
 
-- Plain, warm, unhurried. "How much time?" not "Start browsing."
-- The "reason" phrases are honest and specific: "Rare - posts seldom," "Fresh -
+**Tone: simple, smart, clean, utilitarian** - and *not* rigid, aggressive, or
+strict about it. Utilitarian doesn't mean cold or terse; it means the copy
+informs and gets out of the way. otium talks to a capable adult, not a patient
+being coached.
+
+- **State facts; let the user decide.** otium's goals (finite attention, no
+  doomscroll) are pursued by giving clear information and honest choices - never
+  by telling the user what to do or how to feel. Give them the numbers and the
+  state and trust them to make the right call. This is the load-bearing rule; the
+  rest follow from it.
+- **No wellness/spa copy.** It editorializes the same way growth-hacking does,
+  just in the other direction. Cut anything that reads like a meditation-app
+  landing page: no "come back when you like," "you're caught up *enough*,"
+  "missing things is okay," "a calmer way to…," "breathe," "be present,"
+  "restraint is virtuous." If a line coaches, soothes, or absolves, delete the
+  editorial and keep the fact.
+- **No growth-hack copy either.** No "Don't miss…", no "N people…", no streaks,
+  no FOMO. Same reason: it pushes the user instead of informing them.
+- The "reason" phrases stay honest and specific: "Rare - posts seldom," "Fresh -
   posted today," "Favorite source."
-- End-states affirm rest: "That's your session." / "You're caught up."
-- No growth-hack copy: no "Don't miss…", no "N people…", no streak language.
-- Numbers serve *self-knowledge*, not pressure: "~58 min" tells you the size of
-  the commitment; it is never a score to beat.
+- **End-states are factual, not affirming or nagging.** "That's your session."
+  plus the plain stats. Report where the time went; pass no verdict on it. The
+  session recap is a ledger (count + time per kind, session total), not a
+  congratulation.
+- Numbers serve *self-knowledge*, not pressure or praise: "~58 min" tells you the
+  size of the commitment; it is never a score to beat or a gold star.
+- Never an em/en dash in copy. A spaced hyphen ( - ) is the separator.
 
 ## Anti-patterns (otium must never)
 

@@ -35,6 +35,7 @@ export function ReaderPage({
   onClose,
   onOpen,
   onSave,
+  onNext,
 }: {
   item: Item | null;
   sourceTitle?: string;
@@ -43,6 +44,7 @@ export function ReaderPage({
   onClose: () => void;
   onOpen: () => void; // open the original externally
   onSave?: () => void;
+  onNext?: () => void; // #149: swipe up at the bottom -> advance the feed, close the reader
 }) {
   // Keep mounted through the slide-out so the page animates away cleanly.
   const [mounted, setMounted] = useState(open);
@@ -172,11 +174,21 @@ export function ReaderPage({
   // rest of the drag can't be lost); a vertical-dominant move locks into "scroll"
   // and we never touch it, so native scrolling is untouched. touch-action:pan-y
   // (CSS) still lets vertical panning through.
-  const start = useRef<{ x: number; y: number } | null>(null);
+  const start = useRef<{ x: number; y: number; atBottom: boolean } | null>(null);
   const mode = useRef<"undecided" | "swipe" | "scroll">("undecided");
   const SLOP = 8; // px of travel before we commit to an axis
+  const NEXT_SWIPE = 70; // px of upward travel at the bottom that advances the feed (#149)
+  // #149: at the very bottom there's nothing left to scroll, so an upward flick is
+  // the natural "next" gesture - it advances the feed and closes the reader, saving
+  // the back-then-swipe two-step. Only armed when the gesture STARTS at the bottom,
+  // so a normal upward scroll mid-article never triggers it.
+  function atBottom() {
+    const el = scrollRef.current;
+    if (!el) return false;
+    return el.scrollTop + el.clientHeight >= el.scrollHeight - 4;
+  }
   function onPointerDown(e: ReactPointerEvent) {
-    start.current = { x: e.clientX, y: e.clientY };
+    start.current = { x: e.clientX, y: e.clientY, atBottom: atBottom() };
     mode.current = "undecided";
   }
   function onPointerMove(e: ReactPointerEvent) {
@@ -203,22 +215,46 @@ export function ReaderPage({
     }
     if (mode.current === "swipe") setDrag(Math.max(0, dx));
   }
-  function onPointerUp() {
+  function onPointerUp(e: ReactPointerEvent) {
     const wasSwiping = mode.current === "swipe";
+    const s = start.current;
     mode.current = "undecided";
     start.current = null;
     setDragging(false);
-    if (!wasSwiping) return;
-    setDrag((d) => {
-      if (d != null && d > 90) {
-        window.setTimeout(onClose, 200); // let the slide-out play, then unmount
-        return window.innerWidth;
-      }
-      return null; // spring back to rest
-    });
+    if (wasSwiping) {
+      setDrag((d) => {
+        if (d != null && d > 90) {
+          window.setTimeout(onClose, 200); // let the slide-out play, then unmount
+          return window.innerWidth;
+        }
+        return null; // spring back to rest
+      });
+      return;
+    }
+    // Bottom swipe-up -> next (#149). Vertical-dominant upward flick that began at
+    // the bottom and is still there (nothing scrolled) hands off to the feed.
+    if (s?.atBottom && onNext && atBottom()) {
+      const dy = e.clientY - s.y;
+      const dx = e.clientX - s.x;
+      if (dy <= -NEXT_SWIPE && Math.abs(dy) > Math.abs(dx)) onNext();
+    }
   }
 
   const readEst = useMemo(() => (body ? readTime(body.html.replace(/<[^>]+>/g, " ")) : ""), [body]);
+
+  // Memoize the article element itself, keyed only on the HTML string (#149). The
+  // parent (SessionPage) re-renders every second for its active-time ticker, which
+  // cascades a ReaderPage re-render each second. React re-commits
+  // dangerouslySetInnerHTML on every such render - blowing away and re-inserting
+  // the whole parsed subtree, which forces every <img> to reload (the "flicker" +
+  // content bounce). Returning a referentially-stable element while the body HTML
+  // is unchanged makes React skip that subtree entirely, so images load once and
+  // stay put. (The earlier #142 fix stopped the body from being *re-parsed*; this
+  // stops it from being re-*committed*.)
+  const articleBody = useMemo(
+    () => <div className="reader-body" dangerouslySetInnerHTML={{ __html: body?.html ?? "" }} />,
+    [body?.html],
+  );
 
   function onScroll(e: UIEvent<HTMLDivElement>) {
     const el = e.currentTarget;
@@ -301,7 +337,7 @@ export function ReaderPage({
           </div>
         ) : (
           <>
-            <div className="reader-body" dangerouslySetInnerHTML={{ __html: body?.html ?? "" }} />
+            {articleBody}
             <div className="rp-foot">
               {onSave && (
                 <button className="reader-open" onClick={onSave}>

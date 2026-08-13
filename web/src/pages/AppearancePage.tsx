@@ -25,9 +25,9 @@ const SAMPLE: Selected = {
     id: -1,
     source_id: -1,
     url: "",
-    title: "The quiet architecture of attention",
+    title: "Reading in finite sessions",
     summary:
-      "Finite, chosen sessions beat the infinite scroll - not because restraint is virtuous, but because a boundary is what lets a thing feel finished.",
+      "This is a preview of the reading view. Otium builds each session from the feeds you choose and ends it when your time is up, so there's a clear start and finish instead of an open-ended scroll.",
     content: "",
     content_source: "rss",
     author: "A. Writer",
@@ -497,7 +497,7 @@ export default function AppearancePage() {
             />
             <ToggleRow
               label="Images in reader"
-              desc="Show images inline while reading. Off is calmer on e-ink and lighter on data."
+              desc="Show images inline while reading. Off renders cleaner on e-ink and uses less data."
               on={prefs.reader.images}
               onChange={(v) => update({ reader: { images: v } })}
             />

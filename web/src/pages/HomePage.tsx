@@ -187,7 +187,7 @@ export default function HomePage() {
         <div className="intent-step">
           <div className="intent-head">
             <h1 className="display">Welcome to Otium</h1>
-            <p className="sub">A calmer way to keep up - finite sessions from the feeds you choose, not an endless stream.</p>
+            <p className="sub">Finite sessions built from the feeds you choose - not an endless stream.</p>
           </div>
           <p className="firstrun-step">
             You don't follow anything yet. Head to your <b>Library</b> to add a topic and its first sources - any RSS/Atom

@@ -4333,11 +4333,18 @@ button.id-source.lead {
 }
 .extend-row .btn { flex: 1; }
 
-.recap { text-align: center; padding: 4px 2px 8px; }
-.recap-lead { font-family: var(--serif); font-size: 20px; line-height: 1.35; margin-bottom: 14px; }
-.recap-stats { list-style: none; padding: 0; margin: 0 0 14px; display: flex; flex-direction: column; gap: 6px; }
-.recap-stats li { font-size: 16px; color: var(--ink); }
-.recap-close { color: var(--ink-mute); font-style: italic; margin-bottom: 18px; }
+.recap { padding: 4px 2px 8px; }
+/* #149: a clean two-column ledger - label left, count + time right - not a boxed
+   table. A hairline separates each row; the session total is set apart at the foot. */
+.recap-stats { margin: 0 0 20px; }
+.recap-row { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; padding: 9px 0; border-bottom: 1px solid var(--rule-soft, var(--rule)); }
+.recap-row dt { font-size: 16px; color: var(--ink); margin: 0; }
+.recap-row dd { margin: 0; font-size: 16px; color: var(--ink); display: flex; align-items: baseline; gap: 8px; white-space: nowrap; }
+.recap-row dd b { font-family: var(--serif); font-weight: 600; font-size: 18px; }
+.recap-time { color: var(--ink-mute); font-size: 14px; }
+.recap-total { border-bottom: 0; border-top: 1.5px solid var(--rule-hard); margin-top: 4px; padding-top: 12px; }
+.recap-total dt { font-family: var(--serif); }
+.recap-total dd b { font-size: 20px; }
 .recap-actions { display: flex; flex-direction: column; align-items: center; gap: 12px; }
 .recap-actions .btn { width: 100%; }
 
@@ -4399,7 +4406,11 @@ button.id-source.lead {
   flex-direction: column;
   min-height: 0;
   flex: 1 1 auto;
-  justify-content: center;
+  /* Pin the player just under the byline instead of centering it in the leftover
+     card space - centering pushed the video far below the metadata, leaving a big
+     dead gap above it. Any slack now falls below the action row, where it reads as
+     calm margin rather than a disconnect. */
+  justify-content: flex-start;
 }
 .inline-media {
   display: flex;
@@ -4486,78 +4497,6 @@ button.id-source.lead {
   color: #fff;
   padding-left: 4px; /* optically center the triangle */
   pointer-events: none;
-}
-.im-fs {
-  position: absolute;
-  bottom: 10px;
-  right: 10px;
-  z-index: 4;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 40px;
-  height: 40px;
-  border: 1px solid rgba(255, 255, 255, 0.35);
-  border-radius: 8px;
-  background: rgba(20, 19, 17, 0.62);
-  color: #fff;
-  cursor: pointer;
-}
-.im-fs:active {
-  background: rgba(20, 19, 17, 0.8);
-}
-
-/* Fullscreen: the frame fills the viewport and we draw our own controls (YouTube's
-   are off via controls:0, which also hides its exit button). */
-.im-frame.fs,
-.im-frame:fullscreen {
-  width: 100% !important;
-  height: 100% !important;
-  max-height: none !important;
-  aspect-ratio: auto !important;
-  margin: 0 !important;
-  border: 0;
-  background: #000;
-}
-.im-fsctl {
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  z-index: 5;
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 14px 16px calc(14px + env(safe-area-inset-bottom, 0px));
-  background: linear-gradient(to top, rgba(0, 0, 0, 0.7), rgba(0, 0, 0, 0));
-  color: #fff;
-}
-.im-fsc-btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 40px;
-  height: 40px;
-  border: none;
-  background: none;
-  color: #fff;
-  cursor: pointer;
-  flex-shrink: 0;
-}
-.im-time {
-  font-family: var(--mono);
-  font-size: 12px;
-  color: rgba(255, 255, 255, 0.85);
-  min-width: 38px;
-  text-align: center;
-  flex-shrink: 0;
-}
-.im-scrub {
-  flex: 1;
-  min-width: 0;
-  accent-color: #fff;
-  height: 3px;
-  cursor: pointer;
 }
 .im-nofit {
   display: flex;
