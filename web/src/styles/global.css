@@ -39,25 +39,27 @@
    [data-theme="dark"] on <html> (set pre-paint by the index.html script, toggled
    by the header switch). */
 :root[data-theme="dark"] {
-  --paper: #141310;
-  --paper-2: #1c1a15;
-  --paper-3: #26221a;
-  --ink: #efece3;
-  /* #149: dark mode needs its OWN muted inks - the light-mode values (soft #4b4740,
-     mute #8b857a) are tuned for dark-on-cream and read as unreadable grey-on-black
-     here. These are lifted so soft/muted text (metadata, dates, reason lines,
-     blurbs) clears ~7:1+ against the near-black paper instead of ~5:1. */
-  --ink-soft: #c4bfb3;
-  --ink-mute: #a29c8d;
-  --rule: #3a352b;
-  --rule-hard: #efece3;
-  --hair: #2b2720;
-  /* Lifted good/bad for dark: readable green/rust, with faint translucent chip
-     tints (not the light-mode solids, which would blow out on black). */
-  --good: #7cc496;
-  --bad: #e59486;
-  --good-bg: rgba(124, 196, 150, 0.15);
-  --bad-bg: rgba(229, 148, 134, 0.15);
+  /* #149: dark mode is tuned for E-INK, not OLED. E-ink can't render the tonal gap
+     between a dark grey and black, so the subtle muted greys that read fine on a
+     phone vanish on the device otium is actually built for. The whole foreground is
+     therefore pushed high and the paper pushed near-black to maximize the range: even
+     "muted" text stays a clearly light grey, not a mid grey. Rules are lightened too,
+     since a near-black hairline is invisible on e-ink. */
+  --paper: #0b0a08;
+  --paper-2: #16140f;
+  --paper-3: #201c15;
+  --ink: #f6f3ec;
+  --ink-soft: #e4dfd2;
+  --ink-mute: #cfc9bb;
+  --rule: #5a5445;
+  --rule-hard: #f6f3ec;
+  --hair: #3c372c;
+  /* good/bad go light too - on greyscale e-ink the hue is lost, so legibility has to
+     come from luminance, not color. */
+  --good: #b6ddc8;
+  --bad: #f1bab0;
+  --good-bg: rgba(182, 221, 200, 0.16);
+  --bad-bg: rgba(241, 186, 176, 0.16);
 }
 /* the paper grain is a dark wash on dark so it doesn't read as light speckle. */
 :root[data-theme="dark"] body {
@@ -3579,6 +3581,13 @@ button.id-source.lead {
   background: var(--paper-3);
   color: var(--topic-color, var(--ink));
 }
+/* #149: in dark mode a topic's own color (picked for a light card) is often a dark
+   hue that disappears on black - and on greyscale e-ink the hue is lost anyway. Use
+   the light ink for the pill text/icon so it's always legible; the color identity
+   still shows in light mode. */
+:root[data-theme="dark"] .topic-pill {
+  color: var(--ink);
+}
 .topic-pill svg {
   flex: 0 0 auto;
 }
@@ -3644,9 +3653,11 @@ button.id-source.lead {
   font-weight: 700;
   font-size: 11px;
   line-height: 1;
+  /* Letter stays the light soft-ink; the topic color (--av) only tints the ring +
+     fill, so a dark topic color never makes the letter unreadable. */
   color: var(--ink-soft);
-  border-color: currentColor;
-  background: color-mix(in srgb, currentColor 12%, var(--paper-2, var(--paper)));
+  border-color: var(--av, var(--rule));
+  background: color-mix(in srgb, var(--av, var(--ink-soft)) 14%, var(--paper-2, var(--paper)));
 }
 .card-source:active {
   color: var(--ink);

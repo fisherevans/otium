@@ -109,8 +109,11 @@ export function SourceAvatar({ url, title, color }: { url?: string; title: strin
       />
     );
   }
+  // Pass the topic color as a var used only for the border/background tint - the
+  // letter itself stays --ink-soft so it's legible even when the topic color is dark
+  // (which reads as grey-on-black in dark mode / on e-ink).
   return (
-    <span className="src-avatar mono" style={color ? { color, borderColor: color } : undefined} aria-hidden>
+    <span className="src-avatar mono" style={color ? ({ "--av": color } as CSSProperties) : undefined} aria-hidden>
       {letter}
     </span>
   );
