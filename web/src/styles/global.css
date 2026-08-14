@@ -31,6 +31,59 @@
      only (no self-hosted/CDN faces); degrades to generic serif off-iOS. */
   --book: "Iowan Old Style", "Palatino", "Palatino Linotype", "Georgia", serif;
   --bar-h: 58px;
+  /* #150: motion system. otium historically avoided animation for slow-refresh
+     e-ink, but Fisher's panel is responsive - so we add tactile press feedback and
+     quick screen transitions ("juice"), kept calm and purposeful (fast, smooth, no
+     bounce). Durations short so nothing feels laggy; --ease-out for entrances. */
+  --dur-fast: 90ms;
+  --dur: 170ms;
+  --dur-slow: 300ms;
+  --ease: cubic-bezier(0.4, 0, 0.2, 1);
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* #150: global tactile press feedback. Every button dips slightly when pressed, so
+   a tap always registers. transform-only so it never reflows; the transition also
+   smooths the color/background :active states already defined per component. Buttons
+   that shouldn't scale (full-bleed bars) opt out via .no-press. */
+button {
+  transition: transform var(--dur-fast) var(--ease), background-color var(--dur-fast) var(--ease),
+    color var(--dur-fast) var(--ease), border-color var(--dur-fast) var(--ease);
+}
+button:active:not(:disabled):not(.no-press) {
+  transform: scale(0.96);
+}
+
+/* #150: entrance animations. Keyframes are opt-in via a class on the mounting
+   element (intent steps, the session, sheets), so only intentional transitions play. */
+@keyframes otium-step-in {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes otium-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/* Honor the OS "reduce motion" setting: keep the app fully usable, just still. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
 }
 
 /* #142: dark mode. The same e-ink language inverted - light ink on warm-dark
@@ -165,6 +218,10 @@ button {
   min-height: 0;
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
+  /* #150: gentle fade+lift as each screen mounts (keyed by route in App), so tab
+     and page navigation reads as a transition. The session route (.content-session)
+     has its own fade on .focus-session. */
+  animation: otium-step-in var(--dur) var(--ease-out);
 }
 /* focused session route: no padding, no bottom nav - the session fills it */
 .content-session {
@@ -375,6 +432,9 @@ h1.display {
      .content 96px bottom padding keeps the CTA clear of the sticky nav, while a
      short step still fills the viewport and pins the CTA to the bottom. */
   min-height: 100%;
+  /* #150: each step slides up + fades as it mounts, so advancing the session-start
+     flow (length -> sections -> tune) reads as a transition, not a hard cut. */
+  animation: otium-step-in var(--dur-slow) var(--ease-out);
 }
 .intent-back {
   display: inline-flex;
@@ -408,6 +468,12 @@ h1.display {
   font-family: var(--didot);
   font-size: 22px;
   color: var(--ink);
+}
+/* #150: a firm press flash on the primary session-start tiles - darken + hard rule
+   under the finger, on top of the global scale dip. */
+.time-chip:active {
+  background: var(--paper-3);
+  border-color: var(--rule-hard);
 }
 .time-chip.on {
   background: var(--ink);
@@ -536,6 +602,10 @@ h1.display {
   border: 1.5px solid var(--rule);
   text-align: left;
   cursor: pointer;
+}
+.sec-tile:active {
+  background: var(--paper-3);
+  border-color: var(--rule-hard);
 }
 .sec-tile.on {
   background: var(--ink);
@@ -782,6 +852,9 @@ h1.display {
   flex-direction: column;
   /* fill the viewport below the topbar (nav is hidden on this route) */
   height: calc(100dvh - 61px);
+  /* #150: fade the session in when you arrive from "Begin", so the jump from the
+     intent flow into the reel feels like a transition. */
+  animation: otium-fade-in var(--dur-slow) var(--ease-out);
 }
 /* The top strip only carries the desktop keyboard hint now (time moved to the
    bottom, #120), so it's hidden on mobile - reclaiming the top space - and shown

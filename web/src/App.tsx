@@ -83,7 +83,9 @@ export default function App() {
         )}
       </header>
 
-      <main className={focused ? "content-session" : "content"}>
+      {/* #150: key on pathname so <main> remounts each navigation and its entrance
+          animation replays - a light cross-nav transition without a wrapper div. */}
+      <main key={pathname} className={focused ? "content-session" : "content"}>
         <Routes>
           <Route path="/" element={<HomePage />} />
           <Route path="/session/:id" element={<SessionPage />} /> {/* #67: durable session by id */}

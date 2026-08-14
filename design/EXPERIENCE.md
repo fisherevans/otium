@@ -230,16 +230,30 @@ may style this differently but must provide it.
 
 ## Motion & feedback
 
-Motion should read as *considered*, not *excited*.
+Motion should read as *considered*, not *excited* - but it **should be there**.
+otium wants clean, tactile feedback and "juice": a tap always answers, a screen
+change reads as a transition. The old instinct to strip animation for slow-refresh
+e-ink is dropped - modern panels are responsive, and the calm comes from the
+*quality* of the motion (quick, smooth, purposeful), not its absence.
 
-- Transitions 120-220ms, ease-out. Enough to feel physical, not enough to make
-  you wait.
-- The pad knob tracks the finger 1:1 (no lag); the tether and corner-highlight
-  ease.
-- Screen changes are quiet cross-fades or slides, not flashy.
-- Liking an item gives a small, satisfying but *contained* confirmation (fill +
-  subtle scale) - acknowledgment, not a slot-machine payout.
-- **Never** use motion to pull attention back (no pulsing "new!", no jitter).
+- **Every interactive control gives press feedback.** Buttons dip slightly under
+  the finger (a ~0.96 transform scale) plus the per-control :active state (darken /
+  hard-rule). This is a global rule, not a per-component decision - a tap must never
+  feel dead. The motion tokens live in `global.css` (`--dur-fast/--dur/--dur-slow`,
+  `--ease`/`--ease-out`).
+- **Screen and step changes animate in.** The session-start flow (length ->
+  sections -> tune) slides+fades each step; route navigation fades the new screen;
+  arriving in a session fades the reel in. Entrances use `--ease-out`; keep them
+  ~170-300ms - a transition, not a wait.
+- Transitions 90-300ms. Enough to feel physical, not enough to make you wait.
+- The pad knob tracks the finger 1:1 (no lag); the tether and corner-highlight ease.
+- A confirmation (save, like-equivalent) is small and *contained* (fill + subtle
+  scale) - acknowledgment, not a slot-machine payout.
+- **Honor `prefers-reduced-motion`**: the global media query collapses all
+  animation/transition to ~instant, so the app stays fully usable for anyone who
+  asks the OS for stillness. Motion is the default, not a requirement.
+- **Never** use motion to pull attention back (no pulsing "new!", no jitter, no
+  bounce/overshoot). Juice ≠ gaudy.
 
 ## Component inventory
 
