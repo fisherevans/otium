@@ -20,6 +20,27 @@ export default function SettingsPage() {
       .catch((e) => setErr(String(e.message ?? e)));
   }, []);
 
+  const [reloading, setReloading] = useState(false);
+  // Manual hard-refresh (#149): an installed PWA has no browser refresh, so give an
+  // explicit escape hatch. Unregister the service worker, clear its caches, and
+  // reload - the surest way to pull a fresh build when the auto-update check hasn't.
+  async function hardRefresh() {
+    setReloading(true);
+    try {
+      if ("serviceWorker" in navigator) {
+        const regs = await navigator.serviceWorker.getRegistrations();
+        await Promise.all(regs.map((r) => r.unregister()));
+      }
+      if ("caches" in window) {
+        const keys = await caches.keys();
+        await Promise.all(keys.map((k) => caches.delete(k)));
+      }
+    } catch {
+      /* best-effort - reload regardless */
+    }
+    location.reload();
+  }
+
   function toggleFastCheckin() {
     if (!settings || saving) return;
     const next = !settings.fast_scroll_checkin;
@@ -85,6 +106,18 @@ export default function SettingsPage() {
           </div>
         </div>
       )}
+
+      {/* #149: app version + manual refresh, for when an installed PWA is stuck on an
+          old build. */}
+      <div className="settings-row settings-about">
+        <div className="settings-copy">
+          <b>App version</b>
+          <span>otium reloads itself when a new build ships. Force it here if something looks stale.</span>
+        </div>
+        <button className="btn ghost" onClick={hardRefresh} disabled={reloading}>
+          {reloading ? "Reloading…" : "Reload"}
+        </button>
+      </div>
 
     </div>
   );

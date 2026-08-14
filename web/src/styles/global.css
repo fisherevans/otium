@@ -16,6 +16,13 @@
   --rule: #c9c3b5;
   --rule-hard: #1a1815;
   --hair: #d9d4c8;
+  /* #149: semantic good/bad (open/read vs skip/danger) + their chip tints. Tokenized
+     so they get dark-mode variants - the raw dark green/rust were unreadable on the
+     near-black paper. */
+  --good: #20603f;
+  --bad: #8a3a2f;
+  --good-bg: #e6efe8;
+  --bad-bg: #efe6e2;
   --serif: "Charter", "Iowan Old Style", "Georgia", serif;
   --grot: "Helvetica Neue", "Arial", sans-serif;
   --mono: "SF Mono", "Menlo", ui-monospace, monospace;
@@ -36,11 +43,21 @@
   --paper-2: #1c1a15;
   --paper-3: #26221a;
   --ink: #efece3;
-  --ink-soft: #b7b1a4;
-  --ink-mute: #8b857a;
+  /* #149: dark mode needs its OWN muted inks - the light-mode values (soft #4b4740,
+     mute #8b857a) are tuned for dark-on-cream and read as unreadable grey-on-black
+     here. These are lifted so soft/muted text (metadata, dates, reason lines,
+     blurbs) clears ~7:1+ against the near-black paper instead of ~5:1. */
+  --ink-soft: #c4bfb3;
+  --ink-mute: #a29c8d;
   --rule: #3a352b;
   --rule-hard: #efece3;
   --hair: #2b2720;
+  /* Lifted good/bad for dark: readable green/rust, with faint translucent chip
+     tints (not the light-mode solids, which would blow out on black). */
+  --good: #7cc496;
+  --bad: #e59486;
+  --good-bg: rgba(124, 196, 150, 0.15);
+  --bad-bg: rgba(229, 148, 134, 0.15);
 }
 /* the paper grain is a dark wash on dark so it doesn't read as light speckle. */
 :root[data-theme="dark"] body {
@@ -1601,10 +1618,10 @@ h1.display {
   color: var(--ink-mute);
 }
 .src-stat-ico.ins-open {
-  color: #20603f;
+  color: var(--good);
 }
 .src-stat-ico.ins-skip {
-  color: #8a3a2f;
+  color: var(--bad);
 }
 .src-stat-sub {
   font-family: var(--serif);
@@ -1721,12 +1738,12 @@ h1.display {
   color: var(--paper);
 }
 .art-badge.st-skip {
-  color: #8a3a2f;
-  background: #efe6e2;
+  color: var(--bad);
+  background: var(--bad-bg);
 }
 .art-badge.st-read {
-  color: #20603f;
-  background: #e6efe8;
+  color: var(--good);
+  background: var(--good-bg);
 }
 .art-date {
   flex: 0 0 auto;
@@ -1767,15 +1784,15 @@ h1.display {
   color: var(--ink-mute);
 }
 .act-item.danger {
-  color: #8a3a2f;
+  color: var(--bad);
 }
 .art-badge.st-skipped {
-  color: #8a3a2f;
-  background: #efe6e2;
+  color: var(--bad);
+  background: var(--bad-bg);
 }
 .art-badge.st-liked {
-  color: #20603f;
-  background: #e6efe8;
+  color: var(--good);
+  background: var(--good-bg);
 }
 .art-badge.st-auto-archived {
   opacity: 0.7;
@@ -1921,12 +1938,12 @@ h1.display {
   color: var(--ink-mute);
 }
 .isrc-badge.tone-up {
-  color: #20603f;
-  background: #e6efe8;
+  color: var(--good);
+  background: var(--good-bg);
 }
 .isrc-badge.tone-down {
-  color: #8a3a2f;
-  background: #efe6e2;
+  color: var(--bad);
+  background: var(--bad-bg);
 }
 .isrc-sub {
   font-family: var(--mono);
