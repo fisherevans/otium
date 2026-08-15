@@ -165,7 +165,10 @@ button {
   height: 100%;
   display: flex;
   flex-direction: column;
-  padding-bottom: env(safe-area-inset-bottom);
+  /* #150: NO safe-area padding here. The bottom-most element in each mode carries
+     it - the .nav (tabs) when browsing, the .session-foot when in a session. Having
+     it on .app too double-counted the home-indicator inset, leaving a big empty gap
+     below the nav. */
 }
 
 /* --- top bar --- */
@@ -1113,6 +1116,15 @@ h1.display {
   gap: 14px;
   padding: 18px 0;
   border-bottom: 1px solid var(--hair);
+}
+/* #150: the App-version row's control is a compact button, not a full-width .btn -
+   the default .btn (width:100% + margin-top) crushed the copy into a one-word column. */
+.settings-about { align-items: center; }
+.settings-about .btn {
+  flex: 0 0 auto;
+  width: auto;
+  margin-top: 0;
+  padding: 10px 20px;
 }
 .settings-copy {
   flex: 1;
@@ -2439,11 +2451,14 @@ h1.display {
 /* ============================================================
    The "…" affordance on the current session card (#43)
    ============================================================ */
+/* #150: the ··· overflow flows within .card-top (top of the card's content), not
+   absolutely pinned to the card's top-right corner. Pinned, it floated orphaned in
+   the empty band above vertically-centered content on shorter cards; in flow it
+   travels with the metadata where it belongs. card-top's space-between keeps it hard
+   right, next to the reason line. */
 .item-more {
-  position: absolute;
-  top: 16px;
-  right: 16px;
-  z-index: 6;
+  flex: 0 0 auto;
+  margin-left: auto;
   width: 38px;
   height: 30px;
   border: 1.5px solid var(--rule);

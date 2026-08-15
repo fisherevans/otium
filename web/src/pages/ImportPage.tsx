@@ -86,7 +86,7 @@ export default function ImportPage() {
     <div>
       <h1 className="display">Import your follows</h1>
       <p className="sub">
-        Drop a <b>YouTube Takeout</b> (the raw <b>.zip</b> is fine — it's unpacked for you), an{" "}
+        Drop a <b>YouTube Takeout</b> (the raw <b>.zip</b> is fine - it's unpacked for you), an{" "}
         <b>OPML</b> file (Feedly, podcast apps, any RSS reader), or paste a list of topic URLs.
       </p>
 
@@ -104,7 +104,7 @@ export default function ImportPage() {
           <div className="section-label">or paste URLs / OPML</div>
           <textarea
             className="field"
-            style={{ minHeight: 120, fontFamily: "monospace", fontSize: 13 }}
+            style={{ minHeight: 120, fontFamily: "monospace", fontSize: 13, overflowWrap: "anywhere" }}
             placeholder={"https://www.reddit.com/r/standupshots/.rss\nhttps://mastodon.social/@someone.rss"}
             value={paste}
             onChange={(e) => setPaste(e.target.value)}
