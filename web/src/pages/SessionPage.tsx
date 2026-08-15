@@ -849,19 +849,22 @@ export default function SessionPage() {
           if (exposedSources.current.size >= 1) rows.push({ label: "Sources", count: exposedSources.current.size });
           return (
             <div className="recap">
+              {/* #150: a real 3-column grid (label | count | time). Each row is
+                  display:contents so the counts share one right-aligned column and the
+                  durations share another - no more numbers ping-ponging left/right as
+                  rows do or don't carry a time. Empty cells hold the column. */}
               <dl className="recap-stats">
                 {rows.map((row) => (
                   <div className="recap-row" key={row.label}>
                     <dt>{row.label}</dt>
-                    <dd>
-                      {row.count != null && <b>{row.count}</b>}
-                      {row.time && <span className="recap-time">{row.time}</span>}
-                    </dd>
+                    <span className="recap-count">{row.count != null ? row.count : ""}</span>
+                    <span className="recap-time">{row.time ?? ""}</span>
                   </div>
                 ))}
                 <div className="recap-row recap-total">
                   <dt>Session</dt>
-                  <dd><b>{mins(totalSec)}</b></dd>
+                  <span className="recap-count"></span>
+                  <span className="recap-time">{mins(totalSec)}</span>
                 </div>
               </dl>
               <div className="recap-actions">

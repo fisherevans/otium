@@ -4466,18 +4466,69 @@ button.id-source.lead {
 .extend-row .btn { flex: 1; }
 
 .recap { padding: 4px 2px 8px; }
-/* #149: a clean two-column ledger - label left, count + time right - not a boxed
-   table. A hairline separates each row; the session total is set apart at the foot. */
-.recap-stats { margin: 0 0 20px; }
-.recap-row { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; padding: 9px 0; border-bottom: 1px solid var(--rule-soft, var(--rule)); }
-.recap-row dt { font-size: 16px; color: var(--ink); margin: 0; }
-.recap-row dd { margin: 0; font-size: 16px; color: var(--ink); display: flex; align-items: baseline; gap: 8px; white-space: nowrap; }
-.recap-row dd b { font-family: var(--serif); font-weight: 600; font-size: 18px; }
-.recap-time { color: var(--ink-mute); font-size: 14px; }
-.recap-total { border-bottom: 0; border-top: 1.5px solid var(--rule-hard); margin-top: 4px; padding-top: 12px; }
+/* #150: a fixed 3-column ledger - label | count | time. Counts share one
+   right-aligned column and durations another, so numbers never ping-pong as rows do
+   or don't carry a time. Rows are display:contents so their cells land in the shared
+   grid; a fixed line-height + equal padding keeps every row's hairline aligned. */
+.recap-stats {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  margin: 0 0 20px;
+}
+.recap-row { display: contents; }
+/* No column-gap: the cell borders sit flush so each row's hairline is one continuous
+   line. Column spacing comes from the cells' own left padding instead. */
+.recap-stats dt,
+.recap-count,
+.recap-time {
+  line-height: 26px;
+  padding: 7px 0;
+  border-bottom: 1px solid var(--rule);
+}
+.recap-stats dt { margin: 0; font-size: 16px; color: var(--ink); }
+.recap-count {
+  padding-left: 18px;
+  text-align: right;
+  font-family: var(--serif);
+  font-weight: 600;
+  font-size: 18px;
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+}
+.recap-time {
+  padding-left: 14px;
+  min-width: 3.4em;
+  text-align: right;
+  color: var(--ink-mute);
+  font-size: 14px;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.recap-total dt,
+.recap-total .recap-count,
+.recap-total .recap-time {
+  border-bottom: 0;
+  border-top: 1.5px solid var(--rule-hard);
+  margin-top: 4px;
+  padding-top: 12px;
+}
 .recap-total dt { font-family: var(--serif); }
-.recap-total dd b { font-size: 20px; }
-.recap-actions { display: flex; flex-direction: column; align-items: center; gap: 12px; }
+.recap-total .recap-time { font-family: var(--serif); font-weight: 600; font-size: 20px; color: var(--ink); }
+/* #150: pin the actions as a sticky footer so a tall recap (all six stat rows on a
+   shorter e-ink screen) can scroll its stats without the buttons ever scrolling out
+   of reach - they were getting "lost" below the fold. The paper background + top
+   hairline keep them reading as a footer over the scrolling list. */
+.recap-actions {
+  position: sticky;
+  bottom: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding-top: 12px;
+  padding-bottom: calc(2px + env(safe-area-inset-bottom, 0px));
+  background: var(--paper);
+}
 .recap-actions .btn { width: 100%; }
 
 /* #138: first-run onboarding - empty states + the How-it-works explainer. */
