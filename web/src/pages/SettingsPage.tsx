@@ -130,6 +130,12 @@ export default function SettingsPage() {
                 history. It only works when you're signed in to YouTube in this browser and it allows YouTube cookies, and it
                 lets YouTube see what you watch here. Either way, "Open on YouTube" on a video always logs it for sure.
               </span>
+              {/* #151: otium can't detect YouTube sign-in (cross-origin), so the only
+                  sure check is empirical - sign in, watch one, look at your history. */}
+              <span className="settings-links">
+                <a href="https://www.youtube.com/account" target="_blank" rel="noopener noreferrer">Sign in to YouTube ↗</a>
+                <a href="https://www.youtube.com/feed/history" target="_blank" rel="noopener noreferrer">Check your history ↗</a>
+              </span>
             </div>
             <button
               role="switch"

@@ -1142,6 +1142,20 @@ h1.display {
   color: var(--ink-soft);
   line-height: 1.45;
 }
+/* #151: the self-verify links under the YouTube-history setting. */
+.settings-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 18px;
+  margin-top: 2px;
+}
+.settings-links a {
+  font-family: var(--mono);
+  font-size: 13px;
+  color: var(--ink);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
 /* toggle: an e-ink hard-rule switch, not a glossy iOS pill. */
 .switch {
   flex: none;
