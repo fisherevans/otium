@@ -728,6 +728,7 @@ func (db *DB) kvSet(ctx context.Context, userID int64, key, value string) error 
 
 const (
 	settingFastScrollCheckin = "fast_scroll_checkin"
+	settingYouTubeHistory    = "youtube_history"
 )
 
 // Settings is the user's toggleable preferences. FastScrollCheckin gates the
@@ -739,29 +740,46 @@ const (
 // topic > global - there is no "which topic" ambiguity left to configure.
 type Settings struct {
 	FastScrollCheckin bool `json:"fast_scroll_checkin"`
+	// YouTubeHistory (#151): when on, in-card YouTube videos embed from youtube.com
+	// (not youtube-nocookie.com) so a watch CAN reach the user's YouTube history if
+	// they're signed in and the browser sends third-party cookies. Default OFF - the
+	// private nocookie embed. It's opt-in because it trades the embed's privacy for
+	// history logging, and even on it isn't guaranteed (cookie policy dependent).
+	YouTubeHistory bool `json:"youtube_history"`
 }
 
 // GetSettings returns the user's settings with defaults filled in for any key
 // that has never been written.
 func (db *DB) GetSettings(ctx context.Context, userID int64) (Settings, error) {
-	s := Settings{FastScrollCheckin: true} // defaults
-	v, ok, err := db.kvGet(ctx, userID, settingFastScrollCheckin)
-	if err != nil {
+	s := Settings{FastScrollCheckin: true} // defaults (YouTubeHistory defaults false)
+	if v, ok, err := db.kvGet(ctx, userID, settingFastScrollCheckin); err != nil {
 		return s, err
-	}
-	if ok {
+	} else if ok {
 		s.FastScrollCheckin = v == "1"
+	}
+	if v, ok, err := db.kvGet(ctx, userID, settingYouTubeHistory); err != nil {
+		return s, err
+	} else if ok {
+		s.YouTubeHistory = v == "1"
 	}
 	return s, nil
 }
 
 // SetFastScrollCheckin persists the fast-scroll check-in toggle.
 func (db *DB) SetFastScrollCheckin(ctx context.Context, userID int64, on bool) error {
-	v := "0"
+	return db.kvSet(ctx, userID, settingFastScrollCheckin, boolToKV(on))
+}
+
+// SetYouTubeHistory persists the "let YouTube log my watches" toggle (#151).
+func (db *DB) SetYouTubeHistory(ctx context.Context, userID int64, on bool) error {
+	return db.kvSet(ctx, userID, settingYouTubeHistory, boolToKV(on))
+}
+
+func boolToKV(on bool) string {
 	if on {
-		v = "1"
+		return "1"
 	}
-	return db.kvSet(ctx, userID, settingFastScrollCheckin, v)
+	return "0"
 }
 
 // UpdateTopic patches a topic's presentation fields (name, color, icon), the

@@ -77,6 +77,7 @@ export default function SessionPage() {
 
   const [elapsed, setElapsed] = useState(0);
   const [checkin, setCheckin] = useState<Checkin>(null);
+  const [ytHistory, setYtHistory] = useState(false); // #151: YouTube embed host (nocookie vs youtube.com)
   // Dwell + fast-scroll check-in (#68). fastCheckin gates BOTH the dwell
   // measurement and the nudge; off = old explicit-only behavior. Read via a ref
   // inside the IntersectionObserver so toggling it never re-subscribes the
@@ -227,6 +228,7 @@ export default function SessionPage() {
       .getSettings()
       .then((s) => {
         fastCheckin.current = s.fast_scroll_checkin;
+        setYtHistory(s.youtube_history); // #151: which YouTube host the inline player embeds from
       })
       .catch(() => {});
   }, []);
@@ -740,6 +742,7 @@ export default function SessionPage() {
                     }}
                     onNext={next}
                     onPrev={prev}
+                    ytHistory={ytHistory}
                   />
                 </div>
               ) : (

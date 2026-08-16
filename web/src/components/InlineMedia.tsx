@@ -38,6 +38,7 @@ export function InlineMedia({
   onFirstPlay,
   onNext,
   onPrev,
+  ytHistory = false,
 }: {
   item: Item;
   onSave?: () => void;
@@ -45,6 +46,9 @@ export function InlineMedia({
   onFirstPlay?: () => void;
   onNext?: () => void;
   onPrev?: () => void;
+  // #151: when true, embed from youtube.com (not nocookie) so a watch can reach the
+  // user's YouTube history. Opt-in via Settings; default private.
+  ytHistory?: boolean;
 }) {
   const [notes, setNotes] = useState(false);
   const [playing, setPlaying] = useState(false);
@@ -99,7 +103,9 @@ export function InlineMedia({
       mountRef.current.appendChild(host);
       player = new YT.Player(host, {
         videoId: ytId,
-        host: "https://www.youtube-nocookie.com",
+        // #151: youtube.com (cookies -> a watch can land in the user's history) only
+        // when they've opted in; otherwise the private nocookie embed.
+        host: ytHistory ? "https://www.youtube.com" : "https://www.youtube-nocookie.com",
         playerVars: { rel: 0, modestbranding: 1, playsinline: 1, controls: nativeControls ? 1 : 0 },
         events: {
           onReady: () => {
@@ -139,7 +145,7 @@ export function InlineMedia({
       if (mountRef.current) mountRef.current.innerHTML = ""; // drop the iframe YT left behind
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [video, ytId, nativeControls]);
+  }, [video, ytId, nativeControls, ytHistory]);
 
   function togglePlay() {
     const p = playerRef.current;
@@ -291,7 +297,7 @@ export function InlineMedia({
             </button>
           )}
           <ShareActions item={item} />
-          <button className="im-act im-orig" onClick={onOpenOriginal} aria-label="Open original">
+          <button className="im-act im-orig" onClick={onOpenOriginal} aria-label={video ? "Open on YouTube" : "Open original"}>
             <ExternalLink size={18} strokeWidth={1.75} aria-hidden />
           </button>
         </div>

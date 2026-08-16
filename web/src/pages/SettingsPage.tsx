@@ -56,6 +56,21 @@ export default function SettingsPage() {
       .finally(() => setSaving(false));
   }
 
+  function toggleYouTubeHistory() {
+    if (!settings || saving) return;
+    const next = !settings.youtube_history;
+    setSettings({ ...settings, youtube_history: next });
+    setSaving(true);
+    api
+      .updateSettings({ youtube_history: next })
+      .then(setSettings)
+      .catch((e) => {
+        setErr(String(e.message ?? e));
+        setSettings((s) => (s ? { ...s, youtube_history: !next } : s));
+      })
+      .finally(() => setSaving(false));
+  }
+
   return (
     <div>
       <button className="lib-back" onClick={() => nav("/sections")}>
@@ -99,6 +114,29 @@ export default function SettingsPage() {
               aria-label="Fast-scroll check-in"
               className={`switch ${settings.fast_scroll_checkin ? "on" : ""}`}
               onClick={toggleFastCheckin}
+              disabled={saving}
+            >
+              <span className="switch-knob" />
+            </button>
+          </div>
+
+          {/* #151: let YouTube log in-app watches to your account history. */}
+          <div className="settings-row">
+            <div className="settings-copy">
+              <b>Let YouTube log my watches</b>
+              <span>
+                Videos normally play through YouTube's private embed, which never touches your account - so nothing shows up
+                in your YouTube history. Turn this on to play them through youtube.com instead, so a watch can appear in your
+                history. It only works when you're signed in to YouTube in this browser and it allows YouTube cookies, and it
+                lets YouTube see what you watch here. Either way, "Open on YouTube" on a video always logs it for sure.
+              </span>
+            </div>
+            <button
+              role="switch"
+              aria-checked={settings.youtube_history}
+              aria-label="Let YouTube log my watches"
+              className={`switch ${settings.youtube_history ? "on" : ""}`}
+              onClick={toggleYouTubeHistory}
               disabled={saving}
             >
               <span className="switch-knob" />

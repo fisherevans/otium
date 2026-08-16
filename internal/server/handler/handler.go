@@ -1280,6 +1280,7 @@ func (h *Handler) UpdateSettings(w http.ResponseWriter, r *http.Request) {
 	uid := userID(r)
 	var body struct {
 		FastScrollCheckin *bool `json:"fast_scroll_checkin"`
+		YouTubeHistory    *bool `json:"youtube_history"`
 	}
 	if !decode(w, r, &body) {
 		return
@@ -1287,6 +1288,12 @@ func (h *Handler) UpdateSettings(w http.ResponseWriter, r *http.Request) {
 	if body.FastScrollCheckin != nil {
 		if err := h.db.SetFastScrollCheckin(r.Context(), uid, *body.FastScrollCheckin); err != nil {
 			serverError(w, h.log, "set fast-scroll check-in", err)
+			return
+		}
+	}
+	if body.YouTubeHistory != nil {
+		if err := h.db.SetYouTubeHistory(r.Context(), uid, *body.YouTubeHistory); err != nil {
+			serverError(w, h.log, "set youtube history", err)
 			return
 		}
 	}

@@ -358,6 +358,9 @@ export interface SectionBrowse {
 // removed in #86 - a source now has exactly one topic, so there's nothing to pick.)
 export interface Settings {
   fast_scroll_checkin: boolean;
+  // #151: opt in to embedding YouTube from youtube.com (not nocookie) so watches can
+  // reach your YouTube history. Default off (private embed).
+  youtube_history: boolean;
 }
 
 // Appearance preferences (#80/#81/#82). Display-only: reader typography, card
