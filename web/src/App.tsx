@@ -3,6 +3,12 @@ import { NavLink, Route, Routes, useLocation, useNavigate } from "react-router-d
 import { BookOpen, Library, Bookmark, User } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { ThemeToggle } from "@/components/ThemeToggle";
+import { lazy, Suspense } from "react";
+
+// Dev-only layout lab (/lab). Lazily loaded so it never enters the shipped
+// session bundle, and rendered OUTSIDE the app shell so it owns the whole
+// viewport - it draws its own device chrome.
+const LabPage = lazy(() => import("@/lab/LabPage"));
 import HomePage from "@/pages/HomePage";
 import SessionPage from "@/pages/SessionPage";
 import CollectionsPage from "@/pages/CollectionsPage";
@@ -55,6 +61,16 @@ export default function App() {
           </a>
         )}
       </div>
+    );
+  }
+
+  if (pathname.startsWith("/lab")) {
+    return (
+      <Suspense fallback={<div className="spinner">lab…</div>}>
+        <Routes>
+          <Route path="/lab" element={<LabPage />} />
+        </Routes>
+      </Suspense>
     );
   }
 

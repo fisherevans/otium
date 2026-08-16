@@ -7,11 +7,8 @@ import { SavePicker } from "@/components/SavePicker";
 import { ScoreBreakdownSheet } from "@/components/ScoreBreakdown";
 import { Dialog } from "@/components/Dialog";
 import { SourceSheet } from "@/components/SourceSheet";
-import { TopicPill, CardSource, Byline, Blurb, Media } from "@/components/CardParts";
-import { InlineMedia } from "@/components/InlineMedia";
-import { ShareActions } from "@/components/ReaderActions";
-import { Bookmark, BookOpen, Play, ExternalLink } from "lucide-react";
-import { cardRender, isMedia, isVideo, isVertical } from "@/lib/render";
+import { SessionCard } from "@/components/SessionCard";
+import { cardRender, isMedia, isVideo } from "@/lib/render";
 import { mins } from "@/lib/format";
 
 // Which in-app content surface an item opens into (#51). Video/audio play in
@@ -578,14 +575,6 @@ export default function SessionPage() {
     if (back !== null) requestAnimationFrame(() => scrollTo(Math.min(back, items.length - 1)));
   }
 
-  // The primary callout button per render state (#96): label + icon + action.
-  function primaryFor(sel: Selected): { label: string; Icon: typeof BookOpen; onClick: () => void } {
-    const r = renderOf(sel.item);
-    if (r === "full_text") return { label: "Read", Icon: BookOpen, onClick: () => openContent(sel) };
-    if (isVideo(sel.item)) return { label: "Watch", Icon: Play, onClick: () => openContent(sel) };
-    if (sel.item.media_type === "audio") return { label: "Listen", Icon: Play, onClick: () => openContent(sel) };
-    return { label: "Open original", Icon: ExternalLink, onClick: () => openExternal(sel) };
-  }
 
   // Desktop keyboard navigation (#4): arrows page the reel, space/enter opens
   // the focused item, backspace returns to intent. Inert while a sheet or the
@@ -669,114 +658,34 @@ export default function SessionPage() {
       )}
 
       <div className="stage" ref={stageRef}>
-        {shownItems.map((it, i) => {
-          const primary = primaryFor(it);
-          const render = renderOf(it.item);
-          // Media on the focused card plays inline (no modal); off-screen cards stay
-          // lightweight thumbnails. A vertical frame gets the compact chrome layout.
-          const activeMedia = i === current && isMedia(it.item);
-          const vert = activeMedia && isVertical(it.item);
-          const audioCard = activeMedia && it.item.media_type === "audio";
-          return (
-            <div
-              className={`snap ${i === current ? "" : "away"} ${activeMedia ? "media-card" : ""} ${vert ? "vertical" : ""} ${audioCard ? "audio-card" : ""}`}
-              key={`${it.item.id}-${i}`}
-              data-idx={i}
-              ref={(el) => {
-                itemEls.current[i] = el;
-              }}
-              onPointerDown={cardPointerDown}
-              onPointerMove={cardPointerMove}
-              onPointerUp={(e) => cardPointerUp(e, i)}
-              onClick={() => cardClick(it)}
-              role="link"
-            >
-              {/* Quiet reason line (de-noised, no box) + the ··· overflow. */}
-              <div className="card-top" onClick={(e) => e.stopPropagation()}>
-                {it.reason && <span className="reason">{it.reason}</span>}
-                {i === current && (
-                  <button
-                    className="item-more"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setMenuOpen(true);
-                    }}
-                    aria-label="More actions"
-                  >
-                    ···
-                  </button>
-                )}
-              </div>
-
-              {/* Fixed card order (#96): Topic pill -> Source -> Title ->
-                  Author·Date -> Hero -> Preview blurb -> callout buttons. */}
-              <TopicPill topic={it.topic} />
-              <CardSource sel={it} onSource={() => setSourceSel(it)} />
-              <h3 className="card-title">{it.item.title}</h3>
-              <Byline item={it.item} sourceTitle={it.source_title} />
-
-              {activeMedia ? (
-                // The focused media card: the player is embedded and paused (one tap
-                // to play), sized by real aspect ratio; it owns its own action row.
-                <div
-                  className="card-media"
-                  // #149: fully isolate the media area from the card's swipe/tap
-                  // handlers. InlineMedia owns its own gestures (tap = play, flick =
-                  // navigate) and drives next/prev via props, so nothing here should
-                  // bubble to the card. Stopping only pointerdown+click let a tap on
-                  // "Show notes" or an action button leak a pointerUP to the card's
-                  // swipe detector (which read a stale press) and jump to the next
-                  // item. Bubble-phase stops: children handle first, then it ends here.
-                  onPointerDown={(e) => e.stopPropagation()}
-                  onPointerMove={(e) => e.stopPropagation()}
-                  onPointerUp={(e) => e.stopPropagation()}
-                  onClick={(e) => e.stopPropagation()}
-                >
-                  <InlineMedia
-                    item={it.item}
-                    onSave={() => save(it)}
-                    onOpenOriginal={() => openExternal(it)}
-                    onFirstPlay={() => {
-                      recordOpen(it);
-                      startRead(it);
-                    }}
-                    onNext={next}
-                    onPrev={prev}
-                    ytHistory={ytHistory}
-                  />
-                </div>
-              ) : (
-                <>
-                  <Media item={it.item} />
-                  <Blurb item={it.item} />
-                </>
-              )}
-
-              {i === current && !isMedia(it.item) && (
-                <div
-                  className="card-callout"
-                  onPointerDown={(e) => e.stopPropagation()}
-                  onClick={(e) => e.stopPropagation()}
-                >
-                  <button className="callout-primary" onClick={primary.onClick}>
-                    <primary.Icon size={16} strokeWidth={1.9} aria-hidden />
-                    {primary.label}
-                  </button>
-                  <button className="callout-act" onClick={() => save(it)} aria-label="Save">
-                    <Bookmark size={18} strokeWidth={1.75} aria-hidden />
-                  </button>
-                  <ShareActions item={it.item} />
-                  {/* full_text keeps a quiet path to the original alongside Read. */}
-                  {render === "full_text" && (
-                    <button className="callout-orig" onClick={() => openExternal(it)}>
-                      Open original
-                    </button>
-                  )}
-                </div>
-              )}
-            </div>
-          );
-        })}
+        {shownItems.map((it, i) => (
+          <SessionCard
+            key={`${it.item.id}-${i}`}
+            sel={it}
+            index={i}
+            focused={i === current}
+            render={renderOf(it.item)}
+            ref={(el) => {
+              itemEls.current[i] = el;
+            }}
+            onOpenContent={openContent}
+            onOpenExternal={openExternal}
+            onSave={save}
+            onSource={(s) => setSourceSel(s)}
+            onMenu={() => setMenuOpen(true)}
+            onFirstPlay={(s) => {
+              recordOpen(s);
+              startRead(s);
+            }}
+            onNext={next}
+            onPrev={prev}
+            ytHistory={ytHistory}
+            onPointerDown={cardPointerDown}
+            onPointerMove={cardPointerMove}
+            onPointerUp={(e) => cardPointerUp(e, i)}
+            onClick={() => cardClick(it)}
+          />
+        ))}
         {/* Terminal end-card (#79). Reaching it is passive - the session is
             already over; this just offers the way onward. No auto-redirect: the
             user got here by choosing to advance. */}
