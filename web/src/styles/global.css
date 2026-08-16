@@ -683,6 +683,31 @@ h1.display {
   margin-top: 14px;
   box-shadow: 0 -14px 16px -6px var(--paper);
 }
+/* #152: the per-session "YouTube Shorts" switch on the fine-tune screen. */
+.shorts-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  margin-top: 18px;
+  padding: 14px 0;
+  border-top: 1px solid var(--hair);
+}
+.shorts-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.shorts-copy b {
+  font-family: var(--grot);
+  font-size: 14px;
+  letter-spacing: 0.01em;
+  color: var(--ink);
+}
+.shorts-copy span {
+  font-size: 13px;
+  color: var(--ink-mute);
+}
 .topic-tune-head {
   display: flex;
   align-items: center;

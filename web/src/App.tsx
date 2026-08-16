@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import { NavLink, Route, Routes, useLocation, useNavigate } from "react-router-dom";
 import { BookOpen, Library, Bookmark, User } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
@@ -31,14 +32,28 @@ export default function App() {
   const nav = useNavigate();
   const focused = pathname.startsWith("/session"); // #67: session is /session/:id, full-screen focused mode
 
+  // #152: a 401 makes the API client auto-redirect to /auth/login (which bounces
+  // through Google and usually returns signed-in). So "unauthenticated" almost always
+  // means "a redirect is already in flight" - show a loading state, not a sign-in
+  // button the user never has to press. Only after a few seconds (redirect stalled /
+  // genuinely needs a manual click) do we reveal the button.
+  const [showManualSignin, setShowManualSignin] = useState(false);
+  useEffect(() => {
+    if (!unauthenticated) return;
+    const t = window.setTimeout(() => setShowManualSignin(true), 4000);
+    return () => window.clearTimeout(t);
+  }, [unauthenticated]);
+
   if (loading) return <div className="spinner">otium…</div>;
   if (unauthenticated) {
     return (
       <div className="center">
-        <p className="display">Sign in to continue</p>
-        <a className="btn" href="/auth/login">
-          Continue to sign in
-        </a>
+        <div className="spinner">signing in…</div>
+        {showManualSignin && (
+          <a className="btn" href="/auth/login" style={{ marginTop: 18 }}>
+            Sign in
+          </a>
+        )}
       </div>
     );
   }

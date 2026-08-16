@@ -139,6 +139,17 @@ export default function HomePage() {
   }, [sources, effectiveEverything, excluded, keptTopics]);
   const nothingNew = sources.length > 0 && unseen === 0;
 
+  // #152: whether the current selection includes any YouTube (video) source. Only
+  // then does the "Shorts" toggle make sense - a scope of blogs/podcasts has none.
+  const scopeHasVideo = useMemo(() => {
+    const anyYouTube = (arr: Source[]) => arr.some((s) => s.kind === "youtube");
+    if (effectiveEverything && excluded.length === 0) return anyYouTube(sources);
+    return anyYouTube(sources.filter((s) => s.topic_slug && keptTopics.includes(s.topic_slug)));
+  }, [sources, effectiveEverything, excluded, keptTopics]);
+  // Include YouTube Shorts in the session (default yes). Only sent when the scope has
+  // video; otherwise it's a no-op server-side.
+  const [includeShorts, setIncludeShorts] = useState(true);
+
   async function begin() {
     if (minutes == null) return;
     setBusy(true);
@@ -152,7 +163,8 @@ export default function HomePage() {
       // it (topicless sources too). Untouched Everything sends both empty.
       if (excluded.length > 0) themes = keptTopics;
       else if (!effectiveEverything) sectionSlugs = pickedSections;
-      const resp = await api.createSession(minutes, themes, sectionSlugs);
+      // #152: only meaningful when the scope has video; harmless (true) otherwise.
+      const resp = await api.createSession(minutes, themes, sectionSlugs, !scopeHasVideo || includeShorts);
       if (resp && resp.session_id) nav(`/session/${resp.session_id}`);
       else setErr("Nothing new to gather right now.");
     } catch (e: any) {
@@ -377,6 +389,26 @@ export default function HomePage() {
                   </div>
                 );
               })}
+            </div>
+          )}
+
+          {/* #152: the scope has YouTube sources, so let the reader choose shorts vs
+              long-form for this session. Only appears when there's video to filter. */}
+          {scopeHasVideo && (
+            <div className="shorts-toggle">
+              <div className="shorts-copy">
+                <b>YouTube Shorts</b>
+                <span>{includeShorts ? "Shown alongside longer videos." : "Hidden - long-form videos only."}</span>
+              </div>
+              <button
+                role="switch"
+                aria-checked={includeShorts}
+                aria-label="Include YouTube Shorts"
+                className={`switch ${includeShorts ? "on" : ""}`}
+                onClick={() => setIncludeShorts((v) => !v)}
+              >
+                <span className="switch-knob" />
+              </button>
             </div>
           )}
 
