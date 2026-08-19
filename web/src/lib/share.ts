@@ -6,8 +6,18 @@
 // fallback. Callers surface a visible "copied" confirmation off the boolean/tag
 // these return - the old buried-in-a-··· behavior is what #92 is replacing.
 
+// The layout lab sets this. navigator.share does not exist on desktop Chromium
+// or in headless, so without it the lab renders a row one icon SHORT of the one
+// the phone renders - which makes it lie about the exact thing it is for. Safe
+// to force: shareOrCopy calls navigator.share inside a try and falls back to
+// copying, so a forced-on button still does something sensible.
+let forced = false;
+export function forceWebShare(on: boolean): void {
+  forced = on;
+}
+
 export function canWebShare(): boolean {
-  return typeof navigator !== "undefined" && typeof navigator.share === "function";
+  return forced || (typeof navigator !== "undefined" && typeof navigator.share === "function");
 }
 
 // Copy text to the clipboard, returning whether it landed. Tries the async

@@ -3,6 +3,12 @@ import { NavLink, Route, Routes, useLocation, useNavigate } from "react-router-d
 import { BookOpen, Library, Bookmark, User } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { ThemeToggle } from "@/components/ThemeToggle";
+import { lazy, Suspense } from "react";
+
+// Dev-only layout lab (/lab). Lazily loaded so it never enters the shipped
+// session bundle, and rendered OUTSIDE the app shell so it owns the whole
+// viewport - it draws its own device chrome.
+const LabPage = lazy(() => import("@/lab/LabPage"));
 import HomePage from "@/pages/HomePage";
 import SessionPage from "@/pages/SessionPage";
 import CollectionsPage from "@/pages/CollectionsPage";
@@ -58,6 +64,16 @@ export default function App() {
     );
   }
 
+  if (pathname.startsWith("/lab")) {
+    return (
+      <Suspense fallback={<div className="spinner">lab…</div>}>
+        <Routes>
+          <Route path="/lab" element={<LabPage />} />
+        </Routes>
+      </Suspense>
+    );
+  }
+
   return (
     <div className={`app ${focused ? "focused" : ""}`}>
       <header className={`topbar ${focused ? "session" : ""}`}>
@@ -79,9 +95,14 @@ export default function App() {
             >
               <span className="chrome-ic">←</span> intent
             </button>
-            <span className="wordmark">otium</span>
-            <span className="topbar-right">
+            {/* In a session the theme control sits WITH the wordmark, not beside
+                library: day/night is about the page you are reading, and pairing
+                it with the mark keeps the right edge to one destination. */}
+            <span className="wordmark-slot">
+              <span className="wordmark">otium</span>
               <ThemeToggle />
+            </span>
+            <span className="topbar-right">
               <button className="chrome-btn right" onClick={() => nav("/sections")} aria-label="Go to library">
                 library
               </button>

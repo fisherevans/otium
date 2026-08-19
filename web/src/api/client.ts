@@ -38,6 +38,11 @@ export interface TopicRef {
   slug: string;
   color: string;
   icon: string;
+  // The section above this topic, for the card's "Section > Topic" line. Absent
+  // when the topic has no section of its own (the server also blanks the
+  // auto-created "Uncategorized" bucket) - the card then leads with the topic.
+  section_name?: string;
+  section_slug?: string;
 }
 
 export interface Source {

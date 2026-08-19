@@ -293,3 +293,67 @@ func hasColumn(t *testing.T, sdb *sql.DB, table, column string) bool {
 	}
 	return n > 0
 }
+
+// TestTopicsForSourcesCarriesSection covers the card's "Section > Topic" line:
+// the ref must carry the topic's section (#130 strict tree), and must still
+// resolve the topic when there is no section to name.
+func TestTopicsForSourcesCarriesSection(t *testing.T) {
+	db, uid := newTestDB(t)
+	ctx := context.Background()
+
+	sec, err := db.CreateSection(ctx, uid, "Music Production", "music-production", "")
+	if err != nil {
+		t.Fatalf("section: %v", err)
+	}
+	withSection, err := db.CreateTopic(ctx, uid, "Finger Drumming", "finger-drumming", "#7a6a4f", sec.ID)
+	if err != nil {
+		t.Fatalf("topic: %v", err)
+	}
+	// section_id 0 means "no section" - the nullable end of the tree.
+	loose, err := db.CreateTopic(ctx, uid, "Odds and Ends", "odds", "#555555", 0)
+	if err != nil {
+		t.Fatalf("loose topic: %v", err)
+	}
+
+	mk := func(title string, topicID int64) int64 {
+		s, err := db.CreateSource(ctx, &Source{UserID: uid, Title: title, FeedURL: "https://x/" + title})
+		if err != nil {
+			t.Fatalf("source %s: %v", title, err)
+		}
+		if _, err := db.sql.ExecContext(ctx, `UPDATE sources SET topic_id = ? WHERE id = ?`, topicID, s.ID); err != nil {
+			t.Fatalf("assign %s: %v", title, err)
+		}
+		return s.ID
+	}
+	inSection := mk("Mattias Krantz", withSection.ID)
+	noSection := mk("Riverbank", loose.ID)
+	noTopic, err := db.CreateSource(ctx, &Source{UserID: uid, Title: "Orphan", FeedURL: "https://x/orphan"})
+	if err != nil {
+		t.Fatalf("orphan: %v", err)
+	}
+
+	got, err := db.TopicsForSources(ctx, uid, []int64{inSection, noSection, noTopic.ID})
+	if err != nil {
+		t.Fatalf("resolve: %v", err)
+	}
+
+	a, ok := got[inSection]
+	if !ok {
+		t.Fatal("source with a topic is missing from the map")
+	}
+	if a.Name != "Finger Drumming" || a.SectionName != "Music Production" || a.SectionSlug != "music-production" {
+		t.Fatalf("want Finger Drumming under Music Production, got %+v", a)
+	}
+
+	b, ok := got[noSection]
+	if !ok {
+		t.Fatal("sectionless topic should still resolve - the card leads with the topic")
+	}
+	if b.Name != "Odds and Ends" || b.SectionName != "" || b.SectionSlug != "" {
+		t.Fatalf("sectionless topic should carry an empty section, got %+v", b)
+	}
+
+	if _, ok := got[noTopic.ID]; ok {
+		t.Fatal("a topicless source must stay absent so the card renders source-only")
+	}
+}

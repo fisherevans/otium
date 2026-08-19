@@ -4952,3 +4952,242 @@ button.id-source.lead {
   opacity: 0;
   pointer-events: none;
 }
+
+/* ===========================================================================
+   The session card, as solved (#96 follow-up).
+   ---------------------------------------------------------------------------
+   A card is one fixed screen with no inner scroll, so the whole problem is how
+   that fixed height is divided. Numbers that depend on measurement are written
+   by lib/cardLayout as custom properties; the shapes live here. Each --card-*
+   below has a fallback, so a card still renders sensibly if the solver has not
+   run yet (first paint, or JS disabled).
+
+   These rules come last on purpose: several restate a value set earlier in this
+   file, and the card must win.
+   =========================================================================== */
+
+/* Solved cards lay out from the TOP. Centring arrives as --card-center-pad,
+   measured from real slack. `justify-content: center` cannot be used: on an
+   overflow:hidden column it splits OVERFLOW across both ends too, so a full card
+   loses its headline off the top with no way to scroll back to it. */
+/* The wordmark and its theme control, as one centred unit in a session. */
+.topbar.session .wordmark-slot {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.stage .snap,
+/* the shipped portrait-video rule sets its own 8px padding at higher
+   specificity; the solver owns the gaps now, so every card gets the same one */
+.stage .snap.media-card.vertical {
+  justify-content: flex-start;
+  padding-left: var(--card-gutter, 20px);
+  padding-right: var(--card-gutter, 20px);
+  padding-top: calc(var(--card-top-gap, 18px) + var(--card-center-pad, 0px));
+  padding-bottom: 6px;
+}
+
+/* The headline rides the type ramp the solver picks. The second selector is not
+   redundant: the shipped vertical-media rule sets 17px with equal specificity
+   and would win on order, silently ignoring the ramp on portrait video. */
+.stage .snap .card-title,
+.stage .snap.media-card.vertical .card-title {
+  font-size: var(--card-title-size, 23px);
+  margin-top: 0;
+  margin-bottom: var(--card-rhythm, 13px);
+}
+
+/* Rhythm: the solver overwrites these inline with optically-even values. These
+   are the resting numbers, so an unsolved first paint still looks deliberate. */
+.stage .card-hier {
+  margin-bottom: var(--card-rhythm, 13px);
+}
+.stage .ch-taxonomy .ch-rows {
+  row-gap: var(--card-rhythm, 13px);
+}
+
+/* The headline is never clamped on a solved card: fitting is the solver's job,
+   and it does it by stepping the type ramp, not by cutting words off. The two
+   extra selectors are not redundant - the shipped portrait-video rule (1 line,
+   17px) and audio rule (2 lines) match with equal specificity and would win on
+   order, which is how "Ukulele that transforms into a guit…" happened. */
+.stage .snap .card-title,
+.stage .snap.media-card.vertical .card-title,
+.stage .snap.audio-card .card-title {
+  display: block;
+  -webkit-line-clamp: unset;
+  overflow: visible;
+}
+
+/* Hero: capped as a share of the card, and never cropped to a band. The shipped
+   hero is a fixed-height box with object-fit: cover, which slices a portrait
+   photo into a letterbox strip. Here the box takes its height from the image and
+   the image is contained, so a tall photo gets smaller instead of getting cut. */
+.stage .snap .media.h {
+  height: auto;
+  max-height: var(--card-hero-cap, 46%);
+  aspect-ratio: auto;
+  flex: 0 0 auto;
+}
+.stage .snap .media.h img {
+  position: static;
+  width: 100%;
+  height: auto;
+  max-height: 100%;
+  max-width: 100%;
+  object-fit: contain;
+  margin: 0 auto;
+  display: block;
+}
+/* the dither overlay is sized to the old cropped box; it has nothing to texture
+   once the image is contained */
+.stage .snap .media .dither {
+  display: none;
+}
+
+/* Portrait player: takes the height the solver budgeted, a touch narrower than
+   the column so the frame reads as an object rather than a wall. */
+.stage .inline-media.v .im-frame {
+  height: var(--card-frame-h, min(72dvh, 72vh));
+  max-width: var(--card-media-w, 100%);
+}
+/* the landscape player bleeds past the gutter, so its bleed has to track it */
+.stage .inline-media.h .im-frame {
+  width: calc(100% + var(--card-gutter, 20px) * 2);
+  margin-left: calc(var(--card-gutter, 20px) * -1);
+  margin-right: calc(var(--card-gutter, 20px) * -1);
+}
+
+.stage .card-blurb {
+  -webkit-line-clamp: 3;
+}
+
+/* The old top strip held the reason line and the ··· overflow. The reason line
+   is gone (it repeated what the breadcrumb already says) and the ··· moved into
+   the action row, so the strip is an empty box worth 28px above the headline. */
+.stage .snap .reason {
+  display: none;
+}
+.stage .card-top {
+  display: none;
+}
+.stage .card-byline {
+  display: none;
+}
+
+/* Tightened chrome around the header stack. */
+.stage .card-top,
+.stage .card-byline {
+  margin-bottom: 5px;
+}
+.stage .topic-pill,
+.stage .card-source {
+  margin-bottom: 4px;
+}
+.stage .card-callout,
+.stage .im-actions {
+  margin-top: 7px;
+}
+
+/* One action row everywhere: bare icons at one size, so the same glyph is the
+   same object under a video and under an article. */
+.stage .im-act,
+.stage .im-actions .share-act,
+.stage .card-callout .callout-act,
+.stage .card-callout .share-act {
+  border: none;
+  background: none;
+  padding: 6px;
+}
+.stage .card-callout {
+  gap: 6px;
+}
+/* "Show notes" loses its outline and its label and becomes just the document. */
+.stage .im-notes-toggle {
+  font-size: 0;
+  gap: 0;
+}
+.stage .im-notes-toggle svg {
+  width: 18px;
+  height: 18px;
+}
+
+/* --- the Section > Topic line, and the credit under the headline --- */
+
+.card-hier .ch-line {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 7px;
+  min-width: 0;
+}
+.card-hier .ch-sep {
+  color: var(--ink-mute);
+  font-size: 13px;
+  line-height: 1;
+}
+.card-hier .ch-section {
+  font-family: var(--mono);
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ink);
+  white-space: nowrap;
+}
+.card-hier .ch-topic {
+  font-family: var(--serif);
+  font-size: 15px;
+  color: var(--ink-soft);
+}
+.card-hier .ch-source {
+  font-family: var(--serif);
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--ink);
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  text-align: left;
+}
+.ch-taxonomy .ch-rows {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+.ch-taxonomy .ch-tax {
+  gap: 6px;
+}
+.ch-taxonomy .ch-tax .ch-sep {
+  font-size: 11px;
+}
+
+/* Credit: who made it and how old, as one caption line under the headline. */
+.card-credit {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 0 0 auto;
+  min-width: 0;
+  flex-wrap: wrap;
+}
+.card-credit .cc-source {
+  font-family: var(--serif);
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--ink);
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  text-align: left;
+}
+.card-credit .cc-age {
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--ink-mute);
+  letter-spacing: 0.03em;
+}

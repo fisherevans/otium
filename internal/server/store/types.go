@@ -96,6 +96,11 @@ type TopicRef struct {
 	Slug  string `json:"slug"`
 	Color string `json:"color"`
 	Icon  string `json:"icon"`
+	// The section this topic sits under (#130 strict tree), for the card's
+	// "Section > Topic" line. Empty when the topic has no section - the card then
+	// leads with the topic and drops the chevron.
+	SectionName string `json:"section_name,omitempty"`
+	SectionSlug string `json:"section_slug,omitempty"`
 }
 
 // Section is a user-created overlay gathering several topics under one name (#86):
