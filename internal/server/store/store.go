@@ -1308,6 +1308,28 @@ func (db *DB) MarkFetched(ctx context.Context, sourceID int64, fetchErr string) 
 	return err
 }
 
+// YouTubeSourcesMissingIcon returns every YouTube source with no avatar yet, across
+// all users, as {ID, FeedURL} (the feed_url carries the channel id). Backs the
+// startup avatar backfill (#155): the personal instance has at most a few hundred
+// sources, so an unbounded scan is cheap and lets the backfill converge in one pass.
+func (db *DB) YouTubeSourcesMissingIcon(ctx context.Context) ([]Source, error) {
+	rows, err := db.sql.QueryContext(ctx,
+		`SELECT id, feed_url FROM sources WHERE kind = 'youtube' AND icon_url = ''`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []Source
+	for rows.Next() {
+		var s Source
+		if err := rows.Scan(&s.ID, &s.FeedURL); err != nil {
+			return nil, err
+		}
+		out = append(out, s)
+	}
+	return out, rows.Err()
+}
+
 // SetSourceIcon sets a source's avatar URL only when it's currently empty, so an
 // ingest-captured feed image never clobbers a user-set or YouTube-resolved icon.
 func (db *DB) SetSourceIcon(ctx context.Context, sourceID int64, url string) error {

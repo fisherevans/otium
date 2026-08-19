@@ -96,6 +96,45 @@ func TestTransientOn403(t *testing.T) {
 	}
 }
 
+func TestChannelAvatars(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path != "/channels" {
+			t.Errorf("unexpected path %s", r.URL.Path)
+		}
+		if got := r.URL.Query().Get("id"); got != "UCa,UCb,UCc" {
+			t.Errorf("id = %q, want the joined ids", got)
+		}
+		// UCb has no thumbnails; UCc is absent from the response entirely (deleted).
+		w.Write([]byte(`{"items":[
+			{"id":"UCa","snippet":{"thumbnails":{"default":{"url":"a-lo"},"high":{"url":"a-hi"}}}},
+			{"id":"UCb","snippet":{"thumbnails":{}}}
+		]}`))
+	}))
+	defer srv.Close()
+	old := baseURL
+	baseURL = srv.URL
+	defer func() { baseURL = old }()
+
+	got, err := NewClient("k").ChannelAvatars(context.Background(), []string{"UCa", "UCb", "UCc"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 1 {
+		t.Fatalf("got %d avatars, want 1 (only UCa has a thumbnail): %v", len(got), got)
+	}
+	if got["UCa"] != "a-hi" { // bestThumb prefers high over default
+		t.Fatalf("UCa avatar = %q, want a-hi", got["UCa"])
+	}
+}
+
+func TestChannelAvatarsEmpty(t *testing.T) {
+	// No ids: no HTTP call, empty map.
+	got, err := NewClient("k").ChannelAvatars(context.Background(), nil)
+	if err != nil || len(got) != 0 {
+		t.Fatalf("empty ids = (%v, %v), want (empty, nil)", got, err)
+	}
+}
+
 func TestParseChannelInput(t *testing.T) {
 	tests := []struct {
 		name                                 string

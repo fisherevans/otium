@@ -239,6 +239,41 @@ func (c *Client) channelsList(ctx context.Context, p url.Values) (ResolvedChanne
 	return ResolvedChannel{ChannelID: it.ID, Title: it.Snippet.Title, ThumbnailURL: bestThumb(it.Snippet.Thumbnails)}, nil
 }
 
+// ChannelAvatars resolves avatar URLs for up to 50 channels in one channels.list
+// call (1 quota unit): part=snippet, id=<comma-joined>. Returns a channelID->avatar
+// map holding only the channels the API returned a usable thumbnail for; missing,
+// deleted, or avatarless channels are simply absent. The API caps `id` at 50, so
+// callers (BackfillAvatars) chunk before calling.
+func (c *Client) ChannelAvatars(ctx context.Context, ids []string) (map[string]string, error) {
+	if len(ids) == 0 {
+		return map[string]string{}, nil
+	}
+	p := url.Values{}
+	p.Set("part", "snippet")
+	p.Set("id", strings.Join(ids, ","))
+	p.Set("maxResults", "50")
+	var out struct {
+		Items []struct {
+			ID      string `json:"id"`
+			Snippet struct {
+				Thumbnails map[string]struct {
+					URL string `json:"url"`
+				} `json:"thumbnails"`
+			} `json:"snippet"`
+		} `json:"items"`
+	}
+	if err := c.get(ctx, "channels", p, &out); err != nil {
+		return nil, err
+	}
+	res := make(map[string]string, len(out.Items))
+	for _, it := range out.Items {
+		if u := bestThumb(it.Snippet.Thumbnails); u != "" {
+			res[it.ID] = u
+		}
+	}
+	return res, nil
+}
+
 func (c *Client) searchChannel(ctx context.Context, q string) (ResolvedChannel, error) {
 	res, err := c.SearchChannels(ctx, q, 1)
 	if err != nil {

@@ -138,6 +138,10 @@ func main() {
 		// overhaul): the enrichment sweep is forward-only, so it won't revisit them.
 		// Self-terminating + idempotent, so it's safe every startup.
 		go youtube.BackfillAspects(ctx, db, ytClient, log)
+		// Avatar backfill for YouTube sources that predate add-time avatar capture
+		// (#155). Same self-terminating + idempotent shape: fills icon_url for
+		// channels still on the monogram fallback, then no-ops once they're covered.
+		go youtube.BackfillAvatars(ctx, db, ytClient, log)
 	}
 
 	go func() {
