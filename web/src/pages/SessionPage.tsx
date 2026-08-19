@@ -10,6 +10,7 @@ import { SourceSheet } from "@/components/SourceSheet";
 import { SessionCard } from "@/components/SessionCard";
 import { cardRender, isMedia, isVideo } from "@/lib/render";
 import { mins } from "@/lib/format";
+import { SHIPPED_LAYOUT, SHIPPED_VARS, cardVars, solveWhenReady } from "@/lib/cardLayout";
 
 // Which in-app content surface an item opens into (#51). Video/audio play in
 // the Player; everything else (article/rss/quote/text) reads in the ReaderPage.
@@ -191,6 +192,29 @@ export default function SessionPage() {
       cancelled = true;
     };
   }, [id, nav]);
+
+  // Solve the focused card's layout.
+  //
+  // A card is a fixed box with no inner scroll, so how its height is divided has
+  // to be decided against real measurements - see lib/cardLayout. Only the focused
+  // card is solved: it is the only one whose media is live, and the off-screen
+  // ones are thumbnails nobody is looking at. Re-runs when the focus moves, when
+  // the item's resolved render state changes what the row holds, and on resize.
+  useEffect(() => {
+    const stage = stageRef.current;
+    const card = itemEls.current[current];
+    if (!stage || !card) return;
+    let cancel = solveWhenReady(stage, stage, card, SHIPPED_LAYOUT);
+    const onResize = () => {
+      cancel();
+      cancel = solveWhenReady(stage, stage, card, SHIPPED_LAYOUT);
+    };
+    window.addEventListener("resize", onResize);
+    return () => {
+      cancel();
+      window.removeEventListener("resize", onResize);
+    };
+  }, [current, items, renderMap]);
 
   // Resume scroll: after the queue renders, jump (no animation) to the stored
   // cursor so a refresh lands where the user left off.
@@ -657,7 +681,7 @@ export default function SessionPage() {
         </div>
       )}
 
-      <div className="stage" ref={stageRef}>
+      <div className="stage" ref={stageRef} style={cardVars(SHIPPED_VARS)}>
         {shownItems.map((it, i) => (
           <SessionCard
             key={`${it.item.id}-${i}`}
@@ -665,6 +689,9 @@ export default function SessionPage() {
             index={i}
             focused={i === current}
             render={renderOf(it.item)}
+            hierarchy="taxonomy-credit"
+            sectionName={it.topic?.section_name}
+            menuPlacement="actions"
             ref={(el) => {
               itemEls.current[i] = el;
             }}

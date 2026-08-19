@@ -827,9 +827,19 @@ func (db *DB) TopicsForSources(ctx context.Context, userID int64, sourceIDs []in
 	if len(sourceIDs) == 0 {
 		return out, nil
 	}
-	q := `SELECT s.id, f.name, f.slug, f.color, f.icon
-	      FROM sources s JOIN topics f ON f.id = s.topic_id
+	// The section comes off topics.section_id - the strict tree enforceTree(#130)
+	// collapsed the old many-to-many into. LEFT JOIN, not JOIN: section_id is
+	// nullable, and a topic without one must still return its own identity.
+	q := `SELECT s.id, f.name, f.slug, f.color, f.icon,
+	             COALESCE(m.name, ''), COALESCE(m.slug, '')
+	      FROM sources s
+	      JOIN topics f ON f.id = s.topic_id
+	      LEFT JOIN sections m ON m.id = f.section_id
 	      WHERE s.user_id = ? AND s.id IN (` + placeholders(len(sourceIDs)) + `)`
+	// "Uncategorized" is the auto-created bucket every unplaced topic lands in
+	// (CreateTopic with section 0, and enforceTree's orphan sweep), so it names
+	// nothing the reader chose. Blanked here rather than printed on the card as
+	// "UNCATEGORIZED > TOPIC"; the card then just leads with the topic.
 	args := []any{userID}
 	for _, id := range sourceIDs {
 		args = append(args, id)
@@ -842,8 +852,11 @@ func (db *DB) TopicsForSources(ctx context.Context, userID int64, sourceIDs []in
 	for rows.Next() {
 		var sid int64
 		var f TopicRef
-		if err := rows.Scan(&sid, &f.Name, &f.Slug, &f.Color, &f.Icon); err != nil {
+		if err := rows.Scan(&sid, &f.Name, &f.Slug, &f.Color, &f.Icon, &f.SectionName, &f.SectionSlug); err != nil {
 			return nil, err
+		}
+		if f.SectionSlug == "uncategorized" {
+			f.SectionName, f.SectionSlug = "", ""
 		}
 		out[sid] = f
 	}

@@ -4,14 +4,20 @@ import { cardRender, isVertical, isVideo } from "@/lib/render";
 import { FIXTURES, FIXTURE_BY_KEY } from "./fixtures";
 import {
   DEFAULT_LAYOUT,
+  OPT_PROTOTYPE,
   PRESETS,
-  TITLE_RAMP,
   layoutAttrs,
   layoutVars,
   measureCard,
   type LayoutOptions,
 } from "./layout";
+import "@/styles/global.css";
 import "@/styles/lab.css";
+import { forceWebShare } from "@/lib/share";
+import { solveCard } from "@/lib/cardLayout";
+
+// Render the phone's full action row here, not the desktop's. See lib/share.ts.
+forceWebShare(true);
 
 // The layout lab. A dev-only surface for permuting card layout against the REAL
 // SessionCard - same component the session renders, same CSS, same CardParts.
@@ -50,13 +56,15 @@ interface LabState {
   layout: LayoutOptions;
 }
 
+// Opens on the prototype: it is the current direction, so that is what the lab
+// should show first. Every other option is one dropdown away.
 const INITIAL: LabState = {
   view: "single",
   device: 7,
   w: 412,
   h: 824,
   fixture: "video-vertical",
-  layout: { ...DEFAULT_LAYOUT },
+  layout: { ...OPT_PROTOTYPE },
 };
 
 function readHash(): LabState {
@@ -70,130 +78,6 @@ function readHash(): LabState {
   }
 }
 
-/**
- * The budget solver, applied to a rendered card.
- *
- * The card is exactly one screen (`height:100%; overflow:hidden`), which means
- * `scrollHeight` CLAMPS - it can never report the overflow we are trying to
- * measure. So every measurement here temporarily lets the card size to its
- * content, reads it, and puts it back. Getting this wrong silently collapses the
- * media to nothing, which is exactly what it did the first time.
- */
-function contentHeight(card: HTMLElement): number {
-  const h = card.style.height;
-  const o = card.style.overflow;
-  card.style.height = "auto";
-  card.style.overflow = "visible";
-  const measured = card.offsetHeight;
-  card.style.height = h;
-  card.style.overflow = o;
-  return measured;
-}
-
-function solveCard(screen: HTMLElement, opts: LayoutOptions): string[] {
-  const reel = screen.querySelector<HTMLElement>(".lab-reel");
-  const card = screen.querySelector<HTMLElement>(".snap");
-  if (!reel || !card) return [];
-  const title = card.querySelector<HTMLElement>(".card-title");
-  const frame = card.querySelector<HTMLElement>(".im-frame");
-  const budget = reel.clientHeight;
-
-  // clear anything a previous pass wrote
-  screen.style.removeProperty("--lab-title-size");
-  screen.style.removeProperty("--lab-frame-h");
-  screen.removeAttribute("data-solved-blurb");
-  if (frame) frame.style.removeProperty("height");
-  if (!opts.solve) return [];
-
-  const gaveUp: string[] = [];
-  let cap = opts.heroCap;
-  let ti = 0;
-
-  // Media takes the residual: measure the card with the frame collapsed, then
-  // hand the frame whatever is left (bounded by its own aspect ratio).
-  const sizeMedia = () => {
-    if (!frame) return;
-    // Chrome by subtraction, not by collapsing the frame: the player sits inside
-    // two nested flex containers, and zeroing its height does not reliably shrink
-    // them, which silently reported "no room" and collapsed the media to 2px.
-    const chrome = contentHeight(card) - frame.offsetHeight;
-    const ar = parseFloat(getComputedStyle(frame).getPropertyValue("--ar")) || 0.5625;
-    const widthBound = card.clientWidth / ar;
-    const room = Math.max(0, budget - chrome - 6);
-    const target = opts.video === "bleed" ? widthBound : Math.min(room, widthBound);
-    screen.style.setProperty("--lab-frame-h", `${Math.round(target)}px`);
-    frame.style.height = `${Math.round(target)}px`;
-  };
-
-  const apply = () => {
-    // In PIXELS, deliberately. As a percentage this resolves against the card's
-    // height - and contentHeight() makes that height auto while measuring, which
-    // turns the percentage indefinite, drops the cap, and inflates every reading.
-    screen.style.setProperty("--lab-hero-cap", `${Math.round(cap * budget)}px`);
-    if (opts.title === "ramp" && title) {
-      screen.style.setProperty("--lab-title-size", `${TITLE_RAMP[ti]}px`);
-    }
-    sizeMedia();
-  };
-
-  // Give-order. Video cards have almost nothing to yield because the frame
-  // already absorbs the slack; article cards yield the excerpt, then the hero's
-  // share, then type.
-  const knobs: [string, () => boolean][] = frame
-    ? [
-        ["title 21px", () => step(1)],
-        ["title 19px", () => step(2)],
-        ["title 17px", () => step(3)],
-        ["title 16px", () => step(4)],
-      ]
-    : [
-        ["excerpt dropped", () => dropBlurb()],
-        ["hero cap 34%", () => setCap(0.34)],
-        ["title 21px", () => step(1)],
-        ["hero cap 26%", () => setCap(0.26)],
-        ["title 19px", () => step(2)],
-        ["title 17px", () => step(3)],
-        ["hero cap 18%", () => setCap(0.18)],
-        ["title 16px", () => step(4)],
-      ];
-  function step(n: number) {
-    if (opts.title !== "ramp") return false;
-    if (ti >= n || TITLE_RAMP[n] < opts.titleMin) return false;
-    ti = n;
-    return true;
-  }
-  function setCap(v: number) {
-    if (opts.hero !== "cap" || cap <= v) return false;
-    cap = v;
-    return true;
-  }
-  function dropBlurb() {
-    if (screen.getAttribute("data-solved-blurb") === "off") return false;
-    screen.setAttribute("data-solved-blurb", "off");
-    return true;
-  }
-
-  for (let i = 0; i < 16; i++) {
-    apply();
-    if (contentHeight(card) <= budget + 1) break;
-    const next = knobs.find(([, fn]) => fn());
-    if (!next) break;
-    gaveUp.push(next[0]);
-  }
-  apply();
-
-  // Last resort: take any remaining spill out of the media rather than let the
-  // card clip an action.
-  if (frame) {
-    const spill = contentHeight(card) - budget;
-    if (spill > 0) {
-      const h = Math.max(0, frame.offsetHeight - spill);
-      frame.style.height = `${h}px`;
-      screen.style.setProperty("--lab-frame-h", `${h}px`);
-    }
-  }
-  return gaveUp;
-}
 
 function Screen({
   fixtureKey,
@@ -219,16 +103,42 @@ function Screen({
   useLayoutEffect(() => {
     const screen = ref.current;
     if (!screen) return;
-    let raf = requestAnimationFrame(() => {
-      const gaveUp = solveCard(screen, layout);
+    let cancelled = false;
+    let raf = 0;
+
+    // Images must be decoded before any of this means anything: an <img> with no
+    // intrinsic size yet measures as its borders, which both collapses the hero in
+    // the readout AND makes the solver allocate space against a 2px picture.
+    const run = () => {
+      if (cancelled) return;
+      const gaveUp = solveCard(screen, screen.querySelector<HTMLElement>(".lab-reel")!, screen.querySelector<HTMLElement>(".snap")!, layout);
       raf = requestAnimationFrame(() => {
+        if (cancelled) return;
         const card = screen.querySelector<HTMLElement>(".snap");
         const m = card ? { ...measureCard(card), gaveUp } : null;
         setMetrics(m);
         onMetrics?.(m);
       });
-    });
-    return () => cancelAnimationFrame(raf);
+    };
+
+    const imgs = Array.from(screen.querySelectorAll("img"));
+    const pending = imgs.filter((img) => !img.complete || img.naturalHeight === 0);
+    if (pending.length === 0) {
+      raf = requestAnimationFrame(run);
+    } else {
+      let left = pending.length;
+      const done = () => {
+        if (--left <= 0 && !cancelled) raf = requestAnimationFrame(run);
+      };
+      pending.forEach((img) => {
+        img.addEventListener("load", done, { once: true });
+        img.addEventListener("error", done, { once: true });
+      });
+    }
+    return () => {
+      cancelled = true;
+      cancelAnimationFrame(raf);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [fixtureKey, w, h, JSON.stringify(layout)]);
 
@@ -247,9 +157,12 @@ function Screen({
           >
             <div className="lab-topbar">
               <span>&larr; intent</span>
-              <span className="lab-wordmark">otium</span>
+              <span style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                <span className="lab-wordmark">otium</span>
+                {layout.themeToggle === "wordmark" && <span className="lab-theme">◐</span>}
+              </span>
               <span style={{ display: "flex", gap: 10, alignItems: "center" }}>
-                <span className="lab-theme">◐</span>
+                {layout.themeToggle === "library" && <span className="lab-theme">◐</span>}
                 <span>library</span>
               </span>
             </div>
@@ -259,6 +172,9 @@ function Screen({
                 index={0}
                 focused
                 render={cardRender(fx.sel.item)}
+                hierarchy={layout.hierarchy === "plain" ? "pill" : (layout.hierarchy as "pill" | "stack" | "breadcrumb" | "overline")}
+                sectionName={fx.section}
+                menuPlacement={layout.menu}
                 onOpenContent={() => {}}
                 onOpenExternal={() => {}}
                 onSave={() => {}}
@@ -281,6 +197,7 @@ function Readout({ m, isVid }: { m: ReturnType<typeof measureCard> & { gaveUp: s
     ["title", `${m.titlePx}px${m.titleTruncated ? " · TRUNCATED" : ""}`, m.titleTruncated ? "bad" : "good"],
     ["media", m.mediaW ? `${m.mediaW}×${m.mediaH} · ${m.mediaPct}%` : "none", isVid && m.mediaPct < 40 ? "bad" : ""],
     ["clipped", m.clipped.length ? m.clipped.join(", ") : "nothing", m.clipped.length ? "bad" : "good"],
+    ["clearance", `${m.bottomClearance}px`, m.bottomClearance < 4 ? "bad" : "good"],
     ["fits", m.fits ? "yes" : "no", m.fits ? "good" : "bad"],
     ["gave up", m.gaveUp.length ? m.gaveUp.join(", ") : "nothing", m.gaveUp.length ? "bad" : ""],
   ];
@@ -358,6 +275,9 @@ export function LabPage() {
           <button type="button" className="lab-btn" onClick={() => set({ w: st.h, h: st.w })}>
             rotate
           </button>
+          <button type="button" className="lab-btn" onClick={() => set({ layout: { ...OPT_PROTOTYPE } })} title="Restore the configured default layout">
+            reset
+          </button>
         </div>
         <div className="lab-group">
           <label>w</label>
@@ -371,8 +291,11 @@ export function LabPage() {
         </div>
         <div className="lab-group">
           <label>preset</label>
-          <select value="" onChange={(e) => e.target.value && setL(PRESETS[+e.target.value].opts)}>
-            <option value="">choose…</option>
+          <select
+            value={PRESETS.findIndex((p) => JSON.stringify(p.opts) === JSON.stringify(st.layout))}
+            onChange={(e) => e.target.value !== "-1" && set({ layout: { ...PRESETS[+e.target.value].opts } })}
+          >
+            <option value="-1">custom…</option>
             {PRESETS.map((p, i) => (
               <option key={p.key} value={i}>
                 {p.label}
@@ -470,8 +393,21 @@ export function LabPage() {
             <div className="lab-row">
               <span>hierarchy</span>
               <select value={st.layout.hierarchy} onChange={(e) => setL({ hierarchy: e.target.value as LayoutOptions["hierarchy"] })}>
-                <option value="pill">pill</option>
-                <option value="plain">plain type</option>
+                <option value="pill">pill (today)</option>
+                <option value="plain">flat pill</option>
+                <option value="breadcrumb">breadcrumb</option>
+                <option value="stack">overline + crumb</option>
+                <option value="overline">overline only</option>
+                <option value="taxonomy">section &rsaquo; topic / creator</option>
+                <option value="taxonomy-credit">section &rsaquo; topic / title / credit</option>
+              </select>
+            </div>
+            <div className="lab-row">
+              <span>··· menu</span>
+              <select value={st.layout.menu} onChange={(e) => setL({ menu: e.target.value as LayoutOptions["menu"] })}>
+                <option value="top">own row, top (today)</option>
+                <option value="hierarchy">on the hierarchy row</option>
+                <option value="actions">in the actions, below</option>
               </select>
             </div>
             <div className="lab-row">
@@ -488,6 +424,34 @@ export function LabPage() {
                 <option value="full">full</option>
                 <option value="slim">slim</option>
                 <option value="none">none</option>
+              </select>
+            </div>
+            <div className="lab-row">
+              <span>gutter {st.layout.gutter}px</span>
+              <input type="range" min={8} max={36} value={st.layout.gutter} onChange={(e) => setL({ gutter: +e.target.value })} />
+            </div>
+            <div className="lab-row">
+              <span>media w {Math.round(st.layout.mediaWidth * 100)}%</span>
+              <input type="range" min={40} max={100} value={Math.round(st.layout.mediaWidth * 100)} onChange={(e) => setL({ mediaWidth: +e.target.value / 100 })} />
+            </div>
+            <div className="lab-row">
+              <span>byline</span>
+              <button type="button" className={`lab-btn ${st.layout.showByline ? "on" : ""}`} onClick={() => setL({ showByline: !st.layout.showByline })}>
+                {st.layout.showByline ? "shown" : "hidden"}
+              </button>
+            </div>
+            <div className="lab-row">
+              <span>media icons</span>
+              <select value={st.layout.notes} onChange={(e) => setL({ notes: e.target.value as LayoutOptions["notes"] })}>
+                <option value="labelled">as shipped</option>
+                <option value="icon">bare icons</option>
+              </select>
+            </div>
+            <div className="lab-row">
+              <span>theme ctl</span>
+              <select value={st.layout.themeToggle} onChange={(e) => setL({ themeToggle: e.target.value as LayoutOptions["themeToggle"] })}>
+                <option value="library">by library</option>
+                <option value="wordmark">by wordmark</option>
               </select>
             </div>
             <div className="lab-row">

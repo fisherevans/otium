@@ -242,7 +242,7 @@
 }
 /* the ramp's size is written inline by the solver; this is its floor */
 .lab-screen[data-title="ramp"] .snap .card-title {
-    font-size: var(--lab-title-size, 23px);
+    font-size: var(--card-title-size, 23px);
 }
 
 /* --- article hero --- */
@@ -261,7 +261,7 @@
     object-fit: contain;
 }
 .lab-screen[data-hero="cap"] .snap .media.h {
-    max-height: var(--lab-hero-cap, 42%);
+    max-height: var(--card-hero-cap, 42%);
 }
 .lab-screen[data-hero="cap"] .snap .media.h img {
     max-height: 100%;
@@ -278,7 +278,7 @@
 
 /* --- inline video --- */
 .lab-screen[data-video="budget"] .inline-media.v .im-frame {
-    height: var(--lab-frame-h, min(72dvh, 72vh));
+    height: var(--card-frame-h, min(72dvh, 72vh));
 }
 .lab-screen[data-video="bleed"] .inline-media.v .im-frame {
     height: auto;
@@ -322,6 +322,12 @@
 .lab-screen[data-align="top"] .snap {
     justify-content: flex-start;
 }
+/* Solved cards are ALWAYS laid out from the top; `align: center` is delivered by
+   the solver's measured centring pad instead. Native centring would split a
+   card's overflow across both ends and clip the headline out of reach. */
+.lab-screen[data-solve="on"] .snap {
+    justify-content: flex-start;
+}
 
 /* --- hierarchy: pill vs plain type --- */
 .lab-screen[data-hierarchy="plain"] .topic-pill {
@@ -340,17 +346,32 @@
 }
 
 /* --- action row --- */
+/* icons: drop the fill from the solid "Read" button too, so the article row is
+   bare icons end to end. The row stays LEFT-aligned either way - it sits under a
+   text column and should line up with it, unlike the media row, which sits under
+   a centred frame. */
+.lab-screen[data-actions="icons"] .card-callout {
+    gap: 6px;
+}
+.lab-screen[data-actions="icons"] .card-callout .callout-act,
+.lab-screen[data-actions="icons"] .card-callout .share-act {
+    padding: 6px;
+}
 .lab-screen[data-actions="icons"] .callout-primary {
-    padding: 9px 11px;
+    padding: 6px;
+    border-radius: 0;
+    background: none;
+    color: var(--ink-soft);
     font-size: 0;
     gap: 0;
+}
+.lab-screen[data-actions="icons"] .callout-primary:active {
+    opacity: 1;
+    color: var(--ink);
 }
 .lab-screen[data-actions="icons"] .callout-primary svg {
     width: 18px;
     height: 18px;
-}
-.lab-screen[data-actions="icons"] .callout-orig {
-    display: none;
 }
 .lab-screen[data-actions="labels"] .callout-act,
 .lab-screen[data-actions="labels"] .share-act {
@@ -442,10 +463,10 @@
     max-height: none;
 }
 .lab-screen[data-hero="cap"] .snap .media.h {
-    max-height: var(--lab-hero-cap, 42%);
+    max-height: var(--card-hero-cap, 42%);
 }
 .lab-screen[data-video="budget"] .inline-media.v .im-frame {
-    height: var(--lab-frame-h, calc(72 * var(--lab-vh)));
+    height: var(--card-frame-h, calc(72 * var(--lab-vh)));
 }
 .lab-screen[data-video="bleed"] .inline-media.v .im-frame {
     height: auto;
@@ -454,4 +475,311 @@
 /* the solver can drop the excerpt as a give-order step */
 .lab-screen[data-solved-blurb="off"] .card-blurb {
     display: none;
+}
+
+/* ---------------------------------------------------------------------------
+   Hierarchy variants (SessionCard `hierarchy` prop). Lives here rather than in
+   global.css so the shipped bundle carries none of it until one is adopted.
+   --------------------------------------------------------------------------- */
+.card-hier {
+    align-self: stretch;
+    flex: 0 0 auto;
+    margin-bottom: 10px;
+}
+.card-hier .ch-line {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 7px;
+    min-width: 0;
+}
+.card-hier .ch-sep {
+    color: var(--ink-mute);
+    font-size: 13px;
+    line-height: 1;
+}
+.card-hier .ch-section {
+    font-family: var(--mono);
+    font-size: 10.5px;
+    font-weight: 600;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--ink);
+    white-space: nowrap;
+}
+.card-hier .ch-topic {
+    font-family: var(--serif);
+    font-size: 15px;
+    color: var(--ink-soft);
+}
+.card-hier .ch-source {
+    font-family: var(--serif);
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--ink-soft);
+    background: none;
+    border: none;
+    padding: 0;
+    cursor: pointer;
+    text-align: left;
+}
+.card-hier .ch-more {
+    flex: 0 0 auto;
+    margin-left: auto;
+}
+
+/* breadcrumb: one chevron-separated line, everything on the baseline */
+.ch-breadcrumb {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+.ch-breadcrumb .ch-line {
+    flex: 1 1 auto;
+}
+.ch-breadcrumb .ch-section {
+    font-size: 10px;
+}
+.ch-breadcrumb .ch-topic,
+.ch-breadcrumb .ch-source {
+    font-size: 14px;
+}
+
+/* stack: section overline, then topic > source underneath */
+.ch-stack .ch-top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    margin-bottom: 5px;
+}
+.ch-stack .ch-line {
+    gap: 8px;
+}
+
+/* overline: section only - the source moves into the byline */
+.ch-overline {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    padding-bottom: 7px;
+    border-bottom: 1px solid var(--rule);
+}
+.ch-overline .ch-section {
+    font-size: 11px;
+    letter-spacing: 0.18em;
+}
+.ch-overline .ch-right {
+    margin-left: auto;
+    flex: 0 0 auto;
+    gap: 8px;
+}
+.ch-overline .ch-source {
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--ink-mute);
+}
+
+/* ---------------------------------------------------------------------------
+   Prototype knobs (from Fisher's sketch): wider content, the menu centred against
+   the hierarchy block, bare media icons, no byline, theme toggle by the wordmark.
+   --------------------------------------------------------------------------- */
+
+/* stack: two rows of hierarchy, menu vertically centred against both */
+.ch-stack {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+.ch-stack .ch-rows {
+    flex: 1 1 auto;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+}
+.ch-stack .ch-more {
+    flex: 0 0 auto;
+    margin-left: 0;
+    align-self: center;
+}
+.ch-stack .ch-source {
+    font-weight: 700;
+    color: var(--ink);
+}
+.ch-stack .ch-topic {
+    color: var(--ink-soft);
+}
+
+/* content width: the card's side padding is the only thing setting the column */
+.lab-screen .snap {
+    padding-left: var(--card-gutter, 20px);
+    padding-right: var(--card-gutter, 20px);
+}
+/* the landscape player bleeds past the padding, so its bleed must track it */
+.lab-screen .inline-media.h .im-frame {
+    width: calc(100% + var(--card-gutter, 20px) * 2);
+    margin-left: calc(var(--card-gutter, 20px) * -1);
+    margin-right: calc(var(--card-gutter, 20px) * -1);
+}
+
+/* portrait player: narrower than full-bleed, centred */
+.lab-screen[data-video="budget"] .inline-media.v .im-frame {
+    max-width: var(--card-media-w, 100%);
+}
+
+/* byline off */
+.lab-screen[data-byline="off"] .card-byline {
+    display: none;
+}
+
+/* Bare icons in EVERY action row, at one size - "Show notes" loses its outline
+   and its label, and the article row's icons come down to match the media row's
+   so the same glyph is the same size on both. (Scoped per row: an unscoped
+   .share-act also matched the article row and left Save at 9px beside a 6px
+   Copy link.) */
+.lab-screen[data-notes="icon"] .im-act,
+.lab-screen[data-notes="icon"] .im-actions .share-act,
+.lab-screen[data-notes="icon"] .card-callout .callout-act,
+.lab-screen[data-notes="icon"] .card-callout .share-act {
+    border: none;
+    background: none;
+    padding: 6px;
+}
+.lab-screen[data-notes="icon"] .card-callout {
+    gap: 6px;
+}
+.lab-screen[data-notes="icon"] .im-notes-toggle {
+    font-size: 0;
+    gap: 0;
+}
+.lab-screen[data-notes="icon"] .im-notes-toggle svg {
+    width: 18px;
+    height: 18px;
+}
+
+/* theme control next to the wordmark rather than beside library */
+.lab-topbar .lab-theme {
+    order: 0;
+}
+.lab-screen[data-theme-slot="wordmark"] .lab-topbar {
+    align-items: center;
+}
+
+/* The shipped vertical-media rule (.snap.media-card.vertical .card-title) sets
+   17px and a 1-line clamp, and matches with the same specificity as the ramp
+   override above - so it wins on order. Restate the ramp at higher specificity
+   or a portrait video card silently ignores the type scale. */
+.lab-screen[data-title="ramp"] .snap.media-card.vertical .card-title,
+.lab-screen[data-title="full"] .snap.media-card.vertical .card-title {
+    -webkit-line-clamp: unset;
+    display: block;
+    overflow: visible;
+}
+.lab-screen[data-title="ramp"] .snap.media-card.vertical .card-title {
+    font-size: var(--card-title-size, 23px);
+}
+.lab-screen[data-title="full"] .snap.media-card.vertical .card-title {
+    font-size: 23px;
+}
+/* same story for the audio card's 2-line clamp */
+.lab-screen[data-title="ramp"] .snap.audio-card .card-title,
+.lab-screen[data-title="full"] .snap.audio-card .card-title {
+    -webkit-line-clamp: unset;
+    display: block;
+    overflow: visible;
+}
+
+/* taxonomy: "Section > Topic" over "avatar Creator". Shares the stack chrome. */
+.ch-taxonomy {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+.ch-taxonomy .ch-rows {
+    flex: 1 1 auto;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+.ch-taxonomy .ch-more {
+    flex: 0 0 auto;
+    align-self: center;
+}
+.ch-taxonomy .ch-tax {
+    gap: 6px;
+}
+/* the topic sits on the section's line, so it takes the section's register */
+.ch-taxonomy .ch-tax .ch-topic {
+    font-family: var(--mono);
+    font-size: 10.5px;
+    font-weight: 500;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--ink-soft);
+}
+.ch-taxonomy .ch-tax .ch-sep {
+    font-size: 11px;
+}
+.ch-taxonomy .ch-source {
+    font-weight: 700;
+    color: var(--ink);
+}
+
+/* top gap: the card's own padding. Needs the [data-density] attribute in the
+   selector or the density rules out-specify it and the knob does nothing. */
+.lab-screen[data-density] .snap {
+    padding-top: calc(var(--card-top-gap, 12px) + var(--card-center-pad, 0px));
+}
+
+/* With the reason hidden and the menu moved off its own row, the old top row is
+   an empty 18px box with a 10px margin - 28px of nothing above the card. */
+.lab-screen[data-reason="hidden"]:not([data-menu="top"]) .card-top {
+    display: none;
+}
+
+/* The rhythm pass writes the real margins inline; these are the resting values
+   so a non-solved render still looks deliberate. */
+.lab-screen .card-hier {
+    margin-bottom: var(--card-rhythm, 12px);
+}
+.lab-screen[data-density="tight"] .snap .card-title {
+    margin-top: 0;
+    margin-bottom: var(--card-rhythm, 12px);
+}
+.ch-taxonomy .ch-rows,
+.ch-stack .ch-rows {
+    row-gap: var(--card-rhythm, 12px);
+}
+
+/* taxonomy-credit: taxonomy line, title, then the credit as a caption. */
+.ch-taxonomy-only .ch-rows {
+    row-gap: 0;
+}
+.card-credit {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex: 0 0 auto;
+    min-width: 0;
+    flex-wrap: wrap;
+}
+.card-credit .cc-source {
+    font-family: var(--serif);
+    font-size: 15px;
+    font-weight: 700;
+    color: var(--ink);
+    background: none;
+    border: none;
+    padding: 0;
+    cursor: pointer;
+    text-align: left;
+}
+.card-credit .cc-age {
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--ink-mute);
+    letter-spacing: 0.03em;
 }

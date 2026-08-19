@@ -11,6 +11,8 @@
 # node / vite
 web/node_modules/
 web/dist/
+# standalone layout-lab build output
+web/dist-lab/
 web/*.tsbuildinfo
 *.local
 

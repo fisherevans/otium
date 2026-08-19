@@ -95,9 +95,14 @@ export default function App() {
             >
               <span className="chrome-ic">←</span> intent
             </button>
-            <span className="wordmark">otium</span>
-            <span className="topbar-right">
+            {/* In a session the theme control sits WITH the wordmark, not beside
+                library: day/night is about the page you are reading, and pairing
+                it with the mark keeps the right edge to one destination. */}
+            <span className="wordmark-slot">
+              <span className="wordmark">otium</span>
               <ThemeToggle />
+            </span>
+            <span className="topbar-right">
               <button className="chrome-btn right" onClick={() => nav("/sections")} aria-label="Go to library">
                 library
               </button>

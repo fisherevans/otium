@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent } from "react";
-import { ExternalLink, Bookmark, FileText, ChevronLeft, Play, SlidersHorizontal } from "lucide-react";
+import { ExternalLink, Bookmark, FileText, ChevronLeft, Play, SlidersHorizontal, MoreHorizontal } from "lucide-react";
 import type { Item } from "@/api/client";
 import { ShareActions } from "./ReaderActions";
 import { renderSummary } from "@/lib/html";
@@ -35,6 +35,7 @@ export function InlineMedia({
   item,
   onSave,
   onOpenOriginal,
+  onMenu,
   onFirstPlay,
   onNext,
   onPrev,
@@ -43,6 +44,9 @@ export function InlineMedia({
   item: Item;
   onSave?: () => void;
   onOpenOriginal: () => void;
+  // The card's ··· overflow, when it lives in this row rather than above the card.
+  // Optional so the shipped placement stays untouched.
+  onMenu?: () => void;
   onFirstPlay?: () => void;
   onNext?: () => void;
   onPrev?: () => void;
@@ -300,6 +304,11 @@ export function InlineMedia({
           <button className="im-act im-orig" onClick={onOpenOriginal} aria-label={video ? "Open on YouTube" : "Open original"}>
             <ExternalLink size={18} strokeWidth={1.75} aria-hidden />
           </button>
+          {onMenu && (
+            <button className="im-act im-more-act" onClick={onMenu} aria-label="More actions">
+              <MoreHorizontal size={18} strokeWidth={1.75} aria-hidden />
+            </button>
+          )}
         </div>
       </div>
 

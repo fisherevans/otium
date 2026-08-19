@@ -63,6 +63,8 @@ function sel(over: Partial<Selected> & { item: Item }): Selected {
 export interface Fixture {
   key: string;
   label: string;
+  /** Section the topic belongs to. Not in the session payload yet - see SessionCard. */
+  section?: string;
   /** What this case is here to stress. */
   note: string;
   sel: Selected;
@@ -71,6 +73,7 @@ export interface Fixture {
 export const FIXTURES: Fixture[] = [
   {
     key: "news-portrait",
+    section: "General News",
     label: "Article · 4:5 hero · long headline",
     note: "The case that truncates today and crops a portrait photo to a band.",
     sel: sel({
@@ -88,6 +91,7 @@ export const FIXTURES: Fixture[] = [
   },
   {
     key: "news-wide",
+    section: "General News",
     label: "Article · 16:9 hero",
     note: "The ordinary case. Whatever a variant does, it must not regress this.",
     sel: sel({
@@ -106,6 +110,7 @@ export const FIXTURES: Fixture[] = [
   },
   {
     key: "news-bare",
+    section: "General News",
     label: "Article · no hero · short headline",
     note: "The light payload. The only shape that survives every viewport today.",
     sel: sel({
@@ -122,6 +127,7 @@ export const FIXTURES: Fixture[] = [
   },
   {
     key: "video-vertical",
+    section: "Music Production",
     label: "Video · 9:16 portrait",
     note: "Actions fall outside the card at 412px and below. Wants maximum frame.",
     sel: sel({
@@ -144,6 +150,7 @@ export const FIXTURES: Fixture[] = [
   },
   {
     key: "video-wide",
+    section: "Music Production",
     label: "Video · 16:9 · long headline",
     note: "Width-bound media: lots of spare height, and a title that still truncates.",
     sel: sel({
@@ -167,6 +174,7 @@ export const FIXTURES: Fixture[] = [
   },
   {
     key: "audio",
+    section: "Long Form",
     label: "Podcast · audio",
     note: "No frame, a waveform, and its own action row. Title is clamped to 2 today.",
     sel: sel({
@@ -186,6 +194,7 @@ export const FIXTURES: Fixture[] = [
   },
   {
     key: "no-meta",
+    section: "",
     label: "Article · no author, no topic",
     note: "Topicless source: the source name leads. Byline collapses to a date.",
     sel: sel({
@@ -202,7 +211,28 @@ export const FIXTURES: Fixture[] = [
     }),
   },
   {
+    key: "link-only",
+    section: "General News",
+    label: "Article · summary only, no full text",
+    note: "No extractable body, so no in-app read. The row loses its solid button.",
+    sel: sel({
+      item: item({
+        id: 10,
+        // resolved external: there is a teaser but no body to open in-app
+        content_source: "external",
+        title: "Council votes to fund the culvert survey after all",
+        author: "Anne Wallace Allen",
+        summary:
+          "A one-paragraph wire item with no body text to extract, which is most of what an RSS feed actually carries.",
+        thumbnail_url: pic(1280, 720),
+        published_at: ago(1),
+      }),
+      reason: "From ProPublica",
+    }),
+  },
+  {
     key: "unbroken",
+    section: "Verkehr",
     label: "Stress · unbroken names",
     note: "A source and topic with no break opportunity. Tests overflow, not taste.",
     sel: sel({
@@ -220,6 +250,7 @@ export const FIXTURES: Fixture[] = [
   },
   {
     key: "cjk",
+    section: "調査",
     label: "Stress · Japanese headline",
     note: "Different line-breaking and glyph height. Type ramps must still be legible.",
     sel: sel({
