@@ -7,7 +7,9 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "preview": "vite preview",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "lab": "vite build --config vite.lab.config.ts && node tools/build-lab.mjs",
+    "measure": "node tools/measure.mjs"
   },
   "dependencies": {
     "dompurify": "^3.4.11",
@@ -21,6 +23,7 @@
     "@types/react-dom": "^19.1.5",
     "@vitejs/plugin-react": "^4.5.2",
     "typescript": "~5.8.3",
-    "vite": "^6.3.5"
+    "vite": "^6.3.5",
+    "playwright": "^1.49.0"
   }
 }

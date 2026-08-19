@@ -70,6 +70,25 @@ The Go module is standalone (not in `~/dev/go.work`). Build/test/run it with
 `GOWORK=off` - the Makefile already does. Data lands in `./data/otium.db`
 (gitignored).
 
+### Changing the session card
+
+The card's layout is **solved at runtime** (`web/src/lib/cardLayout.ts`), not set
+in CSS: it measures the box, fits the content by giving in a fixed order, and
+centres the remainder. You cannot review it by reading a stylesheet, and
+screenshots have repeatedly been misleading, so do not change it by eye.
+
+```sh
+cd web
+npm run dev                                   # /lab is the layout harness
+npm run lab                                   # standalone single-file lab
+npm run measure -- --lab dist-lab/lab-standalone.html   # design against this
+npm run measure -- --app http://localhost:5173          # verify what ships
+```
+
+`web/src/lab/README.md` has the full loop, the fixture list, and the specificity
+trap that bites every time (several old `global.css` rules match the card's at
+equal specificity and win on source order).
+
 ## Conventions
 
 - Go: 4-space indent via gofmt, same-line braces, explicit errors, short names
