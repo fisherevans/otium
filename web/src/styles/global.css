@@ -5161,16 +5161,47 @@ button.id-source.lead {
 .ch-taxonomy .ch-tax {
   gap: 6px;
 }
+/* #155: the Section > Topic line reads as one quiet monospace label, not a mix of
+   mono section + serif topic. Same family, size, and case for both halves; the
+   chevron matches so it sits centred on the line rather than riding a taller serif
+   box. Weight stays light (the section is the anchor, the topic secondary by ink). */
+.ch-taxonomy .ch-tax .ch-section,
+.ch-taxonomy .ch-tax .ch-topic {
+  font-family: var(--mono);
+  font-size: 10.5px;
+  font-weight: 500;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  line-height: 1.3;
+}
+.ch-taxonomy .ch-tax .ch-topic {
+  color: var(--ink-mute);
+  font-weight: 400;
+}
 .ch-taxonomy .ch-tax .ch-sep {
-  font-size: 11px;
+  font-family: var(--mono);
+  font-size: 10.5px;
+  line-height: 1.3;
+  color: var(--ink-mute);
+  align-self: center;
 }
 
-/* Credit: who made it and how old, as one caption line under the headline. */
+/* Credit: who made it and how old, as one caption line under the headline. #155:
+   the avatar centres against the text block (not the whole row), and name + date
+   share a baseline - so the 15px name and 12px date sit on one line and the circle
+   is optically level with them rather than each child centring independently. */
 .card-credit {
   display: flex;
   align-items: center;
   gap: 8px;
   flex: 0 0 auto;
+  min-width: 0;
+  flex-wrap: nowrap;
+}
+.card-credit .cc-text {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
   min-width: 0;
   flex-wrap: wrap;
 }

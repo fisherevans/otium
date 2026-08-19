@@ -231,18 +231,22 @@ function CardCredit({ sel, onSource }: { sel: Selected; onSource: () => void }) 
   return (
     <div className="card-credit">
       <SourceAvatar url={sel.source_icon_url} title={sel.source_title} color={sel.topic?.color} />
-      <button
-        type="button"
-        className="cc-source"
-        onPointerDown={(e) => e.stopPropagation()}
-        onClick={(e) => {
-          e.stopPropagation();
-          onSource();
-        }}
-      >
-        {sel.source_title}
-      </button>
-      {age && <span className="cc-age">{age}</span>}
+      {/* Name + date share a baseline; the avatar centres against this text block
+          (see .card-credit / .cc-text in global.css). */}
+      <span className="cc-text">
+        <button
+          type="button"
+          className="cc-source"
+          onPointerDown={(e) => e.stopPropagation()}
+          onClick={(e) => {
+            e.stopPropagation();
+            onSource();
+          }}
+        >
+          {sel.source_title}
+        </button>
+        {age && <span className="cc-age">{age}</span>}
+      </span>
     </div>
   );
 }
