@@ -42,7 +42,13 @@ layouts, the app covers what the server actually returns.
 
 Playwright is now a devDependency. It is only needed to run the harness, and the
 alternative (leaving it implicit) is what made the scripts unrunnable in the first
-place.
+place. The browser binary is a second, separate step - `npx playwright install
+chromium`, once, after `npm install` - because Playwright ships its runner and its
+browsers apart. The harness reads `PLAYWRIGHT_CHROMIUM` if set, but that is an
+override for sandboxes that preinstall a system Chrome, not a normal-machine
+requirement; on a normal machine Playwright finds its own cached browser. Both the
+lab README and CLAUDE.md now spell out the install step so the next run is not a
+cryptic "Executable doesn't exist" error.
 
 ## Related
 

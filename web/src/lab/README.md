@@ -53,6 +53,12 @@ Screenshots are not enough - this layout is solved at runtime, so the numbers on
 exist once a browser has laid it out, and eyeballing them got the wrong answer
 repeatedly. Use the instrument:
 
+The harness drives a real Chromium via Playwright. Playwright is a devDependency,
+but the browser binary is fetched separately - run `npx playwright install chromium`
+once after `npm install`. It lands in Playwright's own cache; you do not need to
+point `PLAYWRIGHT_CHROMIUM` at a system Chrome (that env var is an override for
+sandboxes that ship a preinstalled binary, not a normal-machine requirement).
+
 ```sh
 npm run measure -- --lab dist-lab/lab-standalone.html      # design against this
 npm run measure -- --app http://localhost:5173             # verify what ships

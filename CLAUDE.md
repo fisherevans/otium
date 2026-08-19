@@ -79,6 +79,7 @@ screenshots have repeatedly been misleading, so do not change it by eye.
 
 ```sh
 cd web
+npm install && npx playwright install chromium   # one-time; measure drives a real browser
 npm run dev                                   # /lab is the layout harness
 npm run lab                                   # standalone single-file lab
 npm run measure -- --lab dist-lab/lab-standalone.html   # design against this
