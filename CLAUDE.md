@@ -116,9 +116,6 @@ This repo follows the homelab issue lifecycle: an issue per ask, `status:in-prog
 working, `status:review` with a structured handover comment when delivered, and **only Fisher
 closes an issue**. Full contract: `nottingham-cloud/agent/issue-lifecycle.md`.
 
-That last part supersedes the closing step described below: deliver, post the handover
-comment, label `status:review`, and leave the issue **open** for Fisher.
-
 ## Tracking & work definition (GitHub issues)
 
 GitHub is where in-flight work lives; the repo is current state. Same stance as
@@ -133,7 +130,8 @@ roadmap. Read the open issues before starting work; they're the backlog.
   `ops`, `design`, `discovery`, `intelligence`, `ux`, `tech-debt`,
   `enhancement`.
 - **Open an issue when a stream starts**, reference it in every related commit
-  (`subject … (#N)`), and close it when the change lands. Reconstruct a whole
+  (`subject … (#N)`), and when the change lands move it to `status:review` with a
+  handover comment - it stays **open** until Fisher closes it. Reconstruct a whole
   stream later with `git log --grep '#N'` + `gh issue view N`.
 - **Genuinely isolated** one-or-two-commit changes with no follow-on don't need
   an issue - mark them `[oneoff]` (or `[hotfix]`) in the message. There is no
