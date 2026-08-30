@@ -110,6 +110,15 @@ equal specificity and win on source order).
   check-in**, never a silent re-rank or engagement surveillance (EXPERIENCE.md
   principle 3).
 
+## Issue lifecycle
+
+This repo follows the homelab issue lifecycle: an issue per ask, `status:in-progress` while
+working, `status:review` with a structured handover comment when delivered, and **only Fisher
+closes an issue**. Full contract: `nottingham-cloud/agent/issue-lifecycle.md`.
+
+That last part supersedes the closing step described below: deliver, post the handover
+comment, label `status:review`, and leave the issue **open** for Fisher.
+
 ## Tracking & work definition (GitHub issues)
 
 GitHub is where in-flight work lives; the repo is current state. Same stance as
