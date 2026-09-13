@@ -55,7 +55,7 @@ const SAMPLE: Selected = {
 
 // --- small calm control primitives -------------------------------------------
 
-// Segmented picker (reuses the .wbuckets e-ink bar). For numeric options it
+// Segmented picker (reuses the .repbuckets e-ink bar). For numeric options it
 // highlights the option nearest the current value, so a chip is always active
 // even if a stored value drifted off the grid.
 function Segmented<T extends string | number>({
@@ -87,11 +87,11 @@ function Segmented<T extends string | number>({
   return (
     <div className="ctl">
       <div className="ctl-label">{label}</div>
-      <div className="wbuckets">
+      <div className="repbuckets">
         {options.map((o, i) => (
           <button
             key={String(o.value)}
-            className={`wbucket ${i === activeIdx ? "on" : ""}`}
+            className={`repbucket ${i === activeIdx ? "on" : ""}`}
             onClick={() => onChange(o.value)}
           >
             {o.label}
@@ -146,11 +146,11 @@ function FontPicker({ value, onChange }: { value: FontKey; onChange: (v: FontKey
   return (
     <div className="ctl">
       <div className="ctl-label">Font</div>
-      <div className="wbuckets">
+      <div className="repbuckets">
         {FONTS.map((o) => (
           <button
             key={o.value}
-            className={`wbucket ${value === o.value ? "on" : ""}`}
+            className={`repbucket ${value === o.value ? "on" : ""}`}
             style={{ fontFamily: FONT_STACKS[o.value] }}
             onClick={() => onChange(o.value)}
           >
