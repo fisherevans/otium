@@ -52,9 +52,10 @@ const DEFAULTS: Preferences = {
 // existing theme stacks + one new book serif) - no self-hosted/CDN fonts, in
 // keeping with the offline stance. Ink keys are grayscale shades on the e-ink
 // ramp. Both are shared with the Appearance editor so swatches/labels match
-// exactly what the app renders. A font value is a `var(...)` reference resolved
+// exactly what the app renders. Both values are `var(...)` references resolved
 // lazily at the consuming element (works because custom-property values can hold
-// var() and are substituted at use site).
+// var() and are substituted at use site). #159: inks must be theme tokens, never
+// hex - a literal here is dark-on-dark once the dark palette applies.
 export const FONT_STACKS: Record<FontKey, string> = {
   charter: "var(--serif)",
   book: "var(--book)",
@@ -62,10 +63,10 @@ export const FONT_STACKS: Record<FontKey, string> = {
   grotesk: "var(--grot)",
 };
 export const INK_SHADES: Record<InkKey, string> = {
-  ink: "#1a1815",
-  graphite: "#3a352d",
-  soft: "#4b4740",
-  mute: "#8b857a",
+  ink: "var(--ink)",
+  graphite: "var(--ink-graphite)",
+  soft: "var(--ink-soft)",
+  mute: "var(--ink-mute)",
 };
 
 // prefsToVars maps preferences to the CSS custom properties the reader/card
