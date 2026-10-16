@@ -1,6 +1,6 @@
 # Otium experience
 
-Otium makes spending attention on purpose feel good. It assembles finite sessions from sources the reader chose. Shown and opened counts help the reader make decisions; they never train the ranking or optimize engagement.
+Otium assembles finite sessions from selected sources. Shown and opened counts help the reader make decisions; they never train the ranking or optimize engagement.
 
 ## Devices and identity
 
@@ -25,6 +25,12 @@ A session presents one item at a time. The card's order is section/topic, headli
 Every article opens the same full-page reader, including from Saved, History and source articles. The reader requests extracted content, preserves available text on failure, and offers Retry. Browser Back, the visible Back button and Escape return to the originating context. Media shares `InlineMedia`, begins paused, and keeps controls separate from navigation gestures.
 
 The active session is durable. Going to Library preserves the cursor and offers Return to session. End session opens the recap. When the time budget is reached, the current item remains readable; the next advance reaches the ending. Continuing is an explicit choice.
+
+## Interface copy
+
+Use factual state and action labels. Remove affirmations, permission-giving, emotional validation, meditative slogans and text that tells users how to feel. Focus is implemented through the workflow; the interface does not narrate that philosophy. "Session complete" states the outcome. "You made some room" and "The rest can wait" do not help the user operate the app.
+
+Apply this to headings, dialogs, empty states, utility bars, preset defaults and generated type specimens. Delete unnecessary copy instead of replacing it with a different slogan. Natural-language remaining-time status such as "A little time left" remains useful. Article content is separate from interface copy.
 
 ## Interaction contract
 

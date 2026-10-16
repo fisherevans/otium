@@ -38,3 +38,9 @@ Chromium, WebKit and Firefox passed the default 10-minute news launch and 40-min
 The populated launcher and custom screen each fit without scrolling at 320x568, 320x664, 390x664 and 390x844 in all three engines (24 route/viewport checks). Short screens show one secondary preset with All available. Custom stays in the instrument when an active session makes Resume the primary action. Long labels truncate rather than expanding the launcher; full setup details remain available through its controls.
 
 Three updated browser-touch recordings cover one-tap default launch, the one-screen custom path, and a recent setup becoming a named default preset after its second use. Earlier setup recordings and checks above describe the preceding design. All interactions remain local simulations; physical-device limits still apply.
+
+## Factual copy and prominent custom setup
+
+Rechecked the session/preset flow in Chromium, WebKit and Firefox after moving Custom session into the main content above the default. The launcher and custom screen still fit at 320x568, 320x664, 390x664 and 390x844, including populated, active-session and long-name states. Screenshots of start, setup, ending, settings and Saved were inspected.
+
+A rendered-copy walk covered 16 routes and 12 dialogs. The original seed names migrate to News and Video, while a user-renamed preset stays unchanged. Seven current motion clips were refreshed to show the factual copy and main-screen custom action. No page errors occurred during the checks. Physical-device limitations remain unchanged.
