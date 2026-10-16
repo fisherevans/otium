@@ -30,3 +30,11 @@ The full new-session journey was rerun in WebKit at 320x664, including selection
 Additional Chromium checks verified image drag cancellation, a 1.4-second hold without opening the reader, browser Back dismissing an open Save sheet, and reduced-motion route changes producing no animations. Synthetic touch-event guard checks covered short, diagonal, initially vertical then rightward, slow, cancelled, multi-touch and text-selection gestures; all stayed in the reader. Saved-origin upward gestures did not advance the queue. These synthetic guard tests complement, rather than replace, the browser-input recordings.
 
 Screenshots from Firefox's short viewport and the other engines were visually inspected. Firefox here is Linux Firefox, not Firefox on a physical iPhone. Installed-PWA safe areas, native edge gestures, keyboard/browser chrome and physical e-ink behavior still require device verification. No production code or account data changed.
+
+## Preset-first session launcher
+
+Chromium, WebKit and Firefox passed the default 10-minute news launch and 40-minute video preset, custom setup, recent reuse, repeat suggestion, saving/default selection and reload persistence. Checks also covered active-plan isolation, empty media/topic selections, enabling Begin after restoring a topic, editing/removing presets, and extension durations not replacing the original type offered for saving. Dismissed repeat suggestions stayed dismissed.
+
+The populated launcher and custom screen each fit without scrolling at 320x568, 320x664, 390x664 and 390x844 in all three engines (24 route/viewport checks). Short screens show one secondary preset with All available. Custom stays in the instrument when an active session makes Resume the primary action. Long labels truncate rather than expanding the launcher; full setup details remain available through its controls.
+
+Three updated browser-touch recordings cover one-tap default launch, the one-screen custom path, and a recent setup becoming a named default preset after its second use. Earlier setup recordings and checks above describe the preceding design. All interactions remain local simulations; physical-device limits still apply.

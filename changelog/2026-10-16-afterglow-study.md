@@ -33,3 +33,11 @@ Fisher selected Fraunces for titles and Newsreader for reading. The study now de
 The bottom instrument remains visible on every route, including Settings and History. A persistent folded O mark, role labels and distinct session/article/app treatments make its role changes recognizable; short transitions are disabled for reduced motion and e-ink. Reader continuation requires an upward gesture that starts at the bottom, with distance, duration, axis and selection/zoom/multi-touch guards. Back, swipe-right Back and tap-to-continue remain available. Route changes dismiss transient sheets.
 
 These changes address cramped imagery, narrow reading targets and the jarring disappearance of navigation identified in review. They remain prototype changes; the production app is unchanged.
+
+## Familiar session types
+
+The start screen now leads with a default, saved presets and recent unsaved setups. Starter presets demonstrate ten minutes of news and forty minutes of video. Each starts directly. Custom setup combines time, section and media type on one phone screen; advanced topic exclusions and other durations stay in optional sheets. Longer saved/recent lists open separately so the common path does not require scrolling.
+
+Recent setups are deduplicated and persisted locally, with actions to reuse or promote them. A second consecutive use of an unsaved setup prompts gently at the ending or next start. Any unsaved ending can be promoted; the reading session is never interrupted by a save prompt. Saving supports naming and default selection, and presets can be edited or removed. Extensions preserve the original session type for saving.
+
+Fisher repeatedly uses the same session types and wants an obvious default instead of repeating a setup survey. This pass makes familiarity the fast path while keeping custom choices available. It changes the design prototype only.
