@@ -19,3 +19,9 @@ The existing production app already separates session navigation from its surrou
 - [#163](https://github.com/fisherevans/otium/issues/163)
 - [Interactive study](https://quiver.fisher.sh/static/reports/otium/2026-10-16-afterglow/)
 - [Typography and flow feedback](https://quiver.fisher.sh/static/reports/otium/2026-10-16-afterglow-feedback/?annotate)
+
+## Complete new-session walkthrough
+
+The study now starts before a session, with time selection followed by scope and optional topic exclusions. Begin builds a deterministic, finite sample using those choices. Draft setup stays separate from the active session plan, so changing the next session does not mutate the current one. The selected article IDs, cursor and plan survive reload.
+
+Fisher asked to feel the start experience all the way through, rather than see isolated setup screens. The walkthrough advances its natural-language time with each story, making the ending reachable without waiting for a full real-time session. Reading, saving, returning, ending and explicitly extending all use the same contextual instrument. An empty selection disables Begin and explains how to include a topic. This remains a local prototype with real metadata and illustrative media.
