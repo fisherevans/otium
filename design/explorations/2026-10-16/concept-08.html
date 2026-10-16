@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Otium - Clay</title>
+<link rel="stylesheet" href="shared.css">
+<style>
+:root{--bg:#e5b8a2;--surface:#f0cfbc;--text:#392332;--muted:#684956;--accent:#43283b;--on-accent:#ffe8d7;--line:#cf9e88;--radius:28px;--font:Newsreader,Georgia,serif;--heading:Fraunces,Georgia,serif}
+body{overflow:hidden}.app{height:100dvh;display:flex;flex-direction:column;max-width:600px;margin:auto;padding-top:env(safe-area-inset-top)}button{border:0;background:transparent;min-width:44px;min-height:44px}.top{height:80px;flex-shrink:0;display:flex;align-items:center;justify-content:space-between;padding:12px 25px 8px}.brand{display:flex;align-items:center;gap:8px;font:500 30px var(--heading);letter-spacing:-1.8px}.brand [data-logo]{width:29px;height:29px}.session{background:#f2d0bb;border-radius:50px;padding:0 17px;display:flex;align-items:center;gap:8px;font-size:17px}.session [data-icon]{width:16px;height:16px}.feed{flex:1;min-height:0;overflow-y:auto;scroll-snap-type:y mandatory;scrollbar-width:none}.feed::-webkit-scrollbar{display:none}.page{height:100%;scroll-snap-align:start;scroll-snap-stop:always;display:flex;align-items:center;justify-content:center;padding:9px 27px 17px}.story{width:100%;max-width:370px;text-align:center;display:flex;flex-direction:column;align-items:center}.source{font-size:18px;line-height:1.15;display:flex;align-items:center;justify-content:center;gap:8px}.source .dot{height:4px;width:4px;background:var(--text);border-radius:50%;opacity:.55}.category{font-size:15px;font-style:italic;color:var(--muted)}h1{font:470 36px/1.06 var(--heading);letter-spacing:-1.4px;margin:13px 0 13px;text-wrap:balance}.byline{font-size:15px;line-height:1.3;color:var(--muted);margin-bottom:17px}.hero{width:100%;height:192px;border-radius:100px 100px 22px 22px;overflow:hidden;background:#c59480}.hero img{width:100%;height:100%;object-fit:cover}.video-frame{width:100%;aspect-ratio:16/9;border-radius:22px;overflow:hidden;background:#211a21}.summary{font-size:18px;line-height:1.3;max-width:310px;margin:19px 0 15px;text-wrap:pretty}.actions{display:flex;align-items:center;justify-content:center;gap:9px;width:100%;position:relative}.read{background:var(--accent);color:var(--on-accent);border-radius:30px;min-height:48px;padding:0 25px;font:450 18px var(--heading);display:flex;align-items:center;justify-content:center;gap:13px}.read [data-icon]{width:16px;height:16px}.save{border-radius:50%;background:var(--surface);display:grid;place-items:center;width:48px;height:48px}.more{position:static;flex-shrink:0;display:grid;place-items:center;color:var(--muted)}.page-foot{margin-top:17px;color:var(--muted);font-size:14px;font-style:italic}.page-foot b{font-weight:400;color:var(--text)}.bottom{height:88px;flex-shrink:0;padding:5px 36px max(17px,env(safe-area-inset-bottom));display:flex;justify-content:center;align-items:center}.nav{background:#f1d1bf;border-radius:40px;display:flex;align-items:center;justify-content:space-around;width:100%;max-width:310px;padding:5px 8px;box-shadow:0 5px 16px #623b2a0b}.nav button{display:flex;align-items:center;justify-content:center;gap:7px;padding:0 11px;font-size:16px}.nav [data-icon]{width:18px;height:18px}.detail{background:var(--bg)}.detail-head{border:0;background:var(--bg);padding:14px 20px}.detail-title{font:460 23px var(--heading)}.detail-head button{background:var(--surface)}.detail-body{padding:16px 26px 40px}.detail h1{font:450 37px/1.08 var(--heading)}.reader-meta{font-size:17px}.reader-copy{font-size:20px;line-height:1.6}.reader-hero{border-radius:100px 100px 24px 24px}.group{border:0;border-radius:27px}.group-row{border-color:#e5b8a2;min-height:66px;font-size:19px}.pill,.primary{border:0;border-radius:28px;font-weight:450;font-size:17px}.detail input{border:0;border-radius:24px}.detail .muted{font-size:18px}.detail .choices{gap:9px}.end-page h2{font-family:var(--heading)}
+@media(max-height:780px){.top{height:68px}.bottom{height:78px}.page{padding-top:6px;padding-bottom:9px}h1{font-size:32px;margin:11px 0}.hero{height:167px}.byline{margin-bottom:14px}.summary{font-size:17px;margin:15px 0 12px}.page-foot{margin-top:12px}}
+@media(max-width:345px){.top{padding-left:19px;padding-right:19px}.page{padding-left:21px;padding-right:21px}.brand{font-size:27px}.session{padding:0 12px;font-size:16px}h1{font-size:30px;letter-spacing:-1px}.source{font-size:17px}.hero{height:156px}.summary{font-size:16.5px;line-height:1.25}.read{font-size:17px;padding:0 20px}.bottom{padding-left:24px;padding-right:24px}.nav button{font-size:15px;padding:0 7px;gap:5px}.actions{gap:6px}.read{padding:0 12px;font-size:16px;gap:6px}.save{width:44px;height:44px;flex-shrink:0}}
+</style>
+</head>
+<body><main class="app">
+<header class="top"><div class="brand"><span data-logo></span><span>otium</span></div><button class="session" data-action="session"><span data-icon="clock"></span>15 minutes</button></header>
+<div class="feed">
+<section class="page" data-title="The streets that make us slow down" data-source="Field Notes" data-kind="article"><div class="story">
+<div class="source">Field Notes <span class="dot"></span><span class="category">Places</span></div>
+<h1>The streets that make us slow down</h1><div class="byline">Maya Chen · 4 min read</div>
+<div class="hero"><img src="assets/street.jpg" alt="A calm street with places to pause"></div>
+<p class="summary">A shaded bench, a narrow crossing, a place to pause. The best streets give us small reasons to stay, without asking for our attention.</p>
+<div class="actions"><button class="read" data-action="read">Read the story <span data-icon="chevron"></span></button><button class="save" data-action="save" aria-label="Save story"><span data-icon="bookmark"></span></button><button class="more" data-action="more" aria-label="Story and source options"><span data-icon="more"></span></button></div>
+<div class="page-foot"><b>1 of 3</b> &nbsp; · &nbsp; A little room to wander</div>
+</div></section>
+<section class="page" data-title="Where the mountains meet the water" data-source="Open Frame" data-kind="video"><div class="story">
+<div class="source">Open Frame <span class="dot"></span><span class="category">Outdoors</span></div>
+<h1>Where the mountains meet the water</h1><div class="byline">Alex Morgan · 8 min watch</div>
+<div class="video-frame"><video controls playsinline preload="none" poster="assets/landscape.jpg" src="assets/landscape-demo.mp4"></video></div>
+<p class="summary">A quiet journey along the lakeshore, with room to watch and time to notice.</p>
+<div class="actions"><button class="read" data-action="read">About the film <span data-icon="chevron"></span></button><button class="save" data-action="save" aria-label="Save video"><span data-icon="bookmark"></span></button><button class="more" data-action="more" aria-label="Video and source options"><span data-icon="more"></span></button></div>
+<div class="page-foot"><b>2 of 3</b> &nbsp; · &nbsp; Take your time</div>
+</div></section>
+<section class="page" data-title="Making space for a slower afternoon" data-source="Small Hours" data-kind="article"><div class="story">
+<div class="source">Small Hours <span class="dot"></span><span class="category">Living</span></div>
+<h1>Making space for a slower afternoon</h1><div class="byline">Sam Rivera · 3 min read</div>
+<div class="hero"><img src="assets/landscape.jpg" alt="Still water beneath mountains"></div>
+<p class="summary">A few ordinary rituals can give an afternoon its shape. Begin with what is already close at hand.</p>
+<div class="actions"><button class="read" data-action="read">Read the story <span data-icon="chevron"></span></button><button class="save" data-action="save" aria-label="Save story"><span data-icon="bookmark"></span></button><button class="more" data-action="more" aria-label="Story and source options"><span data-icon="more"></span></button></div>
+<button class="page-foot" data-action="end">3 of 3 &nbsp; · &nbsp; Finish your session</button>
+</div></section>
+</div>
+<footer class="bottom"><nav class="nav" aria-label="Your Otium"><button data-action="library"><span data-icon="library"></span>Sources</button><button data-action="saved"><span data-icon="bookmark"></span>Saved</button><button data-action="you"><span data-icon="person"></span>You</button></nav></footer>
+</main><script src="shared.js"></script></body></html>

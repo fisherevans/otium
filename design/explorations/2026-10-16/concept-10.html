@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Otium - The reading room</title>
+<link rel="stylesheet" href="shared.css">
+<style>
+:root{--bg:#193d34;--surface:#244b40;--text:#f4f0df;--muted:#bdcbb8;--accent:#d8e2bd;--on-accent:#193d34;--line:#ffffff1d;--radius:14px;--font:"Source Serif",Georgia,serif;--heading:"Source Serif",Georgia,serif}
+body{overflow:hidden;background:radial-gradient(ellipse at 80% 0%,#294a3d 0,transparent 65%),var(--bg)}
+.app{height:100dvh;display:flex;flex-direction:column;padding-top:env(safe-area-inset-top);padding-bottom:env(safe-area-inset-bottom)}
+button{background:none;border:0;padding:0;min-width:44px;min-height:44px}
+.top{display:flex;align-items:center;justify-content:space-between;padding:20px 28px 8px;flex:none;min-height:83px}
+.brand{display:flex;align-items:center;gap:8px;font-size:28px;line-height:1;letter-spacing:-1.5px}
+.brand [data-logo]{width:25px;height:25px}
+.sitting{display:flex;align-items:center;gap:10px;text-align:right;color:var(--muted);font-size:14px;line-height:1.4}
+.sitting strong{display:block;font-weight:400;color:var(--text);font-size:17px}
+.sitting [data-icon]{width:17px;height:17px}
+.feed{overflow-y:auto;scroll-snap-type:y mandatory;flex:1;min-height:0;scrollbar-width:none}.feed::-webkit-scrollbar{display:none}
+.page{height:100%;scroll-snap-align:start;scroll-snap-stop:always;display:flex;justify-content:center;align-items:center;padding:15px 30px 10px}
+.story{width:100%;max-width:410px;text-align:center;display:flex;flex-direction:column;align-items:center}
+.category{display:flex;align-items:center;gap:10px;font-size:15px;color:var(--muted);margin-bottom:16px;line-height:1.2}
+.category::before,.category::after{content:"";width:4px;height:4px;border-radius:50%;background:#bac9a4}
+h1{font-family:var(--heading);font-weight:450;font-size:34px;line-height:1.1;letter-spacing:-1.1px;margin:0 0 15px;text-wrap:balance}
+.credit{font-size:15px;color:var(--muted);margin:0 0 23px;line-height:1.4}.credit strong{font-weight:500;color:var(--text)}
+.visual{width:100%;margin:0 0 22px;border-radius:3px;overflow:hidden;position:relative}.visual img{width:100%;height:183px;object-fit:cover}.visual.video{aspect-ratio:16/9;background:#0b211c}.visual.video video{border-radius:3px}
+.description{font-size:17px;line-height:1.55;margin:0;max-width:34ch;color:#e0e6d5;text-wrap:pretty}
+.actions{display:grid;grid-template-columns:44px 1fr 44px;gap:13px;align-items:center;width:100%;margin-top:22px}
+.actions .icon{display:grid;place-items:center;color:var(--muted);border-radius:50%}
+.read{justify-self:center;min-width:146px;padding:0 23px;border-radius:999px;background:var(--text);color:var(--bg);display:flex;align-items:center;justify-content:center;gap:11px;font-size:17px;height:48px;box-shadow:0 3px 14px #09241c1a}
+.read [data-icon]{width:17px;height:17px}
+.foot{flex:none;padding:5px 24px 13px}
+.progress{display:flex;align-items:center;justify-content:center;gap:7px;margin:0 0 6px;min-height:15px;color:var(--muted);font-size:12px;font-family:system-ui,sans-serif}.progress i{display:block;width:14px;height:2px;background:#8ba49470}.progress i:first-child{background:#e0e7cf;width:24px}.progress span{margin-left:6px}
+.nav{display:flex;justify-content:space-between;align-items:center;width:100%;max-width:430px;margin:auto}.nav button{font-size:16px;padding:0 8px;color:var(--muted)}.nav .finish{font-size:14px;color:var(--text);display:flex;gap:5px;align-items:center}.nav .finish [data-icon]{width:15px;height:15px}
+.detail{background:#193d34}.detail-head{background:#193d34;border:0;padding:15px 20px}.detail-title{font-size:21px;font-weight:450}.detail-head button{background:#244b40}.detail-body{padding:17px 27px 40px}.detail h1{font-size:36px;font-weight:450;line-height:1.13}.reader-copy{font-size:19px;line-height:1.75;color:#e5e8d9}.reader-hero{border-radius:3px}.reader-meta{font-size:16px}.group{border:0;border-radius:13px}.group-row{min-height:66px;font-size:18px}.pill,.primary{font-weight:450}.toast{box-shadow:0 4px 35px #001d1855}
+@media(max-width:355px){.top{padding:14px 21px 6px;min-height:72px}.page{padding:10px 23px}.brand{font-size:26px}.sitting{font-size:12px}.sitting strong{font-size:16px}h1{font-size:29px}.credit{font-size:14px;margin-bottom:18px}.category{margin-bottom:12px;font-size:14px}.visual{margin-bottom:18px}.visual img{height:154px}.description{font-size:16px;line-height:1.45}.actions{margin-top:17px;gap:6px}.read{min-width:134px}.foot{padding:2px 16px 7px}.nav button{font-size:15px;padding:0 6px}.nav .finish{font-size:13px}}
+@media(max-height:760px){.top{padding-top:12px;min-height:68px}.category{margin-bottom:10px}.credit{margin-bottom:16px}.visual img{height:151px}.visual{margin-bottom:16px}.actions{margin-top:16px}.foot{padding-bottom:6px}h1{font-size:30px}.description{font-size:16px;line-height:1.45}}
+</style>
+</head>
+<body>
+<div class="app">
+<header class="top"><div class="brand"><span data-logo></span><span>otium</span></div><button class="sitting" data-action="session"><span>A little time away<strong>12 minute sitting</strong></span><span data-icon="sliders"></span></button></header>
+<main class="feed">
+<section class="page" data-title="The streets that make us slow down" data-source="Field Notes" data-kind="article"><article class="story"><div class="category">Places</div><h1>The streets that<br>make us slow down</h1><p class="credit"><strong>Field Notes</strong> · Maya Chen · 4 min</p><figure class="visual"><img src="assets/street.jpg" alt="A leafy, quiet neighborhood street"></figure><p class="description">A shaded bench, a narrow crossing, a place to pause. The best streets give us small reasons to stay, without asking for our attention.</p><div class="actions"><button class="icon" data-action="save" aria-label="Save article"><span data-icon="bookmark"></span></button><button class="read" data-action="read">Read the story<span data-icon="chevron"></span></button><button class="icon" data-action="more" aria-label="Article and source options"><span data-icon="more"></span></button></div></article></section>
+<section class="page" data-title="Where the mountains meet the water" data-source="Open Frame" data-kind="video"><article class="story"><div class="category">Outdoors</div><h1>Where the mountains meet the water</h1><p class="credit"><strong>Open Frame</strong> · Alex Morgan · 8 min</p><figure class="visual video"><video controls playsinline preload="none" poster="assets/landscape.jpg" src="assets/landscape-demo.mp4" aria-label="Illustrative lakeshore video"></video></figure><p class="description">A quiet journey along the lakeshore, with room to watch and time to notice.</p><div class="actions"><button class="icon" data-action="save" aria-label="Save video"><span data-icon="bookmark"></span></button><button class="read" data-action="read">About this film<span data-icon="chevron"></span></button><button class="icon" data-action="more" aria-label="Video and source options"><span data-icon="more"></span></button></div></article></section>
+<section class="page" data-title="Making space for a slower afternoon" data-source="Small Hours" data-kind="article"><article class="story"><div class="category">Living</div><h1>Making space for a slower afternoon</h1><p class="credit"><strong>Small Hours</strong> · Sam Rivera · 3 min</p><figure class="visual"><img src="assets/landscape.jpg" alt="Still water below a distant mountain range"></figure><p class="description">A few ordinary rituals can give an afternoon its shape. Begin with what is already close at hand.</p><div class="actions"><button class="icon" data-action="save" aria-label="Save article"><span data-icon="bookmark"></span></button><button class="read" data-action="read">Read the story<span data-icon="chevron"></span></button><button class="icon" data-action="more" aria-label="Article and source options"><span data-icon="more"></span></button></div></article></section>
+</main>
+<footer class="foot"><div class="progress" aria-label="Three stories in this sitting"><i></i><i></i><i></i><span>1 of 3</span></div><nav class="nav" aria-label="Reading room"><button data-action="library">Sources</button><button data-action="saved">Saved</button><button data-action="you">You</button><button class="finish" data-action="end">Finish<span data-icon="close"></span></button></nav></footer>
+</div>
+<script src="shared.js"></script>
+<script>const feed=document.querySelector('.feed');const progress=document.querySelector('.progress');feed.addEventListener('scroll',()=>{const current=Math.min(2,Math.round(feed.scrollTop/feed.clientHeight));progress.querySelector('span').textContent=`${current+1} of 3`;progress.querySelectorAll('i').forEach((line,i)=>{line.style.background=i===current?'#e0e7cf':'#8ba49470';line.style.width=i===current?'24px':'14px'})},{passive:true});</script>
+</body>
+</html>
