@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import CollectionsPage from "@/pages/CollectionsPage";
 import HistoryPage from "@/pages/HistoryPage";
 
@@ -15,7 +15,8 @@ const SEGS: { key: Seg; label: string }[] = [
 ];
 
 export default function SavedPage() {
-  const [seg, setSeg] = useState<Seg>("collections");
+  const [params, setParams] = useSearchParams();
+  const seg: Seg = params.get("view") === "history" ? "history" : "collections";
 
   return (
     <div>
@@ -30,7 +31,7 @@ export default function SavedPage() {
             role="tab"
             aria-selected={seg === s.key}
             className={`lib-fchip ${seg === s.key ? "on" : ""}`}
-            onClick={() => setSeg(s.key)}
+            onClick={() => { const next = new URLSearchParams(params); next.set("view", s.key); setParams(next); }}
           >
             {s.label}
           </button>

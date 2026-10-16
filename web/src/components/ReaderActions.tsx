@@ -1,3 +1,4 @@
+import { Dialog } from "./Dialog";
 import { useState } from "react";
 import { ExternalLink, Bookmark, Link2, Share2, Check } from "lucide-react";
 import type { Item } from "@/api/client";
@@ -14,8 +15,8 @@ import { canWebShare, copyText, shareOrCopy } from "@/lib/share";
 // the url in an auto-selected readonly field so the user can long-press -> copy.
 function ManualCopy({ url, onClose }: { url: string; onClose: () => void }) {
   return (
-    <div className="copy-manual-scrim" onClick={onClose}>
-      <div className="copy-manual" onClick={(e) => e.stopPropagation()}>
+    <Dialog open onClose={onClose} kicker="Copy link">
+      <div>
         <p className="copy-manual-lead">Copy this link</p>
         <input
           className="copy-manual-field"
@@ -34,15 +35,16 @@ function ManualCopy({ url, onClose }: { url: string; onClose: () => void }) {
           Done
         </button>
       </div>
-    </div>
+    </Dialog>
   );
 }
 
 // ShareActions renders the visible Copy link + Share pair. `labeled` shows text
 // beside the icons (reader header); the default is icon-only (tight rows).
-export function ShareActions({ item, labeled }: { item: Item; labeled?: boolean }) {
+export function ShareActions({ item, labeled, compact = false }: { item: Item; labeled?: boolean; compact?: boolean }) {
   const [toast, setToast] = useState("");
   const [manual, setManual] = useState(false);
+  const nativeShare = canWebShare();
   const cls = labeled ? "share-act labeled" : "share-act";
 
   function flash(msg: string) {
@@ -62,11 +64,11 @@ export function ShareActions({ item, labeled }: { item: Item; labeled?: boolean 
 
   return (
     <>
-      <button className={cls} onClick={onCopy} aria-label="Copy link">
+      {(!compact || !nativeShare) && <button className={cls} onClick={onCopy} aria-label="Copy link">
         <Link2 size={18} strokeWidth={1.75} aria-hidden />
         {labeled && <span>Copy link</span>}
-      </button>
-      {canWebShare() && (
+      </button>}
+      {nativeShare && (
         <button className={cls} onClick={onShare} aria-label="Share">
           <Share2 size={18} strokeWidth={1.75} aria-hidden />
           {labeled && <span>Share</span>}

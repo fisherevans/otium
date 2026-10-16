@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { useBack } from "@/lib/navigation";
 import { api, type Settings } from "@/api/client";
 
 // Settings (#68). A lightweight preferences surface, reachable from the library's
@@ -9,16 +10,20 @@ import { api, type Settings } from "@/api/client";
 // point (docs/decisions.md, "Intentionality & transparency").
 export default function SettingsPage() {
   const nav = useNavigate();
+  const back = useBack("/you");
+  const [saved, setSaved] = useState(false);
   const [settings, setSettings] = useState<Settings | null>(null);
   const [err, setErr] = useState("");
   const [saving, setSaving] = useState(false);
+  const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {
+    setErr("");
     api
       .getSettings()
       .then(setSettings)
       .catch((e) => setErr(String(e.message ?? e)));
-  }, []);
+  }, [attempt]);
 
   const [reloading, setReloading] = useState(false);
   // Manual hard-refresh (#149): an installed PWA has no browser refresh, so give an
@@ -46,9 +51,11 @@ export default function SettingsPage() {
     const next = !settings.fast_scroll_checkin;
     setSettings({ ...settings, fast_scroll_checkin: next }); // optimistic
     setSaving(true);
+    setErr("");
+    setSaved(false);
     api
       .updateSettings({ fast_scroll_checkin: next })
-      .then(setSettings)
+      .then((value) => { setSettings(value); setSaved(true); })
       .catch((e) => {
         setErr(String(e.message ?? e));
         setSettings((s) => (s ? { ...s, fast_scroll_checkin: !next } : s)); // revert
@@ -61,9 +68,11 @@ export default function SettingsPage() {
     const next = !settings.youtube_history;
     setSettings({ ...settings, youtube_history: next });
     setSaving(true);
+    setErr("");
+    setSaved(false);
     api
       .updateSettings({ youtube_history: next })
-      .then(setSettings)
+      .then((value) => { setSettings(value); setSaved(true); })
       .catch((e) => {
         setErr(String(e.message ?? e));
         setSettings((s) => (s ? { ...s, youtube_history: !next } : s));
@@ -73,8 +82,8 @@ export default function SettingsPage() {
 
   return (
     <div>
-      <button className="lib-back" onClick={() => nav("/sections")}>
-        <span aria-hidden>←</span> Library
+      <button className="lib-back" onClick={back}>
+        <span aria-hidden>←</span> Back
       </button>
       <div className="lib-topbar">
         <h1 className="display">Settings</h1>
@@ -83,7 +92,9 @@ export default function SettingsPage() {
         otium tracks nothing for engagement or time-in-app. Everything here stays on your own instance.
       </p>
 
-      {err && <p className="err">{err}</p>}
+      {err && <div role="alert"><p className="err">{err}</p>{!settings && <button className="btn ghost" onClick={() => setAttempt((n) => n + 1)}>Retry</button>}</div>}
+      {!settings && !err && <p role="status">Loading settings…</p>}
+      {saving ? <p role="status">Saving…</p> : saved ? <p role="status">Saved</p> : null}
 
       {/* Appearance (#80/#81/#82): reader typography, card styling, and session
           presets, with a live preview. Its own screen so the preview has room. */}

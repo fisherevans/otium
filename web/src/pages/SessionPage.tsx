@@ -9,6 +9,7 @@ import { Dialog } from "@/components/Dialog";
 import { SourceSheet } from "@/components/SourceSheet";
 import { SessionCard } from "@/components/SessionCard";
 import { cardRender, isMedia, isVideo } from "@/lib/render";
+import { usePreferences } from "@/context/PreferencesContext";
 import { mins } from "@/lib/format";
 import { SHIPPED_LAYOUT, SHIPPED_VARS, cardVars, solveWhenReady } from "@/lib/cardLayout";
 
@@ -39,6 +40,7 @@ const FAST_STREAK = 8;
 export default function SessionPage() {
   const { id = "" } = useParams();
   const nav = useNavigate();
+  const { motionAllowed, prefs, presentation } = usePreferences();
 
   const [items, setItems] = useState<Selected[]>([]);
   const [current, setCurrent] = useState(0);
@@ -105,7 +107,6 @@ export default function SessionPage() {
   const lastContent = useRef<Selected | null>(null); // retains the surface item through the exit anim
   const prevIdx = useRef(0);
   const endedServer = useRef(false); // did we already mark the session ended server-side
-  const readerPushed = useRef(false); // is there a history entry backing an open reader (#78)
   const didInitialScroll = useRef(false);
   // #103: suppress cursor persistence during the initial resume. Otherwise the
   // observer briefly reporting item 0 (before the resume-scroll lands) fires the
@@ -209,12 +210,15 @@ export default function SessionPage() {
       cancel();
       cancel = solveWhenReady(stage, stage, card, SHIPPED_LAYOUT);
     };
+    const observer = new ResizeObserver(onResize);
+    observer.observe(stage);
     window.addEventListener("resize", onResize);
     return () => {
       cancel();
+      observer.disconnect();
       window.removeEventListener("resize", onResize);
     };
-  }, [current, items, renderMap]);
+  }, [current, items, renderMap, prefs, presentation]);
 
   // Resume scroll: after the queue renders, jump (no animation) to the stored
   // cursor so a refresh lands where the user left off.
@@ -284,20 +288,6 @@ export default function SessionPage() {
     return () => window.clearInterval(t);
   }, []);
 
-  // Back gesture / button closes an open reader instead of navigating (#78). Only
-  // acts when a reader-backed history entry is live; otherwise back navigates the
-  // SPA as usual. The entry is already popped by the browser here, so we just
-  // clear our flag and close the surface.
-  useEffect(() => {
-    const onPop = () => {
-      if (readerPushed.current) {
-        readerPushed.current = false;
-        setContent(null);
-      }
-    };
-    window.addEventListener("popstate", onPop);
-    return () => window.removeEventListener("popstate", onPop);
-  }, []);
 
   // #149: the header "← intent" asks to end the session. Every end route shows the
   // recap (same as running out of time), so the stats are never skipped. We ack the
@@ -311,15 +301,21 @@ export default function SessionPage() {
     return () => window.removeEventListener("otium:request-end", onEnd);
   }, []);
 
-  // Persist the cursor as the user advances (debounced). The backend only accepts
-  // a cursor write on an active session, so a late write is a harmless no-op.
+  // Flush the latest pending cursor on departure as well as after scrolling.
+  const pendingCursor = useRef<{ id: string; cursor: number } | null>(null);
   useEffect(() => {
     if (loading || !id || suppressPersist.current) return;
+    pendingCursor.current = { id, cursor: current };
     const t = window.setTimeout(() => {
+      pendingCursor.current = null;
       api.updateSession(id, { cursor: current }).catch(() => {});
-    }, 500);
+    }, 250);
     return () => window.clearTimeout(t);
   }, [current, id, loading]);
+  useEffect(() => () => {
+    const pending = pendingCursor.current;
+    if (pending) void api.updateSession(pending.id, { cursor: pending.cursor }).catch(() => {});
+  }, []);
 
   // Time budget reached (#79): the single duration is up. Do NOT navigate - just
   // freeze the reel at wherever the user is (overIdx). The queue collapses to
@@ -443,9 +439,7 @@ export default function SessionPage() {
 
   function scrollTo(idx: number) {
     const el = itemEls.current[idx];
-    // Instant snap, not a smooth glide: good e-ink panels (Plasma 2) render a
-    // smooth-scroll as a low-framerate jitter, so we jump straight to the card.
-    if (el) el.scrollIntoView({ block: "center" });
+    if (el) el.scrollIntoView({ block: "center", behavior: motionAllowed ? "smooth" : "instant" });
   }
 
   const cur = items[current];
@@ -463,31 +457,37 @@ export default function SessionPage() {
   // dominant leftward drag on the focused card advances it.
   const SWIPE_DIST = 60; // px of horizontal travel to count as a swipe
   const SWIPE_DOMINANCE = 1.3; // horizontal must beat vertical by this factor
-  const press = useRef<{ x: number; y: number; moved: boolean } | null>(null);
+  const press = useRef<{ id: number; x: number; y: number; moved: boolean } | null>(null);
+  const suppressClick = useRef(false);
   function cardPointerDown(e: ReactPointerEvent) {
-    press.current = { x: e.clientX, y: e.clientY, moved: false };
+    press.current = null;
+    suppressClick.current = false;
+    if (!e.isPrimary || (window.visualViewport?.scale ?? 1) > 1 || e.button !== 0 || (e.target as Element).closest("button, a, input, video, audio, iframe, [role=button]")) return;
+    press.current = { id: e.pointerId, x: e.clientX, y: e.clientY, moved: false };
   }
   function cardPointerMove(e: ReactPointerEvent) {
     const p = press.current;
-    if (p && (Math.abs(e.clientX - p.x) > 10 || Math.abs(e.clientY - p.y) > 10)) p.moved = true;
+    if (p?.id === e.pointerId && (Math.abs(e.clientX - p.x) > 10 || Math.abs(e.clientY - p.y) > 10)) p.moved = true;
+  }
+  function cardPointerCancel() {
+    press.current = null;
+    suppressClick.current = true;
   }
   function cardPointerUp(e: ReactPointerEvent, i: number) {
     const p = press.current;
-    if (!p) return;
+    press.current = null;
+    if (!p || p.id !== e.pointerId) return;
     const dx = e.clientX - p.x;
     const dy = e.clientY - p.y;
-    // A dominant leftward drag on the focused card advances it.
-    if (i === current && dx <= -SWIPE_DIST && Math.abs(dx) >= Math.abs(dy) * SWIPE_DOMINANCE) {
-      p.moved = true; // keep cardClick from treating the follow-up click as a tap
-      next();
-    }
+    suppressClick.current = p.moved || Math.abs(dx) > 10 || Math.abs(dy) > 10;
+    if (i === current && dx <= -SWIPE_DIST && Math.abs(dx) >= Math.abs(dy) * SWIPE_DOMINANCE) next();
   }
   function cardClick(sel: Selected) {
-    const p = press.current;
     press.current = null;
-    if (p?.moved) return; // it was a scroll or a swipe, not a tap
-    // Title/body tap is content-aware (#96): full text reads in-app, video/audio
-    // play in-app, and a link-only article opens the original in a new tab.
+    if (suppressClick.current) {
+      suppressClick.current = false;
+      return;
+    }
     engage(sel);
   }
 
@@ -511,10 +511,8 @@ export default function SessionPage() {
       api.itemEvent(sel.item.id, "open", id).catch(() => {});
     }
   }
-  // Opening the reader/player pushes a history entry (#78) so the Android back
-  // gesture / browser back closes it instead of navigating the SPA out of the
-  // session. popstate (above) closes it; closeContent pops the entry when
-  // dismissed by the back button / scrim so history stays balanced.
+  // The shared Overlay owns browser history for the reader and nested sheets.
+  // SessionPage only opens/closes content and accounts for active reading time.
   function readKind(it: Item): string {
     return isVideo(it) ? "video" : isMedia(it) ? "audio" : "read";
   }
@@ -544,18 +542,10 @@ export default function SessionPage() {
     recordOpen(sel);
     startRead(sel);
     setContent(sel);
-    if (!readerPushed.current) {
-      window.history.pushState({ otiumReader: true }, "");
-      readerPushed.current = true;
-    }
   }
   function closeContent() {
     stopRead();
     setContent(null);
-    if (readerPushed.current) {
-      readerPushed.current = false;
-      window.history.back(); // consume our pushed entry (fires popstate; the ref is already cleared)
-    }
   }
   // #149: swipe-up at the bottom of the reader advances the feed as if the user
   // scrolled to the next card - close the surface and move the reel forward one, so
@@ -708,6 +698,7 @@ export default function SessionPage() {
             onPrev={prev}
             ytHistory={ytHistory}
             onPointerDown={cardPointerDown}
+            onPointerCancel={cardPointerCancel}
             onPointerMove={cardPointerMove}
             onPointerUp={(e) => cardPointerUp(e, i)}
             onClick={() => cardClick(it)}

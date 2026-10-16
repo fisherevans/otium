@@ -25,11 +25,11 @@ const DEFAULTS: Preferences = {
   },
   card: {
     meta_size: 11,
-    source_size: 11,
+    source_size: 15,
     topic_tag_size: 13,
     date_size: 13,
     hero_show: true,
-    hero_color: false,
+    hero_color: true,
     // #97 per-element meta defaults mirror the v0.29 card's designed look.
     topic_weight: 600,
     topic_ink: "topic",
@@ -87,7 +87,7 @@ export function prefsToVars(p: Preferences): CSSProperties {
   return {
     "--pref-reader-font-size": `${p.reader.font_size}px`,
     "--pref-reader-line-height": `${p.reader.line_height}`,
-    "--pref-reader-measure": `${p.reader.measure}ch`,
+    "--pref-reader-measure": p.reader.measure ? `${p.reader.measure}ch` : "none",
     "--pref-reader-img-display": p.reader.images ? "block" : "none",
     // #90: reader body face / weight / ink
     "--pref-reader-font-family": FONT_STACKS[p.reader.font_family] ?? "var(--serif)",
@@ -99,6 +99,7 @@ export function prefsToVars(p: Preferences): CSSProperties {
     "--pref-card-date-size": `${p.card.date_size}px`,
     "--pref-hero-display": p.card.hero_show ? "block" : "none",
     "--pref-hero-filter": heroFilter,
+    "--pref-image-filter": heroFilter,
     // #97: per-element meta weight/ink. Each card meta part (topic pill, source,
     // author, date) styles independently. Weight + ink are always emitted with the
     // resolved value; the matching global.css rule carries the same default as its
@@ -133,84 +134,171 @@ function applyToRoot(p: Preferences) {
   for (const [k, v] of Object.entries(vars)) style.setProperty(k, v);
 }
 
+export type Presentation = "standard" | "eink";
+export type SaveStatus = "saved" | "pending" | "saving" | "error";
+const PRESENTATION_KEY = "otium-presentation";
+
+function storedPresentation(): Presentation {
+  try {
+    return localStorage.getItem(PRESENTATION_KEY) === "eink" ? "eink" : "standard";
+  } catch {
+    return "standard";
+  }
+}
+
 interface PrefsState {
   prefs: Preferences;
   loaded: boolean;
-  // update merges a patch, applies it live (:root), and debounce-persists it.
+  loadError: boolean;
+  saveStatus: SaveStatus;
   update: (patch: PreferencesPatch) => void;
+  retry: () => void;
+  presentation: Presentation;
+  setPresentation: (presentation: Presentation) => void;
+  presentationError: boolean;
+  reducedMotion: boolean;
+  motionAllowed: boolean;
 }
 
-const Ctx = createContext<PrefsState>({ prefs: DEFAULTS, loaded: false, update: () => {} });
+const Ctx = createContext<PrefsState>({
+  prefs: DEFAULTS, loaded: false, loadError: false, saveStatus: "saved",
+  update: () => {}, retry: () => {}, presentation: "standard", setPresentation: () => {},
+  presentationError: false, reducedMotion: false, motionAllowed: true,
+});
 
-// Merge a deep-partial patch onto the current prefs (one level of nesting).
 function merge(base: Preferences, patch: PreferencesPatch): Preferences {
   return {
-    reader: { ...base.reader, ...(patch.reader ?? {}) },
-    card: { ...base.card, ...(patch.card ?? {}) },
+    reader: { ...base.reader, ...patch.reader },
+    card: { ...base.card, ...patch.card },
     presets: patch.presets ?? base.presets,
+  };
+}
+
+// Later edits always win, including when an older request fails in flight.
+function mergePatches(older: PreferencesPatch, newer: PreferencesPatch): PreferencesPatch {
+  return {
+    ...(older.reader || newer.reader ? { reader: { ...older.reader, ...newer.reader } } : {}),
+    ...(older.card || newer.card ? { card: { ...older.card, ...newer.card } } : {}),
+    ...(newer.presets || older.presets ? { presets: newer.presets ?? older.presets } : {}),
   };
 }
 
 export function PreferencesProvider({ children }: { children: ReactNode }) {
   const [prefs, setPrefs] = useState<Preferences>(DEFAULTS);
   const [loaded, setLoaded] = useState(false);
+  const [loadError, setLoadError] = useState(false);
+  const [saveStatus, setSaveStatus] = useState<SaveStatus>("saved");
+  const [presentation, setPresentationState] = useState<Presentation>(storedPresentation);
+  const [presentationError, setPresentationError] = useState(false);
+  const [reducedMotion, setReducedMotion] = useState(() => window.matchMedia("(prefers-reduced-motion: reduce)").matches);
   const saveTimer = useRef<number | undefined>(undefined);
   const pending = useRef<PreferencesPatch>({});
+  const edits = useRef<PreferencesPatch>({});
+  const saving = useRef(false);
+  const loading = useRef(false);
+  const loadFailed = useRef(false);
 
-  // Apply defaults synchronously on mount so the very first paint is correct,
-  // then reconcile with the server. A failed fetch (offline / unauth redirect)
-  // just leaves the defaults in place.
+  useEffect(() => applyToRoot(prefs), [prefs]);
   useEffect(() => {
-    applyToRoot(DEFAULTS);
-    api
-      .getPreferences()
-      .then((p) => {
-        setPrefs(p);
-        applyToRoot(p);
-      })
-      .catch(() => {})
-      .finally(() => setLoaded(true));
+    document.documentElement.dataset.presentation = presentation;
+  }, [presentation]);
+  useEffect(() => {
+    const media = window.matchMedia("(prefers-reduced-motion: reduce)");
+    const changed = () => setReducedMotion(media.matches);
+    media.addEventListener("change", changed);
+    const storage = (e: StorageEvent) => {
+      if (e.key === PRESENTATION_KEY || e.key === null) setPresentationState(storedPresentation());
+    };
+    window.addEventListener("storage", storage);
+    return () => {
+      media.removeEventListener("change", changed);
+      window.removeEventListener("storage", storage);
+    };
   }, []);
 
-  const flush = useCallback(() => {
+  const setPresentation = useCallback((value: Presentation) => {
+    setPresentationState(value);
+    try {
+      localStorage.setItem(PRESENTATION_KEY, value);
+      setPresentationError(false);
+    } catch {
+      setPresentationError(true);
+    }
+  }, []);
+
+  const load = useCallback(async () => {
+    if (loading.current) return;
+    loading.current = true;
+    try {
+      const stored = await api.getPreferences();
+      // A slow initial GET or retry must not undo edits made while it ran.
+      setPrefs(merge(stored, edits.current));
+      loadFailed.current = false;
+      setLoadError(false);
+    } catch {
+      loadFailed.current = true;
+      setLoadError(true);
+    } finally {
+      loading.current = false;
+      setLoaded(true);
+    }
+  }, []);
+  useEffect(() => { void load(); }, [load]);
+
+  const flush = useCallback(async () => {
+    if (saving.current || Object.keys(pending.current).length === 0) return;
     const patch = pending.current;
     pending.current = {};
-    if (Object.keys(patch).length === 0) return;
-    api.updatePreferences(patch).catch(() => {});
+    saving.current = true;
+    setSaveStatus("saving");
+    try {
+      await api.updatePreferences(patch);
+      setSaveStatus(Object.keys(pending.current).length ? "pending" : "saved");
+    } catch {
+      pending.current = mergePatches(patch, pending.current);
+      setSaveStatus("error");
+      return;
+    } finally {
+      saving.current = false;
+    }
+    // Serialize writes so an old response cannot overwrite a newer preference.
+    if (Object.keys(pending.current).length) void flush();
   }, []);
 
-  const update = useCallback(
-    (patch: PreferencesPatch) => {
-      setPrefs((cur) => {
-        const next = merge(cur, patch);
-        applyToRoot(next); // live, immediate - preview + app both reflow
-        return next;
-      });
-      // Accumulate the patch so a burst of slider changes coalesces into one PUT.
-      pending.current = {
-        reader: { ...(pending.current.reader ?? {}), ...(patch.reader ?? {}) },
-        card: { ...(pending.current.card ?? {}), ...(patch.card ?? {}) },
-        ...(patch.presets ? { presets: patch.presets } : {}),
-      };
-      window.clearTimeout(saveTimer.current);
-      saveTimer.current = window.setTimeout(flush, 400);
-    },
-    [flush],
-  );
+  const update = useCallback((patch: PreferencesPatch) => {
+    edits.current = mergePatches(edits.current, patch);
+    pending.current = mergePatches(pending.current, patch);
+    setPrefs((cur) => merge(cur, patch));
+    setSaveStatus("pending");
+    window.clearTimeout(saveTimer.current);
+    saveTimer.current = window.setTimeout(() => void flush(), 400);
+  }, [flush]);
 
-  // Persist any pending edit if the tab is hidden/closed mid-debounce.
+  const retry = useCallback(() => {
+    if (loadFailed.current) void load();
+    void flush();
+  }, [load, flush]);
+
   useEffect(() => {
     const onHide = () => {
       if (document.visibilityState === "hidden") {
         window.clearTimeout(saveTimer.current);
-        flush();
+        void flush();
       }
     };
     document.addEventListener("visibilitychange", onHide);
-    return () => document.removeEventListener("visibilitychange", onHide);
-  }, [flush]);
+    window.addEventListener("online", retry);
+    return () => {
+      document.removeEventListener("visibilitychange", onHide);
+      window.removeEventListener("online", retry);
+      window.clearTimeout(saveTimer.current);
+    };
+  }, [flush, retry]);
 
-  return <Ctx.Provider value={{ prefs, loaded, update }}>{children}</Ctx.Provider>;
+  return <Ctx.Provider value={{ prefs, loaded, loadError, saveStatus, update, retry,
+    presentation, setPresentation, presentationError, reducedMotion,
+    motionAllowed: presentation === "standard" && !reducedMotion,
+  }}>{children}</Ctx.Provider>;
 }
 
 export const usePreferences = () => useContext(Ctx);

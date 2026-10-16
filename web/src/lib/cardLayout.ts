@@ -276,7 +276,7 @@ export function solveCard(vars: HTMLElement, reel: HTMLElement, card: HTMLElemen
         over = contentHeight(card) - budget;
       }
     }
-    if (over <= 1) break;
+    if (over <= 0) break;
     const next = knobs.find(([, fn]) => fn());
     if (!next) break;
     gaveUp.push(next[0]);

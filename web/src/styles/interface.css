@@ -1,0 +1,72 @@
+/* Shared interaction scale. Editorial content retains the reader's typography. */
+:root {
+    --mute: #6e685e;
+    --ink-mute: #6e685e;
+    --ink-faint: var(--mute);
+    --grot: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+}
+:root[data-theme="dark"] { --mute: #cfc9bb; --ink-mute: #cfc9bb; }
+button, input, textarea, select { -webkit-tap-highlight-color: transparent; }
+button, a, input, textarea, select { touch-action: manipulation; }
+button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible {
+    outline: 2px solid var(--ink);
+    outline-offset: 3px;
+}
+input:not([type="range"]):not([type="checkbox"]):not([type="radio"]), textarea, select {
+    font-size: max(16px, 1em);
+}
+.brand { display: inline-flex; align-items: center; gap: 9px; color: var(--ink); }
+.brand-mark { width: 29px; height: 29px; flex: none; }
+.brand-name { font-family: var(--serif); font-size: 29px; font-weight: 600; letter-spacing: -.065em; line-height: 1; }
+.brand-compact .brand-mark { width: 28px; height: 28px; }
+.topbar { padding: max(10px, env(safe-area-inset-top)) 20px 10px; align-items: center; min-height: 65px; }
+.chrome-btn, .theme-btn, .theme-toggle, .rp-back, .rp-act, .callout-act, .item-more,
+.im-act, .media-act, .mgmt-edit, .sheet-close, .dlg-close {
+    min-width: 44px; min-height: 44px; display: inline-flex; align-items: center; justify-content: center;
+}
+.callout-primary { min-height: 44px; padding: 10px 16px; font: 600 14px var(--grot); }
+.card-callout { gap: 4px; flex-wrap: nowrap; }
+.card-callout .callout-act { padding: 10px; }
+.btn, .mgmt-back, .mgmt-inline, .lib-fchip, .seg button, .session-end, .intent-btn, .focus-library,
+.rp-pill, .dlg-opt, .isrc-row, .art-more { min-height: 44px; }
+.mgmt-back { font: 500 14px var(--grot); margin-bottom: 12px; display: inline-flex; align-items: center; }
+.mgmt-inline { display: inline-flex; align-items: center; }
+.session-foot { min-height: 52px; padding-bottom: env(safe-area-inset-bottom); }
+.session-end { padding: 10px 16px; font: 500 12px var(--grot); letter-spacing: .02em; }
+.readerpage-head { min-height: 64px; gap: 4px; padding: max(8px, env(safe-area-inset-top)) 12px 8px; }
+.readerpage { touch-action: pan-y pinch-zoom; }
+.rp-readtime { font: 500 12px var(--grot); }
+.readerpage-body { padding-bottom: max(32px, env(safe-area-inset-bottom)); }
+.snap { touch-action: pan-y pinch-zoom; }
+.nav { padding-bottom: env(safe-area-inset-bottom); }
+.nav a, .nav button { min-height: 58px; font: 500 12px var(--grot); letter-spacing: .015em; text-transform: none; }
+.nav a.active, .nav a.on { font-weight: 700; }
+.nav svg { width: 21px; height: 21px; }
+.mgmt-kicker, .dlg-kicker, .sheet-kicker, .section-label, .reason { font-size: 12px; }
+.err { color: var(--ink); border-left: 3px solid currentColor; padding: 10px 12px; font: 500 14px/1.5 var(--grot); }
+.caphint, .dlg-sub, .sub { line-height: 1.5; }
+.yt-result-select { display: flex; align-items: center; gap: 10px; flex: 1; min-width: 0; border: 0; background: none; color: inherit; text-align: left; padding: 0; min-height: 54px; }
+@media (max-width: 359px) {
+    .topbar { padding-left: 14px; padding-right: 14px; }
+    .card-callout { gap: 0; }
+    .callout-primary { padding-inline: 10px; }
+}
+@media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { scroll-behavior: auto !important; animation-duration: 0s !important; transition-duration: 0s !important; }
+}
+:root[data-presentation="eink"] *, :root[data-presentation="eink"] *::before, :root[data-presentation="eink"] *::after {
+    scroll-behavior: auto !important; animation-duration: 0s !important; transition-duration: 0s !important;
+}
+
+.intent-link, .intent-back, .lib-back, .lib-fsbtn { min-height: 44px; min-width: 44px; }
+.lib-back { display: flex; align-items: center; gap: 8px; }
+.seg button { min-width: 64px; }
+@media (max-width: 480px) { .topbar .tagline { display: none; } }
+.library-primary { flex-wrap: nowrap; }
+.library-primary .btn { width: auto; margin: 0; }
+.library-primary .btn:first-child { flex: 1; }
+.library-primary .btn { padding-inline: 14px; }
+
+.src-rss-copy, .va-title, .va-explore, .va-filter { min-height: 44px; min-width: 44px; }
+
+.share-act, .head-act, .sheet-x, .dlg-x, .im-ctltoggle { min-width: 44px; min-height: 44px; display: inline-flex; align-items: center; justify-content: center; }

@@ -4,21 +4,7 @@ import { api, type Topic, type Section, type Source } from "@/api/client";
 import { usePreferences } from "@/context/PreferencesContext";
 import { HowItWorks } from "@/components/HowItWorks";
 
-// The intent flow is three deliberate, sparse screens (#112/#132, restructured
-// #142) - each fits without scrolling, and selecting usually advances you:
-//   1. How long - preset chips + a custom slider.
-//   2. What to read - "Everything you follow" or one section. Single-select by
-//      default: tapping a section picks it AND advances. A "Select multiple" link
-//      switches to checkboxes + a Next button for combining sections.
-//   3. Topics + Begin - fine-tune the chosen section(s) topics (drop any for this
-//      session) and start. Everything skips the tuning (no single section to narrow).
-// Back button + swipe-right move backward through the screens.
-//
-// Session build (#67/#69/#86): POST /sessions with the duration, selected topic slugs
-// as `themes`, and selected section slugs as `sections`. Dropping a topic sends the
-// kept topics as themes (excluded ones fall out); a clean section selection sends the
-// section slug (server expands it to all its topics). Everything sends both empty.
-
+// Choose a duration, then confirm a scope. Topic customization is optional.
 const MIN_MINUTES = 5;
 const MAX_MINUTES = 120;
 const STEP = 5;
@@ -54,15 +40,28 @@ export default function HomePage() {
   const [err, setErr] = useState("");
 
   const [loaded, setLoaded] = useState(false);
+  const [loadError, setLoadError] = useState("");
+  const [loadAttempt, setLoadAttempt] = useState(0);
   useEffect(() => {
-    api.topics().then((t) => setTopics(t ?? [])).catch(() => setTopics([]));
-    api.sections().then(setSections).catch(() => setSections([]));
-    api
-      .sources()
-      .then((s) => setSources(s ?? []))
-      .catch(() => setSources([]))
-      .finally(() => setLoaded(true));
-  }, []);
+    let live = true;
+    setLoadError("");
+    setLoaded(false);
+    Promise.all([api.topics(), api.sections(), api.sources()]).then(([t, s, src]) => {
+      if (!live) return;
+      setTopics(t ?? []);
+      setSections(s ?? []);
+      setSources(src ?? []);
+      try {
+        const stored: unknown = JSON.parse(localStorage.getItem("otium.last-scope") ?? "[]");
+        const valid = Array.isArray(stored) ? s.filter((section) => stored.includes(section.slug)).map((section) => section.slug) : [];
+        setPickedSections(valid);
+        setEverything(valid.length === 0);
+        setMulti(valid.length > 1);
+      } catch { /* Storage is optional; Everything remains the default. */ }
+      setLoaded(true);
+    }).catch((e) => live && setLoadError(String(e.message ?? e)));
+    return () => { live = false; };
+  }, [loadAttempt]);
 
   // Default the time to a preset once preferences load (middle-ish, else first).
   useEffect(() => {
@@ -105,20 +104,18 @@ export default function HomePage() {
   );
 
   // --- section-screen actions ---
-  // Single-select: pick one and advance straight to the topics/Begin screen.
-  function pickEverythingAndGo() {
+  // Scope selection never starts a session or opens customization.
+  function pickEverything() {
     setEverything(true);
     setPickedSections([]);
     setExcluded([]);
-    setStep(3);
   }
-  function pickSectionAndGo(slug: string) {
+  function pickSection(slug: string) {
     setEverything(false);
     setPickedSections([slug]);
     setExcluded([]);
-    setStep(3);
   }
-  // Multi-select: accumulate, advance on Next.
+  // Multi-select combines sections before the explicit Begin decision.
   function toggleSection(slug: string) {
     setEverything(false);
     setPickedSections((p) => (p.includes(slug) ? p.filter((s) => s !== slug) : [...p, slug]));
@@ -165,7 +162,10 @@ export default function HomePage() {
       else if (!effectiveEverything) sectionSlugs = pickedSections;
       // #152: only meaningful when the scope has video; harmless (true) otherwise.
       const resp = await api.createSession(minutes, themes, sectionSlugs, !scopeHasVideo || includeShorts);
-      if (resp && resp.session_id) nav(`/session/${resp.session_id}`);
+      if (resp && resp.session_id) {
+        try { localStorage.setItem("otium.last-scope", JSON.stringify(effectiveEverything ? [] : pickedSections)); } catch { /* Device storage is optional. */ }
+        nav(`/session/${resp.session_id}`);
+      }
       else setErr("Nothing new to gather right now.");
     } catch (e: any) {
       setErr(String(e.message ?? e));
@@ -175,14 +175,16 @@ export default function HomePage() {
   }
 
   // Swipe-right anywhere on a step moves backward (like the reader's back gesture).
-  const press = useRef<{ x: number; y: number } | null>(null);
+  const press = useRef<{ id: number; x: number; y: number } | null>(null);
   function stepDown(e: ReactPointerEvent) {
-    press.current = { x: e.clientX, y: e.clientY };
+    press.current = null;
+    if (!e.isPrimary || e.button !== 0 || (window.visualViewport?.scale ?? 1) > 1 || (e.target as HTMLElement).closest("button, input, a")) return;
+    press.current = { id: e.pointerId, x: e.clientX, y: e.clientY };
   }
   function stepUp(e: ReactPointerEvent) {
     const p = press.current;
     press.current = null;
-    if (!p) return;
+    if (!p || p.id !== e.pointerId) return;
     const dx = e.clientX - p.x;
     const dy = e.clientY - p.y;
     if (dx > 70 && Math.abs(dx) > Math.abs(dy) * 1.4) {
@@ -190,6 +192,21 @@ export default function HomePage() {
       else if (step === 2) setStep(1);
     }
   }
+
+  const scopeLabel = multi && pickedSections.length === 0 ? "Choose a section" : effectiveEverything ? "Everything you follow" : pickedSections.map((slug) => sectionName(sections, slug)).join(" + ");
+  const beginControl = <>
+    {err && <p className="intent-hint" role="alert">{err}</p>}
+    <div className="intent-confirm">
+      {step === 2 && scopedTopics.length > 0 && <button className="intent-link" onClick={() => setStep(3)}>Customize topics{excluded.length > 0 ? ` (${excluded.length} excluded)` : ""}</button>}
+      <p className="intent-summary"><strong>{minutesLabel(minutes ?? 0)}</strong><span>{scopeLabel}</span>{excluded.length > 0 && <span>{excluded.length} topics excluded</span>}</p>
+      <button className="btn" onClick={begin} disabled={busy || nothingNew || (multi && pickedSections.length === 0) || (excluded.length > 0 && keptTopics.length === 0)}>
+        {busy ? "Gathering…" : multi && pickedSections.length === 0 ? "Choose a section" : nothingNew ? "Nothing new right now" : excluded.length > 0 && keptTopics.length === 0 ? "Pick a topic" : "Begin session"}
+      </button>
+    </div>
+  </>;
+
+  if (loadError) return <div className="intent"><div className="intent-step"><h1 className="display">Couldn't load your library</h1><p role="alert">{loadError}</p><button className="btn" onClick={() => setLoadAttempt((n) => n + 1)}>Retry</button></div></div>;
+  if (!loaded) return <div className="intent"><p role="status">Loading your library…</p></div>;
 
   // #138 first-run: no sources yet, so no session is possible. Point to the Library
   // and explain the model instead of a time picker that can't build anything.
@@ -202,7 +219,7 @@ export default function HomePage() {
             <p className="sub">Finite sessions built from the feeds you choose - not an endless stream.</p>
           </div>
           <p className="firstrun-step">
-            You don't follow anything yet. Head to your <b>Library</b> to add a topic and its first sources - any RSS/Atom
+            You don't follow anything yet. Head to your <b>Library</b> to add your first source - any RSS/Atom
             feed, YouTube channel, or podcast. Then come back and pick how long you have.
           </p>
           <button className="btn" onClick={() => nav("/sections")}>
@@ -215,7 +232,7 @@ export default function HomePage() {
   }
 
   return (
-    <div className="intent" onPointerDown={stepDown} onPointerUp={stepUp}>
+    <div className={`intent ${step === 2 ? "choose-scope" : ""}`} onPointerDown={stepDown} onPointerUp={stepUp} onPointerCancel={() => { press.current = null; }}>
       {step === 1 && (
         <div className="intent-step" key="step-time">
           <div className="intent-head">
@@ -225,8 +242,7 @@ export default function HomePage() {
 
           {!custom ? (
             <>
-              {/* Tapping a preset picks it AND advances - same one-tap feel as the
-                  section screen. Custom is the only path that needs an explicit next. */}
+              {/* Tapping a preset picks it AND advances - custom length uses an explicit Next action. */}
               <div className="time-presets">
                 {prefs.presets.map((v) => (
                   <button key={v} className="time-chip" onClick={() => (setMinutes(v), setStep(2))}>
@@ -278,19 +294,20 @@ export default function HomePage() {
 
       {step === 2 && (
         <div className="intent-step slide-up step-sections" key="step-section">
+          <div className="scope-options">
           <div className="intent-head">
             <button className="intent-back" onClick={() => setStep(1)} aria-label="Back to length">
               ← {minutesLabel(minutes ?? 0)}
             </button>
             <h1 className="display">What to read</h1>
-            <p className="sub">{multi ? "Pick any sections to combine." : "Tap a section, or read everything."}</p>
+            <p className="sub">{multi ? "Pick any sections to combine." : "Choose a section, or keep everything selected."}</p>
           </div>
 
           {/* Everything is a distinct full-width tile (single-select only). */}
           {!multi && (
-            <button className="sec-tile everything" onClick={pickEverythingAndGo}>
+            <button className={`sec-tile everything ${effectiveEverything ? "on" : ""}`} aria-pressed={effectiveEverything} onClick={pickEverything}>
               <span className="sec-tile-name">Everything you follow</span>
-              <span className="sec-tile-meta">all your sources →</span>
+              <span className="sec-tile-meta">all your sources</span>
             </button>
           )}
 
@@ -303,19 +320,17 @@ export default function HomePage() {
               )}
               <div className="sec-tiles">
                 {sections.map((m) => {
-                  const on = multi && pickedSections.includes(m.slug);
+                  const on = !everything && pickedSections.includes(m.slug);
                   return (
                     <button
                       key={m.slug}
                       className={`sec-tile ${on ? "on" : ""}`}
-                      onClick={() => (multi ? toggleSection(m.slug) : pickSectionAndGo(m.slug))}
-                      role={multi ? "checkbox" : undefined}
-                      aria-checked={multi ? on : undefined}
+                      onClick={() => (multi ? toggleSection(m.slug) : pickSection(m.slug))}
+                      aria-pressed={on}
                     >
                       <span className="sec-tile-name">{m.name}</span>
                       <span className="sec-tile-meta">
                         {m.topic_count === 1 ? "1 topic" : `${m.topic_count} topics`}
-                        {!multi ? " →" : ""}
                       </span>
                     </button>
                   );
@@ -324,7 +339,7 @@ export default function HomePage() {
             </>
           )}
 
-          {/* Toggle between single-tap-to-go and multi-select-then-Next. */}
+          {/* Switch between one section and a combined scope. */}
           {sections.length > 1 && (
             <button
               className="intent-link sec-multi-link"
@@ -338,11 +353,8 @@ export default function HomePage() {
             </button>
           )}
 
-          {multi && (
-            <button className="btn" onClick={() => setStep(3)} disabled={pickedSections.length === 0}>
-              {pickedSections.length === 0 ? "Pick a section" : "Next →"}
-            </button>
-          )}
+          </div>
+          {beginControl}
         </div>
       )}
 
@@ -352,8 +364,9 @@ export default function HomePage() {
             <button className="intent-back" onClick={() => setStep(2)} aria-label="Back to sections">
               ← {effectiveEverything ? "everything" : pickedSections.length === 1 ? sectionName(sections, pickedSections[0]) : `${pickedSections.length} sections`}
             </button>
-            <h1 className="display">Fine-tune</h1>
-            <p className="sub">Drop any topic you'd rather skip this session, or just begin.</p>
+            <p className="intent-summary">{minutesLabel(minutes ?? 0)} · {scopeLabel}</p>
+            <h1 className="display">Customize topics</h1>
+            <p className="sub">Optional: leave out topics for this session.</p>
           </div>
 
           {/* Topics grouped by their section header. For Everything this is every
@@ -412,15 +425,7 @@ export default function HomePage() {
             </div>
           )}
 
-          {err && (
-            <p className="intent-hint" role="alert">
-              {err}
-            </p>
-          )}
-
-          <button className="btn" onClick={begin} disabled={busy || nothingNew || (scopedTopics.length > 0 && keptTopics.length === 0)}>
-            {busy ? "Gathering…" : nothingNew ? "Nothing new right now" : scopedTopics.length > 0 && keptTopics.length === 0 ? "Pick a topic" : "Begin"}
-          </button>
+          {beginControl}
         </div>
       )}
     </div>

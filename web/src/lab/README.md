@@ -72,7 +72,14 @@ overflow, and whether the actions are reachable. It exits non-zero if anything
 clipped, so it can gate a change.
 
 `--app` needs the Go server and a seeded database (see the repo `CLAUDE.md`), and
-walks a real session rather than fixtures.
+walks a real session rather than fixtures. Both modes cover 412, 390, 375 and
+320px widths. The app pass resets to the first card for each viewport and accepts
+a direct active-session URL. The lab imports the shared appearance and interface
+styles so typography and action sizes stay aligned with production. For concurrent
+local checks, capture a real `/api/v1/sessions/current` JSON response and pass
+`--session /path/to/session.json` alongside `--app`. This replays that queue in
+the actual app and suppresses writes, so another browser cannot change the
+measured content or cursor mid-pass. Article-content GETs still use the server.
 
 ## Changing the card
 

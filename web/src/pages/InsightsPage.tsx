@@ -1,3 +1,4 @@
+import { useBack } from "@/lib/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { api, type Topic, type InsightsResponse, type InsightsSource } from "@/api/client";
 import { BUCKETS, REP_BLABEL, bucketOf, type Bucket } from "@/lib/represent";
@@ -103,6 +104,7 @@ function Donut({ sources }: { sources: InsightsSource[] }) {
 }
 
 export default function InsightsPage() {
+  const back = useBack("/you");
   const [topics, setTopics] = useState<Topic[]>([]);
   const [scope, setScope] = useState<string | null>(null); // null = all topics; else topic slug
   const [data, setData] = useState<InsightsResponse | null>(null);
@@ -150,14 +152,20 @@ export default function InsightsPage() {
     window.setTimeout(() => setToast((t) => (t === msg ? null : t)), 3500);
   }
 
+  async function saveChange(action: () => Promise<unknown>) {
+    setErr("");
+    try { await action(); return true; }
+    catch (error: any) { setErr(error.message || "Couldn't save. Your changes are still here; try again."); return false; }
+  }
+
   async function setWeight(s: InsightsSource, bucket: Bucket) {
-    await api.updateSource(s.source_id, { weight_bucket: bucket }).catch(() => {});
+    if (!await saveChange(() => api.updateSource(s.source_id, { weight_bucket: bucket }))) return;
     setSheet(null);
     showToast(`${s.source_title} → ${REP_BLABEL[bucket]}`);
     load();
   }
   async function archive(s: InsightsSource) {
-    await api.updateSource(s.source_id, { state: "archived" }).catch(() => {});
+    if (!await saveChange(() => api.updateSource(s.source_id, { state: "archived" }))) return;
     setSheet(null);
     showToast(`${s.source_title} archived`);
     load();
@@ -167,6 +175,7 @@ export default function InsightsPage() {
 
   return (
     <div>
+      <button className="mgmt-back" onClick={back}>← Back</button>
       <h1 className="display">Topic insights</h1>
       <p className="sub">
         What each source actually is in your topic right now, next to how much of it you skip. A big slice you mostly
@@ -251,6 +260,7 @@ export default function InsightsPage() {
       )}
 
       <BottomSheet open={!!sheet} onClose={() => setSheet(null)} kicker={sheet?.source_title}>
+        {err && <p className="err" role="alert">{err}</p>}
         {sheet && (
           <div className="insights-sheet">
             <div className="insight">

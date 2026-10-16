@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { api, type Topic, type ScoringConfig } from "@/api/client";
 import { type Bucket } from "@/lib/represent";
 import { Dialog } from "@/components/Dialog";
@@ -29,6 +29,7 @@ export function AddSourceWizard({
   onClose: () => void;
   onAdded: () => void;
 }) {
+  const createdId = useRef<number | null>(null);
   const [step, setStep] = useState(1);
   const [kind, setKind] = useState<Kind>("rss");
   const [err, setErr] = useState("");
@@ -53,6 +54,7 @@ export function AddSourceWizard({
   const [adding, setAdding] = useState(false);
 
   function reset() {
+    createdId.current = null;
     setStep(1);
     setKind("rss");
     setErr("");
@@ -71,6 +73,7 @@ export function AddSourceWizard({
     setKeywords("");
   }
   function close() {
+    if (adding) return;
     reset();
     onClose();
   }
@@ -114,14 +117,17 @@ export function AddSourceWizard({
     setErr("");
     try {
       const isYt = kind === "youtube";
-      const created = await api.createSource({
-        kind,
-        title: name.trim() || (isYt && ytSelected ? ytSelected.title : url),
-        ...(isYt && ytSelected
-          ? { channel_id: ytSelected.channel_id, icon_url: ytSelected.thumbnail, import_backlog: importAll }
-          : { feed_url: url.trim() }),
-      });
-      await api.setSourceTopic(created.id, topic.slug).catch(() => {});
+      if (createdId.current === null) {
+        const created = await api.createSource({
+          kind,
+          title: name.trim() || (isYt && ytSelected ? ytSelected.title : url),
+          ...(isYt && ytSelected
+            ? { channel_id: ytSelected.channel_id, icon_url: ytSelected.thumbnail, import_backlog: importAll }
+            : { feed_url: url.trim() }),
+        });
+        createdId.current = created.id;
+      }
+      await api.setSourceTopic(createdId.current, topic.slug);
       // Patch only the options that differ from the defaults.
       const patch: Parameters<typeof api.updateSource>[1] = {};
       if (bucket !== "normal") patch.weight_bucket = bucket;
@@ -137,11 +143,12 @@ export function AddSourceWizard({
         patch.scoring_config = sc;
       }
       if (keywords.trim()) patch.archive_keywords = keywords.trim();
-      if (Object.keys(patch).length) await api.updateSource(created.id, patch).catch(() => {});
+      if (Object.keys(patch).length) await api.updateSource(createdId.current, patch);
       onAdded();
-      close();
+      reset();
+      onClose();
     } catch (e: any) {
-      setErr(String(e.message ?? e).replace(/^Error:\s*/, ""));
+      setErr((createdId.current !== null ? "Source created, but setup did not finish. Retry to finish without adding it again. " : "") + String(e.message ?? e).replace(/^Error:\s*/, ""));
     } finally {
       setAdding(false);
     }
@@ -151,7 +158,7 @@ export function AddSourceWizard({
 
   return (
     <Dialog open={open} onClose={close} kicker={kicker}>
-      {err && <p className="err">{err}</p>}
+      {err && <p role="alert" className="err">{err}</p>}
 
       {step === 1 && (
         <>
@@ -166,7 +173,7 @@ export function AddSourceWizard({
               <button className="dlg-opt" onClick={() => pickKind("youtube")}>
                 <span className="dlg-radio" aria-hidden />
                 <span className="dlg-name">YouTube</span>
-                <span className="dlg-sub">channel via Data API - full history + durations</span>
+                <span className="dlg-sub">videos from a channel</span>
               </button>
             )}
             <button className="dlg-opt" onClick={() => pickKind("podcast")}>
@@ -188,7 +195,6 @@ export function AddSourceWizard({
               value={ytQuery}
               autoFocus
               onChange={(e) => setYtQuery(e.target.value)}
-              onBlur={ytSearch}
               onKeyDown={(e) => e.key === "Enter" && ytSearch()}
             />
             <button className="btn ghost" onClick={ytSearch} disabled={ytSearching || !ytQuery.trim()}>
@@ -202,14 +208,15 @@ export function AddSourceWizard({
                 <div
                   key={r.channel_id}
                   className={`yt-result ${ytSelected?.channel_id === r.channel_id ? "sel" : ""}`}
-                  onClick={() => setYtSelected(r)}
                 >
+                  <button type="button" className="yt-result-select" aria-pressed={ytSelected?.channel_id === r.channel_id} onClick={() => setYtSelected(r)}>
                   <span className="yt-result-radio" aria-hidden />
                   {r.thumbnail ? <img className="yt-result-av" src={r.thumbnail} alt="" /> : <span className="yt-result-av ph" />}
                   <div className="yt-result-body">
                     <div className="yt-result-title">{r.title}</div>
                     {r.description && <div className="yt-result-desc">{r.description}</div>}
                   </div>
+                  </button>
                   <a className="yt-result-open" href={r.channel_url} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()}>
                     Open ↗
                   </a>

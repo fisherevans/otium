@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useSearchParams } from "react-router-dom";
+import { useBack, useListScroll } from "@/lib/navigation";
 import { api, collectionDisplayName, type Collection, type CollectionItem, type CollectionSort, type Item } from "@/api/client";
 import { BottomSheet } from "@/components/BottomSheet";
 import { Reader } from "@/components/Reader";
@@ -43,13 +44,19 @@ function itemStamp(it: CollectionItem, sort: CollectionSort): string {
 // Saved tab can host it under a shared header + segmented control (#84). The
 // standalone /collections route renders it non-embedded for deep links.
 export default function CollectionsPage({ embedded = false }: { embedded?: boolean }) {
-  const nav = useNavigate();
+  const back = useBack("/saved");
+  const location = useLocation();
+  const [params, setParams] = useSearchParams();
+  const selectedId = Number(params.get("collection")) || null;
+  const sort: CollectionSort = params.get("sort") === "published" ? "published" : "saved";
+  const [loaded, setLoaded] = useState(false);
+  const [notice, setNotice] = useState("");
+  const [saving, setSaving] = useState(false);
   const [cols, setCols] = useState<Collection[]>([]);
   const [err, setErr] = useState("");
-  const [selected, setSelected] = useState<Collection | null>(null);
   const [items, setItems] = useState<CollectionItem[]>([]);
   const [loadingItems, setLoadingItems] = useState(false);
-  const [sort, setSort] = useState<CollectionSort>("saved"); // #89 review order
+  const [loadedItemsFor, setLoadedItemsFor] = useState("");
 
   const [creating, setCreating] = useState(false);
   const [newName, setNewName] = useState("");
@@ -60,54 +67,69 @@ export default function CollectionsPage({ embedded = false }: { embedded?: boole
   const shownKind = content ? contentKind(content) : null;
 
   function reload() {
-    api.collections().then(setCols).catch((e) => setErr(String(e.message ?? e)));
+    api.collections().then(setCols).catch((e) => setErr(String(e.message ?? e))).finally(() => setLoaded(true));
   }
   useEffect(() => { reload(); }, []);
 
   // The live version of the open collection, so counts/name reflect edits.
   const selectedLive = useMemo(
-    () => (selected ? cols.find((c) => c.id === selected.id) ?? selected : null),
-    [selected, cols],
+    () => cols.find((c) => c.id === selectedId) ?? null,
+    [selectedId, cols],
   );
 
-  function loadItems(id: number, s: CollectionSort) {
+  useEffect(() => {
+    if (!selectedId) return;
+    let live = true;
     setLoadingItems(true);
-    api
-      .collectionItems(id, s)
-      .then(setItems)
-      .catch((e) => setErr(String(e.message ?? e)))
-      .finally(() => setLoadingItems(false));
-  }
+    setErr("");
+    api.collectionItems(selectedId, sort).then((rows) => { if (live) { setItems(rows); setLoadedItemsFor(`${selectedId}:${sort}`); } })
+      .catch((e) => live && setErr(String(e.message ?? e)))
+      .finally(() => live && setLoadingItems(false));
+    return () => { live = false; };
+  }, [selectedId, sort]);
+  useListScroll(loaded && (!selectedId || (!loadingItems && loadedItemsFor === `${selectedId}:${sort}`)));
 
   function openCollection(c: Collection) {
-    setSelected(c);
-    setSort("saved"); // reset to the default order on each open
-    loadItems(c.id, "saved");
+    const next = new URLSearchParams(params);
+    next.set("collection", String(c.id));
+    next.delete("sort");
+    setLoadingItems(true);
+    setParams(next, { state: { collectionParent: true } });
   }
-
+  function closeCollection() {
+    const next = new URLSearchParams(params);
+    next.delete("collection");
+    next.delete("sort");
+    if (location.state?.collectionParent && (window.history.state?.idx ?? 0) > 0) back();
+    else setParams(next, { replace: true });
+  }
   function changeSort(s: CollectionSort) {
-    if (s === sort) return;
-    setSort(s);
-    if (selectedLive) loadItems(selectedLive.id, s);
+    const next = new URLSearchParams(params);
+    next.set("sort", s);
+    setLoadingItems(true);
+    setParams(next, { replace: true, state: location.state });
   }
 
   async function createCollection() {
     const n = newName.trim();
-    if (!n) return;
+    if (!n || saving) return;
+    setSaving(true); setErr(""); setNotice("");
     try {
       await api.createCollection(n);
       setNewName("");
       setCreating(false);
+      setNotice("Collection created");
       reload();
     } catch (e: any) {
       setErr(String(e.message ?? e));
-    }
+    } finally { setSaving(false); }
   }
 
   async function removeItem(it: Item) {
     if (!selectedLive) return;
     try {
       await api.removeFromCollection(selectedLive.id, it.id);
+      setNotice("Removed from collection");
       setItems((prev) => prev.filter((x) => x.id !== it.id));
       setCols((prev) => prev.map((c) => (c.id === selectedLive.id ? { ...c, item_count: Math.max(0, c.item_count - 1) } : c)));
     } catch (e: any) {
@@ -118,41 +140,44 @@ export default function CollectionsPage({ embedded = false }: { embedded?: boole
   async function doRename() {
     if (!manage) return;
     const n = renameVal.trim();
-    if (!n) return;
+    if (!n || saving) return;
+    setSaving(true); setErr(""); setNotice("");
     try {
       await api.renameCollection(manage.id, n);
       setManage(null);
       reload();
-      if (selected?.id === manage.id) setSelected({ ...selected, name: n });
+      setNotice("Collection renamed");
     } catch (e: any) {
       setErr(String(e.message ?? e));
-    }
+    } finally { setSaving(false); }
   }
 
   async function doDelete() {
-    if (!manage) return;
+    if (!manage || saving) return;
+    setSaving(true); setErr("");
     try {
       await api.deleteCollection(manage.id);
-      const wasOpen = selected?.id === manage.id;
+      const wasOpen = selectedId === manage.id;
       setManage(null);
-      if (wasOpen) setSelected(null);
+      if (wasOpen) { const next = new URLSearchParams(params); next.delete("collection"); setParams(next, { replace: true }); }
+      setNotice("Collection deleted");
       reload();
     } catch (e: any) {
       setErr(String(e.message ?? e));
-    }
+    } finally { setSaving(false); }
   }
 
   // ---- item browse view ----
   if (selectedLive) {
     return (
       <div>
-        <button className="lib-back" onClick={() => setSelected(null)}>
+        <button className="lib-back" onClick={closeCollection}>
           <span aria-hidden>←</span> All collections
         </button>
         <div className="lib-topbar">
           <h1 className="display">{collectionDisplayName(selectedLive)}</h1>
           {selectedLive.kind === "user" && (
-            <button className="lib-fsbtn" onClick={() => { setManage(selectedLive); setRenameVal(selectedLive.name); }}>
+            <button className="lib-fsbtn" onClick={() => { setErr(""); setManage(selectedLive); setRenameVal(selectedLive.name); }}>
               Edit
             </button>
           )}
@@ -175,19 +200,20 @@ export default function CollectionsPage({ embedded = false }: { embedded?: boole
           ))}
         </div>
 
-        {err && <p className="err">{err}</p>}
+        {err && !manage && <p className="err" role="alert">{err}</p>}
+        {notice && <p role="status">{notice}</p>}
         {loadingItems ? (
           <p className="sub">Loading…</p>
-        ) : items.length === 0 ? (
+        ) : err && items.length === 0 ? null : items.length === 0 ? (
           <p className="sub" style={{ padding: "16px 0" }}>Nothing here yet. Save items from a session to fill this list.</p>
         ) : (
           items.map((it) => (
             <div className="lib-row" key={it.id}>
               <div className="lib-head">
-                <div className="nm" onClick={() => setContent(it)} style={{ cursor: "pointer" }}>
+                <button className="nm list-item-button" onClick={() => setContent(it)}>
                   <b>{it.title}</b>
                   <span>{it.media_type}{itemStamp(it, sort)}</span>
-                </div>
+                </button>
                 <button className="coll-x" onClick={() => removeItem(it)} aria-label="Remove from collection">×</button>
               </div>
             </div>
@@ -195,6 +221,8 @@ export default function CollectionsPage({ embedded = false }: { embedded?: boole
         )}
 
         <RenameDeleteSheet
+          error={err}
+          saving={saving}
           manage={manage}
           renameVal={renameVal}
           setRenameVal={setRenameVal}
@@ -211,8 +239,8 @@ export default function CollectionsPage({ embedded = false }: { embedded?: boole
   return (
     <div>
       {!embedded && (
-        <button className="lib-back" onClick={() => nav("/sections")}>
-          <span aria-hidden>←</span> Library
+        <button className="lib-back" onClick={back}>
+          <span aria-hidden>←</span> Back
         </button>
       )}
       <div className="lib-topbar">
@@ -221,31 +249,33 @@ export default function CollectionsPage({ embedded = false }: { embedded?: boole
       </div>
       <p className="sub">Lists you've set items aside into. Saved and Read Later are always here; make your own for anything else.</p>
 
-      {err && <p className="err">{err}</p>}
+      {err && !manage && <p className="err" role="alert">{err}</p>}
+        {notice && <p role="status">{notice}</p>}
 
       {creating && (
         <div className="lib-add">
           <input
             className="field"
-            placeholder="Collection name"
+            aria-label="Collection name" placeholder="Collection name"
             value={newName}
             autoFocus
             onChange={(e) => setNewName(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && createCollection()}
           />
-          <button className="btn" onClick={createCollection} disabled={!newName.trim()}>Create</button>
+          <button className="btn" onClick={createCollection} disabled={saving || !newName.trim()}>Create</button>
         </div>
       )}
 
+      {!loaded && <p role="status">Loading collections…</p>}
       {cols.map((c) => (
         <div className="lib-row" key={c.id}>
-          <div className="lib-head" onClick={() => openCollection(c)}>
+          <button className="lib-head list-item-button" onClick={() => openCollection(c)}>
             <div className="nm">
               <b>{collectionDisplayName(c)}</b>
               <span>{c.item_count} {c.item_count === 1 ? "item" : "items"}{c.kind === "builtin" ? " · built-in" : ""}</span>
             </div>
-            <span className="chev">▸</span>
-          </div>
+            <span className="chev" aria-hidden>▸</span>
+          </button>
         </div>
       ))}
     </div>
@@ -253,6 +283,8 @@ export default function CollectionsPage({ embedded = false }: { embedded?: boole
 }
 
 function RenameDeleteSheet({
+  error,
+  saving,
   manage,
   renameVal,
   setRenameVal,
@@ -260,6 +292,8 @@ function RenameDeleteSheet({
   onRename,
   onDelete,
 }: {
+  error: string;
+  saving: boolean;
   manage: Collection | null;
   renameVal: string;
   setRenameVal: (s: string) => void;
@@ -272,16 +306,17 @@ function RenameDeleteSheet({
   return (
     <BottomSheet open={manage !== null} onClose={onClose} kicker="Edit collection">
       <div className="lib-sheet">
+        {error && <p className="err" role="alert">{error}</p>}
         <div className="ctl-label" style={{ marginTop: 4 }}>Name</div>
-        <input className="field" value={renameVal} onChange={(e) => setRenameVal(e.target.value)} onKeyDown={(e) => e.key === "Enter" && onRename()} />
+        <input className="field" aria-label="Collection name" value={renameVal} onChange={(e) => setRenameVal(e.target.value)} onKeyDown={(e) => e.key === "Enter" && onRename()} />
         <div className="lib-sheet-foot">
-          <button className="btn" onClick={onRename} disabled={!renameVal.trim()}>Rename</button>
+          <button className="btn" onClick={onRename} disabled={saving || !renameVal.trim()}>Rename</button>
         </div>
         <div className="ctl-label" style={{ marginTop: 22 }}>Delete</div>
         {confirmDel ? (
           <div className="lib-sheet-foot" style={{ marginTop: 6 }}>
             <button className="btn ghost" onClick={() => setConfirmDel(false)}>Keep</button>
-            <button className="btn" onClick={onDelete}>Delete for good</button>
+            <button className="btn" onClick={onDelete} disabled={saving}>Delete for good</button>
           </div>
         ) : (
           <button className="btn ghost" style={{ marginTop: 6 }} onClick={() => setConfirmDel(true)}>Delete this collection</button>

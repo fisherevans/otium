@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
-import { NavLink, Route, Routes, useLocation, useNavigate } from "react-router-dom";
+import { Link, NavLink, Route, Routes, useLocation, useNavigate } from "react-router-dom";
 import { BookOpen, Library, Bookmark, User } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
+import { Brand } from "@/components/Brand";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { lazy, Suspense } from "react";
 
@@ -91,26 +92,22 @@ export default function App() {
                 window.dispatchEvent(new CustomEvent("otium:request-end", { detail: { ack: () => (handled = true) } }));
                 if (!handled) nav("/");
               }}
-              aria-label="Back to intent"
+              aria-label="End session"
             >
-              <span className="chrome-ic">←</span> intent
+              End session
             </button>
             {/* In a session the theme control sits WITH the wordmark, not beside
                 library: day/night is about the page you are reading, and pairing
                 it with the mark keeps the right edge to one destination. */}
             <span className="wordmark-slot">
-              <span className="wordmark">otium</span>
+              <Brand compact />
               <ThemeToggle />
             </span>
-            <span className="topbar-right">
-              <button className="chrome-btn right" onClick={() => nav("/sections")} aria-label="Go to library">
-                library
-              </button>
-            </span>
+            <span className="topbar-right"><button className="chrome-btn right" onClick={() => nav("/sections", { state: { returnTo: pathname } })}>Library</button></span>
           </>
         ) : (
           <>
-            <span className="wordmark">otium</span>
+            <Brand />
             <span className="topbar-right">
               <span className="tagline">attention, on purpose</span>
               <ThemeToggle />
@@ -153,18 +150,18 @@ export default function App() {
             <BookOpen size={19} strokeWidth={1.75} aria-hidden />
             <span>read</span>
           </NavLink>
-          <NavLink to="/sections" className={({ isActive }) => (isActive ? "active" : "")}>
+          <Link to="/sections" className={/^\/(sections|topics|sources|import)(\/|$)/.test(pathname) ? "active" : ""} aria-current={/^\/(sections|topics|sources|import)(\/|$)/.test(pathname) ? "page" : undefined}>
             <Library size={19} strokeWidth={1.75} aria-hidden />
             <span>library</span>
-          </NavLink>
-          <NavLink to="/saved" className={({ isActive }) => (isActive ? "active" : "")}>
+          </Link>
+          <Link to="/saved" className={/^\/(saved|collections|history)(\/|$)/.test(pathname) ? "active" : ""} aria-current={/^\/(saved|collections|history)(\/|$)/.test(pathname) ? "page" : undefined}>
             <Bookmark size={19} strokeWidth={1.75} aria-hidden />
             <span>saved</span>
-          </NavLink>
-          <NavLink to="/you" className={({ isActive }) => (isActive ? "active" : "")}>
+          </Link>
+          <Link to="/you" className={/^\/(you|settings|insights)(\/|$)/.test(pathname) ? "active" : ""} aria-current={/^\/(you|settings|insights)(\/|$)/.test(pathname) ? "page" : undefined}>
             <User size={19} strokeWidth={1.75} aria-hidden />
             <span>you</span>
-          </NavLink>
+          </Link>
         </nav>
       )}
     </div>

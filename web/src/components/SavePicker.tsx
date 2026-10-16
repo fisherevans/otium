@@ -81,9 +81,9 @@ export function SavePicker({
 
       {err && <p className="err">{err}</p>}
       {loading ? (
-        <p className="sub" style={{ padding: "10px 0" }}>Loading your collections…</p>
+        <div className="save-loading" role="status"><p className="sub">Loading your collections…</p></div>
       ) : (
-        <div className="sheet-rows">
+        <div className="sheet-rows save-choices">
           {cols.map((c) => (
             <button key={c.id} className="sheet-row" onClick={() => toggle(c)} disabled={busy !== null}>
               <span className="save-check" aria-hidden>{c.contains ? "◉" : "○"}</span>

@@ -173,9 +173,11 @@ export function InlineMedia({
   const TAP_SLOP = 10; // px of movement under which it's unambiguously a tap
   const SWIPE = 45; // px a flick must travel to navigate
   const FLICK_MS = 400; // a navigation flick must complete within this
-  const g = useRef<{ x: number; y: number; t: number } | null>(null);
+  const g = useRef<{ id: number; x: number; y: number; t: number } | null>(null);
   function onDown(e: ReactPointerEvent) {
-    g.current = { x: e.clientX, y: e.clientY, t: e.timeStamp };
+    g.current = null;
+    if (!e.isPrimary || e.button !== 0 || (window.visualViewport?.scale ?? 1) > 1) return;
+    g.current = { id: e.pointerId, x: e.clientX, y: e.clientY, t: e.timeStamp };
     // Capture the pointer so a swipe that leaves the overlay still delivers pointerup
     // here. Touch has implicit capture; mouse/desktop does not - without this a
     // swipe-off-the-element loses the release and never navigates.
@@ -188,7 +190,7 @@ export function InlineMedia({
   function onUp(e: ReactPointerEvent) {
     const d = g.current;
     g.current = null;
-    if (!d) return;
+    if (!d || d.id !== e.pointerId) return;
     const dx = e.clientX - d.x;
     const dy = e.clientY - d.y;
     const dt = e.timeStamp - d.t;
@@ -248,6 +250,9 @@ export function InlineMedia({
                   style={notes ? { touchAction: "pan-y" } : { touchAction: "none" }}
                   onPointerDown={onDown}
                   onPointerUp={onUp}
+                  onPointerCancel={() => { g.current = null; }}
+                  tabIndex={0}
+                  onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); togglePlay(); } }}
                   role="button"
                   aria-label={playing ? "Pause" : "Play"}
                 >
@@ -300,7 +305,7 @@ export function InlineMedia({
               <Bookmark size={18} strokeWidth={1.75} aria-hidden />
             </button>
           )}
-          <ShareActions item={item} />
+          <ShareActions item={item} compact />
           <button className="im-act im-orig" onClick={onOpenOriginal} aria-label={video ? "Open on YouTube" : "Open original"}>
             <ExternalLink size={18} strokeWidth={1.75} aria-hidden />
           </button>

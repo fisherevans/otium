@@ -2,7 +2,7 @@
 // installable (a fetch handler is required) and to serve the immutable hashed
 // assets fast. It NEVER caches /api, /auth, or /healthz, so authed data is always
 // fresh and the OIDC flow is never intercepted.
-const CACHE = "otium-static-v1";
+const CACHE = "otium-static-v2";
 
 self.addEventListener("install", () => self.skipWaiting());
 
@@ -19,7 +19,7 @@ self.addEventListener("fetch", (e) => {
   const url = new URL(e.request.url);
   if (e.request.method !== "GET" || url.origin !== location.origin) return;
   if (url.pathname.startsWith("/api/") || url.pathname.startsWith("/auth/") || url.pathname === "/healthz") return;
-  // Vite's hashed bundles + our icons are immutable: cache-first.
+  // Vite's hashed bundles + versioned identity icon paths are immutable: cache-first.
   if (url.pathname.startsWith("/assets/") || url.pathname.startsWith("/icons/")) {
     e.respondWith(
       caches.open(CACHE).then((c) =>

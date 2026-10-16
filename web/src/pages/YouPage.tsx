@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Settings, Palette, PieChart, Download, ChevronRight } from "lucide-react";
+import { Settings, Palette, PieChart, History, ChevronRight } from "lucide-react";
 import { api, type ReadingStats } from "@/api/client";
 
 function fmtMin(min: number): string {
@@ -22,19 +22,24 @@ type Dest = {
 };
 
 const DESTS: Dest[] = [
-  { icon: Settings, label: "Settings", desc: "Preferences and ranking behavior.", to: "/settings" },
+  { icon: Settings, label: "Settings", desc: "Session behavior and playback.", to: "/settings" },
   { icon: Palette, label: "Appearance", desc: "Reader typography, cards, and session presets.", to: "/settings/appearance" },
-  { icon: PieChart, label: "Insights", desc: "What each source actually is in your topic.", to: "/insights" },
-  { icon: Download, label: "Import", desc: "Bring your follows in from OPML or Takeout.", to: "/import" },
+  { icon: PieChart, label: "Insights", desc: "How your sources shape each session.", to: "/insights" },
+  { icon: History, label: "Reading history", desc: "Return to articles you have seen or read.", to: "/saved?view=history" },
 ];
 
 export default function YouPage() {
   const nav = useNavigate();
+  const [showStats, setShowStats] = useState(false);
+  const [statsAttempt, setStatsAttempt] = useState(0);
+  const [statsError, setStatsError] = useState("");
   const [rs, setRs] = useState<ReadingStats | null>(null);
 
   useEffect(() => {
-    api.readingStats().then(setRs).catch(() => {});
-  }, []);
+    if (!showStats || rs) return;
+    setStatsError("");
+    api.readingStats().then(setRs).catch((e) => setStatsError(String(e.message ?? e)));
+  }, [showStats, rs, statsAttempt]);
 
   // Show the reading summary only once there's something to reflect. Descriptive,
   // never a scoreboard (#135) - it answers "how do I read", it doesn't grade you.
@@ -45,8 +50,35 @@ export default function YouPage() {
       <div className="lib-topbar">
         <h1 className="display">You</h1>
       </div>
-      <p className="sub">Settings and the rest of otium.</p>
+      <p className="sub">Preferences and reading activity.</p>
 
+      <div className="you-list">
+        {DESTS.map((d) => {
+          const Ic = d.icon;
+          return (
+            <button key={d.to} className="settings-link" onClick={() => nav(d.to)}>
+              <Ic size={20} strokeWidth={1.75} aria-hidden />
+              <div className="settings-copy">
+                <b>{d.label}</b>
+                <span>{d.desc}</span>
+              </div>
+              <span className="settings-link-chev" aria-hidden>
+                <ChevronRight size={18} strokeWidth={1.75} />
+              </span>
+            </button>
+          );
+        })}
+      </div>
+
+      <button className="settings-link" aria-expanded={showStats} onClick={() => setShowStats((v) => !v)}>
+        <PieChart size={20} strokeWidth={1.75} aria-hidden />
+        <span className="settings-copy"><b>Reading activity</b><span>A descriptive summary of your reading.</span></span>
+        <span aria-hidden>{showStats ? "−" : "+"}</span>
+      </button>
+      {showStats && <div>
+        {statsError && <div><p className="err" role="alert">{statsError}</p><button className="btn ghost" onClick={() => setStatsAttempt((n) => n + 1)}>Retry</button></div>}
+        {!rs && !statsError && <p role="status">Loading activity…</p>}
+        {rs && !hasStats && <p className="sub">Your reading activity will appear here after a session.</p>}
       {hasStats && rs && (
         <div className="you-stats">
           <div className="you-stats-grid">
@@ -96,23 +128,7 @@ export default function YouPage() {
         </div>
       )}
 
-      <div className="you-list">
-        {DESTS.map((d) => {
-          const Ic = d.icon;
-          return (
-            <button key={d.to} className="settings-link" onClick={() => nav(d.to)}>
-              <Ic size={20} strokeWidth={1.75} aria-hidden />
-              <div className="settings-copy">
-                <b>{d.label}</b>
-                <span>{d.desc}</span>
-              </div>
-              <span className="settings-link-chev" aria-hidden>
-                <ChevronRight size={18} strokeWidth={1.75} />
-              </span>
-            </button>
-          );
-        })}
-      </div>
+      </div>}
 
       <p className="you-about">otium - attention, on purpose.</p>
     </div>

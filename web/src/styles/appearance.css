@@ -1,0 +1,84 @@
+/* Production preference selectors also style the live preview. */
+:is(.stage, .lab-reel) .ch-taxonomy .ch-tax .ch-section,
+:is(.stage, .lab-reel) .ch-taxonomy .ch-tax .ch-topic {
+    font-family: var(--grot);
+    font-size: var(--pref-card-topictag-size, 13px);
+    font-weight: var(--pref-card-topic-weight, 600);
+    color: var(--pref-card-topic-ink, var(--ink-soft));
+    letter-spacing: .04em;
+}
+:is(.stage, .lab-reel) .ch-taxonomy .ch-tax .ch-sep { font-size: var(--pref-card-topictag-size, 13px); }
+:is(.stage, .lab-reel) .card-credit .cc-source {
+    min-height: 44px;
+    min-width: 44px;
+    display: inline-flex;
+    align-items: center;
+    font-size: var(--pref-card-source-size, 15px);
+    font-weight: var(--pref-card-source-weight, 600);
+    color: var(--pref-card-source-ink, var(--ink-soft));
+}
+:is(.stage, .lab-reel) .card-credit .cc-age {
+    font-family: var(--grot);
+    font-size: var(--pref-card-date-size, 13px);
+    font-weight: var(--pref-card-date-weight, 400);
+    color: var(--pref-card-date-ink, var(--ink-mute));
+}
+/* Image choices apply to card heroes, article bodies, and source portraits. */
+:root .reader-body img, :root .media img, :root img.src-avatar, :root .im-cover {
+    filter: var(--pref-image-filter, none);
+}
+:root[data-presentation="eink"] img { filter: grayscale(1) contrast(1.15); }
+:root[data-presentation="eink"] *, :root[data-presentation="eink"] *::before, :root[data-presentation="eink"] *::after {
+    animation-duration: .01ms !important;
+    animation-delay: 0ms !important;
+    transition-duration: .01ms !important;
+    transition-delay: 0ms !important;
+    scroll-behavior: auto !important;
+}
+@media (prefers-reduced-motion: reduce) {
+    :root *, :root *::before, :root *::after {
+        animation-duration: .01ms !important;
+        animation-delay: 0ms !important;
+        transition-duration: .01ms !important;
+        transition-delay: 0ms !important;
+        scroll-behavior: auto !important;
+    }
+}
+.appearance-page { width: 100%; max-width: 720px; margin-inline: auto; padding-bottom: 28px; }
+.appearance-page .appearance-title { margin: 8px 0 12px; font: 500 30px/1.2 var(--didot); }
+.appearance-page .appearance-section { margin-top: 24px; border-top: 1px solid var(--hair); padding-top: 16px; }
+.appearance-page h2 { font: 600 20px/1.3 var(--serif); margin: 0 0 12px; }
+.appearance-page .appearance-advanced h3 { font: 600 16px/1.3 var(--grot); }
+.appearance-page .appearance-note { color: var(--ink-soft); font: 14px/1.5 var(--grot); margin: 10px 0 16px; }
+.appearance-page .appearance-save { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; font: 14px/1.4 var(--grot); color: var(--ink-soft); }
+.appearance-page .appearance-choice { border: 0; padding: 0; margin: 16px 0; min-width: 0; font: 500 14px/1.4 var(--grot); }
+.appearance-page .appearance-choice legend { padding: 0; margin-bottom: 8px; }
+.appearance-page .appearance-options { display: flex; flex-wrap: wrap; gap: 6px; }
+.appearance-page .appearance-options button, .appearance-page .appearance-presets button {
+    min-height: 44px; border: 1px solid var(--rule); border-radius: 6px; padding: 8px 12px;
+    font: inherit; color: var(--ink); background: var(--paper);
+}
+.appearance-page .appearance-options button[aria-pressed="true"] { background: var(--ink); color: var(--paper); border-color: var(--ink); }
+.appearance-page .appearance-slider { margin: 18px 0; }
+.appearance-page .appearance-slider label { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; font: 500 14px/1.4 var(--grot); }
+.appearance-page .appearance-slider output { font-weight: 400; color: var(--ink-soft); }
+.appearance-page .appearance-slider input { width: 100%; min-height: 44px; accent-color: var(--ink); }
+.appearance-page .appearance-toggle { display: flex; align-items: center; min-height: 44px; gap: 12px; font: 500 14px/1.4 var(--grot); cursor: pointer; }
+.appearance-page .appearance-toggle input { width: 20px; height: 20px; accent-color: var(--ink); }
+.appearance-page .appearance-select { display: flex; gap: 16px; align-items: center; font: 500 14px var(--grot); }
+.appearance-page .appearance-select select { flex: 1; min-height: 44px; padding: 8px; font: 16px var(--serif); color: var(--ink); background: var(--paper); border: 1px solid var(--rule); }
+.appearance-page .appearance-advanced { margin-top: 20px; }
+.appearance-page summary { cursor: pointer; min-height: 44px; padding-block: 12px; font: 600 15px/1.3 var(--grot); }
+.appearance-page .appearance-preview { border: 1px solid var(--rule); padding: 0 12px 12px; margin: 16px 0; }
+.appearance-page .appearance-card-frame { height: 500px; width: 100%; max-width: 430px; margin-inline: auto; border: 1px solid var(--hair); overflow: hidden; flex: none; scroll-snap-type: none; }
+.appearance-page .appearance-card-frame .snap { height: 100%; overflow: hidden; }
+.appearance-page .appearance-reader-frame { height: 300px; overflow-y: auto; padding: 20px; border: 1px solid var(--hair); }
+.appearance-page .appearance-presets > div { display: flex; align-items: end; gap: 12px; margin-block: 12px; }
+.appearance-page .appearance-presets label { display: grid; gap: 6px; font: 14px var(--grot); }
+.appearance-page .appearance-presets input { width: 100px; min-height: 44px; font-size: 16px; }
+.appearance-page button:disabled { opacity: .5; cursor: default; }
+/* The solver yields the excerpt before reducing imagery and headline size.
+   The lab already honored this decision; the production stage must too. */
+.stage[data-solved-blurb="off"] .card-blurb { display: none; }
+
+.appearance-page .lib-back { min-height: 44px; display: inline-flex; align-items: center; gap: 8px; }

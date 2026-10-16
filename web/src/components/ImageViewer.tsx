@@ -1,11 +1,11 @@
-import { useCallback, useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
-import { createPortal } from "react-dom";
+import { useCallback, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
+import { Overlay } from "./Overlay";
 import { X } from "lucide-react";
 
 // ImageViewer (#149): a full-screen photo viewer for reader images. Tap an image in
 // an article and it opens here, where you can double-tap (or double-click) to zoom,
-// drag to pan while zoomed, and pinch to zoom on touch. A close button fades out
-// after a moment and returns on any tap. When not zoomed, dragging down dismisses -
+// drag to pan while zoomed, and pinch to zoom on touch. Close stays reachable.
+// When not zoomed, dragging down dismisses -
 // the image follows the finger and fades as it goes.
 //
 // Deliberately dependency-free: pointer events cover mouse (pan + double-click) and
@@ -14,7 +14,6 @@ export function ImageViewer({ src, alt, onClose }: { src: string; alt?: string; 
   const [scale, setScale] = useState(1);
   const [tx, setTx] = useState(0);
   const [ty, setTy] = useState(0);
-  const [uiShown, setUiShown] = useState(true);
   const [pinching, setPinching] = useState(false);
 
   const pointers = useRef<Map<number, { x: number; y: number }>>(new Map());
@@ -23,21 +22,6 @@ export function ImageViewer({ src, alt, onClose }: { src: string; alt?: string; 
   const lastTap = useRef(0);
 
   const clamp = (s: number) => Math.min(6, Math.max(1, s));
-
-  // Auto-hide the close button after a beat of stillness; any tap brings it back.
-  useEffect(() => {
-    if (!uiShown) return;
-    const t = window.setTimeout(() => setUiShown(false), 2600);
-    return () => window.clearTimeout(t);
-  }, [uiShown, scale, tx, ty]);
-
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [onClose]);
 
   const reset = useCallback(() => {
     setScale(1);
@@ -54,7 +38,7 @@ export function ImageViewer({ src, alt, onClose }: { src: string; alt?: string; 
     pointers.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
     if (pointers.current.size === 2) {
       const [a, b] = [...pointers.current.values()];
-      pinch.current = { dist: Math.hypot(a.x - b.x, a.y - b.y), scale };
+      pinch.current = { dist: Math.max(1, Math.hypot(a.x - b.x, a.y - b.y)), scale };
       pan.current = null;
       setPinching(true);
     } else if (pointers.current.size === 1) {
@@ -111,7 +95,6 @@ export function ImageViewer({ src, alt, onClose }: { src: string; alt?: string; 
         lastTap.current = 0;
       } else {
         lastTap.current = now;
-        setUiShown((v) => !v);
       }
     }
     pan.current = null;
@@ -122,15 +105,20 @@ export function ImageViewer({ src, alt, onClose }: { src: string; alt?: string; 
   // Portal to <body> so the viewer is never trapped by the reader page's transform
   // (a transformed ancestor makes position:fixed relative to it, and its stacking
   // context can bury the scrim). At the body root it reliably covers everything.
-  return createPortal(
+  return (
+    <Overlay label={alt ? `Image: ${alt}` : "Image viewer"} onClose={onClose}>
     <div
       className="imgviewer"
-      role="dialog"
-      aria-modal="true"
       onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}
       onPointerUp={onPointerUp}
-      onPointerCancel={onPointerUp}
+      onPointerCancel={(event) => {
+        pointers.current.delete(event.pointerId);
+        pan.current = null;
+        pinch.current = null;
+        setPinching(false);
+        if (scale <= 1.02) setTy(0);
+      }}
       style={{ background: `rgba(12, 11, 10, ${dragFade})` }}
     >
       <img
@@ -145,14 +133,14 @@ export function ImageViewer({ src, alt, onClose }: { src: string; alt?: string; 
         }}
       />
       <button
-        className={`imgviewer-close ${uiShown ? "" : "hidden"}`}
+        className="imgviewer-close"
         onClick={onClose}
         onPointerDown={(e) => e.stopPropagation()}
         aria-label="Close"
       >
         <X size={22} strokeWidth={2} aria-hidden />
       </button>
-    </div>,
-    document.body,
+    </div>
+    </Overlay>
   );
 }
