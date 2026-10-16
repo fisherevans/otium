@@ -1,32 +1,18 @@
-# Afterglow: the voice and the surrounding app
+# Afterglow: reading and movement
 
-[Open the new interactive prototype](https://quiver.fisher.sh/static/reports/otium/2026-10-16-afterglow/). The arrows above the article switch fonts without changing your place. Tap the font name for all six specimens and the option to keep Newsreader for body text. Close the strip to see the app without comparison controls.
+[Try the updated prototype](https://quiver.fisher.sh/static/reports/otium/2026-10-16-afterglow/?audition=0#start).
 
-[Start a session from the beginning](https://quiver.fisher.sh/static/reports/otium/2026-10-16-afterglow/?audition=0#start): choose time, choose scope and topics, Begin, read/save/return, and reach the ending. Choices change the mock session; its time advances with the stories.
+Fraunces titles and Newsreader reading are settled. This pass gives images more room, makes the whole brief a reading target, and keeps the bottom instrument present throughout the app.
 
-Afterglow is the selected direction. This round explores its typography and how the same contextual instrument serves the surrounding app. From Library or the app menu, try setup, source controls, Saved, History and Appearance. In the reading bar, the left button opens article options; the time phrase opens session controls; Next advances one brief. Swiping does the same. The study guide in Your Otium lets you preview time phases and jump to the ending.
+Hold an article image to view it whole. Read an article, scroll to its bottom, then give it a separate deliberate upward swipe to continue to the next brief. Back and swipe-right Back return to your current brief. The continuation cue is also tappable.
 
-```ask
-type: single
-id: afterglow-typeface
-label: Which typeface feels right in the actual screens?
-help: Try both the short and long real headlines. Notes can distinguish headline and reading-body preferences.
-notes: true
-other: true
-options:
-  - Newsreader | The original Afterglow voice, with an editorial rhythm.
-  - Source Serif | Sturdy, quiet forms and an even texture.
-  - Literata | Open forms and a bookish rhythm.
-  - Lora | Lively curves with a firm structure.
-  - Fraunces | Softer edges and a more expressive character.
-  - Crimson Pro | A compact, literary voice.
-```
+Try Settings and History as well: the instrument keeps its position and Otium mark while its role, styling and contents change. E-ink and reduced-motion settings make those changes immediate.
 
 ```ask
 type: text
-id: afterglow-experiences
-label: What feels right or wrong as you move between the session and the rest of Otium?
-help: Especially the contextual bar, finding Library or Saved, returning to an article, and the ending. Leave this blank if the direction feels settled.
+id: afterglow-refinement
+label: Where does the reading flow still feel cramped or unnatural?
+help: Especially image framing, hold-to-view, continuing from the reader, and the instrument changing roles. The type pairing is already selected.
 ```
 
-This is a design prototype. Account-like actions are local simulations. Publisher metadata and images are real, teasers are labelled paraphrases, and the video is illustrative. The production app is unchanged. [Notes, sources and scope](https://quiver.fisher.sh/static/reports/otium/2026-10-16-afterglow/notes.html).
+This is a local design prototype; production is unchanged. Browser checks include Firefox, Chromium and WebKit, but physical iPhone, home-screen PWA and e-ink feel still need device verification. [Notes, recordings and sources](https://quiver.fisher.sh/static/reports/otium/2026-10-16-afterglow/notes.html).
