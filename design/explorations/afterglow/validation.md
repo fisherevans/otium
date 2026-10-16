@@ -1,6 +1,6 @@
 # Afterglow browser verification
 
-Verified October 16, 2026 against the standalone study in Chromium and WebKit. This records the prototype checks, not production app validation.
+Earlier rounds verified October 16, 2026 against the standalone study in Chromium and WebKit. This records the prototype checks, not production app validation.
 
 - All six typefaces, all four publisher fixtures and the illustrative video at 390x844, 320x740, 390x664 and 320x664: 240 brief/font/viewport checks across the two engines. No measured overflow or broken article images. The narrowest long-headline case uses a 21px title and 16px teaser.
 - Eighteen routes captured in each engine, plus font specimens, article options, media and e-ink states. Mobile and desktop rendered with the shared `shot` tool; screenshots inspected.
@@ -20,3 +20,13 @@ The interaction walkthrough used Playwright and browser scroll/IntersectionObser
 Chromium and WebKit both passed Start > time > scope > exclude Politics > Begin, producing the expected Vermont/technology/video sample. Open/save/return, reload of the selected plan and cursor, Library return, natural-language phases and finite ending passed. Starting again with Vermont produced a different set; video-only scope also reached the ending by scrolling. Draft edits left the active plan unchanged. Empty topic selections disabled Begin, and re-including topics restored it even when closing with X or Escape. Fresh entry has no invented Resume; explicit full-fixture comparison remains available.
 
 The complete journey also passed WebKit at 320x664. Three motion clips were captured with the shared `clip` tool and real browser touch events: start/setup/Begin, read/save/return/swipe, and advancing to the ending. Assertions confirmed that a touch swipe advanced exactly one item and the final action reached End. Clips are embedded in the design notes. This remains browser touch emulation, not a physical-device check.
+
+## Selected pairing and reading refinement
+
+The current pass uses Fraunces titles and Newsreader reading. Chromium, WebKit and Firefox each passed 15 brief/viewport checks (five fixtures at 390x844, 390x664 and 320x664), with no brief overflow and all article photographs using contained framing. All 15 tested surrounding routes retained the same instrument height. Broad brief taps, image taps, hold-to-view, the explicit viewer, reader continuation and Saved-origin return passed without page errors in all three engines.
+
+The full new-session journey was rerun in WebKit at 320x664, including selection, save/return, reload persistence, draft isolation, empty choices, video and ending. Seven current clips were captured with the shared clip tool using browser touch input: setup/Begin, read/save/return, ending, image hold, ordinary scroll followed by bottom continuation, swipe-right Back, and instrument role changes. Assertions checked that ordinary scrolling never advanced, bottom continuation advanced exactly once, and Back retained position.
+
+Additional Chromium checks verified image drag cancellation, a 1.4-second hold without opening the reader, browser Back dismissing an open Save sheet, and reduced-motion route changes producing no animations. Synthetic touch-event guard checks covered short, diagonal, initially vertical then rightward, slow, cancelled, multi-touch and text-selection gestures; all stayed in the reader. Saved-origin upward gestures did not advance the queue. These synthetic guard tests complement, rather than replace, the browser-input recordings.
+
+Screenshots from Firefox's short viewport and the other engines were visually inspected. Firefox here is Linux Firefox, not Firefox on a physical iPhone. Installed-PWA safe areas, native edge gestures, keyboard/browser chrome and physical e-ink behavior still require device verification. No production code or account data changed.
