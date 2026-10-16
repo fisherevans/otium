@@ -44,3 +44,11 @@ Three updated browser-touch recordings cover one-tap default launch, the one-scr
 Rechecked the session/preset flow in Chromium, WebKit and Firefox after moving Custom session into the main content above the default. The launcher and custom screen still fit at 320x568, 320x664, 390x664 and 390x844, including populated, active-session and long-name states. Screenshots of start, setup, ending, settings and Saved were inspected.
 
 A rendered-copy walk covered 16 routes and 12 dialogs. The original seed names migrate to News and Video, while a user-renamed preset stays unchanged. Seven current motion clips were refreshed to show the factual copy and main-screen custom action. No page errors occurred during the checks. Physical-device limitations remain unchanged.
+
+## Completed-session review
+
+Chromium, WebKit and Firefox passed a three-item review with one opened article, one skipped article and an item left on screen when ending explicitly. The list contains only items shown. Stats record actual prototype time, not the selected duration. Video playback is recorded separately. Saving during the session prevents a forward skip; leaving for Library pauses time.
+
+Per-row collection selection, collection creation, removal and closing with Escape update the correct bookmark. Opening a reviewed article returns to Review session without offering session continuation. Stats remain unchanged after review actions and reload. Extensions retain activity; starting a new session resets it. No page errors occurred. Two browser-touch clips show ending/review and saving/reopening. These checks remain browser emulation, not physical iPhone or PWA validation.
+
+Additional Chromium checks verified that hidden-document time is excluded and Review session restores its scroll position at 320x568. The existing preset launcher suite passed again, including compact setup, repeat suggestions, default selection, reload, empty choices and draft isolation. Start/custom/preset recordings were refreshed for the new ending.

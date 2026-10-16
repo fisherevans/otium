@@ -47,3 +47,9 @@ Fisher repeatedly uses the same session types and wants an obvious default inste
 Removed meditative slogans, affirmations, permission-giving and emotional validation throughout the active prototype, including menus, empty states, type specimens and utility bars. The ending now states Session complete and lists Saved articles, New session and Extend session. Natural-language remaining-time status stays; commentary on the user's choices does not. Original starter preset labels migrate to News and Video without changing user-defined names.
 
 Custom session is now the first prominent action in the launcher's main content, above the default preset. The default card is compact and secondary. This addresses Fisher's rejection of the interface's generated filler and the custom workflow being hidden in a utility bar. Compact phone layouts retain the no-scroll start requirement.
+
+## Review the completed session
+
+Replaced the ending's Saved articles action with Review session. The condensed list contains items actually shown, with independent bookmark controls for assigning collections or creating one. Reopening an item returns to the same list position.
+
+Fisher wants to review and save from the session as a whole, including items not saved while browsing. Stats therefore live beside this list: articles opened, video plays, skips and visible session time. Opening is not labelled as completed reading. The ending freezes those measurements so later review actions cannot rewrite them. Extensions retain activity and new sessions reset it. This changes the prototype only.
