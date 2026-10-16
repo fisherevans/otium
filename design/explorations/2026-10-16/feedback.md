@@ -2,6 +2,8 @@
 
 [Open the ten interactive studies](https://quiver.fisher.sh/static/reports/otium/2026-10-16-analog-directions/). Switch between Brief, Video, Reader and Library, then try the directions on your phone.
 
+Use the Article sample picker to compare typical VTDigger, POLITICO and 404 Media content, plus the long-headline stress case. Actual metadata and images are paired with labelled length-matched teaser paraphrases.
+
 All ten are serif-led and analog in character. Buffer is the reference for polish and interaction. The upper-right page fold appears in every prototype. These are independent studies, not changes to the live app.
 
 ```ask
@@ -24,4 +26,4 @@ options:
   - 10 The reading room | A deep forest reading room makes each story feel like an unhurried sitting, with sturdy ivory serif typography and quiet controls at its edges.
 ```
 
-The chosen direction will retain Otium's existing functionality. These previews simulate account actions locally and use illustrative content. Browser checks cover Chromium and WebKit at phone sizes; a physical iPhone and e-ink review is still needed for the selected implementation.
+The chosen direction will retain Otium's existing functionality. These previews simulate account actions locally and use real article metadata with adapted teaser text and an illustrative video. Browser checks cover Chromium and WebKit at phone sizes; a physical iPhone and e-ink review is still needed for the selected implementation.

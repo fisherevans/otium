@@ -23,6 +23,8 @@
     const feed=document.querySelector('.feed');
     const pages=[...document.querySelectorAll('.page')];
     const saved=new Set();
+    const realArticles=window.OTIUM_CONTENT?.articles||[];
+    const articleFor=p=>realArticles.find(a=>a.id===p?.dataset.article);
     let current=pages[0], previousFocus=null, toastTimer, duration='10 min', scope='Everything';
     const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
     const icon=n=>'<span data-icon="'+n+'"></span>';
@@ -43,12 +45,27 @@
     }
     function reading() {
         const p=current||pages[0],title=p.dataset.title,source=p.dataset.source;
+        const item=articleFor(p);
+        if(item){
+            show(source,'<article class="reader-copy"><div class="reader-meta">'+esc(item.author)+' · '+esc(item.dateLabel)+'</div><h1>'+esc(title)+'</h1><img class="reader-hero" src="'+esc(item.image)+'" alt="'+esc(item.imageAlt||'Article image')+'"><p class="real-note">Photo: '+esc(item.imageCredit)+'</p><p>'+esc(item.teaser)+'</p><p class="real-note">Preview paraphrase matched to the feed description length. This is an excerpt preview, not the publisher’s full article.</p><a class="publisher-link" href="'+esc(item.url)+'" target="_blank" rel="noopener noreferrer">Read the original at '+esc(source)+' ↗</a><div class="choices"><button class="pill" data-action="save">'+icon('bookmark')+'Save</button><button class="pill" data-action="share">'+icon('share')+'Share</button></div><p class="real-note">Original headline: '+item.titleChars+' characters. Feed teaser after Otium’s ingestion limit: '+item.summaryChars+' characters. Source image: '+item.imageWidth+' × '+item.imageHeight+'. '+esc(item.selection)+'</p></article>');return;
+        }
         show(source,'<article class="reader-copy"><div class="reader-meta">'+esc(source)+' · '+(p.dataset.kind==='video'?'Alex Morgan · 8 min watch':source==='Small Hours'?'Sam Rivera · 3 min read':'Maya Chen · 4 min read')+'</div><h1>'+esc(title)+'</h1><img class="reader-hero" src="'+(p.querySelector('img')?.getAttribute('src')||'assets/landscape.jpg')+'" alt="A place to pause"><p>Some places seem to ask nothing of us. We pass through them a little more slowly, notice the light, and find ourselves looking up.</p><p>It rarely takes a grand gesture. A tree provides shade. A bench faces the street. The distance between one doorway and the next gives the walk its rhythm.</p><p>These small details make room for ordinary life. They offer a choice to linger, without turning the choice into an obligation.</p><p>The useful question is not how much a place can show us. It is how comfortably it lets us pay attention.</p><div class="choices"><button class="pill" data-action="save">'+icon('bookmark')+'Save</button><button class="pill" data-action="share">'+icon('share')+'Share</button></div><p class="muted">Illustrative article for comparing design directions.</p></article>');
     }
     function screen(action) {
-        if(action==='brief'){close();feed?.scrollTo({top:0,behavior:'instant'});return;}
-        if(action==='video'){close();pages[1]?.scrollIntoView({block:'start',behavior:'instant'});return;}
+        if(action==='brief'){close();const selected=pages.find(p=>p.dataset.article===new URLSearchParams(location.search).get('sample'))||pages[0];current=selected;selected.scrollIntoView({block:'start',behavior:'instant'});return;}
+        if(action==='video'){close();pages.find(p=>p.dataset.kind==='video')?.scrollIntoView({block:'start',behavior:'instant'});return;}
+        if(action.startsWith('read:')){current=pages.find(p=>p.dataset.article===action.slice(5))||current;reading();return;}
         if(action==='reader'||action==='read'){reading();return;}
+        if(realArticles.length&&action==='library'){
+            show('Library','<h1>Your sources, at your pace.</h1><p class="muted">Real article samples used by all ten directions.</p><div class="group">'+[...new Set(realArticles.map(a=>a.source))].map(source=>row(esc(source),'source:'+source,'book')).join('')+'</div><p class="real-note">This source list is the comparison fixture. Your account is unchanged.</p>');return;
+        }
+        if(realArticles.length&&(action==='source'||action.startsWith('source:'))){
+            const source=action.startsWith('source:')?action.slice(7):current.dataset.source;
+            show(source,'<h1>'+esc(source)+'</h1><div class="group">'+realArticles.filter(a=>a.source===source).map(a=>row(esc(a.title),'read:'+a.id,'book')).join('')+'</div>');return;
+        }
+        if(realArticles.length&&action==='why'){
+            const a=articleFor(current);show('Why this sample','<h1>A measured comparison.</h1><p class="reader-copy">'+esc(a?.selection||'Illustrative video retained for media comparison.')+'</p><p class="real-note">The same sample appears in every direction. Read the sampling notes in the gallery for the date window and coverage limits.</p>');return;
+        }
         if(action==='library'){
             show('Library','<h1>Your sources, at your pace.</h1><p class="muted">Choose what makes up a session.</p><div class="choices"><button class="primary" data-action="add">'+icon('plus')+'Add source</button><button class="pill" data-action="import">Import</button></div><div class="group">'+row('Places','topic','library','3 sources')+row('Outdoors','topic','library','2 sources')+row('Living','topic','library','4 sources')+'</div><div class="group">'+row('Organize sections','organize','sliders')+'</div>');return;
         }
@@ -56,20 +73,20 @@
         if(action==='source'){show('Field Notes','<h1>Field Notes</h1><p class="muted">Maya Chen · Articles · Places</p><div class="group">'+row('Browse articles','read','book')+row('Representation','representation','sliders','Normal')+row('Archive after','archive','clock','30 days')+'</div>');return;}
         if(action==='saved'){
             const list=[...saved];
-            show('Saved','<h1>For another moment.</h1><div class="choices"><button class="pill" data-action="collections">All saved</button><button class="pill" data-action="collections">Read later</button></div>'+(list.length?'<div class="group">'+list.map(t=>row(esc(t),'read','bookmark')).join('')+'</div>':'<p class="muted">Save a brief and it will wait here. Nothing is marked unread.</p>'));return;
+            show('Saved','<h1>For another moment.</h1><div class="choices"><button class="pill" data-action="collections">All saved</button><button class="pill" data-action="collections">Read later</button></div>'+(list.length?'<div class="group">'+list.map(t=>row(esc(t),'read:'+(realArticles.find(a=>a.title===t)?.id||''),'bookmark')).join('')+'</div>':'<p class="muted">Save a brief and it will wait here. Nothing is marked unread.</p>'));return;
         }
         if(action==='you'){show('You','<h1>A little more your own.</h1><div class="group">'+row('Appearance','appearance','sun')+row('Reading history','history','clock')+row('Insights','insights','sliders')+row('Settings','settings','person')+'</div>');return;}
         if(action==='appearance'){show('Appearance','<h1>Make room for reading.</h1><p class="muted">This preview changes only this concept.</p><div class="group">'+row('E-ink preview','eink','sun',document.body.dataset.eink==='true'?'On':'Off')+'</div><p class="muted">The production app retains type size, reading measure, font, image and card controls. This exploration is about the visual direction.</p>');return;}
         if(action==='eink'){document.body.dataset.eink=document.body.dataset.eink==='true'?'false':'true';screen('appearance');return;}
         if(action==='session'){show('Your session','<h1>How much time is yours?</h1><div class="choices">'+['5 min','10 min','20 min','40 min'].map(d=>'<button class="pill" data-duration="'+d+'" aria-pressed="'+(d===duration)+'">'+d+'</button>').join('')+'</div><p class="muted">What would you like to spend it with?</p><div class="choices">'+['Everything','Places','Outdoors'].map(s=>'<button class="pill" data-scope="'+s+'" aria-pressed="'+(s===scope)+'">'+s+'</button>').join('')+'</div><button class="primary" data-action="begin">Begin session</button><div class="group">'+row('End this session','end','check')+'</div>');return;}
         if(action==='begin'){close();feed?.scrollTo({top:0,behavior:'instant'});toast(duration+' · '+scope);return;}
-        if(action==='end'){show('A good place to stop','<div class="end-page"><span data-logo style="width:48px;height:48px"></span><h1>That is your moment.</h1><p>Three briefs. Time spent on purpose.</p><button class="primary" data-action="session">New session</button><button class="pill" data-action="saved">Visit Saved</button></div>');return;}
+        if(action==='end'){show('A good place to stop','<div class="end-page"><span data-logo style="width:48px;height:48px"></span><h1>That is your moment.</h1><p>'+pages.length+' briefs. Time spent on purpose.</p><button class="primary" data-action="session">New session</button><button class="pill" data-action="saved">Visit Saved</button></div>');return;}
         if(action==='more'){show('This brief','<h1>'+esc(current.dataset.title)+'</h1><div class="group">'+row('Why this appeared','why','sliders')+row('About this source','source','book')+row('Save to collection','collections','bookmark')+row('Share','share','share')+'</div>');return;}
         if(action==='why'){show('Why this appeared','<h1>Because you chose it.</h1><p class="reader-copy">This source belongs to Places, which is included in your session. Its representation is Normal. The session draws from the sources and topics you choose.</p><button class="pill" data-action="representation">Change representation</button>');return;}
         if(action==='collections'){show('Save to','<h1>A place to return to.</h1><div class="group">'+row('Saved','save-close','bookmark')+row('Read later','save-close','book')+row('Watch later','save-close','play')+'</div>');return;}
         if(action==='representation'||action==='archive'){show(action==='archive'?'Archive after':'Representation','<h1>'+ (action==='archive'?'Keep it current.':'Choose the balance.')+'</h1><div class="choices">'+(action==='archive'?['7 days','30 days','Evergreen']:['Less','Normal','More']).map(t=>'<button class="pill" data-demo-choice="'+t+'">'+t+'</button>').join('')+'</div>');return;}
         if(action==='add'||action==='import'){show(action==='add'?'Add source':'Import sources','<h1>'+(action==='add'?'Something worth following.':'Bring your sources.')+'</h1><p class="muted">'+(action==='add'?'Feed URL or YouTube channel':'An OPML file from your current reader')+'</p><form data-demo-form><input '+(action==='add'?'type="url" placeholder="https://" required':'type="file" accept=".opml,.xml"')+' aria-label="'+(action==='add'?'Source URL':'OPML file')+'"><div class="choices"><button class="primary" type="submit">'+(action==='add'?'Add source':'Import')+'</button></div></form><p class="muted">Design prototype. No account data will change.</p>');return;}
-        if(action==='history'){show('Reading history','<h1>Where your attention went.</h1><div class="group">'+pages.filter(p=>p.dataset.kind==='article').map(p=>row(esc(p.dataset.title),'read','book','Today')).join('')+'</div>');return;}
+        if(action==='history'){show('Reading history','<h1>Where your attention went.</h1><div class="group">'+pages.filter(p=>p.dataset.kind==='article').map(p=>row(esc(p.dataset.title),'read:'+(p.dataset.article||''),'book','Sample')).join('')+'</div>');return;}
         if(action==='insights'){show('Insights','<h1>A view of your choices.</h1><p class="muted">Descriptive, never a target.</p><div class="group"><div class="group-row">Places <span class="grow"></span>40%</div><div class="group-row">Outdoors <span class="grow"></span>35%</div><div class="group-row">Living <span class="grow"></span>25%</div></div><p class="muted">Illustrative session composition.</p>');return;}
         if(action==='settings'||action==='organize'){show(action==='settings'?'Settings':'Sections','<h1>'+(action==='settings'?'Your reading, your way.':'Keep your interests together.')+'</h1><div class="group">'+row('Session defaults','session','clock')+row('Sources and topics','library','library')+row('Appearance','appearance','sun')+'</div>');return;}
     }
@@ -88,7 +105,7 @@
             pages.forEach(p=>p.querySelectorAll('[data-action=save]').forEach(b=>{b.classList.toggle('saved-on',saved.has(p.dataset.title));b.setAttribute('aria-pressed',String(saved.has(p.dataset.title)));}));
             toast(saved.has(title)?'Saved for later':'Removed from Saved');if(action==='save-close')close();return;
         }
-        if(action==='share'){navigator.clipboard?.writeText(location.href).then(()=>toast('Preview link copied')).catch(()=>toast('Use your browser to share this preview'));return;}
+        if(action==='share'){navigator.clipboard?.writeText(articleFor(current)?.url||location.href).then(()=>toast('Preview link copied')).catch(()=>toast('Use your browser to share this preview'));return;}
         screen(action);
     });
     document.addEventListener('submit',e=>{if(e.target.matches('[data-demo-form]')){e.preventDefault();close();toast('Preview only. Your sources are unchanged.');}});
@@ -98,7 +115,7 @@
     const observer=new IntersectionObserver(entries=>entries.forEach(entry=>{if(entry.isIntersecting){current=entry.target;document.querySelectorAll('[data-current]').forEach(el=>el.textContent=String(pages.indexOf(current)+1));}else entry.target.querySelectorAll('video').forEach(v=>v.pause());}),{root:feed,threshold:.6});
     pages.forEach(p=>observer.observe(p));
     icons();
-    const state=new URLSearchParams(location.search).get('state');if(state)setTimeout(()=>screen(state),100);
+    const query=new URLSearchParams(location.search);const selected=pages.find(p=>p.dataset.article===query.get('sample'));if(selected)current=selected;const state=query.get('state')||'brief';setTimeout(()=>{if(selected){current=selected;selected.scrollIntoView({block:'start',behavior:'instant'});}screen(state);},100);
     if(new URLSearchParams(location.search).get('eink')==='1')document.body.dataset.eink='true';
     window.otiumPreview={screen,pages,saved};
 })();
