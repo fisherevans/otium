@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useParams } from "react-router-dom";
+import { useBack } from "@/lib/navigation";
 import { api, type Topic, type Source, type SourceItem } from "@/api/client";
 import { relTime, fmtDateLong, ageDays } from "@/lib/format";
 import { freshness, FRESHNESS_HALF_LIFE_DAYS } from "@/lib/freshness";
@@ -36,9 +37,11 @@ const FILTERS: { key: Filter; label: string }[] = [
 ];
 
 export default function SourceArticlesPage() {
-  const nav = useNavigate();
   const { id } = useParams();
   const sourceId = Number(id);
+  const back = useBack(`/sources/${sourceId}`);
+  const [error, setError] = useState("");
+  const [attempt, setAttempt] = useState(0);
 
   const [source, setSource] = useState<Source | null>(null);
   const [topic, setTopic] = useState<Topic | null>(null);
@@ -54,8 +57,9 @@ export default function SourceArticlesPage() {
       setSource(s);
       if (s?.topic_slug) api.topics().then((is) => setTopic(is.find((i) => i.slug === s.topic_slug) ?? null)).catch(() => {});
     }).catch(() => {});
-    api.sourceItems(sourceId).then(setItems).catch(() => {});
-  }, [sourceId]);
+    setError("");
+    api.sourceItems(sourceId).then(setItems).catch((e) => setError(String(e.message ?? e)));
+  }, [sourceId, attempt]);
 
   const keywords = (source?.archive_keywords ?? "").split(",").map((k) => k.trim().toLowerCase()).filter(Boolean);
   const resolvedDays = resolveSourceArchive(source?.archive_after_days ?? 0, topic?.archive_after_days ?? 0).days;
@@ -133,8 +137,8 @@ export default function SourceArticlesPage() {
 
   return (
     <div className="mgmt va-page">
-      <button className="mgmt-back" onClick={() => nav(`/sources/${sourceId}`)}>
-        ← {source ? source.title : "Source"}
+      <button className="mgmt-back" onClick={back}>
+        ← Back
       </button>
       <div className="mgmt-kicker">View Articles</div>
       <h1 className="mgmt-title">{source?.title ?? "Articles"}</h1>
@@ -143,7 +147,7 @@ export default function SourceArticlesPage() {
         Filter: {FILTERS.find((f) => f.key === filter)!.label}
       </button>
 
-      {items === null ? (
+      {error ? <div role="alert"><p className="err">{error}</p><button className="btn ghost" onClick={() => setAttempt((n) => n + 1)}>Retry</button></div> : items === null ? (
         <p className="lib2-subtitle">Loading…</p>
       ) : items.length === 0 ? (
         <p className="lib2-empty">No articles fetched yet.</p>

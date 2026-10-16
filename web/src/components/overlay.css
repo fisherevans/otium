@@ -1,0 +1,39 @@
+/* Modal geometry is independent of the device presentation's visual tokens. */
+dialog.overlay-host {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  max-width: none;
+  max-height: none;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  overflow: hidden;
+  background: transparent;
+  color: var(--ink);
+}
+dialog.overlay-host::backdrop { background: transparent; }
+.overlay-host .sheet { transition: transform 240ms cubic-bezier(0.4, 0, 0.2, 1); }
+.overlay-host .sheet-scrim { transition: background-color 240ms ease; }
+.overlay-host .readerpage { touch-action: pan-y pinch-zoom; }
+.overlay-host .readerpage.dragging { transition: none; }
+.overlay-host .imgviewer-close { min-width: 44px; min-height: 44px; }
+.overlay-host .imgviewer-close:focus-visible { opacity: 1; pointer-events: auto; }
+.overlay-host .reader-player-body { display: flex; flex-direction: column; min-height: 0; }
+.overlay-host .reader-player-body .inline-media { flex: 1; min-height: 260px; }
+[data-presentation="eink"] .overlay-host *,
+[data-presentation="eink"] .overlay-host *::before,
+[data-presentation="eink"] .overlay-host *::after { transition: none !important; animation: none !important; }
+@media (prefers-reduced-motion: reduce) {
+  .overlay-host *, .overlay-host *::before, .overlay-host *::after { transition: none !important; animation: none !important; }
+}
+
+.overlay-host .rp-load-error { padding: 16px 0; border-bottom: 1px solid var(--hair); margin-bottom: 20px; }
+.overlay-host .rp-load-error p { margin: 0 0 12px; }
+
+.overlay-host .save-loading, .overlay-host .save-choices { min-height: 208px; }
+.overlay-host .save-loading { padding: 10px 0; }
+
+.overlay-host .reader-body img[data-load-failed] { display: none !important; }
+.overlay-host .reader-image-unavailable { display: block; margin: 8px 0; font: 0.85rem/1.5 var(--grot); color: var(--ink-soft); }

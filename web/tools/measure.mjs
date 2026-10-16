@@ -36,14 +36,17 @@ const arg = (name, fallback = null) => {
 const LAB = arg("lab");
 const APP = arg("app");
 const SHOTS = arg("shots");
+const SESSION = arg("session");
+const sessionSnapshot = SESSION ? JSON.parse(readFileSync(resolve(SESSION), "utf8")) : null;
 if (!LAB && !APP) {
   console.error("need --lab <file|url> or --app <url>. See the header of this file.");
   process.exit(2);
 }
 
-// Devices worth checking. The Palma is the e-ink target; the 320 is the floor.
+// Phone viewports plus the Palma e-ink target; 320px is the narrow floor.
 const DEVICES = [
   { name: "Palma 2", w: 412, h: 824, index: 7 },
+  { name: "iPhone", w: 390, h: 664, index: 0 },
   { name: "iPhone SE", w: 375, h: 667, index: 0 },
   { name: "narrow", w: 320, h: 568, index: 0 },
 ];
@@ -170,35 +173,55 @@ if (LAB) {
 if (APP) {
   // Walk a real session. The intent flow is length -> scope -> begin; if a
   // session is already active the app resumes it and those steps are absent.
-  const device = DEVICES[0];
-  const page = await browser.newPage({ viewport: { width: device.w, height: device.h }, deviceScaleFactor: SHOTS ? 2 : 1 });
-  page.on("pageerror", (e) => errors.push(e.message));
-  await page.goto(APP, { waitUntil: "networkidle" });
-  await page.waitForTimeout(800);
-  for (const step of ["20 min", "ALL YOUR SOURCES"]) {
-    const el = await page.$(`text=${step}`);
-    if (el) {
-      await el.click();
-      await page.waitForTimeout(1500);
+  for (const device of DEVICES) {
+    const firstRow = rows.length;
+    const page = await browser.newPage({ viewport: { width: device.w, height: device.h }, deviceScaleFactor: SHOTS ? 2 : 1 });
+    page.on("pageerror", (e) => errors.push(e.message));
+    if (sessionSnapshot) {
+      // Real API payload captured from an isolated dev server. Keep concurrent
+      // browser passes from replacing each other's queue or advancing its cursor.
+      await page.route("**/api/v1/**", (route) => {
+        if (route.request().url().endsWith("/sessions/current")) {
+          return route.fulfill({ json: { ...sessionSnapshot, cursor: 0 } });
+        }
+        if (route.request().method() !== "GET") return route.fulfill({ json: { ok: true } });
+        return route.continue();
+      });
     }
-  }
-  const begin = page.locator("button", { hasText: /^BEGIN$/i }).first();
-  if (await begin.count()) {
-    await begin.click({ force: true });
-    await page.waitForTimeout(3500);
-  }
-  for (let i = 0; i < 12; i++) {
-    const m = await page.evaluate(readCard);
-    if (m.endCard || m.error) break;
-    record(`app #${i}`, m);
-    if (SHOTS) await page.screenshot({ path: `${SHOTS}/app-${i}.png` });
+    const appURL = sessionSnapshot ? new URL(`/session/${sessionSnapshot.session_id}`, APP).href : APP;
+    await page.goto(appURL, { waitUntil: "networkidle" });
+    await page.waitForTimeout(800);
+    for (const step of ["20 min", "Everything you follow"]) {
+      const el = await page.$(`text=${step}`);
+      if (el) {
+        await el.click();
+        await page.waitForTimeout(1500);
+      }
+    }
+    const begin = page.locator("button", { hasText: /^Begin session$/i }).first();
+    if (await begin.count()) {
+      await begin.click({ force: true });
+      await page.waitForTimeout(3500);
+    }
     await page.evaluate(() => {
-      const s = document.querySelector(".stage");
-      s.scrollTop += s.clientHeight;
+      const stage = document.querySelector(".stage");
+      if (stage) stage.scrollTop = 0;
     });
-    await page.waitForTimeout(2000);
+    await page.waitForTimeout(1800);
+    for (let i = 0; i < 12; i++) {
+      const m = await page.evaluate(readCard);
+      if (m.endCard || m.error) break;
+      record(`${device.name} app #${i}`, m);
+      if (SHOTS) await page.screenshot({ path: `${SHOTS}/${device.name.replace(/\W+/g, "-")}-app-${i}.png` });
+      await page.evaluate(() => {
+        const s = document.querySelector(".stage");
+        s.scrollTop += s.clientHeight;
+      });
+      await page.waitForTimeout(2000);
+    }
+    if (rows.length === firstRow) problems.push(`${device.name}: no session cards measured`);
+    await page.close();
   }
-  await page.close();
 }
 
 await browser.close();

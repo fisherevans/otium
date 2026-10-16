@@ -58,7 +58,7 @@ type CardPrefs struct {
 	TopicTagSize float64 `json:"topic_tag_size"` // topic pill name, px
 	DateSize     float64 `json:"date_size"`      // date, px
 	HeroShow     bool    `json:"hero_show"`      // show the hero/media block
-	HeroColor    bool    `json:"hero_color"`     // true = color; false = grayscale/dither (default)
+	HeroColor    bool    `json:"hero_color"`     // true = color; false = grayscale/dither
 
 	// #97 per-element weight (300-700) + ink (curated enum). TopicInk additionally
 	// allows "topic" = keep the topic's own color tint (the default, distinctive look).
@@ -82,9 +82,8 @@ type CardPrefs struct {
 	MetaInk    string `json:"meta_ink"`    // identity/date ink key (#90)
 }
 
-// DefaultPreferences is the out-of-the-box look - the current e-ink theme's
-// values, so a user who never opens the Appearance screen sees no change. Each
-// number mirrors the corresponding rule in web/src/styles/global.css.
+// DefaultPreferences is the standard phone presentation. Stored choices are
+// preserved; the browser applies the device-local e-ink presentation separately.
 func DefaultPreferences() Preferences {
 	return Preferences{
 		Reader: ReaderPrefs{
@@ -92,8 +91,8 @@ func DefaultPreferences() Preferences {
 			FontFamily: "charter", FontWeight: 400, Ink: "soft",
 		},
 		Card: CardPrefs{
-			MetaSize: 11, SourceSize: 11, TopicTagSize: 13, DateSize: 13,
-			HeroShow: true, HeroColor: false,
+			MetaSize: 11, SourceSize: 15, TopicTagSize: 13, DateSize: 13,
+			HeroShow: true, HeroColor: true,
 			// #97 per-element defaults mirror the v0.29 card's designed look exactly:
 			// topic pill 600 + topic-color tint, source 600 + soft, author 500 + mute,
 			// date 400 + mute. So a fresh user (and one who never touched the old

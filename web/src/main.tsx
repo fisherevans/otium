@@ -5,6 +5,9 @@ import { AuthProvider } from "@/context/AuthContext";
 import { PreferencesProvider } from "@/context/PreferencesContext";
 import App from "@/App";
 import "@/styles/global.css";
+import "@/styles/flow.css";
+import "@/styles/appearance.css";
+import "@/styles/interface.css";
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>

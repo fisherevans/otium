@@ -1,0 +1,21 @@
+/* Task hierarchy shared by setup, Library, Saved and You. */
+.intent-summary { display: flex; flex-wrap: wrap; gap: 6px 12px; margin: 0; line-height: 1.5; color: var(--ink); }
+.intent-summary span { overflow-wrap: anywhere; }
+.intent-confirm { margin-top: 20px; padding-top: 18px; border-top: 1px solid var(--line); display: grid; gap: 14px; }
+.intent-confirm .btn { width: 100%; }
+.library-primary { display: flex; flex-wrap: wrap; gap: 12px; margin: 22px 0 8px; }
+.library-primary .btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; }
+.library-organize { flex-wrap: wrap; padding: 10px 0 18px; }
+.flow-label { display: block; margin: 18px 0 8px; font-size: 14px; }
+.list-item-button { appearance: none; border: 0; background: transparent; color: inherit; text-align: left; font: inherit; width: 100%; cursor: pointer; }
+.list-item-button.nm { display: flex; flex-direction: column; align-items: flex-start; }
+.list-item-button b, .list-item-button span { overflow-wrap: anywhere; }
+.you-list { margin-top: 20px; }
+.topbar.session { justify-content: space-between; }
+.intent .intent-confirm { position: sticky; bottom: 0; z-index: 2; background: var(--paper); padding-bottom: 12px; box-shadow: 0 -10px 14px var(--paper); }
+.intent .intent-confirm .btn { position: static; margin: 0; box-shadow: none; }
+.intent .intent-confirm .intent-link { margin: 0; align-self: start; min-height: 44px; }
+.intent.choose-scope { height: 100%; min-height: 0; }
+.intent.choose-scope .intent-step { height: 100%; min-height: 0; }
+.scope-options { flex: 1; min-height: 0; overflow-y: auto; padding-bottom: 12px; }
+.intent.choose-scope .intent-confirm { position: static; flex: 0 0 auto; gap: 8px; margin-top: 8px; padding-top: 8px; padding-bottom: 0; box-shadow: none; }

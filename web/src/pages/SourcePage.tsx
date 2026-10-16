@@ -1,3 +1,4 @@
+import { useBack } from "@/lib/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { Pencil, Settings, Copy, Check, Mail, Ban, EyeOff } from "lucide-react";
@@ -36,6 +37,7 @@ function Dots({ level }: { level: number }) {
 
 
 export default function SourcePage() {
+  const back = useBack("/sections");
   const nav = useNavigate();
   const { id } = useParams();
   const sourceId = Number(id);
@@ -177,38 +179,44 @@ export default function SourcePage() {
     );
   }
 
+  async function saveChange(action: () => Promise<unknown>) {
+    setErr("");
+    try { await action(); return true; }
+    catch (error: any) { setErr(error.message || "Couldn't save. Your changes are still here; try again."); return false; }
+  }
+
   // handlers
   async function saveRename() {
     const t = renameDraft.trim();
     if (!t) return;
+    if (!await saveChange(() => api.updateSource(sourceId, { title: t }))) return;
     setRenameOpen(false);
-    await api.updateSource(sourceId, { title: t }).catch(() => {});
     reload();
   }
   async function setWeight(b: Bucket) {
-    await api.updateSource(sourceId, { weight_bucket: b }).catch(() => {});
+    if (!await saveChange(() => api.updateSource(sourceId, { weight_bucket: b }))) return;
     reload();
   }
   async function pickArchive(days: number) {
-    await api.updateSource(sourceId, { archive_after_days: days }).catch(() => {});
+    if (!await saveChange(() => api.updateSource(sourceId, { archive_after_days: days }))) return;
     reload();
   }
   async function saveKeywords() {
     const list = parseKeywords(kwDraft);
-    await api.updateSource(sourceId, { archive_keywords: list.join(", ") }).catch(() => {});
+    if (!await saveChange(() => api.updateSource(sourceId, { archive_keywords: list.join(", ") }))) return;
     reload();
   }
   async function setKeepCount(n: number) {
-    await api.updateSource(sourceId, { archive_keep_count: n }).catch(() => {});
+    if (!await saveChange(() => api.updateSource(sourceId, { archive_keep_count: n }))) return;
     reload();
   }
   async function setCombine(c: "and" | "or") {
-    await api.updateSource(sourceId, { archive_combine: c }).catch(() => {});
+    if (!await saveChange(() => api.updateSource(sourceId, { archive_combine: c }))) return;
     reload();
   }
   // Scoring is a single config object; merge the changed field and send the whole thing.
   async function saveScoring(next: ScoringConfig) {
-    await api.updateSource(sourceId, { scoring_config: next }).catch(() => {});
+    if (!await saveChange(() => api.updateSource(sourceId, { scoring_config: next }))) return;
     reload();
   }
   function setDirection(d: "newest" | "oldest" | "random") {
@@ -218,13 +226,13 @@ export default function SourcePage() {
     saveScoring({ ...scoring, length: p ? { prefer: p } : null });
   }
   async function chooseTopic(slug: string) {
+    if (!await saveChange(() => api.setSourceTopic(sourceId, slug))) return;
     setTopicOpen(false);
-    await api.setSourceTopic(sourceId, slug).catch(() => {});
     reload();
   }
   async function resetMeta() {
+    if (!await saveChange(() => api.resetSourceMetadata(sourceId))) return;
     setResetOpen(false);
-    await api.resetSourceMetadata(sourceId).catch(() => {});
     reloadStats();
     api.sourceItems(sourceId).then(setPosts).catch(() => {});
     showToast("Metadata reset - every article is unread again.");
@@ -239,13 +247,13 @@ export default function SourcePage() {
   }
   async function replaceUrl() {
     if (!urlDraft.trim()) return;
+    if (!await saveChange(() => api.replaceSourceFeedURL(sourceId, urlDraft.trim()))) return;
     setUrlOpen(false);
-    await api.replaceSourceFeedURL(sourceId, urlDraft.trim()).catch(() => {});
     reload();
     showToast("Feed URL replaced.");
   }
   async function del() {
-    await api.deleteSource(sourceId).catch(() => {});
+    if (!await saveChange(() => api.deleteSource(sourceId))) return;
     nav(source?.topic_slug ? `/topics/${source.topic_slug}` : "/sections");
   }
   function copyUrl() {
@@ -257,21 +265,20 @@ export default function SourcePage() {
   if (sources && !source) {
     return (
       <div className="mgmt">
-        <button className="mgmt-back" onClick={() => nav("/sections")}>
+        <button className="mgmt-back" onClick={back}>
           ← Library
         </button>
         <p className="lib2-empty">That source is gone.</p>
       </div>
     );
   }
-  if (!source) return <p className="lib2-subtitle">Loading…</p>;
+  if (!source) return err ? <div><p className="err" role="alert">{err}</p><button className="btn" onClick={reload}>Try again</button></div> : <p className="lib2-subtitle">Loading…</p>;
 
-  const backTo = source.topic_slug ? `/topics/${source.topic_slug}` : "/sections";
   const backLabel = topic?.name ?? "Library";
 
   return (
     <div className="mgmt src-page">
-      <button className="mgmt-back" onClick={() => nav(backTo)}>
+      <button className="mgmt-back" onClick={back}>
         ← {backLabel}
       </button>
       <div className="mgmt-kicker">Manage Source</div>
@@ -478,6 +485,7 @@ export default function SourcePage() {
 
       {/* --- dialogs --- */}
       <Dialog open={renameOpen} onClose={() => setRenameOpen(false)} kicker="Rename source">
+        {err && <p className="err" role="alert">{err}</p>}
         <input className="field" value={renameDraft} autoFocus onChange={(e) => setRenameDraft(e.target.value)} onKeyDown={(e) => e.key === "Enter" && saveRename()} />
         <div className="dlg-actions">
           <button className="btn" onClick={saveRename} disabled={!renameDraft.trim()}>
@@ -487,6 +495,7 @@ export default function SourcePage() {
       </Dialog>
 
       <Dialog open={controlsOpen} onClose={() => setControlsOpen(false)} kicker="Feed controls">
+        {err && <p className="err" role="alert">{err}</p>}
         <div className="dlg-sub">Representation</div>
         <RepresentationPicker value={bucket} onChange={setWeight} />
         <div className="dlg-sub">Archive after</div>
@@ -544,6 +553,7 @@ export default function SourcePage() {
       </Dialog>
 
       <Dialog open={topicOpen} onClose={() => setTopicOpen(false)} kicker="Move to topic">
+        {err && <p className="err" role="alert">{err}</p>}
         <div className="dlg-opts">
           {topics.map((i) => (
             <button key={i.slug} className={`dlg-opt ${source.topic_slug === i.slug ? "on" : ""}`} onClick={() => chooseTopic(i.slug)}>
@@ -559,6 +569,7 @@ export default function SourcePage() {
       </Dialog>
 
       <Dialog open={resetOpen} onClose={() => setResetOpen(false)} kicker="Reset article metadata">
+        {err && <p className="err" role="alert">{err}</p>}
         <p className="dlg-copy">
           Marks every article from {source.title} unread again and clears its engagement (presented, skipped, read). The
           articles themselves are kept.
@@ -574,6 +585,7 @@ export default function SourcePage() {
       </Dialog>
 
       <Dialog open={urlOpen} onClose={() => setUrlOpen(false)} kicker="Replace RSS feed URL">
+        {err && <p className="err" role="alert">{err}</p>}
         <p className="dlg-copy">Swap the feed URL, keeping this source's articles and settings.</p>
         <input className="field" value={urlDraft} autoFocus onChange={(e) => setUrlDraft(e.target.value)} />
         <div className="dlg-actions">
@@ -587,6 +599,7 @@ export default function SourcePage() {
       </Dialog>
 
       <Dialog open={delOpen} onClose={() => setDelOpen(false)} kicker="Delete source">
+        {err && <p className="err" role="alert">{err}</p>}
         <p className="dlg-copy">
           Permanently remove {source.title} and all of its stored articles. This can't be undone.
         </p>

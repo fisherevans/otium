@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
 
+import { Overlay, usePresence } from "./Overlay";
+
 // A calm, mobile-first bottom sheet in the e-ink language: a hairline-topped
 // paper panel that slides up over a dim scrim, tap-scrim / Escape to dismiss.
 // `variant="tall"` makes it a near-full-height reading surface (the #41 reader);
@@ -41,8 +43,7 @@ export function BottomSheet({
   headActions?: ReactNode;
   children: ReactNode;
 }) {
-  const [mounted, setMounted] = useState(open);
-  const [up, setUp] = useState(false);
+  const { mounted, visible: up } = usePresence(open);
   const [exitUp, setExitUp] = useState(false);
   const [exitRight, setExitRight] = useState(false);
   const sheetRef = useRef<HTMLDivElement>(null);
@@ -53,25 +54,10 @@ export function BottomSheet({
 
   useEffect(() => {
     if (open) {
-      setMounted(true);
-      setExitUp(false); // a fresh open always enters (and by default leaves) downward
+      setExitUp(false);
       setExitRight(false);
-      const id = requestAnimationFrame(() => setUp(true));
-      return () => cancelAnimationFrame(id);
     }
-    setUp(false);
-    const t = window.setTimeout(() => setMounted(false), 360);
-    return () => window.clearTimeout(t);
   }, [open]);
-
-  useEffect(() => {
-    if (!open) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [open, onClose]);
 
   // Interactive drag-to-close (#78). We track the pointer from press to release
   // and translate the sheet 1:1 with the finger once a vertical drag is
@@ -98,6 +84,8 @@ export function BottomSheet({
 
   function onPointerDown(e: ReactPointerEvent) {
     if (!swipeClose) return;
+    if (!e.isPrimary) { onPointerCancel(); return; }
+    if ((e.target as Element).closest("button, a, input, select, textarea")) return;
     if (e.pointerType === "mouse" && e.button !== 0) return;
     const t = e.target as Element;
     const fromHeader = !!t.closest(".sheet-head, .sheet-handle");
@@ -117,7 +105,7 @@ export function BottomSheet({
 
   function onPointerMove(e: ReactPointerEvent) {
     const d = drag.current;
-    if (!d) return;
+    if (!d || d.pointerId !== e.pointerId) return;
     const dy = e.clientY - d.startY;
     const dx = e.clientX - d.startX;
     if (!d.active) {
@@ -204,12 +192,11 @@ export function BottomSheet({
   if (!mounted) return null;
 
   return (
+    <Overlay active={open} label={kicker || "Actions"} onClose={onClose}>
     <div className={`sheet-scrim ${up ? "up" : ""}`} onClick={onClose}>
       <div
         ref={sheetRef}
         className={`sheet ${variant === "tall" ? "sheet-tall" : ""} ${wide ? "sheet-wide" : ""} ${up ? "up" : ""} ${exitUp ? "exit-up" : ""} ${exitRight ? "exit-right" : ""}`}
-        role="dialog"
-        aria-modal="true"
         onClick={(e) => e.stopPropagation()}
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
@@ -229,5 +216,6 @@ export function BottomSheet({
         {children}
       </div>
     </div>
+    </Overlay>
   );
 }

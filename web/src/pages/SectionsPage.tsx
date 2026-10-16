@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { Pencil, Plus, ChevronRight, ArrowRightLeft } from "lucide-react";
 import { api, type Topic, type Section } from "@/api/client";
 import { feedIcon, FEED_ICONS } from "@/lib/feedIcons";
 import { Dialog } from "@/components/Dialog";
+import { AddSourceWizard } from "@/components/AddSourceWizard";
 import { HowItWorks } from "@/components/HowItWorks";
 
 // The Library landing (#131, strict Section>Topic>Source tree). Sections group
@@ -13,9 +14,21 @@ import { HowItWorks } from "@/components/HowItWorks";
 // replaced the old flat /sources library page.
 export default function SectionsPage() {
   const nav = useNavigate();
+  const location = useLocation();
+  const returnTo = typeof location.state?.returnTo === "string" && /^\/session\/[^/]+$/.test(location.state.returnTo) ? location.state.returnTo : null;
   const [sections, setSections] = useState<Section[] | null>(null);
   const [topics, setTopics] = useState<Topic[]>([]);
   const [err, setErr] = useState("");
+  const [formError, setFormError] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [notice, setNotice] = useState("");
+  const [organizing, setOrganizing] = useState(false);
+  const [destinationOpen, setDestinationOpen] = useState(false);
+  const [destination, setDestination] = useState("");
+  const [destinationName, setDestinationName] = useState("");
+  const [destinationSection, setDestinationSection] = useState("");
+  const [sourceTopic, setSourceTopic] = useState<Topic | null>(null);
+  const [ytAvailable, setYtAvailable] = useState(false);
 
   const [addOpen, setAddOpen] = useState(false);
   const [newName, setNewName] = useState("");
@@ -25,11 +38,39 @@ export default function SectionsPage() {
   const [renameDraft, setRenameDraft] = useState("");
   const [moveFor, setMoveFor] = useState<Topic | null>(null);
 
-  function reload() {
-    api.sections().then(setSections).catch((e: any) => setErr(String(e.message ?? e)));
-    api.topics().then((t) => setTopics(t ?? [])).catch(() => {});
+  async function reload() {
+    setErr("");
+    try {
+      const [ss, ts] = await Promise.all([api.sections(), api.topics()]);
+      setSections(ss ?? []);
+      setTopics(ts ?? []);
+    } catch (e: any) { setErr(String(e.message ?? e)); }
   }
-  useEffect(reload, []);
+  useEffect(() => { void reload(); api.getConfig().then((c) => setYtAvailable(c.youtube_available)).catch(() => {}); }, []);
+
+  async function save(action: () => Promise<unknown>, done: () => void, message = "Saved") {
+    if (saving) return;
+    setSaving(true);
+    setFormError("");
+    setNotice("");
+    try { await action(); done(); setNotice(message); await reload(); }
+    catch (e: any) { setFormError(String(e.message ?? e)); }
+    finally { setSaving(false); }
+  }
+
+  async function chooseDestination() {
+    if (destination === "new") {
+      const name = destinationName.trim();
+      if (!name) return;
+      await save(async () => {
+        const topic = await api.createTopic(name, undefined, destinationSection ? Number(destinationSection) : undefined);
+        setSourceTopic(topic);
+      }, () => { setDestinationOpen(false); setDestinationName(""); }, "Topic created");
+    } else {
+      const topic = topics.find((t) => t.slug === destination);
+      if (topic) { setSourceTopic(topic); setDestinationOpen(false); }
+    }
+  }
 
   // Group topics under their section (strict tree: each topic has exactly one).
   const bySection = useMemo(() => {
@@ -43,54 +84,31 @@ export default function SectionsPage() {
   }, [topics]);
 
   async function create() {
-    const name = newName.trim();
-    if (!name) return;
-    setAddOpen(false);
-    setNewName("");
-    await api.createSection(name).catch((e: any) => setErr(String(e.message ?? e)));
-    reload();
+    if (!newName.trim()) return;
+    await save(() => api.createSection(newName.trim()), () => { setAddOpen(false); setNewName(""); }, "Section added");
   }
   async function createTopic() {
-    const name = newTopic.trim();
-    if (!name) return;
-    setAddTopicOpen(false);
-    setNewTopic("");
-    // No section chosen -> lands in Uncategorized; move it after with the Move link.
-    await api.createTopic(name).catch((e: any) => setErr(String(e.message ?? e)));
-    reload();
+    if (!newTopic.trim()) return;
+    await save(() => api.createTopic(newTopic.trim()), () => { setAddTopicOpen(false); setNewTopic(""); }, "Topic added");
   }
   async function chooseSectionIcon(key: string) {
     if (!renameFor) return;
     const next = renameFor.icon === key ? "" : key;
-    await api.updateSection(renameFor.id, { icon: next }).catch(() => {});
-    setRenameFor((m) => (m ? { ...m, icon: next } : m));
-    reload();
+    await save(() => api.updateSection(renameFor.id, { icon: next }), () => setRenameFor((m) => m ? { ...m, icon: next } : m));
   }
   async function saveRename() {
-    if (!renameFor) return;
-    const name = renameDraft.trim();
-    const m = renameFor;
-    setRenameFor(null);
-    if (name && name !== m.name) {
-      await api.updateSection(m.id, { name }).catch(() => {});
-      reload();
-    }
+    if (!renameFor || !renameDraft.trim()) return;
+    await save(() => api.updateSection(renameFor.id, { name: renameDraft.trim() }), () => setRenameFor(null));
   }
   async function del() {
     if (!renameFor) return;
-    const m = renameFor;
-    setRenameFor(null);
-    // The server reassigns this section's topics to Uncategorized before deleting.
-    await api.deleteSection(m.id).catch(() => {});
-    reload();
+    await save(() => api.deleteSection(renameFor.id), () => setRenameFor(null), "Section deleted; its topics are in Uncategorized");
   }
   async function moveTopic(sectionId: number) {
     if (!moveFor) return;
-    const t = moveFor;
-    setMoveFor(null);
-    await api.moveTopicToSection(t.id, sectionId).catch(() => {});
-    reload();
+    await save(() => api.moveTopicToSection(moveFor.id, sectionId), () => setMoveFor(null), "Topic moved");
   }
+  const formStatus = <>{formError && <p className="err" role="alert">{formError}</p>}{saving ? <p role="status">Saving…</p> : notice ? <p role="status">{notice}</p> : null}</>;
 
   function TopicRow(f: Topic) {
     const I = feedIcon(f.icon);
@@ -104,9 +122,9 @@ export default function SectionsPage() {
           <span className="sec-topic-count">{(f.source_count ?? 0) === 1 ? "1 source" : `${f.source_count ?? 0} sources`}</span>
           <ChevronRight size={16} strokeWidth={1.75} className="sec-topic-chev" aria-hidden />
         </button>
-        <button className="sec-topic-move" onClick={() => setMoveFor(f)} title="Move to another section">
+        {organizing && <button className="sec-topic-move" onClick={() => { setFormError(""); setMoveFor(f); }} title="Move to another section">
           <ArrowRightLeft size={14} strokeWidth={1.75} aria-hidden /> move
-        </button>
+        </button>}
       </div>
     );
   }
@@ -115,33 +133,30 @@ export default function SectionsPage() {
 
   return (
     <div className="mgmt">
+      {returnTo && <button className="lib-back" onClick={() => nav(returnTo)}>← Return to session</button>}
       <div className="mgmt-titlerow">
         <h1 className="mgmt-title">Library</h1>
-        <div className="mgmt-actions">
-          <button className="mgmt-edit" onClick={() => (setNewTopic(""), setAddTopicOpen(true))}>
-            <Plus size={15} strokeWidth={1.9} aria-hidden /> Topic
-          </button>
-          <button className="mgmt-edit" onClick={() => (setNewName(""), setAddOpen(true))}>
-            <Plus size={15} strokeWidth={1.9} aria-hidden /> Section
-          </button>
-        </div>
       </div>
-      <p className="int-prose">Your sources, grouped as sections of topics. Tap a topic to manage its sources, or move it to another section.</p>
-      {err && <p className="err">{err}</p>}
+      <p className="int-prose">The sources you choose, organized into topics and sections.</p>
+      <div className="library-primary">
+        <button className="btn" disabled={sections === null} onClick={() => { setFormError(""); setDestination(topics[0]?.slug ?? "new"); setDestinationOpen(true); }}><Plus size={18} aria-hidden /> Add source</button>
+        <button className="btn ghost" onClick={() => nav("/import")}>Import</button>
+      </div>
+      <button className="intent-link" aria-expanded={organizing} onClick={() => setOrganizing((v) => !v)}>Organize library</button>
+      {organizing && <div className="mgmt-actions library-organize">
+        <button className="mgmt-edit" onClick={() => { setFormError(""); setAddTopicOpen(true); }}><Plus size={15} aria-hidden /> Add topic</button>
+        <button className="mgmt-edit" onClick={() => { setFormError(""); setAddOpen(true); }}><Plus size={15} aria-hidden /> Add section</button>
+      </div>}
+      {err && <div role="alert"><p className="err">{err}</p><button className="btn ghost" onClick={reload}>Retry</button></div>}
+      {notice && <p role="status">{notice}</p>}
 
-      {sections === null ? (
+      {sections === null && !err ? (
         <p className="lib2-subtitle">Loading…</p>
-      ) : noTopics ? (
+      ) : sections === null ? null : noTopics ? (
         // #138 first-run: nothing added yet.
         <div className="firstrun">
           <p className="firstrun-lead">Welcome. Otium is empty until you add the feeds you care about.</p>
-          <p className="firstrun-step">
-            Start by adding a <b>topic</b> (say "News" or "Comedy") - then open it to add <b>sources</b>: any RSS/Atom feed, a
-            YouTube channel, a podcast. Group topics into <b>sections</b> whenever you like.
-          </p>
-          <button className="btn" onClick={() => (setNewTopic(""), setAddTopicOpen(true))}>
-            Add your first topic
-          </button>
+          <p className="firstrun-step">Add a source above: an RSS/Atom feed, YouTube channel, or podcast. Choose or create its topic along the way.</p>
           <HowItWorks defaultOpen />
         </div>
       ) : (
@@ -151,9 +166,9 @@ export default function SectionsPage() {
             <div className="section-zone" key={section.id}>
               <div className="section-zone-head">
                 <span className="section-zone-name">{section.name}</span>
-                <button className="mgmt-edit" onClick={() => (setRenameDraft(section.name), setRenameFor(section))}>
+                {organizing && <button className="mgmt-edit" onClick={() => (setFormError(""), setRenameDraft(section.name), setRenameFor(section))}>
                   <Pencil size={13} strokeWidth={1.9} aria-hidden /> edit
-                </button>
+                </button>}
               </div>
               {list.length === 0 ? (
                 <p className="section-empty">No topics yet - move one here or add a topic from the library.</p>
@@ -165,28 +180,51 @@ export default function SectionsPage() {
         })
       )}
 
+      <Dialog open={destinationOpen} onClose={() => !saving && setDestinationOpen(false)} kicker="Add source · destination">
+        {formStatus}
+        <label className="flow-label" htmlFor="source-topic">Topic</label>
+        <select id="source-topic" className="field" value={destination} onChange={(e) => setDestination(e.target.value)}>
+          {topics.map((t) => <option key={t.slug} value={t.slug}>{t.section_name ? `${t.section_name} / ` : ""}{t.name}</option>)}
+          <option value="new">Create a topic</option>
+        </select>
+        {destination === "new" && <>
+          <label className="flow-label" htmlFor="source-new-topic">New topic name</label>
+          <input id="source-new-topic" className="field" value={destinationName} onChange={(e) => setDestinationName(e.target.value)} placeholder="e.g. Local news" />
+          <label className="flow-label" htmlFor="source-section">Section</label>
+          <select id="source-section" className="field" value={destinationSection} onChange={(e) => setDestinationSection(e.target.value)}>
+            <option value="">Uncategorized</option>
+            {(sections ?? []).map((section) => <option key={section.id} value={section.id}>{section.name}</option>)}
+          </select>
+        </>}
+        <div className="dlg-actions"><button className="btn" disabled={saving || (destination === "new" && !destinationName.trim())} onClick={chooseDestination}>Continue</button></div>
+      </Dialog>
+      {sourceTopic && <AddSourceWizard open topic={sourceTopic} ytAvailable={ytAvailable} onClose={() => setSourceTopic(null)} onAdded={() => { setNotice("Source added"); void reload(); }} />}
+
       <Dialog open={addOpen} onClose={() => setAddOpen(false)} kicker="Add section">
-        <input className="field" placeholder="e.g. News" value={newName} autoFocus onChange={(e) => setNewName(e.target.value)} onKeyDown={(e) => e.key === "Enter" && create()} />
+        {formStatus}
+        <input className="field" aria-label="Section name" placeholder="e.g. News" value={newName} autoFocus onChange={(e) => setNewName(e.target.value)} onKeyDown={(e) => e.key === "Enter" && create()} />
         <div className="dlg-actions">
-          <button className="btn" onClick={create} disabled={!newName.trim()}>
+          <button className="btn" onClick={create} disabled={saving || !newName.trim()}>
             Add section
           </button>
         </div>
       </Dialog>
 
       <Dialog open={addTopicOpen} onClose={() => setAddTopicOpen(false)} kicker="Add topic">
-        <input className="field" placeholder="e.g. Local News" value={newTopic} autoFocus onChange={(e) => setNewTopic(e.target.value)} onKeyDown={(e) => e.key === "Enter" && createTopic()} />
+        {formStatus}
+        <input className="field" aria-label="Topic name" placeholder="e.g. Local News" value={newTopic} autoFocus onChange={(e) => setNewTopic(e.target.value)} onKeyDown={(e) => e.key === "Enter" && createTopic()} />
         <p className="caphint">Lands in Uncategorized - move it into a section afterward, and add sources from its page.</p>
         <div className="dlg-actions">
-          <button className="btn" onClick={createTopic} disabled={!newTopic.trim()}>
+          <button className="btn" onClick={createTopic} disabled={saving || !newTopic.trim()}>
             Add topic
           </button>
         </div>
       </Dialog>
 
       <Dialog open={renameFor !== null} onClose={() => setRenameFor(null)} kicker="Edit section">
+        {formStatus}
         <div className="dlg-sub">Name</div>
-        <input className="field" value={renameDraft} autoFocus onChange={(e) => setRenameDraft(e.target.value)} onKeyDown={(e) => e.key === "Enter" && saveRename()} />
+        <input className="field" aria-label="Section name" value={renameDraft} autoFocus onChange={(e) => setRenameDraft(e.target.value)} onKeyDown={(e) => e.key === "Enter" && saveRename()} />
         <div className="dlg-sub">Icon</div>
         <div className="icon-grid">
           <button className={`icon-cell ${!renameFor?.icon ? "on" : ""}`} onClick={() => chooseSectionIcon("")} aria-label="No icon">
@@ -211,13 +249,14 @@ export default function SectionsPage() {
           <button className="btn danger" onClick={del}>
             Delete
           </button>
-          <button className="btn" onClick={saveRename} disabled={!renameDraft.trim()}>
+          <button className="btn" onClick={saveRename} disabled={saving || !renameDraft.trim()}>
             Save
           </button>
         </div>
       </Dialog>
 
       <Dialog open={moveFor !== null} onClose={() => setMoveFor(null)} kicker={moveFor ? `Move "${moveFor.name}"` : "Move topic"}>
+        {formStatus}
         <div className="dlg-sub">Move to section</div>
         <div className="dlg-opts">
           {(sections ?? []).map((s) => (
@@ -225,7 +264,7 @@ export default function SectionsPage() {
               key={s.id}
               className={`dlg-opt ${moveFor?.section_id === s.id ? "on" : ""}`}
               onClick={() => moveTopic(s.id)}
-              disabled={moveFor?.section_id === s.id}
+              disabled={saving || moveFor?.section_id === s.id}
             >
               <span className="dlg-radio" aria-hidden />
               <span className="dlg-name">{s.name}</span>

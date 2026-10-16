@@ -1,3 +1,4 @@
+import { useBack } from "@/lib/navigation";
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { api, type CommitResult, type ImportCandidate } from "@/api/client";
@@ -9,6 +10,7 @@ const FORMAT_LABEL: Record<string, string> = {
 };
 
 export default function ImportPage() {
+  const back = useBack("/sections");
   const nav = useNavigate();
   const [cands, setCands] = useState<ImportCandidate[]>([]);
   const [format, setFormat] = useState("");
@@ -84,6 +86,7 @@ export default function ImportPage() {
 
   return (
     <div>
+      <button className="mgmt-back" onClick={back}>← Back</button>
       <h1 className="display">Import your follows</h1>
       <p className="sub">
         Drop a <b>YouTube Takeout</b> (the raw <b>.zip</b> is fine - it's unpacked for you), an{" "}

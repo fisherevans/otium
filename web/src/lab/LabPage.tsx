@@ -13,6 +13,8 @@ import {
 } from "./layout";
 import "@/styles/global.css";
 import "@/styles/lab.css";
+import "@/styles/appearance.css";
+import "@/styles/interface.css";
 import { forceWebShare } from "@/lib/share";
 import { solveCard } from "@/lib/cardLayout";
 

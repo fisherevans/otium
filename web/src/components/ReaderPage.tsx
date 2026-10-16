@@ -1,16 +1,14 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type UIEvent, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type UIEvent, type SyntheticEvent, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent } from "react";
 import { ChevronLeft, ExternalLink, Bookmark } from "lucide-react";
 import { api, type Item, type ItemContent } from "@/api/client";
 import { renderSummary } from "@/lib/html";
 import { fmtDate, readTime, authorRedundant } from "@/lib/format";
 import { ShareActions } from "./ReaderActions";
 import { ImageViewer } from "./ImageViewer";
+import { Overlay, usePresence } from "./Overlay";
 
-// The in-app reader as a PUSHED PAGE (#85), not a sheet. Opening full-text
-// content from the session slides in a full-screen page over everything; back
-// pops it (SessionPage owns the history entry, exactly as the old sheet did in
-// #78, so the Android back gesture still closes it). One scroll context - the
-// sheet-over-page scroll fight is gone.
+// Shared full-page article reader. Overlay owns its history entry so each
+// origin keeps its own list, selection, and scroll position.
 //
 // It loads the reader body lazily via GET /items/{id}/content (#98/#99), so a
 // teaser-only topic gets its readability-extracted full text on demand. When a
@@ -29,7 +27,7 @@ function bodyFrom(raw: string | undefined): Body {
 }
 
 export function ReaderPage({
-  item,
+  item: currentItem,
   sourceTitle,
   preloaded,
   open,
@@ -47,30 +45,23 @@ export function ReaderPage({
   onSave?: () => void;
   onNext?: () => void; // #149: swipe up at the bottom -> advance the feed, close the reader
 }) {
-  // Keep mounted through the slide-out so the page animates away cleanly.
-  const [mounted, setMounted] = useState(open);
-  const [inView, setInView] = useState(false);
-  // Interactive swipe-to-dismiss (#120): the pane follows the finger, then either
-  // animates off to the right past a threshold or springs back. drag = live
-  // translateX in px (null = resting, CSS class owns the transform); dragging
-  // disables the transition so it tracks 1:1.
+  const previousItem = useRef(currentItem);
+  if (currentItem) previousItem.current = currentItem;
+  const item = currentItem ?? previousItem.current;
+  const { mounted, visible: inView } = usePresence(open);
   const [drag, setDrag] = useState<number | null>(null);
   const [dragging, setDragging] = useState(false);
+  const [advanced, setAdvanced] = useState(false);
   useEffect(() => {
-    if (open) {
-      setMounted(true);
-      setDrag(null);
-      setDragging(false);
-      const id = requestAnimationFrame(() => setInView(true));
-      return () => cancelAnimationFrame(id);
-    }
-    setInView(false);
-    const t = window.setTimeout(() => setMounted(false), 320);
-    return () => window.clearTimeout(t);
+    setDrag(null);
+    setDragging(false);
+    if (open) setAdvanced(false);
   }, [open]);
 
   const [state, setState] = useState<"loading" | "ready" | "external">("loading");
   const [body, setBody] = useState<Body>(null);
+  const [loadError, setLoadError] = useState(false);
+  const [attempt, setAttempt] = useState(0);
   const [progress, setProgress] = useState(0);
   // #102: reveal-on-scroll-up condensed header. Hidden while reading down;
   // scrolling up (to look for context) slides a title+date bar in; scrolling
@@ -88,6 +79,7 @@ export function ReaderPage({
     if (!open || !item) return;
     let cancelled = false;
     setState("loading");
+    setLoadError(false);
     setBody(null);
     setProgress(0);
     setRevealed(false);
@@ -116,7 +108,11 @@ export function ReaderPage({
       api
         .itemContent(item.id)
         .then(decide)
-        .catch(() => decide(null));
+        .catch(() => {
+          if (cancelled) return;
+          setLoadError(true);
+          decide(null);
+        });
     }
     return () => {
       cancelled = true;
@@ -128,16 +124,18 @@ export function ReaderPage({
     // item's content is stable for a given id, so `open` + `itemId` is enough; the
     // closure captures the current item/preloaded when the id actually changes.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, itemId]);
+  }, [open, itemId, attempt]);
 
   // Desktop keyboard controls (#4): backspace/escape closes back to the card,
   // space / arrows page the article. Active only while the reader is open.
   useEffect(() => {
     if (!open) return;
     function onKey(e: KeyboardEvent) {
+      const target = e.target as HTMLElement;
+      if (e.defaultPrevented || !target.closest(".readerpage") || target.closest("input, textarea, select, [contenteditable]")) return;
+      if (e.key === " " && target.closest("button, a")) return;
       const el = scrollRef.current;
       switch (e.key) {
-        case "Escape":
         case "Backspace":
           e.preventDefault();
           onClose();
@@ -175,7 +173,8 @@ export function ReaderPage({
   // rest of the drag can't be lost); a vertical-dominant move locks into "scroll"
   // and we never touch it, so native scrolling is untouched. touch-action:pan-y
   // (CSS) still lets vertical panning through.
-  const start = useRef<{ x: number; y: number; atBottom: boolean } | null>(null);
+  const start = useRef<{ id: number; x: number; y: number; atBottom: boolean } | null>(null);
+  const pointers = useRef(new Set<number>());
   const mode = useRef<"undecided" | "swipe" | "scroll">("undecided");
   const SLOP = 8; // px of travel before we commit to an axis
   const NEXT_SWIPE = 70; // px of upward travel at the bottom that advances the feed (#149)
@@ -188,13 +187,25 @@ export function ReaderPage({
     if (!el) return false;
     return el.scrollTop + el.clientHeight >= el.scrollHeight - 4;
   }
+  function cancelGesture() {
+    start.current = null;
+    mode.current = "undecided";
+    setDrag(null);
+    setDragging(false);
+  }
   function onPointerDown(e: ReactPointerEvent) {
-    start.current = { x: e.clientX, y: e.clientY, atBottom: atBottom() };
+    pointers.current.add(e.pointerId);
+    if (pointers.current.size !== 1 || !e.isPrimary || (window.visualViewport?.scale ?? 1) > 1.05) {
+      cancelGesture();
+      return;
+    }
+    if (e.button !== 0 || (e.target as Element).closest("button, a, input, textarea, select, iframe, audio, video")) return;
+    start.current = { id: e.pointerId, x: e.clientX, y: e.clientY, atBottom: atBottom() };
     mode.current = "undecided";
   }
   function onPointerMove(e: ReactPointerEvent) {
     const s = start.current;
-    if (!s || mode.current === "scroll") return;
+    if (!s || s.id !== e.pointerId || pointers.current.size !== 1 || mode.current === "scroll") return;
     const dx = e.clientX - s.x;
     const dy = e.clientY - s.y;
     if (mode.current === "undecided") {
@@ -217,35 +228,26 @@ export function ReaderPage({
     if (mode.current === "swipe") setDrag(Math.max(0, dx));
   }
   function onPointerUp(e: ReactPointerEvent) {
-    const wasSwiping = mode.current === "swipe";
+    pointers.current.delete(e.pointerId);
     const s = start.current;
-    mode.current = "undecided";
-    start.current = null;
-    setDragging(false);
+    if (!s || s.id !== e.pointerId) return;
+    const wasSwiping = mode.current === "swipe";
+    const dx = e.clientX - s.x;
+    const dy = e.clientY - s.y;
+    cancelGesture();
     if (wasSwiping) {
-      setDrag((d) => {
-        if (d != null && d > 90) {
-          window.setTimeout(onClose, 200); // let the slide-out play, then unmount
-          return window.innerWidth;
-        }
-        return null; // spring back to rest
-      });
+      if (dx > 90) onClose();
       return;
     }
-    // Bottom swipe-up -> next (#149). Vertical-dominant upward flick that began at
-    // the bottom and is still there (nothing scrolled) hands off to the feed.
-    if (s?.atBottom && onNext && atBottom()) {
-      const dy = e.clientY - s.y;
-      const dx = e.clientX - s.x;
-      if (dy <= -NEXT_SWIPE && Math.abs(dy) > Math.abs(dx)) {
-        // Unmount the reader instantly rather than playing the slide-out. Otherwise
-        // the reader slides right AT THE SAME TIME as the feed scrolls up to the next
-        // card - two competing transitions. Vanishing here leaves only the feed's
-        // upward move visible, which is the one the user asked for.
-        setMounted(false);
-        onNext();
-      }
+    if (s.atBottom && onNext && atBottom() && dy <= -NEXT_SWIPE && Math.abs(dy) > Math.abs(dx)) {
+      // Only the feed moves when advancing; avoid a competing reader exit.
+      setAdvanced(true);
+      onNext();
     }
+  }
+  function onPointerCancel(e: ReactPointerEvent) {
+    pointers.current.delete(e.pointerId);
+    cancelGesture();
   }
 
   const readEst = useMemo(() => (body ? readTime(body.html.replace(/<[^>]+>/g, " ")) : ""), [body]);
@@ -255,6 +257,7 @@ export function ReaderPage({
   // check the target. Stable (useCallback) so the memoized article element below
   // keeps its reference and the flicker fix holds.
   const [viewerSrc, setViewerSrc] = useState<string | null>(null);
+  useEffect(() => { if (!open) setViewerSrc(null); }, [open]);
   const onBodyClick = useCallback((e: ReactMouseEvent) => {
     const t = e.target as HTMLElement;
     if (t.tagName === "IMG") {
@@ -264,6 +267,16 @@ export function ReaderPage({
         setViewerSrc(src);
       }
     }
+  }, []);
+
+  const onBodyError = useCallback((event: SyntheticEvent<HTMLDivElement>) => {
+    const image = event.target;
+    if (!(image instanceof HTMLImageElement) || image.dataset.loadFailed) return;
+    image.dataset.loadFailed = "true";
+    const caption = document.createElement("span");
+    caption.className = "reader-image-unavailable";
+    caption.textContent = image.alt ? `Image unavailable: ${image.alt}` : "Image unavailable.";
+    image.insertAdjacentElement("afterend", caption);
   }, []);
 
   // Memoize the article element itself, keyed only on the HTML string (#149). The
@@ -276,8 +289,8 @@ export function ReaderPage({
   // stay put. (The earlier #142 fix stopped the body from being *re-parsed*; this
   // stops it from being re-*committed*.)
   const articleBody = useMemo(
-    () => <div className="reader-body" onClick={onBodyClick} dangerouslySetInnerHTML={{ __html: body?.html ?? "" }} />,
-    [body?.html, onBodyClick],
+    () => <div className="reader-body" onClick={onBodyClick} onErrorCapture={onBodyError} dangerouslySetInnerHTML={{ __html: body?.html ?? "" }} />,
+    [body?.html, onBodyClick, onBodyError],
   );
 
   function onScroll(e: UIEvent<HTMLDivElement>) {
@@ -294,22 +307,21 @@ export function ReaderPage({
     lastY.current = y;
   }
 
-  if (!mounted || !item) return null;
+  if (!mounted || !item || advanced) return null;
 
   return (
+    <Overlay active={open} label={item.title} onClose={onClose}>
     <div
       className={`readerpage ${inView ? "in" : ""} ${dragging ? "dragging" : ""}`}
-      role="dialog"
-      aria-modal="true"
       style={drag != null ? { transform: `translateX(${drag}px)` } : undefined}
       onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}
       onPointerUp={onPointerUp}
-      onPointerCancel={onPointerUp}
+      onPointerCancel={onPointerCancel}
     >
       <div className="rp-topbar">
         <div className="readerpage-head">
-        <button className="rp-back" onClick={onClose} aria-label="Back to card">
+        <button className="rp-back" onClick={onClose} aria-label="Back">
           <ChevronLeft size={20} strokeWidth={1.9} aria-hidden />
         </button>
         {readEst && <span className="rp-readtime">{readEst}</span>}
@@ -349,8 +361,14 @@ export function ReaderPage({
           })()}
         </div>
 
+        {loadError && (
+          <div className="rp-load-error" role="status">
+            <p>{body ? "The full text could not load. Showing the available text." : "The full text could not load."}</p>
+            <button className="btn ghost" onClick={() => setAttempt((value) => value + 1)}>Retry</button>
+          </div>
+        )}
         {state === "loading" ? (
-          <div className="rp-loading">loading the full text…</div>
+          <div className="rp-loading" role="status">loading the full text…</div>
         ) : state === "external" ? (
           <div className="reader-empty">
             <p className="reader-empty-lead">No in-app text for this one.</p>
@@ -386,5 +404,6 @@ export function ReaderPage({
       {/* #149: full-screen zoomable photo viewer for a tapped article image. */}
       {viewerSrc && <ImageViewer src={viewerSrc} onClose={() => setViewerSrc(null)} />}
     </div>
+    </Overlay>
   );
 }

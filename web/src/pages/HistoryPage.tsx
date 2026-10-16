@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useSearchParams } from "react-router-dom";
+import { useBack, useListScroll } from "@/lib/navigation";
 import { api, type HistoryFilter, type HistoryItem, type Item, type Source } from "@/api/client";
 import { Reader } from "@/components/Reader";
 import { Player } from "@/components/Player";
@@ -48,11 +49,14 @@ const SUB: Record<HistoryFilter, string> = {
 // body under its shared header + segmented control (#84). The standalone
 // /history route renders it non-embedded for deep links.
 export default function HistoryPage({ embedded = false }: { embedded?: boolean }) {
-  const nav = useNavigate();
-  const [filter, setFilter] = useState<HistoryFilter>("shown");
+  const back = useBack("/saved");
+  const [params, setParams] = useSearchParams();
+  const filter: HistoryFilter = params.get("filter") === "read" ? "read" : params.get("filter") === "saved" ? "saved" : "shown";
+  const [retry, setRetry] = useState(0);
   const [items, setItems] = useState<HistoryItem[]>([]);
   const [sources, setSources] = useState<Source[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadedFilter, setLoadedFilter] = useState<HistoryFilter | null>(null);
   const [loadingMore, setLoadingMore] = useState(false);
   const [atEnd, setAtEnd] = useState(false);
   const [err, setErr] = useState("");
@@ -82,6 +86,7 @@ export default function HistoryPage({ embedded = false }: { embedded?: boolean }
       .then((rows) => {
         if (!live) return;
         setItems(rows);
+        setLoadedFilter(filter);
         setAtEnd(rows.length < PAGE);
       })
       .catch((e) => live && setErr(String(e.message ?? e)))
@@ -89,7 +94,9 @@ export default function HistoryPage({ embedded = false }: { embedded?: boolean }
     return () => {
       live = false;
     };
-  }, [filter]);
+  }, [filter, retry]);
+
+  useListScroll(!loading && loadedFilter === filter);
 
   function loadMore() {
     setLoadingMore(true);
@@ -107,8 +114,8 @@ export default function HistoryPage({ embedded = false }: { embedded?: boolean }
     <div>
       {!embedded && (
         <>
-          <button className="lib-back" onClick={() => nav("/sections")}>
-            <span aria-hidden>←</span> Library
+          <button className="lib-back" onClick={back}>
+            <span aria-hidden>←</span> Back
           </button>
           <div className="lib-topbar">
             <h1 className="display">History</h1>
@@ -123,18 +130,19 @@ export default function HistoryPage({ embedded = false }: { embedded?: boolean }
           <button
             key={f.key}
             className={`lib-fchip ${filter === f.key ? "on" : ""}`}
-            onClick={() => setFilter(f.key)}
+            aria-pressed={filter === f.key}
+            onClick={() => { setLoading(true); const next = new URLSearchParams(params); next.set("filter", f.key); setParams(next); }}
           >
             {f.label}
           </button>
         ))}
       </div>
 
-      {err && <p className="err">{err}</p>}
+      {err && <div role="alert"><p className="err">{err}</p><button className="btn ghost" onClick={() => setRetry((n) => n + 1)}>Retry</button></div>}
 
       {loading ? (
         <p className="sub">Loading…</p>
-      ) : items.length === 0 ? (
+      ) : err && items.length === 0 ? null : items.length === 0 ? (
         <p className="sub" style={{ padding: "16px 0" }}>Nothing here yet.</p>
       ) : (
         <>
@@ -142,7 +150,7 @@ export default function HistoryPage({ embedded = false }: { embedded?: boolean }
             const src = sourceTitle.get(it.source_id);
             return (
               <div className="lib-row" key={`${it.id}-${it.state}`}>
-                <div className="lib-head" onClick={() => setContent(it)} style={{ cursor: "pointer" }}>
+                <button className="lib-head list-item-button" onClick={() => setContent(it)}>
                   <div className="nm">
                     <b>{it.title}</b>
                     <span>
@@ -151,8 +159,8 @@ export default function HistoryPage({ embedded = false }: { embedded?: boolean }
                       {it.interacted_at ? ` · ${relTime(it.interacted_at)}` : ""}
                     </span>
                   </div>
-                  <span className="chev">▸</span>
-                </div>
+                  <span className="chev" aria-hidden>▸</span>
+                </button>
               </div>
             );
           })}

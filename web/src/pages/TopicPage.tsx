@@ -1,3 +1,4 @@
+import { useBack } from "@/lib/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { Pencil, Plus, Mail, Ban, EyeOff } from "lucide-react";
@@ -37,6 +38,7 @@ function BadgeIcon({ tone }: { tone: "up" | "down" | "mute" }) {
 }
 
 export default function TopicPage() {
+  const back = useBack("/sections");
   const nav = useNavigate();
   const { slug } = useParams();
 
@@ -108,31 +110,37 @@ export default function TopicPage() {
   // so a source's pill reflects where it ranks among all of them, not this topic.
   const bands = useMemo(() => openRateBands(Object.values(stats)), [stats]);
 
+  async function saveChange(action: () => Promise<unknown>) {
+    setErr("");
+    try { await action(); return true; }
+    catch (error: any) { setErr(error.message || "Couldn't save. Your changes are still here; try again."); return false; }
+  }
+
   async function pickArchive(days: number) {
     if (!topic) return;
     // Don't close on pick: ArchiveChoice fires onChange live (e.g. while adjusting a
     // custom window), so the dialog stays open and the user dismisses it with Done.
-    await api.updateTopic(topic.id, { archive_after_days: days }).catch(() => {});
+    if (!await saveChange(() => api.updateTopic(topic.id, { archive_after_days: days }))) return;
     reloadTopics();
   }
   async function saveEdit() {
     if (!topic) return;
     const name = editName.trim();
-    setEditOpen(false);
     if (name && name !== topic.name) {
-      await api.updateTopic(topic.id, { name }).catch(() => {});
+      if (!await saveChange(() => api.updateTopic(topic.id, { name }))) return;
       reloadTopics();
     }
+    setEditOpen(false);
   }
   async function chooseIcon(key: string) {
     if (!topic) return;
     const next = topic.icon === key ? "" : key;
-    await api.updateTopic(topic.id, { icon: next }).catch(() => {});
+    if (!await saveChange(() => api.updateTopic(topic.id, { icon: next }))) return;
     reloadTopics();
   }
   async function setHalfLife(days: number) {
     if (!topic) return;
-    await api.updateTopic(topic.id, { half_life_days: days }).catch(() => {});
+    if (!await saveChange(() => api.updateTopic(topic.id, { half_life_days: days }))) return;
     reloadTopics();
   }
   function onSourceAdded() {
@@ -144,7 +152,7 @@ export default function TopicPage() {
   if (topics && !topic) {
     return (
       <div className="mgmt">
-        <button className="mgmt-back" onClick={() => nav("/sections")}>
+        <button className="mgmt-back" onClick={back}>
           ← Library
         </button>
         <p className="lib2-empty">That topic doesn't exist.</p>
@@ -163,7 +171,7 @@ export default function TopicPage() {
 
   return (
     <div className="mgmt">
-      <button className="mgmt-back" onClick={() => nav("/sections")}>
+      <button className="mgmt-back" onClick={back}>
         ← Library
       </button>
       <div className="mgmt-kicker">Manage Topic</div>
@@ -237,6 +245,7 @@ export default function TopicPage() {
 
       {/* --- dialogs --- */}
       <Dialog open={editOpen} onClose={() => setEditOpen(false)} kicker="Edit topic">
+        {err && <p className="err" role="alert">{err}</p>}
         <div className="dlg-sub">Name</div>
         <input className="field" value={editName} autoFocus onChange={(e) => setEditName(e.target.value)} onKeyDown={(e) => e.key === "Enter" && saveEdit()} />
         <div className="dlg-sub">Icon</div>
@@ -287,6 +296,7 @@ export default function TopicPage() {
       </Dialog>
 
       <Dialog open={archiveOpen} onClose={() => setArchiveOpen(false)} kicker="Default archival period">
+        {err && <p className="err" role="alert">{err}</p>}
         <p className="caphint">Sources in {topic.name} inherit this unless they set their own.</p>
         <ArchiveChoice scope="topic" value={topic.archive_after_days ?? 0} onChange={pickArchive} />
         <div className="dlg-actions">

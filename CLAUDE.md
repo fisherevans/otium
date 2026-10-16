@@ -11,22 +11,17 @@ follows the nottingham-cloud app contract (own repo, GHCR images, semver-tag
 release, deploy pinned from nottingham-cloud). It is **not** the ops repo - deploy
 manifests and the managed-repos registry live in nottingham-cloud.
 
-## Domain vocabulary (#111)
+## Experience and vocabulary
 
-- **source** - one content origin: an RSS feed, a YouTube channel, a podcast. Has
-  a `feed_url` (its RSS URL - "feed" stays here, it's genuinely RSS).
-- **interest** - a saved group of sources ("Comedy", "Local News"). A source
-  belongs to one interest (or none). *Was called `feed`.*
-- **mix** - a saved group of interests, many-to-many (an interest can be in
-  0..many mixes). The session builder targets interests and/or mixes. *Was called
-  `group`.*
-- **insights** - the read-only feed-composition/share view (`/api/v1/insights`,
-  InsightsPage, already UI-labeled "Insights"). *Was internally called `mix`.*
-- **collection** - a saved list of *items* (Saved / Watch Later / Liked).
-  Unchanged - a different axis (groups items, not sources).
+Read [design/EXPERIENCE.md](design/EXPERIENCE.md) before changing the UI. iPhone is the primary device; the device-local e-ink presentation remains supported. Use shared SessionCard, ReaderPage and Overlay primitives instead of recreating parallel surfaces. The layout lab must import the same styles as the production card.
 
-Only the RSS ingest keeps "feed": `internal/server/feeds`, `gofeed`, `feed_url`,
-and the frozen legacy `feed_sources` table (its column stays `feed_id`).
+- **Source:** one RSS feed, YouTube channel or podcast.
+- **Topic:** a group of sources. A source belongs to one topic or none.
+- **Section:** a group of topics that can be selected for a session.
+- **Collection:** saved items, independent of source organization.
+- **Insights:** descriptive composition and activity information; never a ranking signal.
+
+Legacy database names and RSS-specific `feed_url` remain unchanged. Use the current user vocabulary in UI copy and new code.
 
 ## Architecture
 
@@ -94,15 +89,13 @@ equal specificity and win on source order).
 
 - Go: 4-space indent via gofmt, same-line braces, explicit errors, short names
   in tight scopes. `make fmt` before committing.
-- TS/React: mobile-first (Fisher tests on his phone). The visual language is
-  **E-Ink** - ink on paper, Charter serif, Didot display, hard hairline rules,
-  dithered media, deliberately slow "e-ink refresh" transitions. Tokens +
-  components live in `web/src/styles/global.css`; the reference is
-  `design/prototypes/eink/eink-refined.html` (scroll-snap session + compact
-  bottom bar + media reel). Keep it calm: no urgency, no badges, no unread
-  counts, no infinite scroll. [design/EXPERIENCE.md](design/EXPERIENCE.md) is
-  the theme-independent contract (IA, the intent-pad spec, touch rules,
-  anti-patterns) the app must honor.
+- TS/React: iPhone first, with a paper palette, editorial serif content and
+  system-sans controls. Standard presentation uses short transitions and color;
+  device-local E-ink and reduced motion use immediate transitions. Preserve
+  saved account image choices. Tokens and shared styles live in `web/src/styles/`.
+  Keep it calm: no urgency, badges, unread counts or infinite scroll.
+  [design/EXPERIENCE.md](design/EXPERIENCE.md) is the current contract for
+  hierarchy, touch, navigation and presentation; old prototypes are historical.
 - The SPA calls relative `/api/v1` and `/auth/*` - never a build-time base URL.
   Dev proxy and prod nginx both do the split.
 - Explicit signals drive curation - like / skip / open / weight only. The one

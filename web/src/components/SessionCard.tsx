@@ -69,6 +69,7 @@ export interface SessionCardProps {
   ytHistory?: boolean;
   onPointerDown?: (e: ReactPointerEvent) => void;
   onPointerMove?: (e: ReactPointerEvent) => void;
+  onPointerCancel?: (e: ReactPointerEvent) => void;
   onPointerUp?: (e: ReactPointerEvent) => void;
   onClick?: () => void;
   /** Defaults to what ships today. */
@@ -282,6 +283,7 @@ export const SessionCard = forwardRef<HTMLDivElement, SessionCardProps>(function
     onPointerDown,
     onPointerMove,
     onPointerUp,
+    onPointerCancel,
     onClick,
     hierarchy = "pill",
     sectionName,
@@ -302,11 +304,13 @@ export const SessionCard = forwardRef<HTMLDivElement, SessionCardProps>(function
       className={`snap ${focused ? "" : "away"} ${activeMedia ? "media-card" : ""} ${vert ? "vertical" : ""} ${audioCard ? "audio-card" : ""}`}
       data-idx={index}
       ref={ref}
+      onPointerDownCapture={(e) => { if (!e.isPrimary || (window.visualViewport?.scale ?? 1) > 1) onPointerCancel?.(e); }}
       onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}
       onPointerUp={onPointerUp}
+      onPointerCancel={onPointerCancel}
       onClick={onClick}
-      role="link"
+      role="article"
     >
       {/* Quiet reason line (de-noised, no box) + the ··· overflow. */}
       {(menuPlacement === "top" || it.reason) && (
@@ -384,7 +388,7 @@ export const SessionCard = forwardRef<HTMLDivElement, SessionCardProps>(function
       )}
 
       {focused && !isMedia(it.item) && (
-        <div className="card-callout" onPointerDown={(e) => e.stopPropagation()} onClick={(e) => e.stopPropagation()}>
+        <div className="card-callout" onPointerDown={(e) => { onPointerCancel?.(e); e.stopPropagation(); }} onPointerUp={(e) => e.stopPropagation()} onPointerMove={(e) => e.stopPropagation()} onClick={(e) => e.stopPropagation()}>
           {/* The solid button appears only when there is something to open IN the
               app. Without full text there is nothing to read here, so the row is
               icons alone and "open original" carries the weight. */}
@@ -397,7 +401,7 @@ export const SessionCard = forwardRef<HTMLDivElement, SessionCardProps>(function
           <button className="callout-act" onClick={() => onSave(it)} aria-label="Save">
             <Bookmark size={18} strokeWidth={1.75} aria-hidden />
           </button>
-          <ShareActions item={it.item} />
+          <ShareActions item={it.item} compact />
           {/* Same icon, same order as the media row - one action set everywhere. */}
           <button className="callout-act" onClick={() => onOpenExternal(it)} aria-label="Open original">
             <ExternalLink size={18} strokeWidth={1.75} aria-hidden />
