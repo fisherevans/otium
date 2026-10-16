@@ -4,7 +4,7 @@ Second-round design prototype for [#163](https://github.com/fisherevans/otium/is
 
 Open `index.html?audition=0#start` for the session launcher. The default is a 10-minute news session; a second starter preset is 40 minutes of video. Each starts with one tap. Custom session is the first, prominent action in the main content, above the default preset. It opens a single screen with time, library selection and media type, then Begin. Topic exclusions and other durations are optional sheets. The launcher and common custom path fit without scrolling at the tested phone sizes; longer preset/recent lists live behind All.
 
-Recent setups are recorded locally when a session starts, deduplicated and capped at 12. Reuse or save them from the launcher or Recent sheet. Using the same unsaved setup twice consecutively offers a gentle save suggestion at the ending and next start, never over the active article. Dismissing it suppresses that suggestion for the setup. Any unsaved session can be saved from its ending. Saved presets can be renamed, changed, removed or made the default. Extensions retain the original session type for saving and do not count as another repeated setup.
+Recent setups are recorded locally when a session starts, deduplicated and capped at 12. Reuse or save them from the launcher or Recent sheet. Using the same unsaved setup twice consecutively offers a save suggestion at the ending and next start, never over the active article. Dismissing it suppresses that suggestion for the setup. Any unsaved session can be saved from its ending. Saved presets can be renamed, changed, removed or made the default. Extensions retain the original session type for saving and do not count as another repeated setup.
 
 Fraunces is the selected title face, with Newsreader for reading. Existing study preferences migrate to this pairing once. `Aa` opens reading size and appearance controls. The study guide is under Your Otium > About this study.
 
@@ -17,6 +17,12 @@ Fraunces is the selected title face, with Newsreader for reading. Existing study
 - A deliberate upward swipe that begins at the bottom of a session article advances to the next brief. Ordinary scrolling does not. Back, swipe-right Back and the tappable continuation cue coexist. Saved articles do not advance the session.
 - A persistent bottom instrument on every page, with a folded O mark, explicit role label, distinct session/reader/app treatment, and short content transitions. E-ink and reduced-motion settings suppress these transitions.
 - Local multi-collection saving, collection management, source preferences, add/import previews and a complete finite new-session walkthrough with saved presets and reusable recent setups.
+
+## Session review
+
+The ending opens Review session: a condensed list of unique items actually shown, in encounter order. Each row opens its article and has a separate bookmark control for choosing or creating collections. Returning from the reader keeps the list position.
+
+Stats record unique articles opened, videos played when applicable, forward skips without opening/playing/saving, and actual visible time in the session or its reader. Opening is not treated as proof of a completed read. Other app screens and background time are excluded. The ending freezes the stats; reviewing or saving afterward does not rewrite them. Extensions retain the activity, while a new session resets it. The latest completed review survives reload locally.
 
 ## Interface copy
 
