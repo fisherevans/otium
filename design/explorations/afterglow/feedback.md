@@ -2,6 +2,8 @@
 
 [Open the new interactive prototype](https://quiver.fisher.sh/static/reports/otium/2026-10-16-afterglow/). The arrows above the article switch fonts without changing your place. Tap the font name for all six specimens and the option to keep Newsreader for body text. Close the strip to see the app without comparison controls.
 
+[Start a session from the beginning](https://quiver.fisher.sh/static/reports/otium/2026-10-16-afterglow/?audition=0#start): choose time, choose scope and topics, Begin, read/save/return, and reach the ending. Choices change the mock session; its time advances with the stories.
+
 Afterglow is the selected direction. This round explores its typography and how the same contextual instrument serves the surrounding app. From Library or the app menu, try setup, source controls, Saved, History and Appearance. In the reading bar, the left button opens article options; the time phrase opens session controls; Next advances one brief. Swiping does the same. The study guide in Your Otium lets you preview time phases and jump to the ending.
 
 ```ask

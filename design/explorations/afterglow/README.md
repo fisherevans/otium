@@ -2,7 +2,9 @@
 
 Second-round design prototype for [#163](https://github.com/fisherevans/otium/issues/163), following Fisher's selection of Afterglow from the ten independent studies. This is an interactive, local-state exploration, not the production application.
 
-Open `index.html`. The visible typeface strip cycles six bundled serif families without moving the current article. `Aa` opens the specimens and the body-font toggle. Hide the strip to judge the unobstructed app. The study guide is under Your Otium > About this study, also accessible from the typeface sheet.
+Open `index.html?audition=0#start` for the complete new-session walkthrough: Start, choose time, choose scope/topics, Begin, read/save/return, then end or extend. Time and topics select a finite subset of the sample fixtures; natural-language time advances as you move through them, so the entire flow can be reviewed quickly. An empty topic selection disables Begin. Changing setup does not alter the active session until Begin.
+
+Use `index.html?audition=1#session` for the original all-fixture comparison in a fresh browser. The visible typeface strip cycles six bundled serif families without moving the current article. `Aa` opens the specimens and the body-font toggle. Hide the strip to judge the unobstructed app. The study guide is under Your Otium > About this study, also accessible from the typeface sheet.
 
 ## What this round demonstrates
 
@@ -15,7 +17,7 @@ Open `index.html`. The visible typeface strip cycles six bundled serif families 
 
 ## Scope
 
-There is no account API, ingestion, extraction or production session generation. Four real article fixtures from the earlier measured sample are shared by every font. Teasers are labelled, length-matched paraphrases. The reader links to the publisher rather than copying its full article. The landscape clip is illustrative. The setup controls demonstrate intent but intentionally use the same fixed comparison set.
+There is no account API, ingestion, extraction or production session generation. Four real article fixtures from the earlier measured sample are shared by every font. Teasers are labelled, length-matched paraphrases. The reader links to the publisher rather than copying its full article. The landscape clip is illustrative. Setup selects matching fixtures by scope and exclusions and limits the short sample by duration. It is a deterministic mock, not the production representation/eligibility engine. The active plan and article IDs are snapshotted separately from setup drafts and persist across reloads.
 
 Source/topic structural edits are explicitly labelled simulations that retain the comparison fixtures. Production's YouTube, Shorts, audio, extraction retry, full appearance controls, history pagination, import discovery and account flows remain requirements for an implementation; this study does not replace or remove them.
 
@@ -23,6 +25,7 @@ Assets and fonts are local; all six font licenses are included. Content measurem
 
 ## Review
 
+- [Start a new session](https://quiver.fisher.sh/static/reports/otium/2026-10-16-afterglow/?audition=0#start)
 - [Interactive prototype](https://quiver.fisher.sh/static/reports/otium/2026-10-16-afterglow/)
 - [Typography and flow feedback](https://quiver.fisher.sh/static/reports/otium/2026-10-16-afterglow-feedback/?annotate)
 - [Original ten directions](https://quiver.fisher.sh/static/reports/otium/2026-10-16-analog-directions/)

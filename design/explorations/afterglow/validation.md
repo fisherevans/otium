@@ -14,3 +14,9 @@ Verified October 16, 2026 against the standalone study in Chromium and WebKit. T
 - Correct Back targets for Outdoors/Culture. No page errors during the exercised flows.
 
 The interaction walkthrough used Playwright and browser scroll/IntersectionObserver behavior. It does not establish physical finger-swipe feel, iOS Safari chrome/keyboard behavior, PWA safe-area behavior, or e-ink refresh performance. Production account APIs, extraction, YouTube/Shorts, podcasts and full import behavior are outside this local prototype.
+
+## New-session walkthrough extension
+
+Chromium and WebKit both passed Start > time > scope > exclude Politics > Begin, producing the expected Vermont/technology/video sample. Open/save/return, reload of the selected plan and cursor, Library return, natural-language phases and finite ending passed. Starting again with Vermont produced a different set; video-only scope also reached the ending by scrolling. Draft edits left the active plan unchanged. Empty topic selections disabled Begin, and re-including topics restored it even when closing with X or Escape. Fresh entry has no invented Resume; explicit full-fixture comparison remains available.
+
+The complete journey also passed WebKit at 320x664. Three motion clips were captured with the shared `clip` tool and real browser touch events: start/setup/Begin, read/save/return/swipe, and advancing to the ending. Assertions confirmed that a touch swipe advanced exactly one item and the final action reached End. Clips are embedded in the design notes. This remains browser touch emulation, not a physical-device check.
