@@ -2,7 +2,9 @@
 
 Second-round design prototype for [#163](https://github.com/fisherevans/otium/issues/163), following Fisher's selection of Afterglow from the ten independent studies. This is an interactive, local-state exploration, not the production application.
 
-Open `index.html?audition=0#start` for the complete new-session walkthrough: Start, choose time, choose scope/topics, Begin, read/save/return, then end or extend. Time and topics select a finite subset of the sample fixtures; natural-language time advances as you move through them, so the entire flow can be reviewed quickly. An empty topic selection disables Begin. Changing setup does not alter the active session until Begin.
+Open `index.html?audition=0#start` for the preset-first launcher. The default is a 10-minute news session; a second starter preset is 40 minutes of video. Each starts with one tap. Custom opens a single screen with time, library selection and media type, then Begin. Topic exclusions and other durations are optional sheets. The launcher and common custom path fit without scrolling at the tested phone sizes; longer preset/recent lists live behind All.
+
+Recent setups are recorded locally when a session starts, deduplicated and capped at 12. Reuse or save them from the launcher or Recent sheet. Using the same unsaved setup twice consecutively offers a gentle save suggestion at the ending and next start, never over the active article. Dismissing it suppresses that suggestion for the setup. Any unsaved session can be saved from its ending. Saved presets can be renamed, changed, removed or made the default. Extensions retain the original session type for saving and do not count as another repeated setup.
 
 Fraunces is the selected title face, with Newsreader for reading. Existing study preferences migrate to this pairing once. `Aa` opens reading size and appearance controls. The study guide is under Your Otium > About this study.
 
@@ -14,11 +16,11 @@ Fraunces is the selected title face, with Newsreader for reading. Existing study
 - Hold a photograph to open the full-image viewer. The article menu and reader's Full image button provide explicit alternatives. Dragging cancels the tap; holding does not also open the reader.
 - A deliberate upward swipe that begins at the bottom of a session article advances to the next brief. Ordinary scrolling does not. Back, swipe-right Back and the tappable continuation cue coexist. Saved articles do not advance the session.
 - A persistent bottom instrument on every page, with a folded O mark, explicit role label, distinct session/reader/app treatment, and short content transitions. E-ink and reduced-motion settings suppress these transitions.
-- Local multi-collection saving, collection management, source preferences, add/import previews and a complete finite new-session walkthrough.
+- Local multi-collection saving, collection management, source preferences, add/import previews and a complete finite new-session walkthrough with saved presets and reusable recent setups.
 
 ## Scope
 
-There is no account API, ingestion, extraction or production session generation. Four real article fixtures from the earlier measured sample are shared by every font. Teasers are labelled, length-matched paraphrases. The reader links to the publisher rather than copying its full article. The landscape clip is illustrative. Setup selects matching fixtures by scope and exclusions and limits the short sample by duration. It is a deterministic mock, not the production representation/eligibility engine. The active plan and article IDs are snapshotted separately from setup drafts and persist across reloads.
+There is no account API, ingestion, extraction or production session generation. Four real article fixtures from the earlier measured sample are shared by every font. Teasers are labelled, length-matched paraphrases. The reader links to the publisher rather than copying its full article. The landscape clip is illustrative. Setup selects matching fixtures by scope, media type and exclusions and limits the short sample by duration. It is a deterministic mock, not the production representation/eligibility engine. The active plan and article IDs are snapshotted separately from setup drafts and persist across reloads.
 
 Source/topic structural edits are explicitly labelled simulations that retain the comparison fixtures. Production's YouTube, Shorts, audio, extraction retry, full appearance controls, history pagination, import discovery and account flows remain requirements for an implementation; this study does not replace or remove them.
 
