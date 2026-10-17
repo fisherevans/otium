@@ -1,3 +1,4 @@
+import { ExternalLink } from "lucide-react";
 import { useRef, useState } from "react";
 import { api, type Topic, type ScoringConfig } from "@/api/client";
 import { type Bucket } from "@/lib/represent";
@@ -218,7 +219,7 @@ export function AddSourceWizard({
                   </div>
                   </button>
                   <a className="yt-result-open" href={r.channel_url} target="_blank" rel="noreferrer" onClick={(e) => e.stopPropagation()}>
-                    Open ↗
+                    Open <ExternalLink size={14} className="inline-icon" aria-hidden />
                   </a>
                 </div>
               ))}

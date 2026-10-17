@@ -1,3 +1,4 @@
+import { ExternalLink } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useBack } from "@/lib/navigation";
@@ -136,8 +137,8 @@ export default function SettingsPage() {
               {/* #151: otium can't detect YouTube sign-in (cross-origin), so the only
                   sure check is empirical - sign in, watch one, look at your history. */}
               <span className="settings-links">
-                <a href="https://www.youtube.com/account" target="_blank" rel="noopener noreferrer">Sign in to YouTube ↗</a>
-                <a href="https://www.youtube.com/feed/history" target="_blank" rel="noopener noreferrer">Check your history ↗</a>
+                <a href="https://www.youtube.com/account" target="_blank" rel="noopener noreferrer">Sign in to YouTube <ExternalLink size={14} className="inline-icon" aria-hidden /></a>
+                <a href="https://www.youtube.com/feed/history" target="_blank" rel="noopener noreferrer">Check your history <ExternalLink size={14} className="inline-icon" aria-hidden /></a>
               </span>
             </div>
             <button

@@ -1,3 +1,4 @@
+import { ExternalLink } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { api, type Item, type Selected, type Source } from "@/api/client";
@@ -136,7 +137,7 @@ export function ItemActions({
       </div>
 
       <div className="sheet-rows">
-        {onOpenOriginal && <button className="sheet-row" onClick={onOpenOriginal}><span>Open original</span><span aria-hidden>↗</span></button>}
+        {onOpenOriginal && <button className="sheet-row" onClick={onOpenOriginal}><span>Open original</span><ExternalLink size={16} aria-hidden /></button>}
         <ShareActions item={item} />
         {onEnd && <button className="sheet-row" onClick={onEnd}><span>End session</span><span aria-hidden>›</span></button>}
       </div>

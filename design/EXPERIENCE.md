@@ -8,6 +8,8 @@ The iPhone is the primary device. E-ink remains a supported presentation, select
 
 The folded O is the app's mark: one closed reading space and an inward page fold. The fold sits at the upper right. Its vector sources live in `web/public/icons/`, with a matching inline mark in `Brand.tsx`. Icon URLs include the identity name so a new identity bypasses old browser and service-worker caches. The app icon uses warm gold on ink; the header inherits the current theme. Keep the mark recognizable at favicon size, without fine strokes or color-dependent meaning.
 
+Interface icons use monochrome inline SVGs from the existing Lucide set. Never use emoji or Unicode pictographs as control icons, including CSS-generated content: their presentation varies by operating system. Article content is separate.
+
 ## Navigation and task hierarchy
 
 The persistent bottom instrument changes with the task: session options and Next while browsing, Back while reading, and page actions elsewhere. Its folded O, role label and geometry remain recognizable. Short transitions indicate the change; e-ink and reduced motion use immediate changes. A header menu reaches New session, Library, Saved and Your Otium. Existing routes remain valid. Back returns to the originating context with a stable parent fallback. Saved filters, collection selection and sorting live in the URL; returning to lists restores position.

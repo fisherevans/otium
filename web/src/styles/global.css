@@ -5224,3 +5224,5 @@ button.id-source.lead {
   color: var(--ink-mute);
   letter-spacing: 0.03em;
 }
+
+.inline-icon { display: inline-block; vertical-align: -0.15em; flex-shrink: 0; }

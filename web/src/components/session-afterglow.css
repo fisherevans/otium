@@ -16,9 +16,8 @@
 :is(.stage, .lab-reel, .appearance-card-frame) .snap.afterglow-card .inline-media.v .im-frame { border-radius: 13px; overflow: hidden; }
 :is(.stage, .lab-reel, .appearance-card-frame) .snap.afterglow-card .card-callout { justify-content: flex-start; gap: 4px; }
 :is(.stage, .lab-reel, .appearance-card-frame) .snap.afterglow-card .callout-primary { font-family: var(--reading, 'Newsreader', Georgia, serif); font-size: 17px; border: 0; padding: 5px 0; background: none; color: var(--ink); }
-:is(.stage, .lab-reel, .appearance-card-frame) .snap.afterglow-card .callout-primary svg { display: none; }
+:is(.stage, .lab-reel, .appearance-card-frame) .snap.afterglow-card .callout-primary svg { flex: 0 0 auto; }
 :is(.stage, .lab-reel, .appearance-card-frame) .snap.afterglow-card .callout-act, :is(.stage, .lab-reel, .appearance-card-frame) .snap.afterglow-card .card-callout .share-act { display: none; }
-:is(.stage, .lab-reel, .appearance-card-frame) .snap.afterglow-card .card-callout::after { content: '↗'; font-size: 17px; margin-left: 2px; }
 .afterglow-card .image-expand { position: absolute; right: 8px; bottom: 8px; min-height: 44px; min-width: 44px; border: 0; border-radius: 50%; background: color-mix(in srgb, var(--paper) 92%, transparent); color: var(--ink); display: grid; place-items: center; }
 .afterglow-card .media { -webkit-touch-callout: none; position: relative; }
 .session-ending { flex: 1; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 20px; padding: 22px; text-align: center; }
