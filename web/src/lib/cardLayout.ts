@@ -165,7 +165,8 @@ export function applyRhythm(card: HTMLElement, rhythm: number) {
 
 export function solveCard(vars: HTMLElement, reel: HTMLElement, card: HTMLElement, opts: CardLayoutOpts): string[] {
   const title = card.querySelector<HTMLElement>(".card-title");
-  const frame = card.querySelector<HTMLElement>(".im-frame");
+  const frame = card.querySelector<HTMLElement>(".im-frame, .im-audio-art");
+  const audioArt = frame?.classList.contains("im-audio-art") ?? false;
   const budget = reel.clientHeight;
 
   // clear anything a previous pass wrote
@@ -196,11 +197,11 @@ export function solveCard(vars: HTMLElement, reel: HTMLElement, card: HTMLElemen
     // two nested flex containers, and zeroing its height does not reliably shrink
     // them, which silently reported "no room" and collapsed the media to 2px.
     const chrome = contentHeight(card) - frame.offsetHeight;
-    const ar = parseFloat(getComputedStyle(frame).getPropertyValue("--ar")) || 0.5625;
+    const ar = audioArt ? 1 : parseFloat(getComputedStyle(frame).getPropertyValue("--ar")) || 0.5625;
     // The portrait player may be narrower than the column; convert that width cap
     // into a height cap so the frame stays on its true aspect ratio.
     const colW = columnWidth();
-    const capW = ar < 1 ? colW * opts.mediaWidth : colW;
+    const capW = audioArt ? Math.min(132, colW) : ar < 1 ? colW * opts.mediaWidth : colW;
     const widthBound = capW / ar;
     // Do NOT reserve the bottom gap here: the card's own padding and the action
     // row's margin already provide separation, and the clearance pass below is
@@ -225,8 +226,7 @@ export function solveCard(vars: HTMLElement, reel: HTMLElement, card: HTMLElemen
   };
 
   // Give-order. Video cards have almost nothing to yield because the frame
-  // already absorbs the slack; article cards yield the excerpt, then the hero's
-  // share, then type.
+  // already absorbs the slack; article cards yield some image space and type before dropping the excerpt.
   const knobs: [string, () => boolean][] = frame
     ? [
         ["title 21px", () => step(1)],
@@ -235,11 +235,11 @@ export function solveCard(vars: HTMLElement, reel: HTMLElement, card: HTMLElemen
         ["title 16px", () => step(4)],
       ]
     : [
-        ["excerpt dropped", () => dropBlurb()],
         ["hero cap 34%", () => setCap(0.34)],
         ["title 21px", () => step(1)],
         ["hero cap 26%", () => setCap(0.26)],
         ["title 19px", () => step(2)],
+        ["excerpt dropped", () => dropBlurb()],
         ["title 17px", () => step(3)],
         ["hero cap 18%", () => setCap(0.18)],
         ["title 16px", () => step(4)],
@@ -287,9 +287,9 @@ export function solveCard(vars: HTMLElement, reel: HTMLElement, card: HTMLElemen
   // media until the buttons are pushed down but not touching" is literally what
   // happens rather than something inferred from margins.
   if (frame) {
-    const ar2 = parseFloat(getComputedStyle(frame).getPropertyValue("--ar")) || 0.5625;
+    const ar2 = audioArt ? 1 : parseFloat(getComputedStyle(frame).getPropertyValue("--ar")) || 0.5625;
     const colW2 = columnWidth();
-    const maxH = (ar2 < 1 ? colW2 * opts.mediaWidth : colW2) / ar2;
+    const maxH = audioArt ? Math.min(132, colW2) : (ar2 < 1 ? colW2 * opts.mediaWidth : colW2) / ar2;
     for (let i = 0; i < 6; i++) {
       const actions = card.querySelector<HTMLElement>(".im-actions, .card-callout");
       if (!actions) break;
@@ -364,16 +364,20 @@ export function solveWhenReady(
   const run = () => {
     if (cancelled) return;
     const gaveUp = solveCard(vars, reel, card, opts);
+    if (document.fonts.status === "loading") void document.fonts.ready.then(() => { if (!cancelled) raf = requestAnimationFrame(run); });
     if (onDone) raf = requestAnimationFrame(() => !cancelled && onDone(gaveUp));
+  };
+  const schedule = () => {
+    void document.fonts.ready.then(() => { if (!cancelled) raf = requestAnimationFrame(run); });
   };
   const pending = Array.from(card.querySelectorAll("img")).filter((i) => !i.complete || i.naturalHeight === 0);
   const cleanups: (() => void)[] = [];
   if (pending.length === 0) {
-    raf = requestAnimationFrame(run);
+    schedule();
   } else {
     let left = pending.length;
     const done = () => {
-      if (--left <= 0 && !cancelled) raf = requestAnimationFrame(run);
+      if (--left <= 0 && !cancelled) schedule();
     };
     pending.forEach((img) => {
       img.addEventListener("load", done, { once: true });

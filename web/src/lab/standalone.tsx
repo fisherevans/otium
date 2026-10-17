@@ -9,6 +9,9 @@ import { createRoot } from "react-dom/client";
 // global.css in the bundle, and every shipped rule of equal specificity won on
 // order. That is why the card kept ignoring the lab's own knobs.
 import "@/styles/global.css";
+import "@/styles/appearance.css";
+import "@/styles/interface.css";
+import "@/styles/afterglow.css";
 import { LabPage } from "@/lab/LabPage";
 
 createRoot(document.getElementById("root")!).render(

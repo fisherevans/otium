@@ -2,7 +2,7 @@
 // installable (a fetch handler is required) and to serve the immutable hashed
 // assets fast. It NEVER caches /api, /auth, or /healthz, so authed data is always
 // fresh and the OIDC flow is never intercepted.
-const CACHE = "otium-static-v2";
+const CACHE = "otium-static-v3";
 
 self.addEventListener("install", () => self.skipWaiting());
 

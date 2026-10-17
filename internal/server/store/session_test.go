@@ -91,3 +91,47 @@ func equalInts(a, b []int64) bool {
 	}
 	return true
 }
+
+// Extension must keep the queue and cursor while preventing an old review from
+// replacing a newer session belonging to the same account.
+func TestExtendSession(t *testing.T) {
+	db, err := Open(":memory:")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	ctx := context.Background()
+	user, _ := db.UpsertUserByUsername(ctx, "reader", "")
+	other, _ := db.UpsertUserByUsername(ctx, "other", "")
+	if err := db.CreateSession(ctx, "one", user.ID, 10, []string{"news"}, []int64{3, 9}); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.UpdateSessionCursor(ctx, user.ID, "one", 1); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.EndSession(ctx, user.ID, "one"); err != nil {
+		t.Fatal(err)
+	}
+	if ok, err := db.ExtendSession(ctx, other.ID, "one", 5); ok || err != nil {
+		t.Fatalf("another account extended: %v %v", ok, err)
+	}
+	if ok, err := db.ExtendSession(ctx, user.ID, "one", 5); !ok || err != nil {
+		t.Fatalf("extend: %v %v", ok, err)
+	}
+	session, err := db.CurrentSession(ctx, user.ID)
+	if err != nil || session == nil || session.DurationMin != 15 || session.Cursor != 1 || !equalInts(session.ItemIDs, []int64{3, 9}) {
+		t.Fatalf("extended session lost its state: %+v %v", session, err)
+	}
+	if err := db.CreateSession(ctx, "two", user.ID, 20, nil, []int64{4}); err != nil {
+		t.Fatal(err)
+	}
+	if ok, err := db.ExtendSession(ctx, user.ID, "one", 5); ok || err != nil {
+		t.Fatalf("old session replaced current: %v %v", ok, err)
+	}
+	if err := db.EndSession(ctx, user.ID, "two"); err != nil {
+		t.Fatal(err)
+	}
+	if ok, err := db.ExtendSession(ctx, user.ID, "one", 5); ok || err != nil {
+		t.Fatalf("old session resurrected: %v %v", ok, err)
+	}
+}

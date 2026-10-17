@@ -11,10 +11,12 @@ export function SavePicker({
   item,
   open,
   onClose,
+  onChange,
 }: {
   item: Item | null;
   open: boolean;
   onClose: () => void;
+  onChange?: (item: Item, saved: boolean) => void;
 }) {
   const [cols, setCols] = useState<Collection[]>([]);
   const [loading, setLoading] = useState(false);
@@ -39,15 +41,14 @@ export function SavePicker({
   async function toggle(c: Collection) {
     if (!item || busy !== null) return;
     setBusy(c.id);
+    setErr("");
     const isIn = !!c.contains;
     try {
       if (isIn) await api.removeFromCollection(c.id, item.id);
       else await api.addToCollection(c.id, item.id);
-      setCols((prev) =>
-        prev.map((x) =>
-          x.id === c.id ? { ...x, contains: !isIn, item_count: x.item_count + (isIn ? -1 : 1) } : x,
-        ),
-      );
+      const updated = cols.map((x) => x.id === c.id ? { ...x, contains: !isIn, item_count: x.item_count + (isIn ? -1 : 1) } : x);
+      setCols(updated);
+      onChange?.(item, updated.some((collection) => collection.contains));
     } catch (e: any) {
       setErr(String(e.message ?? e));
     } finally {
@@ -60,10 +61,12 @@ export function SavePicker({
     const n = name.trim();
     if (!n) return;
     setBusy(-1);
+    setErr("");
     try {
       const c = await api.createCollection(n);
       await api.addToCollection(c.id, item.id);
       setCols((prev) => [...prev, { ...c, contains: true, item_count: 1 }]);
+      onChange?.(item, true);
       setCreating(false);
       setName("");
     } catch (e: any) {

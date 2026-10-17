@@ -32,7 +32,7 @@ export function ThemeToggle() {
     }
     // Keep the PWA status-bar color in step with the theme.
     const meta = document.querySelector('meta[name="theme-color"]');
-    if (meta) meta.setAttribute("content", next === "dark" ? "#141310" : "#f4f2ec");
+    if (meta) meta.setAttribute("content", next === "dark" ? "#141413" : "#f5f1e8");
     setTheme(next);
   }
 

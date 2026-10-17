@@ -2039,6 +2039,21 @@ func (db *DB) UpdateSessionCursor(ctx context.Context, userID int64, id string, 
 	return err
 }
 
+// ExtendSession resumes the user's latest session and adds to its persisted
+// budget. An older session cannot displace a newer session, even if both ended.
+func (db *DB) ExtendSession(ctx context.Context, userID int64, id string, minutes int) (bool, error) {
+	result, err := db.sql.ExecContext(ctx, `UPDATE sessions
+        SET duration_min=duration_min+?, min_low=duration_min+?, min_high=duration_min+?, status='active'
+        WHERE id=? AND user_id=?
+          AND rowid=(SELECT MAX(rowid) FROM sessions WHERE user_id=?)`,
+		minutes, minutes, minutes, id, userID, userID)
+	if err != nil {
+		return false, err
+	}
+	count, err := result.RowsAffected()
+	return count > 0, err
+}
+
 // EndSession marks a session 'ended' (idempotent).
 func (db *DB) EndSession(ctx context.Context, userID int64, id string) error {
 	_, err := db.sql.ExecContext(ctx,

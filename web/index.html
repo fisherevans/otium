@@ -8,9 +8,9 @@
     <!-- PWA: installable, standalone, on-brand. theme_color matches the paper bg so
          the Android status bar blends into the app in standalone mode. -->
     <link rel="manifest" href="/manifest.webmanifest" />
-    <meta name="theme-color" content="#f4f2ec" />
-    <link rel="icon" href="/icons/folded-o-32.png" sizes="32x32" type="image/png" />
-    <link rel="apple-touch-icon" href="/icons/folded-o-touch.png" />
+    <meta name="theme-color" content="#f5f1e8" />
+    <link rel="icon" href="/icons/afterglow-o-32.png" sizes="32x32" type="image/png" />
+    <link rel="apple-touch-icon" href="/icons/afterglow-o-touch.png" />
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-title" content="Otium" />
@@ -25,7 +25,7 @@
           var t = localStorage.getItem("otium-theme");
           if (!t) t = window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
           document.documentElement.dataset.theme = t;
-          document.querySelector('meta[name="theme-color"]').setAttribute("content", t === "dark" ? "#141310" : "#f4f2ec");
+          document.querySelector('meta[name="theme-color"]').setAttribute("content", t === "dark" ? "#141413" : "#f5f1e8");
         } catch (e) {
           document.documentElement.dataset.theme = "light";
         }

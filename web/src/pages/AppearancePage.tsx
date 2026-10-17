@@ -8,8 +8,8 @@ import { cardVars, SHIPPED_LAYOUT, SHIPPED_VARS, solveWhenReady } from "@/lib/ca
 const HERO = "data:image/svg+xml," + encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" width="640" height="360"><defs><linearGradient id="sky" x2="0" y2="1"><stop stop-color="#e8b04b"/><stop offset="1" stop-color="#d76a5a"/></linearGradient></defs><rect width="640" height="360" fill="url(#sky)"/><circle cx="464" cy="116" r="60" fill="#f6e7c8"/><path d="M0 300L140 208L256 276L392 184L520 264L640 200V360H0Z" fill="#4a5a53"/><path d="M0 336L168 264L300 320L440 256L640 316V360H0Z" fill="#2f3a37"/></svg>`);
 const SAMPLE: Selected = {
     item: {
-        id: -1, source_id: -1, url: "https://example.org/reading", title: "Reading in finite sessions",
-        summary: "A clear start and finish makes room for the articles you chose to read, without an endless scroll.",
+        id: -1, source_id: -1, url: "https://example.org/reading", title: "How migratory birds navigate at night",
+        summary: "Researchers study how birds combine starlight, magnetic fields and familiar landmarks during migration.",
         content: "<p>A sample article.</p>", content_source: "rss", author: "A. Writer", thumbnail_url: HERO,
         media_type: "article", duration_sec: 0, aspect_ratio: 0,
         published_at: new Date(Date.now() - 2 * 86400000).toISOString(), fetched_at: "",
@@ -53,7 +53,7 @@ function CardPreview({ long }: { long: boolean }) {
     const frame = useRef<HTMLDivElement>(null);
     const card = useRef<HTMLDivElement>(null);
     const sample = { ...SAMPLE, item: { ...SAMPLE.item, title: long
-        ? "What changes when we choose where a reading session ends, and leave the rest for another day"
+        ? "How migratory birds find their way across thousands of miles using stars, magnetic fields and familiar landmarks"
         : SAMPLE.item.title } };
     useEffect(() => {
         const box = frame.current;
@@ -82,9 +82,9 @@ function ReaderPreview() {
         <h1 className="rp-title">{SAMPLE.item.title}</h1>
         <div className="rp-meta"><span>The Reader</span><span>·</span><span>A. Writer</span></div>
         <div className="reader-body">
-            <p>Attention is something you choose to spend. A session gives reading a clear beginning and an end, with room to follow an idea without losing the rest of the day.</p>
+            <p>Many migratory birds travel at night. Cooler air reduces the energy needed for flight, while the stars provide a reference for navigation.</p>
             <img src={HERO} alt="Illustrated hills beneath a golden sky" />
-            <p>When the boundary is real, finishing is real. You close the session because you chose where the edge was.</p>
+            <p>Researchers can test these navigation systems by changing the light or magnetic field around birds in controlled conditions.</p>
         </div>
     </div>;
 }
@@ -130,8 +130,8 @@ export default function AppearancePage() {
                 <Slider label="Text size" value={prefs.reader.font_size} min={13} max={24} unit=" px" onChange={font_size => update({ reader: { font_size } })} />
                 <label className="appearance-select" htmlFor={fontId}>Font
                     <select id={fontId} value={prefs.reader.font_family} onChange={e => update({ reader: { font_family: e.target.value as FontKey } })}>
-                        {(["charter", "book", "didot", "grotesk"] as const).map(font => <option key={font} value={font} style={{ fontFamily: FONT_STACKS[font] }}>
-                            {{ charter: "Charter", book: "Iowan", didot: "Didot", grotesk: "Grotesk" }[font]}</option>)}
+                        {(["newsreader", "charter", "book", "didot", "grotesk"] as const).map(font => <option key={font} value={font} style={{ fontFamily: FONT_STACKS[font] }}>
+                            {{ newsreader: "Newsreader", charter: "Charter", book: "Iowan", didot: "Didot", grotesk: "Grotesk" }[font]}</option>)}
                     </select>
                 </label>
                 <Toggle label="Show images in articles" value={prefs.reader.images} onChange={images => update({ reader: { images } })} />

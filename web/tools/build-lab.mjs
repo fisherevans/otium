@@ -10,7 +10,10 @@ const here = dirname(fileURLToPath(import.meta.url));
 const dist = resolve(here, "../dist-lab");
 const html = readFileSync(resolve(dist, "lab.html"), "utf8");
 const js = readFileSync(resolve(dist, "lab.js"), "utf8");
-const css = readFileSync(resolve(dist, "lab.css"), "utf8");
+const css = readFileSync(resolve(dist, "lab.css"), "utf8").replace(
+  /url\(["']?\/fonts\/([a-z0-9-]+\.ttf)["']?\)/g,
+  (_, name) => `url("data:font/ttf;base64,${readFileSync(resolve(here, "../public/fonts", name)).toString("base64")}")`,
+);
 
 // Replacement STRINGS are not literal: $&, $\', $` and $1 are substitution
 // patterns, and a minified bundle contains them. That silently ate characters

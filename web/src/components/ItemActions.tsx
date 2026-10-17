@@ -4,6 +4,7 @@ import { api, type Item, type Selected, type Source } from "@/api/client";
 import { BottomSheet } from "./BottomSheet";
 import { bucketOf, REP_LABEL } from "@/lib/represent";
 import { RepDots } from "./RepDots";
+import { ShareActions } from "./ReaderActions";
 import { isMedia } from "@/lib/render";
 
 // The "…" overflow for the current session item (#43), restyled to match the
@@ -19,6 +20,8 @@ export function ItemActions({
   onRead,
   onSave,
   onWhy,
+  onOpenOriginal,
+  onEnd,
 }: {
   selected: Selected | null;
   open: boolean;
@@ -26,6 +29,8 @@ export function ItemActions({
   onRead: () => void;
   onSave?: (item: Item) => void;
   onWhy: () => void;
+  onOpenOriginal?: () => void;
+  onEnd?: () => void;
 }) {
   const nav = useNavigate();
   const item = selected?.item ?? null;
@@ -128,6 +133,12 @@ export function ItemActions({
           <span>View source</span>
           <span className="sheet-chev">▸</span>
         </button>
+      </div>
+
+      <div className="sheet-rows">
+        {onOpenOriginal && <button className="sheet-row" onClick={onOpenOriginal}><span>Open original</span><span aria-hidden>↗</span></button>}
+        <ShareActions item={item} />
+        {onEnd && <button className="sheet-row" onClick={onEnd}><span>End session</span><span aria-hidden>›</span></button>}
       </div>
 
       {/* #142: filter this kind of post out of future sessions. Tap a category to
