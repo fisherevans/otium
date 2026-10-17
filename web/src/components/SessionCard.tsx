@@ -1,5 +1,5 @@
 import { forwardRef, type PointerEvent as ReactPointerEvent } from "react";
-import { Bookmark, BookOpen, Play, ExternalLink, MoreHorizontal } from "lucide-react";
+import { Bookmark, BookOpen, Play, ExternalLink, MoreHorizontal, ChevronRight } from "lucide-react";
 import type { Item, ItemRender, Selected } from "@/api/client";
 import { TopicPill, CardSource, SourceAvatar, Byline, Blurb, Media } from "@/components/CardParts";
 import { InlineMedia } from "@/components/InlineMedia";
@@ -125,7 +125,7 @@ function CardHierarchy({
     </button>
   );
   const avatar = <SourceAvatar url={sel.source_icon_url} title={sel.source_title} color={topic?.color} />;
-  const chev = <span className="ch-sep" aria-hidden>›</span>;
+  const chev = <ChevronRight size={12} className="ch-sep inline-icon" aria-hidden />;
 
   if (style === "breadcrumb") {
     return (

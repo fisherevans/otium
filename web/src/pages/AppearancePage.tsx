@@ -1,3 +1,4 @@
+import { ArrowLeft } from "lucide-react";
 import { useEffect, useId, useRef, useState } from "react";
 import type { FontKey, InkKey, Selected } from "@/api/client";
 import { useBack } from "@/lib/navigation";
@@ -97,7 +98,7 @@ export default function AppearancePage() {
     const fontId = useId();
     const error = loadError || saveStatus === "error";
     return <div className="appearance appearance-page">
-        <button className="lib-back" onClick={back}><span aria-hidden>←</span> Back</button>
+        <button className="lib-back" onClick={back}><ArrowLeft size={18} className="inline-icon" aria-hidden /> Back</button>
         <h1 className="appearance-title">Appearance</h1>
         <div className="appearance-save" role={error ? "alert" : "status"}>
             {!loaded ? "Loading preferences..." : loadError ? "Saved preferences could not be loaded. Your edits stay here." :
@@ -167,7 +168,7 @@ export default function AppearancePage() {
             <p className="appearance-note">Applies to article and card images. {presentation === "eink" ? "E-ink presentation uses grayscale on this device regardless of this account preference." : "Your existing image preference is preserved."}</p>
         </section>
         <details className="appearance-advanced appearance-section"><summary>Session lengths</summary>
-            <p className="appearance-note">Starting lengths on Read, in minutes. Changes apply to your account.</p>
+            <p className="appearance-note">Starting session lengths, in minutes. Changes apply to your account.</p>
             <div className="appearance-presets">{prefs.presets.map((minutes, index) => <div key={minutes}>
                 <label>Length {index + 1}<input type="number" min={5} max={120} step={5} required defaultValue={minutes} onBlur={e => {
                     if (!e.currentTarget.checkValidity()) {

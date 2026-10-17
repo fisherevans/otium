@@ -34,10 +34,10 @@ export function SourceItems({
   }, [open, sourceId]);
 
   return (
-    <BottomSheet open={open} onClose={onClose} variant="tall" kicker="Raw topic">
+    <BottomSheet open={open} onClose={onClose} variant="tall" kicker="Source history">
       <div className="src-items">
         {err && <p className="err">{err}</p>}
-        {!err && items === null && <p className="src-items-load">loading topic…</p>}
+        {!err && items === null && <p className="src-items-load">Loading source history…</p>}
         {items && items.length === 0 && <p className="src-items-load">No recent items.</p>}
         {items?.map((it) => (
           <button

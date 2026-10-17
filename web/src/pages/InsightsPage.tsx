@@ -1,3 +1,4 @@
+import { ArrowLeft } from "lucide-react";
 import { useBack } from "@/lib/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { api, type Topic, type InsightsResponse, type InsightsSource } from "@/api/client";
@@ -161,7 +162,7 @@ export default function InsightsPage() {
   async function setWeight(s: InsightsSource, bucket: Bucket) {
     if (!await saveChange(() => api.updateSource(s.source_id, { weight_bucket: bucket }))) return;
     setSheet(null);
-    showToast(`${s.source_title} → ${REP_BLABEL[bucket]}`);
+    showToast(`${s.source_title}: ${REP_BLABEL[bucket]}`);
     load();
   }
   async function archive(s: InsightsSource) {
@@ -175,7 +176,7 @@ export default function InsightsPage() {
 
   return (
     <div>
-      <button className="mgmt-back" onClick={back}>← Back</button>
+      <button className="mgmt-back" onClick={back}><ArrowLeft size={18} className="inline-icon" aria-hidden /> Back</button>
       <h1 className="display">Topic insights</h1>
       <p className="sub">
         What each source actually is in your topic right now, next to how much of it you skip. A big slice you mostly

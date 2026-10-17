@@ -1,3 +1,4 @@
+import { ArrowLeft, ChevronRight } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useBack, useListScroll } from "@/lib/navigation";
@@ -115,7 +116,7 @@ export default function HistoryPage({ embedded = false }: { embedded?: boolean }
       {!embedded && (
         <>
           <button className="lib-back" onClick={back}>
-            <span aria-hidden>←</span> Back
+            <ArrowLeft size={18} className="inline-icon" aria-hidden /> Back
           </button>
           <div className="lib-topbar">
             <h1 className="display">History</h1>
@@ -159,7 +160,7 @@ export default function HistoryPage({ embedded = false }: { embedded?: boolean }
                       {it.interacted_at ? ` · ${relTime(it.interacted_at)}` : ""}
                     </span>
                   </div>
-                  <span className="chev" aria-hidden>▸</span>
+                  <ChevronRight size={18} className="chev inline-icon" aria-hidden />
                 </button>
               </div>
             );

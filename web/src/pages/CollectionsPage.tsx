@@ -1,3 +1,4 @@
+import { ArrowLeft, ChevronRight, X } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { useLocation, useSearchParams } from "react-router-dom";
 import { useBack, useListScroll } from "@/lib/navigation";
@@ -172,7 +173,7 @@ export default function CollectionsPage({ embedded = false }: { embedded?: boole
     return (
       <div>
         <button className="lib-back" onClick={closeCollection}>
-          <span aria-hidden>←</span> All collections
+          <ArrowLeft size={18} className="inline-icon" aria-hidden /> All collections
         </button>
         <div className="lib-topbar">
           <h1 className="display">{collectionDisplayName(selectedLive)}</h1>
@@ -214,7 +215,7 @@ export default function CollectionsPage({ embedded = false }: { embedded?: boole
                   <b>{it.title}</b>
                   <span>{it.media_type}{itemStamp(it, sort)}</span>
                 </button>
-                <button className="coll-x" onClick={() => removeItem(it)} aria-label="Remove from collection">×</button>
+                <button className="coll-x" onClick={() => removeItem(it)} aria-label="Remove from collection"><X size={18} className="inline-icon" aria-hidden /></button>
               </div>
             </div>
           ))
@@ -240,7 +241,7 @@ export default function CollectionsPage({ embedded = false }: { embedded?: boole
     <div>
       {!embedded && (
         <button className="lib-back" onClick={back}>
-          <span aria-hidden>←</span> Back
+          <ArrowLeft size={18} className="inline-icon" aria-hidden /> Back
         </button>
       )}
       <div className="lib-topbar">
@@ -273,7 +274,7 @@ export default function CollectionsPage({ embedded = false }: { embedded?: boole
               <b>{collectionDisplayName(c)}</b>
               <span>{c.item_count} {c.item_count === 1 ? "item" : "items"}{c.kind === "builtin" ? " · built-in" : ""}</span>
             </div>
-            <span className="chev" aria-hidden>▸</span>
+            <ChevronRight size={18} className="chev inline-icon" aria-hidden />
           </button>
         </div>
       ))}

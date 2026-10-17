@@ -1,4 +1,4 @@
-import { ExternalLink } from "lucide-react";
+import { ExternalLink, ArrowLeft, ChevronRight } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useBack } from "@/lib/navigation";
@@ -84,7 +84,7 @@ export default function SettingsPage() {
   return (
     <div>
       <button className="lib-back" onClick={back}>
-        <span aria-hidden>←</span> Back
+        <ArrowLeft size={18} className="inline-icon" aria-hidden /> Back
       </button>
       <div className="lib-topbar">
         <h1 className="display">Settings</h1>
@@ -102,7 +102,7 @@ export default function SettingsPage() {
           <span>Fonts, images, text size and session-duration choices.</span>
         </div>
         <span className="settings-link-chev" aria-hidden>
-          →
+          <ChevronRight size={18} className="inline-icon" aria-hidden />
         </span>
       </button>
 

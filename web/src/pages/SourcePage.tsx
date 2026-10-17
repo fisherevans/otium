@@ -1,7 +1,7 @@
 import { useBack } from "@/lib/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { Pencil, Settings, Copy, Check, Mail, Ban, EyeOff } from "lucide-react";
+import { Pencil, Settings, Copy, Check, Mail, Ban, EyeOff, ArrowLeft, ArrowRight } from "lucide-react";
 import { api, parseScoring, type Topic, type Source, type SourceItem, type SourceStats, type ScoringConfig } from "@/api/client";
 import { bucketOf, REP_LEVEL, REP_PROSE, REP_LABEL, compareToAverage, type Bucket } from "@/lib/represent";
 import { RepresentationPicker } from "@/components/RepresentationPicker";
@@ -267,7 +267,7 @@ export default function SourcePage() {
     return (
       <div className="mgmt">
         <button className="mgmt-back" onClick={back}>
-          ← Library
+          <ArrowLeft size={18} className="inline-icon" aria-hidden /> Library
         </button>
         <p className="lib2-empty">That source is gone.</p>
       </div>
@@ -280,13 +280,13 @@ export default function SourcePage() {
   return (
     <div className="mgmt src-page">
       <button className="mgmt-back" onClick={back}>
-        ← {backLabel}
+        <ArrowLeft size={18} className="inline-icon" aria-hidden /> {backLabel}
       </button>
-      <div className="mgmt-kicker">Manage Source</div>
+      <div className="mgmt-kicker">Source</div>
       <div className="mgmt-titlerow">
         <h1 className="mgmt-title">{source.title}</h1>
         <button className="mgmt-edit" onClick={() => (setRenameDraft(source.title), setRenameOpen(true))}>
-          <Pencil size={13} strokeWidth={1.9} aria-hidden /> rename
+          <Pencil size={13} strokeWidth={1.9} aria-hidden /> Rename
         </button>
       </div>
 
@@ -363,9 +363,9 @@ export default function SourcePage() {
 
       {/* --- feed controls (read-only, edited in a dialog) --- */}
       <div className="mgmt-sechead">
-        <span className="mgmt-seclabel">Feed Controls</span>
+        <span className="mgmt-seclabel">Feed controls</span>
         <button className="mgmt-edit" onClick={() => (setKwDraft(keywords.join(", ")), setControlsOpen(true))}>
-          <Settings size={13} strokeWidth={1.9} aria-hidden /> edit
+          <Settings size={13} strokeWidth={1.9} aria-hidden /> Edit
         </button>
       </div>
       <div className="fc">
@@ -424,7 +424,7 @@ export default function SourcePage() {
         )}
         .{" "}
         <button className="mgmt-inline" onClick={() => setTopicOpen(true)}>
-          change
+          Change
         </button>
       </p>
 
@@ -432,7 +432,7 @@ export default function SourcePage() {
       <div className="mgmt-sechead">
         <span className="mgmt-seclabel">Articles</span>
         <button className="mgmt-edit" onClick={() => nav(`/sources/${sourceId}/articles`)}>
-          view all
+          View all
         </button>
       </div>
       <div className="art-list">
@@ -456,7 +456,7 @@ export default function SourcePage() {
         )}
         {posts && posts.length > 4 && (
           <button className="art-more" onClick={() => nav(`/sources/${sourceId}/articles`)}>
-            see more →
+            See more <ArrowRight size={18} className="inline-icon" aria-hidden />
           </button>
         )}
       </div>

@@ -1,3 +1,4 @@
+import { X } from "lucide-react";
 import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from "react";
 
 import { Overlay, usePresence } from "./Overlay";
@@ -209,7 +210,7 @@ export function BottomSheet({
             <span className="sheet-k">{kicker}</span>
             {headActions}
             <button className="sheet-x" onClick={onClose} aria-label="Close">
-              ×
+              <X size={22} className="inline-icon" aria-hidden />
             </button>
           </div>
         )}

@@ -1,3 +1,4 @@
+import { X } from "lucide-react";
 import { type ReactNode } from "react";
 import { Overlay } from "./Overlay";
 
@@ -26,7 +27,7 @@ export function Dialog({
         <div className="dlg-head">
           <span className="dlg-kicker">{kicker}</span>
           <button className="dlg-x" onClick={onClose} aria-label="Close">
-            ×
+            <X size={22} className="inline-icon" aria-hidden />
           </button>
         </div>
         <div className="dlg-body">{children}</div>

@@ -66,7 +66,7 @@ export function ScoreBreakdownSheet({ sel, open, onClose }: { sel: Selected | nu
                 <span className="bd-score-val">{fresh.toFixed(2)}</span>
               </div>
               <p className="bd-note">
-                Recency is the only article-score signal today. More are coming - view count, length, and keyword boosts.
+                Article scores reflect recency.
               </p>
             </div>
           </div>

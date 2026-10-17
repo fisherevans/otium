@@ -1,4 +1,4 @@
-import { ExternalLink } from "lucide-react";
+import { ExternalLink, Check } from "lucide-react";
 import { useRef, useState } from "react";
 import { api, type Topic, type ScoringConfig } from "@/api/client";
 import { type Bucket } from "@/lib/represent";
@@ -266,7 +266,7 @@ export function AddSourceWizard({
           {kind === "youtube" && (
             <button className={`dlg-opt ${importAll ? "on" : ""}`} onClick={() => setImportAll((v) => !v)}>
               <span className="dlg-check" aria-hidden>
-                {importAll ? "✓" : ""}
+                {importAll && <Check size={16} className="inline-icon" aria-hidden />}
               </span>
               <span className="dlg-name">Import full history</span>
               <span className="dlg-sub">back to this source's archive window</span>

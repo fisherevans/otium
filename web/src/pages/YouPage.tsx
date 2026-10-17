@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Settings, Palette, PieChart, History, ChevronRight } from "lucide-react";
+import { Settings, Palette, PieChart, History, ChevronRight, Minus, Plus } from "lucide-react";
 import { api, type ReadingStats } from "@/api/client";
 
 function fmtMin(min: number): string {
@@ -73,7 +73,7 @@ export default function YouPage() {
       <button className="settings-link" aria-expanded={showStats} onClick={() => setShowStats((v) => !v)}>
         <PieChart size={20} strokeWidth={1.75} aria-hidden />
         <span className="settings-copy"><b>Reading activity</b><span>A descriptive summary of your reading.</span></span>
-        <span aria-hidden>{showStats ? "−" : "+"}</span>
+        <span aria-hidden>{showStats ? <Minus size={18} className="inline-icon" aria-hidden /> : <Plus size={18} className="inline-icon" aria-hidden />}</span>
       </button>
       {showStats && <div>
         {statsError && <div><p className="err" role="alert">{statsError}</p><button className="btn ghost" onClick={() => setStatsAttempt((n) => n + 1)}>Retry</button></div>}
@@ -130,7 +130,6 @@ export default function YouPage() {
 
       </div>}
 
-      <p className="you-about">otium - attention, on purpose.</p>
     </div>
   );
 }

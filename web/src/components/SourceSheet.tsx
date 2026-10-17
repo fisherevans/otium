@@ -1,3 +1,4 @@
+import { ChevronRight } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { api, type Source } from "@/api/client";
@@ -77,7 +78,7 @@ export function SourceSheet({
         <div className="sheet-rows">
           <button className="sheet-row" onClick={() => setHistory(true)}>
             <span>View source history</span>
-            <span className="sheet-chev">▸</span>
+            <ChevronRight size={18} className="sheet-chev inline-icon" aria-hidden />
           </button>
           <button
             className="sheet-row"
@@ -87,7 +88,7 @@ export function SourceSheet({
             }}
           >
             <span>Manage source settings</span>
-            <span className="sheet-chev">▸</span>
+            <ChevronRight size={18} className="sheet-chev inline-icon" aria-hidden />
           </button>
         </div>
       </BottomSheet>

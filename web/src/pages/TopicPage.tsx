@@ -1,7 +1,7 @@
 import { useBack } from "@/lib/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { Pencil, Plus, Mail, Ban, EyeOff } from "lucide-react";
+import { Pencil, Plus, Mail, Ban, EyeOff, ArrowLeft } from "lucide-react";
 import { api, type Topic, type Section, type Source, type SourceStats } from "@/api/client";
 import { FEED_ICONS, feedIcon } from "@/lib/feedIcons";
 import { archiveValue, resolveTopicArchive } from "@/lib/archive";
@@ -153,7 +153,7 @@ export default function TopicPage() {
     return (
       <div className="mgmt">
         <button className="mgmt-back" onClick={back}>
-          ← Library
+          <ArrowLeft size={18} className="inline-icon" aria-hidden /> Library
         </button>
         <p className="lib2-empty">That topic doesn't exist.</p>
       </div>
@@ -172,9 +172,9 @@ export default function TopicPage() {
   return (
     <div className="mgmt">
       <button className="mgmt-back" onClick={back}>
-        ← Library
+        <ArrowLeft size={18} className="inline-icon" aria-hidden /> Library
       </button>
-      <div className="mgmt-kicker">Manage Topic</div>
+      <div className="mgmt-kicker">Topic</div>
       <div className="mgmt-titlerow">
         <h1 className="mgmt-title int-title">
           {Icon ? (

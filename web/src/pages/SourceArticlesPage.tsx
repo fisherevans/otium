@@ -1,3 +1,4 @@
+import { ArrowLeft } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { useParams } from "react-router-dom";
 import { useBack } from "@/lib/navigation";
@@ -10,7 +11,7 @@ import { Reader } from "@/components/Reader";
 import { Player } from "@/components/Player";
 
 // Per-source article list (session engine v2, mockup #5). Splits the source's
-// items into "On Deck" (unseen + still within the archival window) and "Archived"
+// items into "On deck" (unseen + still within the archival window) and "Archived"
 // (seen, or aged/keyword-archived). Each row shows title, the mockup's
 // "{relative} · {date} · {duration}" meta, an age-based explore score with a bar,
 // and its engagement status badges. Opening an item is orientation only.
@@ -30,10 +31,10 @@ function durType(it: SourceItem): string {
 }
 type Filter = "none" | "unread" | "read" | "skipped";
 const FILTERS: { key: Filter; label: string }[] = [
-  { key: "none", label: "none" },
-  { key: "unread", label: "unread" },
-  { key: "read", label: "read" },
-  { key: "skipped", label: "skipped" },
+  { key: "none", label: "All" },
+  { key: "unread", label: "Unread" },
+  { key: "read", label: "Read" },
+  { key: "skipped", label: "Skipped" },
 ];
 
 export default function SourceArticlesPage() {
@@ -121,7 +122,7 @@ export default function SourceArticlesPage() {
           </span>
           <span className="va-score">{score.toFixed(2)}</span>
           <button className="va-explore" onClick={() => setExplain(it)}>
-            explore score
+            Explore score
           </button>
           <span className="va-badges">
             {bs.map((b) => (
@@ -138,9 +139,9 @@ export default function SourceArticlesPage() {
   return (
     <div className="mgmt va-page">
       <button className="mgmt-back" onClick={back}>
-        ← Back
+        <ArrowLeft size={18} className="inline-icon" aria-hidden /> Back
       </button>
-      <div className="mgmt-kicker">View Articles</div>
+      <div className="mgmt-kicker">Articles</div>
       <h1 className="mgmt-title">{source?.title ?? "Articles"}</h1>
 
       <button className="va-filter" onClick={() => setFilterOpen(true)}>
@@ -156,7 +157,7 @@ export default function SourceArticlesPage() {
           {onDeck.length > 0 && (
             <>
               <div className="mgmt-sechead">
-                <span className="mgmt-seclabel">On Deck</span>
+                <span className="mgmt-seclabel">On deck</span>
                 <span className="va-count">{onDeck.length}</span>
               </div>
               {onDeck.map(Row)}
@@ -196,7 +197,6 @@ export default function SourceArticlesPage() {
               Right now the score is age-based freshness: published {relTime(explain.published_at)} ({Math.round(ageDays(explain.published_at))} days
               old), so it decays on a {FRESHNESS_HALF_LIFE_DAYS}-day half-life. Newer articles score higher.
             </p>
-            <p className="caphint">More scoring signals (keywords, topics, quality) are coming - freshness is just the first.</p>
           </>
         )}
       </Dialog>

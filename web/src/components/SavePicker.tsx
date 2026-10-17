@@ -1,3 +1,4 @@
+import { CheckCircle2, Circle, Plus, ChevronRight } from "lucide-react";
 import { useEffect, useState } from "react";
 import { api, collectionDisplayName, type Collection, type Item } from "@/api/client";
 import { BottomSheet } from "./BottomSheet";
@@ -88,8 +89,8 @@ export function SavePicker({
       ) : (
         <div className="sheet-rows save-choices">
           {cols.map((c) => (
-            <button key={c.id} className="sheet-row" onClick={() => toggle(c)} disabled={busy !== null}>
-              <span className="save-check" aria-hidden>{c.contains ? "◉" : "○"}</span>
+            <button key={c.id} className="sheet-row" aria-pressed={!!c.contains} onClick={() => toggle(c)} disabled={busy !== null}>
+              <span className="save-check" aria-hidden>{c.contains ? <CheckCircle2 size={20} className="inline-icon" aria-hidden /> : <Circle size={20} className="inline-icon" aria-hidden />}</span>
               <span className="save-name">
                 {collectionDisplayName(c)}
                 {c.kind === "builtin" && <span className="save-kind"> · built-in</span>}
@@ -117,9 +118,9 @@ export function SavePicker({
             </div>
           ) : (
             <button className="sheet-row" onClick={() => setCreating(true)}>
-              <span className="save-check" aria-hidden>+</span>
+              <span className="save-check" aria-hidden><Plus size={20} className="inline-icon" aria-hidden /></span>
               <span className="save-name">New collection</span>
-              <span className="sheet-chev">▸</span>
+              <ChevronRight size={18} className="sheet-chev inline-icon" aria-hidden />
             </button>
           )}
         </div>

@@ -1,4 +1,4 @@
-import { ExternalLink } from "lucide-react";
+import { ExternalLink, Check, ChevronRight } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { api, type Item, type Selected, type Source } from "@/api/client";
@@ -105,7 +105,7 @@ export function ItemActions({
         </span>
         <span className="va-score">{score.toFixed(2)}</span>
         <button className="va-explore" onClick={onWhy}>
-          explore score
+          Explore score
         </button>
       </div>
       <p className="ia-sub">Surfaced by recency - a source's articles come up newest first.</p>
@@ -121,25 +121,25 @@ export function ItemActions({
         {!isMedia(item) && (
           <button className="sheet-row" onClick={onRead}>
             <span>Read in app</span>
-            <span className="sheet-chev">▸</span>
+            <ChevronRight size={18} className="sheet-chev inline-icon" aria-hidden />
           </button>
         )}
         {onSave && (
           <button className="sheet-row" onClick={() => onSave(item)}>
             <span>Save to collection</span>
-            <span className="sheet-chev">▸</span>
+            <ChevronRight size={18} className="sheet-chev inline-icon" aria-hidden />
           </button>
         )}
         <button className="sheet-row" onClick={() => nav(`/sources/${sourceId}`)}>
           <span>View source</span>
-          <span className="sheet-chev">▸</span>
+          <ChevronRight size={18} className="sheet-chev inline-icon" aria-hidden />
         </button>
       </div>
 
       <div className="sheet-rows">
         {onOpenOriginal && <button className="sheet-row" onClick={onOpenOriginal}><span>Open original</span><ExternalLink size={16} aria-hidden /></button>}
         <ShareActions item={item} />
-        {onEnd && <button className="sheet-row" onClick={onEnd}><span>End session</span><span aria-hidden>›</span></button>}
+        {onEnd && <button className="sheet-row" onClick={onEnd}><span>End session</span><ChevronRight size={18} className="sheet-chev inline-icon" aria-hidden /></button>}
       </div>
 
       {/* #142: filter this kind of post out of future sessions. Tap a category to
@@ -158,7 +158,7 @@ export function ItemActions({
                   disabled={done}
                   onClick={() => muteCategory(c)}
                 >
-                  {done ? `✓ ${c}` : c}
+                  {done && <Check size={15} className="inline-icon" aria-hidden />} {c}
                 </button>
               );
             })}

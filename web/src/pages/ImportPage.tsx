@@ -1,3 +1,4 @@
+import { ArrowLeft } from "lucide-react";
 import { useBack } from "@/lib/navigation";
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
@@ -31,7 +32,7 @@ export default function ImportPage() {
     try {
       const r = await api.parseImport(body);
       if (r.count === 0) {
-        setErr("Nothing recognized in that file. Expected OPML, a YouTube Takeout CSV, or a list of topic URLs.");
+        setErr("Nothing recognized in that file. Expected OPML, a YouTube Takeout CSV, or a list of source URLs.");
         return;
       }
       setCands(r.candidates);
@@ -72,7 +73,7 @@ export default function ImportPage() {
           {result.topics_created > 0 && `, ${result.topics_created} topics created`}.
         </p>
         <p style={{ color: "var(--ink-faint)", fontSize: 13 }}>
-          Topics are refreshing in the background - items will fill in over the next minute or two.
+          Sources are refreshing in the background - items will fill in over the next minute or two.
         </p>
         <button className="btn" onClick={() => nav("/")}>
           Build a session
@@ -86,11 +87,11 @@ export default function ImportPage() {
 
   return (
     <div>
-      <button className="mgmt-back" onClick={back}>← Back</button>
-      <h1 className="display">Import your follows</h1>
+      <button className="mgmt-back" onClick={back}><ArrowLeft size={18} className="inline-icon" aria-hidden /> Back</button>
+      <h1 className="display">Import sources</h1>
       <p className="sub">
         Drop a <b>YouTube Takeout</b> (the raw <b>.zip</b> is fine - it's unpacked for you), an{" "}
-        <b>OPML</b> file (Feedly, podcast apps, any RSS reader), or paste a list of topic URLs.
+        <b>OPML</b> file (Feedly, podcast apps, any RSS reader), or paste a list of source URLs.
       </p>
 
       {cands.length === 0 ? (
@@ -135,7 +136,7 @@ export default function ImportPage() {
               <input type="checkbox" checked={makeTopics} onChange={(e) => setMakeTopics(e.target.checked)} />
               <div className="title">
                 <b>Turn folders into topics</b>
-                <span>Uses your OPML folders as otium themes</span>
+                <span>Creates topics from your OPML folders</span>
               </div>
             </label>
           )}

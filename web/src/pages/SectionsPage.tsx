@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
-import { Pencil, Plus, ChevronRight, ArrowRightLeft } from "lucide-react";
+import { Pencil, Plus, ChevronRight, ArrowRightLeft, ArrowLeft } from "lucide-react";
 import { api, type Topic, type Section } from "@/api/client";
 import { feedIcon, FEED_ICONS } from "@/lib/feedIcons";
 import { Dialog } from "@/components/Dialog";
@@ -133,7 +133,7 @@ export default function SectionsPage() {
 
   return (
     <div className="mgmt">
-      {returnTo && <button className="lib-back" onClick={() => nav(returnTo)}>← Return to session</button>}
+      {returnTo && <button className="lib-back" onClick={() => nav(returnTo)}><ArrowLeft size={18} className="inline-icon" aria-hidden /> Return to session</button>}
       <div className="mgmt-titlerow">
         <h1 className="mgmt-title">Library</h1>
       </div>
