@@ -1,437 +1,162 @@
 import { useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import { useNavigate } from "react-router-dom";
+import { ArrowLeft, ArrowRight, Bookmark, ChevronRight, MoreHorizontal, Plus, SlidersHorizontal, X } from "lucide-react";
 import { api, type Topic, type Section, type Source } from "@/api/client";
 import { usePreferences } from "@/context/PreferencesContext";
+import { useAuth } from "@/context/AuthContext";
+import { useInstrument } from "@/components/ContextInstrument";
+import { Overlay } from "@/components/Overlay";
 import { HowItWorks } from "@/components/HowItWorks";
-
-// Choose a duration, then confirm a scope. Topic customization is optional.
-const MIN_MINUTES = 5;
-const MAX_MINUTES = 120;
-const STEP = 5;
-
-function minutesLabel(v: number): string {
-  if (v < 60) return `${v} min`;
-  const h = v / 60;
-  return Number.isInteger(h) ? `${h} hr` : `${Math.floor(v / 60)}h ${v % 60}m`;
-}
-
-type Step = 1 | 2 | 3;
+import { SavePresetDialog } from "@/components/SessionPresetPrompt";
+import { defaultSetup, initialPresets, isSavedSetup, loadSessionPresets, mediaLabel, recordSessionSetup, repeatSuggestion, setupKey, storeSessionPresets, type SessionPreset, type SessionPresets, type SessionSetup } from "@/lib/sessionPresets";
+import "@/styles/launcher.css";
 
 export default function HomePage() {
-  const nav = useNavigate();
-  const { prefs } = usePreferences();
-
-  const [step, setStep] = useState<Step>(1);
-  const [minutes, setMinutes] = useState<number | null>(null);
-  const [custom, setCustom] = useState(false);
-
-  const [topics, setTopics] = useState<Topic[]>([]);
-  const [sections, setSections] = useState<Section[]>([]);
-  const [sources, setSources] = useState<Source[]>([]);
-
-  // Selection. `everything` is the default; picking any section turns it off.
-  const [everything, setEverything] = useState(true);
-  const [pickedSections, setPickedSections] = useState<string[]>([]);
-  const [multi, setMulti] = useState(false); // section screen: checkbox mode
-  // Topic slugs dropped for this session (within the picked sections).
-  const [excluded, setExcluded] = useState<string[]>([]);
-
-  const [busy, setBusy] = useState(false);
-  const [err, setErr] = useState("");
-
-  const [loaded, setLoaded] = useState(false);
-  const [loadError, setLoadError] = useState("");
-  const [loadAttempt, setLoadAttempt] = useState(0);
-  useEffect(() => {
-    let live = true;
-    setLoadError("");
-    setLoaded(false);
-    Promise.all([api.topics(), api.sections(), api.sources()]).then(([t, s, src]) => {
-      if (!live) return;
-      setTopics(t ?? []);
-      setSections(s ?? []);
-      setSources(src ?? []);
-      try {
-        const stored: unknown = JSON.parse(localStorage.getItem("otium.last-scope") ?? "[]");
-        const valid = Array.isArray(stored) ? s.filter((section) => stored.includes(section.slug)).map((section) => section.slug) : [];
-        setPickedSections(valid);
-        setEverything(valid.length === 0);
-        setMulti(valid.length > 1);
-      } catch { /* Storage is optional; Everything remains the default. */ }
-      setLoaded(true);
-    }).catch((e) => live && setLoadError(String(e.message ?? e)));
-    return () => { live = false; };
-  }, [loadAttempt]);
-
-  // Default the time to a preset once preferences load (middle-ish, else first).
-  useEffect(() => {
-    if (minutes == null && prefs.presets.length > 0) {
-      const mid = prefs.presets[Math.min(1, prefs.presets.length - 1)];
-      setMinutes(mid);
+    const nav = useNavigate();
+    const { prefs } = usePreferences();
+    const { user } = useAuth();
+    const [custom, setCustom] = useState(false);
+    const [setup, setSetup] = useState<SessionSetup>(defaultSetup);
+    const [data, setData] = useState<SessionPresets>(initialPresets);
+    const [topics, setTopics] = useState<Topic[]>([]);
+    const [sections, setSections] = useState<Section[]>([]);
+    const [sources, setSources] = useState<Source[]>([]);
+    const [activeSession, setActiveSession] = useState("");
+    const [loaded, setLoaded] = useState(false);
+    const [loadError, setLoadError] = useState("");
+    const [loadAttempt, setLoadAttempt] = useState(0);
+    const [busy, setBusy] = useState(false);
+    const [error, setError] = useState("");
+    const [sheet, setSheet] = useState<"advanced" | "presets" | "recent" | null>(null);
+    const [save, setSave] = useState<{ setup: SessionSetup; preset?: SessionPreset } | null>(null);
+    const accountId = user?.id;
+    useEffect(() => {
+        if (accountId == null) return;
+        const refresh = () => setData(loadSessionPresets(accountId));
+        refresh();
+        window.addEventListener("otium-presets-change", refresh);
+        window.addEventListener("storage", refresh);
+        return () => { window.removeEventListener("otium-presets-change", refresh); window.removeEventListener("storage", refresh); };
+    }, [accountId]);
+    useEffect(() => {
+        let live = true;
+        setLoadError(""); setLoaded(false);
+        Promise.all([api.topics(), api.sections(), api.sources(), api.currentSession()]).then(([t, s, src, current]) => {
+            if (!live) return;
+            setTopics(t ?? []); setSections(s ?? []); setSources(src ?? []); setActiveSession(current?.session_id ?? ""); setLoaded(true);
+            try {
+                const previous: unknown = JSON.parse(localStorage.getItem("otium.last-scope") ?? "[]");
+                if (Array.isArray(previous)) setSetup((value) => ({ ...value, sections: (s ?? []).filter((section) => previous.includes(section.slug)).map((section) => section.slug) }));
+            } catch { /* Existing scope is optional device state. */ }
+        }).catch((e) => live && setLoadError(String(e.message ?? e)));
+        return () => { live = false; };
+    }, [loadAttempt]);
+    const initializedMinutes = useRef(false);
+    useEffect(() => {
+        if (!initializedMinutes.current && prefs.presets.length) {
+            initializedMinutes.current = true;
+            setSetup((value) => ({ ...value, minutes: prefs.presets[Math.min(1, prefs.presets.length - 1)] }));
+        }
+    }, [prefs.presets]);
+    const scopedTopics = useMemo(() => topics.filter((topic) => !setup.sections.length || setup.sections.includes(topic.section_slug ?? "")), [topics, setup.sections]);
+    const defaultPreset = data.presets.find((preset) => preset.id === data.defaultId) ?? data.presets[0];
+    const otherPresets = data.presets.filter((preset) => preset.id !== defaultPreset?.id);
+    const recent = data.recent.filter((value) => !isSavedSetup(data, value));
+    const suggestion = repeatSuggestion(data);
+    function scopeLabel(value: SessionSetup) {
+        return value.sections.length ? value.sections.map((slug) => sections.find((section) => section.slug === slug)?.name ?? "Unavailable section").join(" + ") : "Everything";
     }
-  }, [prefs.presets, minutes]);
-
-  const topicsBySection = useMemo(() => {
-    const m = new Map<string, Topic[]>();
-    for (const t of topics) {
-      if (!t.section_slug) continue;
-      if (!m.has(t.section_slug)) m.set(t.section_slug, []);
-      m.get(t.section_slug)!.push(t);
+    function setupLabel(value: SessionSetup) {
+        return `${value.minutes} min · ${mediaLabel[value.media]} · ${scopeLabel(value)}${value.excluded.length ? ` · ${value.excluded.length} topics excluded` : ""}${!value.includeShorts && (value.media === "all" || value.media === "video") ? " · No Shorts" : ""}`;
     }
-    return m;
-  }, [topics]);
-
-  const effectiveEverything = everything || pickedSections.length === 0;
-
-  // The sections whose topics step 3 tunes: the chosen ones, or ALL of them for
-  // "Everything you follow" (so it can still filter individual topics, grouped
-  // under their section headers). Ordered as `sections` for stable grouping.
-  const activeSectionSlugs = useMemo(
-    () => (effectiveEverything ? sections.map((s) => s.slug) : pickedSections),
-    [effectiveEverything, sections, pickedSections],
-  );
-
-  // Topics in the active sections (the scope step 3 tunes).
-  const scopedTopics = useMemo(
-    () => activeSectionSlugs.flatMap((slug) => topicsBySection.get(slug) ?? []),
-    [activeSectionSlugs, topicsBySection],
-  );
-
-  // Kept topic slugs (scope minus dropped).
-  const keptTopics = useMemo(
-    () => scopedTopics.filter((t) => !excluded.includes(t.slug)).map((t) => t.slug),
-    [scopedTopics, excluded],
-  );
-
-  // --- section-screen actions ---
-  // Scope selection never starts a session or opens customization.
-  function pickEverything() {
-    setEverything(true);
-    setPickedSections([]);
-    setExcluded([]);
-  }
-  function pickSection(slug: string) {
-    setEverything(false);
-    setPickedSections([slug]);
-    setExcluded([]);
-  }
-  // Multi-select combines sections before the explicit Begin decision.
-  function toggleSection(slug: string) {
-    setEverything(false);
-    setPickedSections((p) => (p.includes(slug) ? p.filter((s) => s !== slug) : [...p, slug]));
-    setExcluded([]);
-  }
-  function toggleExclude(slug: string) {
-    setExcluded((p) => (p.includes(slug) ? p.filter((s) => s !== slug) : [...p, slug]));
-  }
-
-  // Unseen supply for the selection, to disable Begin when there's nothing new.
-  // Everything with nothing dropped counts every source (topicless included);
-  // otherwise it's the sources whose topic is still kept.
-  const unseen = useMemo(() => {
-    if (effectiveEverything && excluded.length === 0) return sources.reduce((n, s) => n + (s.unseen_count ?? 0), 0);
-    const scope = keptTopics;
-    const match = sources.filter((s) => s.topic_slug && scope.includes(s.topic_slug));
-    return match.reduce((n, s) => n + (s.unseen_count ?? 0), 0);
-  }, [sources, effectiveEverything, excluded, keptTopics]);
-  const nothingNew = sources.length > 0 && unseen === 0;
-
-  // #152: whether the current selection includes any YouTube (video) source. Only
-  // then does the "Shorts" toggle make sense - a scope of blogs/podcasts has none.
-  const scopeHasVideo = useMemo(() => {
-    const anyYouTube = (arr: Source[]) => arr.some((s) => s.kind === "youtube");
-    if (effectiveEverything && excluded.length === 0) return anyYouTube(sources);
-    return anyYouTube(sources.filter((s) => s.topic_slug && keptTopics.includes(s.topic_slug)));
-  }, [sources, effectiveEverything, excluded, keptTopics]);
-  // Include YouTube Shorts in the session (default yes). Only sent when the scope has
-  // video; otherwise it's a no-op server-side.
-  const [includeShorts, setIncludeShorts] = useState(true);
-
-  async function begin() {
-    if (minutes == null) return;
-    setBusy(true);
-    setErr("");
-    try {
-      let themes: string[] = [];
-      let sectionSlugs: string[] = [];
-      // Dropping any topic sends the kept ones as themes (the excluded ones fall
-      // out) - this applies whether the base was a section or Everything. An
-      // untouched section selection sends the section slug so the server expands
-      // it (topicless sources too). Untouched Everything sends both empty.
-      if (excluded.length > 0) themes = keptTopics;
-      else if (!effectiveEverything) sectionSlugs = pickedSections;
-      // #152: only meaningful when the scope has video; harmless (true) otherwise.
-      const resp = await api.createSession(minutes, themes, sectionSlugs, !scopeHasVideo || includeShorts);
-      if (resp && resp.session_id) {
-        try { localStorage.setItem("otium.last-scope", JSON.stringify(effectiveEverything ? [] : pickedSections)); } catch { /* Device storage is optional. */ }
-        nav(`/session/${resp.session_id}`);
-      }
-      else setErr("Nothing new to gather right now.");
-    } catch (e: any) {
-      setErr(String(e.message ?? e));
-    } finally {
-      setBusy(false);
+    function hasSupply(value: SessionSetup) {
+        const kept = topics.filter((topic) => (!value.sections.length || value.sections.includes(topic.section_slug ?? "")) && !value.excluded.includes(topic.slug));
+        const scope = sources.filter((source) => !value.sections.length && !value.excluded.length || kept.some((topic) => topic.slug === source.topic_slug));
+        // Counts are per source, not per media type. The server resolves exact
+        // media eligibility; using source kinds here would hide mixed RSS media.
+        return scope.some((source) => (source.unseen_count ?? 0) > 0);
     }
-  }
-
-  // Swipe-right anywhere on a step moves backward (like the reader's back gesture).
-  const press = useRef<{ id: number; x: number; y: number } | null>(null);
-  function stepDown(e: ReactPointerEvent) {
-    press.current = null;
-    if (!e.isPrimary || e.button !== 0 || (window.visualViewport?.scale ?? 1) > 1 || (e.target as HTMLElement).closest("button, input, a")) return;
-    press.current = { id: e.pointerId, x: e.clientX, y: e.clientY };
-  }
-  function stepUp(e: ReactPointerEvent) {
-    const p = press.current;
-    press.current = null;
-    if (!p || p.id !== e.pointerId) return;
-    const dx = e.clientX - p.x;
-    const dy = e.clientY - p.y;
-    if (dx > 70 && Math.abs(dx) > Math.abs(dy) * 1.4) {
-      if (step === 3) setStep(2);
-      else if (step === 2) setStep(1);
+    function invalidSetup(value: SessionSetup) {
+        return value.sections.some((slug) => !sections.some((section) => section.slug === slug)) ||
+            value.excluded.length > 0 && !topics.some((topic) => (!value.sections.length || value.sections.includes(topic.section_slug ?? "")) && !value.excluded.includes(topic.slug));
     }
-  }
+    async function begin(value: SessionSetup) {
+        if (busy || accountId == null) return;
+        if (invalidSetup(value)) { setError("This setup has no available topics. Edit the session scope."); return; }
+        setBusy(true); setError("");
+        try {
+            const themes = value.excluded.length ? topics.filter((topic) => (!value.sections.length || value.sections.includes(topic.section_slug ?? "")) && !value.excluded.includes(topic.slug)).map((topic) => topic.slug) : [];
+            const response = await api.createSession(value.minutes, themes, value.excluded.length ? [] : value.sections, value.includeShorts, value.media);
+            if (!response?.session_id) { setError("No new items match this session. Change the scope or media type."); return; }
+            recordSessionSetup(accountId, response.session_id, value);
+            try { localStorage.setItem("otium.last-scope", JSON.stringify(value.sections)); } catch { /* Storage is optional. */ }
+            nav(`/session/${response.session_id}`);
+        } catch (e: unknown) { setError(e instanceof Error ? e.message : String(e)); }
+        finally { setBusy(false); }
+    }
+    function updateData(next: SessionPresets) {
+        if (accountId != null && !storeSessionPresets(accountId, next)) setError("Couldn't save this change. Check browser storage and retry.");
+    }
+    useInstrument(custom && loaded && sources.length > 0 ? {
+        eyebrow: "Custom session", label: `${setup.minutes} min · ${mediaLabel[setup.media]}`,
+        onMenu: () => setCustom(false), menuLabel: "Back to sessions", leadingIcon: <ArrowLeft size={20}/>,
+        action: { label: busy ? "Gathering…" : "Start", onClick: () => { void begin(setup); }, icon: <ArrowRight size={18}/>, disabled: busy || !hasSupply(setup) || invalidSetup(setup) },
+    } : activeSession && loaded ? {
+        eyebrow: "Session in progress", label: "Return to session",
+        onMenu: () => window.dispatchEvent(new CustomEvent("otium:app-menu")), menuLabel: "App menu",
+        onLabel: () => nav(`/session/${activeSession}`),
+        action: { label: "Resume", onClick: () => nav(`/session/${activeSession}`), icon: <ArrowRight size={18}/> },
+    } : null);
+    const press = useRef<{ id: number; x: number; y: number; axis: string } | null>(null);
+    function pointerDown(event: ReactPointerEvent) {
+        press.current = null;
+        if (event.isPrimary && event.button === 0 && (window.visualViewport?.scale ?? 1) <= 1 && !(event.target as HTMLElement).closest("button,input,select,a,label")) press.current = { id: event.pointerId, x: event.clientX, y: event.clientY, axis: "" };
+    }
+    function pointerMove(event: ReactPointerEvent) {
+        const p = press.current;
+        if (!p || p.id !== event.pointerId || p.axis) return;
+        const dx = Math.abs(event.clientX - p.x), dy = Math.abs(event.clientY - p.y);
+        if (Math.max(dx, dy) > 12) p.axis = dx > dy * 1.4 ? "x" : "y";
+    }
+    function pointerUp(event: ReactPointerEvent) {
+        const p = press.current; press.current = null;
+        if (p && p.id === event.pointerId && p.axis === "x" && event.clientX - p.x > 70 && custom) setCustom(false);
+    }
+    if (loadError) return <section className="launcher"><h1>Couldn't load your library</h1><p role="alert">{loadError}</p><button className="btn" onClick={() => setLoadAttempt((n) => n + 1)}>Retry</button></section>;
+    if (!loaded) return <section className="launcher"><p role="status">Loading your library…</p></section>;
+    if (!sources.length) return <section className="launcher"><h1>Add your first source</h1><p>Follow RSS feeds, YouTube channels or podcasts to build a session.</p><button className="btn" onClick={() => nav("/sections")}>Go to Library</button><HowItWorks defaultOpen/></section>;
+    return <section className={`launcher ${custom ? "launcher-custom" : ""}`} onPointerDown={pointerDown} onPointerMove={pointerMove} onPointerUp={pointerUp} onPointerCancel={() => { press.current = null; }}>
+        <header className="launcher-head"><h1>{custom ? "Custom session" : "New session"}</h1></header>
+        {error && <p className="launcher-error" role="alert">{error}</p>}
+        {!custom ? <>
+            <button className="launcher-custom-action" onClick={() => { setError(""); setCustom(true); }}><Plus size={21}/><span>Custom session</span><ChevronRight size={18}/></button>
+            {defaultPreset && <div className="launcher-default">
+                <div className="launcher-kicker">Default<button className="icon-btn" aria-label="Manage presets" onClick={() => setSheet("presets")}><MoreHorizontal size={20}/></button></div>
+                <p className="launcher-meta">{setupLabel(defaultPreset.setup)}</p>
+                <button className="btn" disabled={busy || !hasSupply(defaultPreset.setup) || invalidSetup(defaultPreset.setup)} onClick={() => begin(defaultPreset.setup)}>{busy ? "Gathering…" : `Start ${defaultPreset.name}`}<ArrowRight size={18}/></button>
+            </div>}
 
-  const scopeLabel = multi && pickedSections.length === 0 ? "Choose a section" : effectiveEverything ? "Everything you follow" : pickedSections.map((slug) => sectionName(sections, slug)).join(" + ");
-  const beginControl = <>
-    {err && <p className="intent-hint" role="alert">{err}</p>}
-    <div className="intent-confirm">
-      {step === 2 && scopedTopics.length > 0 && <button className="intent-link" onClick={() => setStep(3)}>Customize topics{excluded.length > 0 ? ` (${excluded.length} excluded)` : ""}</button>}
-      <p className="intent-summary"><strong>{minutesLabel(minutes ?? 0)}</strong><span>{scopeLabel}</span>{excluded.length > 0 && <span>{excluded.length} topics excluded</span>}</p>
-      <button className="btn" onClick={begin} disabled={busy || nothingNew || (multi && pickedSections.length === 0) || (excluded.length > 0 && keptTopics.length === 0)}>
-        {busy ? "Gathering…" : multi && pickedSections.length === 0 ? "Choose a section" : nothingNew ? "Nothing new right now" : excluded.length > 0 && keptTopics.length === 0 ? "Pick a topic" : "Begin session"}
-      </button>
-    </div>
-  </>;
-
-  if (loadError) return <div className="intent"><div className="intent-step"><h1 className="display">Couldn't load your library</h1><p role="alert">{loadError}</p><button className="btn" onClick={() => setLoadAttempt((n) => n + 1)}>Retry</button></div></div>;
-  if (!loaded) return <div className="intent"><p role="status">Loading your library…</p></div>;
-
-  // #138 first-run: no sources yet, so no session is possible. Point to the Library
-  // and explain the model instead of a time picker that can't build anything.
-  if (loaded && sources.length === 0) {
-    return (
-      <div className="intent">
-        <div className="intent-step">
-          <div className="intent-head">
-            <h1 className="display">Welcome to Otium</h1>
-            <p className="sub">Finite sessions built from the feeds you choose - not an endless stream.</p>
-          </div>
-          <p className="firstrun-step">
-            You don't follow anything yet. Head to your <b>Library</b> to add your first source - any RSS/Atom
-            feed, YouTube channel, or podcast. Then come back and pick how long you have.
-          </p>
-          <button className="btn" onClick={() => nav("/sections")}>
-            Go to Library
-          </button>
-          <HowItWorks defaultOpen />
-        </div>
-      </div>
-    );
-  }
-
-  return (
-    <div className={`intent ${step === 2 ? "choose-scope" : ""}`} onPointerDown={stepDown} onPointerUp={stepUp} onPointerCancel={() => { press.current = null; }}>
-      {step === 1 && (
-        <div className="intent-step" key="step-time">
-          <div className="intent-head">
-            <h1 className="display">How long?</h1>
-            <p className="sub">{custom ? "Set a length, then choose what to read." : "Tap a length to choose what to read."}</p>
-          </div>
-
-          {!custom ? (
-            <>
-              {/* Tapping a preset picks it AND advances - custom length uses an explicit Next action. */}
-              <div className="time-presets">
-                {prefs.presets.map((v) => (
-                  <button key={v} className="time-chip" onClick={() => (setMinutes(v), setStep(2))}>
-                    {minutesLabel(v)}
-                  </button>
-                ))}
-              </div>
-              <button className="intent-link" onClick={() => setCustom(true)}>
-                custom length
-              </button>
-            </>
-          ) : (
-            <>
-              <div className="time-custom">
-                <div className="time-readout">
-                  <span className="big">{minutes ?? 0}</span>
-                  <span className="unit">min</span>
-                </div>
-                <input
-                  className="time-slider"
-                  type="range"
-                  min={MIN_MINUTES}
-                  max={MAX_MINUTES}
-                  step={STEP}
-                  value={minutes ?? MIN_MINUTES}
-                  onChange={(e) => setMinutes(Number(e.target.value))}
-                  aria-label="How long"
-                />
-                <input
-                  className="field time-number"
-                  type="number"
-                  min={MIN_MINUTES}
-                  max={MAX_MINUTES}
-                  value={minutes ?? MIN_MINUTES}
-                  onChange={(e) => setMinutes(Math.min(MAX_MINUTES, Math.max(MIN_MINUTES, Number(e.target.value) || MIN_MINUTES)))}
-                  aria-label="Minutes"
-                />
-                <button className="intent-link" onClick={() => setCustom(false)}>
-                  use a preset
-                </button>
-              </div>
-              <button className="btn" onClick={() => setStep(2)} disabled={minutes == null}>
-                Choose what to read →
-              </button>
-            </>
-          )}
-        </div>
-      )}
-
-      {step === 2 && (
-        <div className="intent-step slide-up step-sections" key="step-section">
-          <div className="scope-options">
-          <div className="intent-head">
-            <button className="intent-back" onClick={() => setStep(1)} aria-label="Back to length">
-              ← {minutesLabel(minutes ?? 0)}
-            </button>
-            <h1 className="display">What to read</h1>
-            <p className="sub">{multi ? "Pick any sections to combine." : "Choose a section, or keep everything selected."}</p>
-          </div>
-
-          {/* Everything is a distinct full-width tile (single-select only). */}
-          {!multi && (
-            <button className={`sec-tile everything ${effectiveEverything ? "on" : ""}`} aria-pressed={effectiveEverything} onClick={pickEverything}>
-              <span className="sec-tile-name">Everything you follow</span>
-              <span className="sec-tile-meta">all your sources</span>
-            </button>
-          )}
-
-          {sections.length > 0 && (
-            <>
-              {!multi && (
-                <div className="sec-divider">
-                  <span>or choose a section</span>
-                </div>
-              )}
-              <div className="sec-tiles">
-                {sections.map((m) => {
-                  const on = !everything && pickedSections.includes(m.slug);
-                  return (
-                    <button
-                      key={m.slug}
-                      className={`sec-tile ${on ? "on" : ""}`}
-                      onClick={() => (multi ? toggleSection(m.slug) : pickSection(m.slug))}
-                      aria-pressed={on}
-                    >
-                      <span className="sec-tile-name">{m.name}</span>
-                      <span className="sec-tile-meta">
-                        {m.topic_count === 1 ? "1 topic" : `${m.topic_count} topics`}
-                      </span>
-                    </button>
-                  );
-                })}
-              </div>
-            </>
-          )}
-
-          {/* Switch between one section and a combined scope. */}
-          {sections.length > 1 && (
-            <button
-              className="intent-link sec-multi-link"
-              onClick={() => {
-                setMulti((v) => !v);
-                setPickedSections([]);
-                setEverything(true);
-              }}
-            >
-              {multi ? "← back to single" : "select multiple"}
-            </button>
-          )}
-
-          </div>
-          {beginControl}
-        </div>
-      )}
-
-      {step === 3 && (
-        <div className="intent-step slide-up step-sections step-tune" key="step-topics">
-          <div className="intent-head">
-            <button className="intent-back" onClick={() => setStep(2)} aria-label="Back to sections">
-              ← {effectiveEverything ? "everything" : pickedSections.length === 1 ? sectionName(sections, pickedSections[0]) : `${pickedSections.length} sections`}
-            </button>
-            <p className="intent-summary">{minutesLabel(minutes ?? 0)} · {scopeLabel}</p>
-            <h1 className="display">Customize topics</h1>
-            <p className="sub">Optional: leave out topics for this session.</p>
-          </div>
-
-          {/* Topics grouped by their section header. For Everything this is every
-              section's topics (so you can still filter individually); for a picked
-              section (or sections) it's just those. Tap a pill to drop it. */}
-          {scopedTopics.length > 0 && (
-            <div className="topic-tune open">
-              <div className="topic-tune-head">
-                <span className="pick-group-label">Topics · {keptTopics.length} of {scopedTopics.length} on</span>
-              </div>
-              {activeSectionSlugs.map((slug) => {
-                const list = topicsBySection.get(slug) ?? [];
-                const sec = sections.find((s) => s.slug === slug);
-                if (list.length === 0) return null;
-                return (
-                  <div className="topic-group" key={slug}>
-                    {activeSectionSlugs.length > 1 && <div className="pick-group-sublabel">{sec?.name}</div>}
-                    <div className="topic-chips">
-                      {list.map((t) => {
-                        const on = !excluded.includes(t.slug);
-                        return (
-                          <button
-                            key={t.slug}
-                            className={`topic-chip ${on ? "on" : "off"}`}
-                            onClick={() => toggleExclude(t.slug)}
-                            aria-pressed={on}
-                          >
-                            {t.name}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-
-          {/* #152: the scope has YouTube sources, so let the reader choose shorts vs
-              long-form for this session. Only appears when there's video to filter. */}
-          {scopeHasVideo && (
-            <div className="shorts-toggle">
-              <div className="shorts-copy">
-                <b>YouTube Shorts</b>
-                <span>{includeShorts ? "Shown alongside longer videos." : "Hidden - long-form videos only."}</span>
-              </div>
-              <button
-                role="switch"
-                aria-checked={includeShorts}
-                aria-label="Include YouTube Shorts"
-                className={`switch ${includeShorts ? "on" : ""}`}
-                onClick={() => setIncludeShorts((v) => !v)}
-              >
-                <span className="switch-knob" />
-              </button>
-            </div>
-          )}
-
-          {beginControl}
-        </div>
-      )}
-    </div>
-  );
-}
-
-function sectionName(sections: Section[], slug: string): string {
-  return sections.find((s) => s.slug === slug)?.name ?? "section";
+            {otherPresets.slice(0, 1).map((preset) => <button key={preset.id} className="launcher-row" disabled={busy || !hasSupply(preset.setup) || invalidSetup(preset.setup)} onClick={() => begin(preset.setup)}><span><strong>{preset.name}</strong><small>Preset · {setupLabel(preset.setup)}</small></span><ChevronRight size={18}/></button>)}
+            {!otherPresets.length && <button className="launcher-row" onClick={() => setCustom(true)}><span>Create a preset</span><Plus size={18}/></button>}
+            {recent[0] && <><div className="launcher-recent"><button className="launcher-row" onClick={() => setSheet("recent")}><span><strong>{recent[0].minutes} min {mediaLabel[recent[0].media].toLowerCase()}</strong><small>Recent · {scopeLabel(recent[0])}</small></span><ChevronRight size={18}/></button><button className="icon-btn" aria-label="Save recent session as preset" onClick={() => setSave({ setup: recent[0] })}><Bookmark size={18}/></button></div></>}
+            {suggestion && <div className="launcher-suggestion"><button onClick={() => setSave({ setup: suggestion })}>Used twice. Save as preset?</button><button className="icon-btn" aria-label="Dismiss preset suggestion" onClick={() => updateData({ ...data, dismissed: [...data.dismissed, setupKey(suggestion)] })}><X size={16}/></button></div>}
+            {!sources.some((source) => (source.unseen_count ?? 0) > 0) && <p className="launcher-meta">No new items. Add or refresh sources in Library.</p>}
+        </> : <>
+            <fieldset className="launcher-group"><legend>Duration</legend><div className="launcher-options">{prefs.presets.slice(0, 4).map((minutes) => <button key={minutes} aria-pressed={setup.minutes === minutes} onClick={() => setSetup({ ...setup, minutes })}>{minutes} min</button>)}</div><label className="launcher-duration">Minutes<input type="number" min={5} max={120} value={setup.minutes} onChange={(event) => setSetup({ ...setup, minutes: Math.round(Math.max(5, Math.min(120, Number(event.target.value) || 5))) })}/></label></fieldset>
+            <label className="launcher-field">Scope<select value={setup.sections.length === 0 ? "" : setup.sections.length === 1 ? setup.sections[0] : "__multiple"} onChange={(event) => setSetup({ ...setup, sections: event.target.value ? [event.target.value] : [], excluded: [] })}><option value="">Everything</option>{sections.map((section) => <option key={section.slug} value={section.slug}>{section.name}</option>)}{setup.sections.length > 1 && <option value="__multiple">{setup.sections.length} sections</option>}</select></label>
+            <fieldset className="launcher-group"><legend>Media</legend><div className="launcher-options">{(["all", "read", "video", "audio"] as const).map((media) => <button key={media} aria-pressed={setup.media === media} onClick={() => setSetup({ ...setup, media })}>{media === "all" ? "All" : mediaLabel[media]}</button>)}</div></fieldset>
+            <button className="launcher-advanced" onClick={() => setSheet("advanced")}><SlidersHorizontal size={17}/>Topics, sections and Shorts<ChevronRight size={17}/></button>
+            <div className="launcher-begin">{!hasSupply(setup) && <p className="launcher-meta">No new items in this scope.</p>}<button className="launcher-save-link" onClick={() => setSave({ setup })}><Bookmark size={16}/>Save preset</button></div>
+        </>}
+        {sheet && <Overlay label={sheet === "advanced" ? "Session options" : sheet === "recent" ? "Recent sessions" : "Presets"} onClose={() => setSheet(null)}><div className="launcher-sheet"><div className="launcher-sheet-head"><h2>{sheet === "advanced" ? "Session options" : sheet === "recent" ? "Recent sessions" : "Presets"}</h2><button className="icon-btn" aria-label="Close" onClick={() => setSheet(null)}><X size={20}/></button></div>
+            {sheet === "advanced" ? <>
+                <h3>Sections</h3><label className="launcher-check"><input type="checkbox" checked={!setup.sections.length} onChange={() => setSetup({ ...setup, sections: [], excluded: [] })}/>Everything</label>
+                {sections.map((section) => <label className="launcher-check" key={section.slug}><input type="checkbox" checked={setup.sections.includes(section.slug)} onChange={() => setSetup({ ...setup, sections: setup.sections.includes(section.slug) ? setup.sections.filter((slug) => slug !== section.slug) : [...setup.sections, section.slug], excluded: [] })}/>{section.name}</label>)}
+                <h3>Topics</h3>{scopedTopics.map((topic) => <label className="launcher-check" key={topic.slug}><input type="checkbox" checked={!setup.excluded.includes(topic.slug)} onChange={() => setSetup({ ...setup, excluded: setup.excluded.includes(topic.slug) ? setup.excluded.filter((slug) => slug !== topic.slug) : [...setup.excluded, topic.slug] })}/>{topic.name}</label>)}
+                {(setup.media === "all" || setup.media === "video") && <label className="launcher-check"><input type="checkbox" checked={setup.includeShorts} onChange={(event) => setSetup({ ...setup, includeShorts: event.target.checked })}/>Include YouTube Shorts</label>}
+                <button className="btn" onClick={() => setSheet(null)}>Done</button>
+            </> : sheet === "presets" ? <><p className="launcher-meta">Saved on this device for your account.</p>{data.presets.map((preset) => <div className="launcher-preset" key={preset.id}><button className="launcher-row" disabled={busy || !hasSupply(preset.setup) || invalidSetup(preset.setup)} onClick={() => begin(preset.setup)}><span><strong>{preset.name}{preset.id === data.defaultId ? " · Default" : ""}</strong><small>{setupLabel(preset.setup)}</small></span><ArrowRight size={18}/></button><div className="launcher-preset-actions"><button onClick={() => { setSheet(null); setSetup(preset.setup); setCustom(true); }}>Customize</button><button onClick={() => setSave({ setup: preset.setup, preset })}>Rename</button>{preset.id !== data.defaultId && <button onClick={() => updateData({ ...data, defaultId: preset.id })}>Make default</button>}<button onClick={() => updateData({ ...data, presets: data.presets.filter((p) => p.id !== preset.id), defaultId: data.defaultId === preset.id ? data.presets.find((p) => p.id !== preset.id)?.id ?? "" : data.defaultId })}>Remove</button></div></div>)}<button className="btn" onClick={() => { setSheet(null); setCustom(true); }}>Custom session</button></> : <>{recent.length ? recent.map((value) => <div className="launcher-recent" key={setupKey(value)}><button className="launcher-row" onClick={() => { setSheet(null); setSetup(value); setCustom(true); }}><span><strong>{value.minutes} min {mediaLabel[value.media].toLowerCase()}</strong><small>{setupLabel(value)}</small></span><ChevronRight size={18}/></button><button className="icon-btn" aria-label={`Save ${value.minutes} minute session as preset`} onClick={() => setSave({ setup: value })}><Bookmark size={18}/></button></div>) : <p>No unsaved sessions.</p>}</>}
+        </div></Overlay>}
+        {save && <SavePresetDialog setup={save.setup} name={save.preset?.name} editId={save.preset?.id} onClose={() => setSave(null)}/>}
+    </section>;
 }

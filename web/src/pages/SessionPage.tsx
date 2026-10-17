@@ -5,12 +5,18 @@ import { ItemActions } from "@/components/ItemActions";
 import { ReaderPage } from "@/components/ReaderPage";
 import { SavePicker } from "@/components/SavePicker";
 import { ScoreBreakdownSheet } from "@/components/ScoreBreakdown";
-import { Dialog } from "@/components/Dialog";
+import { ArrowDown, BookOpen, ChevronRight } from "lucide-react";
+import { ContextInstrument } from "@/components/ContextInstrument";
+import { Brand } from "@/components/Brand";
+import { BottomSheet } from "@/components/BottomSheet";
+import { InlineMedia } from "@/components/InlineMedia";
+import { SessionReview, type SessionReviewData } from "@/components/SessionReview";
+import { SessionPresetPrompt } from "@/components/SessionPresetPrompt";
+import { useAuth } from "@/context/AuthContext";
 import { SourceSheet } from "@/components/SourceSheet";
 import { SessionCard } from "@/components/SessionCard";
 import { cardRender, isMedia, isVideo } from "@/lib/render";
 import { usePreferences } from "@/context/PreferencesContext";
-import { mins } from "@/lib/format";
 import { SHIPPED_LAYOUT, SHIPPED_VARS, cardVars, solveWhenReady } from "@/lib/cardLayout";
 
 // Which in-app content surface an item opens into (#51). Video/audio play in
@@ -40,6 +46,8 @@ const FAST_STREAK = 8;
 export default function SessionPage() {
   const { id = "" } = useParams();
   const nav = useNavigate();
+  const { user } = useAuth();
+  const cacheKey = `otium:session:${user?.id ?? "unknown"}`;
   const { motionAllowed, prefs, presentation } = usePreferences();
 
   const [items, setItems] = useState<Selected[]>([]);
@@ -50,7 +58,15 @@ export default function SessionPage() {
   const [err, setErr] = useState("");
   const [saveItem, setSaveItem] = useState<Item | null>(null); // Save picker target (#57)
   const [menuOpen, setMenuOpen] = useState(false);
-  const [recapOpen, setRecapOpen] = useState(false); // #134: end-of-session recap
+  const [recapOpen, setRecapOpen] = useState(false);
+  const [review, setReview] = useState<SessionReviewData | null>(null);
+  const reviewRef = useRef<SessionReviewData | null>(null);
+  const [saved, setSaved] = useState<Record<number, boolean>>({});
+  const [reviewMedia, setReviewMedia] = useState<Selected | null>(null);
+  const [extending, setExtending] = useState(false);
+  const [ending, setEnding] = useState(false);
+  const endConfirmed = useRef(false);
+  const [endError, setEndError] = useState("");
   const [breakdown, setBreakdown] = useState<Selected | null>(null);
   const [content, setContent] = useState<Selected | null>(null); // the in-app content surface (#51)
   const [sourceSel, setSourceSel] = useState<Selected | null>(null); // source context menu target (#75)
@@ -89,6 +105,7 @@ export default function SessionPage() {
   const fastStreak = useRef(0);
   const shownIds = useRef<Set<number>>(new Set());
   const engaged = useRef<Set<number>>(new Set()); // ids that got open/save
+  const played = useRef<Set<number>>(new Set());
   const opened = useRef<Set<number>>(new Set()); // ids that fired an `open` event (dedupe, #51)
   // #135 active-reading timer: the in-app read/watch currently being timed.
   const readTimer = useRef<{ itemId: number; kind: string; openedAt: number; hiddenMs: number; hiddenSince: number | null } | null>(null);
@@ -98,6 +115,7 @@ export default function SessionPage() {
   // Headlines advanced past without engaging (the "rest of the time" bucket), and
   // the distinct sources a card was actually shown from this session.
   const skipCount = useRef(0);
+  const skippedIds = useRef<Set<number>>(new Set());
   const exposedSources = useRef<Set<number>>(new Set());
   // Session wall-clock start + time the tab was hidden (screen off / app switched),
   // so the recap can separate "time away from otium" from active session time.
@@ -106,6 +124,7 @@ export default function SessionPage() {
   const awaySince = useRef<number | null>(null);
   const lastContent = useRef<Selected | null>(null); // retains the surface item through the exit anim
   const prevIdx = useRef(0);
+  const endRequest = useRef<Promise<unknown>>(Promise.resolve());
   const endedServer = useRef(false); // did we already mark the session ended server-side
   const didInitialScroll = useRef(false);
   // #103: suppress cursor persistence during the initial resume. Otherwise the
@@ -115,6 +134,58 @@ export default function SessionPage() {
   const suppressPersist = useRef(true);
   const stageRef = useRef<HTMLDivElement>(null);
   const itemEls = useRef<(HTMLDivElement | null)[]>([]);
+
+  const persistActivity = useRef<() => void>(() => {});
+  persistActivity.current = () => {
+    if (loading) return;
+    try {
+      const lightweight = (list: Selected[]) => list.map((sel) => ({ ...sel, item: { ...sel.item, content: "" } }));
+      localStorage.setItem(cacheKey, JSON.stringify({ id, items: lightweight(items), duration, themes, endConfirmed: endConfirmed.current,
+        review: reviewRef.current ? { ...reviewRef.current, items: lightweight(reviewRef.current.items) } : null,
+        elapsed, seen: [...shownIds.current], opened: [...opened.current], played: [...played.current], engaged: [...engaged.current],
+        skipped: [...skippedIds.current], skips: skipCount.current, reading: readMsByKind.current,
+        sources: [...exposedSources.current], away: awayMs.current }));
+    } catch { /* Local storage may be unavailable; the server still owns the queue. */ }
+  };
+  const finishSessionRef = useRef<() => void>(() => {});
+  function finishSession() {
+    if (reviewRef.current) return;
+    stopRead();
+    const snapshot: SessionReviewData = {
+      items: items.filter((sel, index, all) => shownIds.current.has(sel.item.id) && all.findIndex((entry) => entry.item.id === sel.item.id) === index),
+      opened: [...opened.current], played: [...played.current], skipped: [...skippedIds.current], skips: skipCount.current,
+      activeSeconds: elapsed, awaySeconds: awayMs.current / 1000, reading: { ...readMsByKind.current },
+      sources: exposedSources.current.size, cursor: Math.min(current, items.length - 1), duration,
+    };
+    reviewRef.current = snapshot;
+    setReview(snapshot);
+    setCheckin(null);
+    setMenuOpen(false);
+    endServer();
+    persistActivity.current();
+  }
+
+  finishSessionRef.current = finishSession;
+
+  useEffect(() => {
+    if (!recapOpen || !review) return;
+    let cancelled = false;
+    void Promise.all(review.items.map(async ({ item }) => {
+      try { const collections = await api.collections(item.id); return [item.id, collections.some((collection) => collection.contains)] as const; }
+      catch { return [item.id, false] as const; }
+    })).then((entries) => { if (!cancelled) setSaved(Object.fromEntries(entries)); });
+    return () => { cancelled = true; };
+  }, [recapOpen, review]);
+
+  function closeSave() {
+    const target = saveItem;
+    setSaveItem(null);
+    if (target) void api.collections(target.id).then((collections) => {
+      const contains = collections.some((collection) => collection.contains);
+      setSaved((previous) => ({ ...previous, [target.id]: contains }));
+      if (contains && !reviewRef.current) engaged.current.add(target.id);
+    }).catch(() => {});
+  }
 
   // The authoritative render state for a card's callout (#96): the resolved value
   // once fetched, else the synchronous guess off the payload.
@@ -129,16 +200,26 @@ export default function SessionPage() {
   const endServer = useCallback(() => {
     if (endedServer.current) return;
     endedServer.current = true;
-    if (id) api.updateSession(id, { status: "ended" }).catch(() => {});
+    setEndError("");
+    setEnding(true);
+    endConfirmed.current = false;
+    if (id) endRequest.current = api.updateSession(id, { status: "ended" }).then(() => {
+      endConfirmed.current = true;
+      persistActivity.current();
+    }).catch((error) => {
+      endedServer.current = false;
+      setEndError(`Could not end the session: ${String(error.message ?? error)}`);
+    }).finally(() => setEnding(false));
   }, [id]);
 
   // goHome ends the session and returns to intent. The explicit exit for the
   // end-card's "Start a new session", the fast-scroll "Something else", and the
   // empty-state button. Never fired automatically (#79).
   const goHome = useCallback(() => {
+    if (extending || ending) return;
     endServer();
     nav("/");
-  }, [endServer, nav]);
+  }, [endServer, nav, extending, ending]);
 
   // Load / resume the active session by id. If there is no active session, or the
   // URL points at a session that's no longer current (superseded / ended), this
@@ -146,24 +227,45 @@ export default function SessionPage() {
   useEffect(() => {
     let cancelled = false;
     endedServer.current = false;
+    endConfirmed.current = false;
     didInitialScroll.current = false;
     suppressPersist.current = true;
     setLoading(true);
     setErr("");
-    setElapsed(0);
+    let cached: any = null;
+    try { cached = JSON.parse(localStorage.getItem(cacheKey) || "null"); } catch { /* no local activity */ }
+    if (cached?.id !== id) cached = null;
+    setElapsed(cached?.elapsed ?? 0);
+    reviewRef.current = cached?.review ?? null;
+    setReview(reviewRef.current);
+    setRecapOpen(false);
     setOverIdx(null);
     setCheckin(null);
     fastStreak.current = 0;
     shownAt.current = Date.now();
-    shownIds.current = new Set();
-    engaged.current = new Set();
-    opened.current = new Set();
-    readMsByKind.current = { read: 0, video: 0, audio: 0 };
-    skipCount.current = 0;
-    exposedSources.current = new Set();
+    shownIds.current = new Set(cached?.seen ?? []);
+    engaged.current = new Set(cached?.engaged ?? []);
+    opened.current = new Set(cached?.opened ?? []);
+    played.current = new Set(cached?.played ?? []);
+    readMsByKind.current = cached?.reading ?? { read: 0, video: 0, audio: 0 };
+    skipCount.current = cached?.skips ?? 0;
+    skippedIds.current = new Set(cached?.skipped ?? []);
+    exposedSources.current = new Set(cached?.sources ?? []);
     sessionStart.current = Date.now();
-    awayMs.current = 0;
+    awayMs.current = cached?.away ?? 0;
     awaySince.current = null;
+    if (cached?.review && cached?.items?.length) {
+      setItems(cached.items);
+      setDuration(cached.duration);
+      setThemes(cached.themes ?? []);
+      setCurrent(cached.review.cursor);
+      prevIdx.current = cached.review.cursor;
+      endConfirmed.current = cached.endConfirmed ?? true;
+      endedServer.current = endConfirmed.current;
+      if (!endConfirmed.current) setEndError("This session's ending could not be confirmed. Retry to mark it ended.");
+      setLoading(false);
+      return;
+    }
     api
       .currentSession()
       .then((s) => {
@@ -178,9 +280,8 @@ export default function SessionPage() {
         const start = Math.min(Math.max(0, s.cursor), Math.max(0, s.items.length - 1));
         setCurrent(start);
         prevIdx.current = start;
-        // Items already passed were seen on a prior visit; seed shownIds so we
-        // don't re-fire `seen` for them on resume.
-        s.items.slice(0, start).forEach((it) => shownIds.current.add(it.item.id));
+        // Local activity records exactly which items were displayed. A cursor
+        // alone is not evidence that every earlier queue item was shown.
         setLoading(false);
       })
       .catch((e: any) => {
@@ -192,7 +293,7 @@ export default function SessionPage() {
     return () => {
       cancelled = true;
     };
-  }, [id, nav]);
+  }, [id, nav, cacheKey]);
 
   // Solve the focused card's layout.
   //
@@ -204,7 +305,7 @@ export default function SessionPage() {
   useEffect(() => {
     const stage = stageRef.current;
     const card = itemEls.current[current];
-    if (!stage || !card) return;
+    if (!stage || !card || review) return;
     let cancel = solveWhenReady(stage, stage, card, SHIPPED_LAYOUT);
     const onResize = () => {
       cancel();
@@ -218,12 +319,12 @@ export default function SessionPage() {
       observer.disconnect();
       window.removeEventListener("resize", onResize);
     };
-  }, [current, items, renderMap, prefs, presentation]);
+  }, [current, items, renderMap, prefs, presentation, review]);
 
   // Resume scroll: after the queue renders, jump (no animation) to the stored
   // cursor so a refresh lands where the user left off.
   useEffect(() => {
-    if (loading || didInitialScroll.current || items.length === 0) return;
+    if (loading || review || didInitialScroll.current || items.length === 0) return;
     didInitialScroll.current = true;
     const stage = stageRef.current;
     if (!stage) {
@@ -244,7 +345,7 @@ export default function SessionPage() {
       jump();
       suppressPersist.current = false;
     }, 300);
-  }, [loading, items, current]);
+  }, [loading, items, current, review]);
 
   // Load the fast-scroll check-in setting once. When off, no dwell is measured
   // and no nudge fires (the observer reads fastCheckin.current at advance time).
@@ -283,7 +384,8 @@ export default function SessionPage() {
   // Active-time ticker (pauses while hidden).
   useEffect(() => {
     const t = window.setInterval(() => {
-      if (document.visibilityState === "visible") setElapsed((e) => e + 1);
+      if (document.visibilityState === "visible" && !reviewRef.current) setElapsed((e) => e + 1);
+      persistActivity.current();
     }, 1000);
     return () => window.clearInterval(t);
   }, []);
@@ -295,23 +397,23 @@ export default function SessionPage() {
   useEffect(() => {
     const onEnd = (e: Event) => {
       (e as CustomEvent).detail?.ack?.();
-      setRecapOpen(true);
+      finishSession();
     };
     window.addEventListener("otium:request-end", onEnd);
     return () => window.removeEventListener("otium:request-end", onEnd);
-  }, []);
+  });
 
   // Flush the latest pending cursor on departure as well as after scrolling.
   const pendingCursor = useRef<{ id: string; cursor: number } | null>(null);
   useEffect(() => {
-    if (loading || !id || suppressPersist.current) return;
+    if (loading || review || !id || suppressPersist.current) return;
     pendingCursor.current = { id, cursor: current };
     const t = window.setTimeout(() => {
       pendingCursor.current = null;
       api.updateSession(id, { cursor: current }).catch(() => {});
     }, 250);
     return () => window.clearTimeout(t);
-  }, [current, id, loading]);
+  }, [current, id, loading, review]);
   useEffect(() => () => {
     const pending = pendingCursor.current;
     if (pending) void api.updateSession(pending.id, { cursor: pending.cursor }).catch(() => {});
@@ -334,6 +436,7 @@ export default function SessionPage() {
   // recap can report "time away from otium" as its own line.
   useEffect(() => {
     function onVis() {
+      if (reviewRef.current) return;
       const t = readTimer.current;
       if (t) {
         if (document.hidden) {
@@ -351,7 +454,9 @@ export default function SessionPage() {
       }
     }
     document.addEventListener("visibilitychange", onVis);
-    return () => document.removeEventListener("visibilitychange", onVis);
+    const save = () => persistActivity.current();
+    window.addEventListener("pagehide", save);
+    return () => { document.removeEventListener("visibilitychange", onVis); window.removeEventListener("pagehide", save); stopRead(); persistActivity.current(); };
   }, []);
 
   // #135: whenever the in-app reader clears (via any path - scrim, back button,
@@ -366,11 +471,11 @@ export default function SessionPage() {
   // the queue is fixed and durable.
   useEffect(() => {
     const stage = stageRef.current;
-    if (!stage) return;
+    if (!stage || review) return;
     const obs = new IntersectionObserver(
       (entries) => {
         for (const en of entries) {
-          if (!en.isIntersecting) continue;
+          if (!en.isIntersecting || reviewRef.current) continue;
           const idx = Number((en.target as HTMLElement).dataset.idx);
           if (Number.isNaN(idx)) continue;
           // Leaving a card flushes any inline watch/read time it accrued (#135):
@@ -393,7 +498,8 @@ export default function SessionPage() {
               // through, or saved.
               if (!wasEngaged) {
                 api.itemEvent(left.item.id, "skip", id).catch(() => {});
-                skipCount.current += 1; // #149: a headline passed without opening
+                skipCount.current += 1;
+                skippedIds.current.add(left.item.id); // #149: a headline passed without opening
               }
               // Dwell measurement + the fast-scroll nudge are gated by the setting.
               // Dwell is append-only raw material (never re-ranks); the nudge is a
@@ -419,7 +525,7 @@ export default function SessionPage() {
           // Reaching the terminal end-card (#79) is the moment the session is
           // genuinely done: mark it ended server-side (idempotent). No nav.
           if (idx >= visibleCount) {
-            endServer();
+            finishSessionRef.current();
             continue;
           }
           const it = items[idx];
@@ -435,7 +541,7 @@ export default function SessionPage() {
     itemEls.current.forEach((el) => el && obs.observe(el));
     return () => obs.disconnect();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [items, id, checkin, visibleCount]);
+  }, [items, id, checkin, visibleCount, review]);
 
   function scrollTo(idx: number) {
     const el = itemEls.current[idx];
@@ -505,6 +611,7 @@ export default function SessionPage() {
   // consumption: fire an `open` event exactly once per item so it counts as
   // engagement, not a skip.
   function recordOpen(sel: Selected) {
+    if (reviewRef.current) return;
     engaged.current.add(sel.item.id);
     if (!opened.current.has(sel.item.id)) {
       opened.current.add(sel.item.id);
@@ -519,6 +626,7 @@ export default function SessionPage() {
   // #135 active-reading timer: measure time the in-app reader/player is open AND
   // the tab is visible; pause while hidden (see the visibilitychange effect).
   function startRead(sel: Selected) {
+    if (reviewRef.current) return;
     readTimer.current = {
       itemId: sel.item.id,
       kind: readKind(sel.item),
@@ -557,11 +665,10 @@ export default function SessionPage() {
   function openExternal(sel: Selected) {
     recordOpen(sel);
     // External read: engagement counted, duration unmeasured (excluded from averages).
-    api.recordRead(sel.item.id, id ?? "", 0, true, readKind(sel.item)).catch(() => {});
+    if (!reviewRef.current) api.recordRead(sel.item.id, id ?? "", 0, true, readKind(sel.item)).catch(() => {});
     window.open(sel.item.url, "_blank", "noopener");
   }
   function save(sel: Selected) {
-    engaged.current.add(sel.item.id);
     setSaveItem(sel.item);
   }
   function next() {
@@ -581,12 +688,27 @@ export default function SessionPage() {
   // #142: add more time from the session-over hub. Unfreezes the reel and drops
   // the user back where they were (the item we froze at) with the extra minutes,
   // so "add time" feels like the session simply continued.
-  function extend(more: number) {
-    const back = overIdx;
-    setDuration((d) => d + more);
-    setOverIdx(null);
-    setRecapOpen(false);
-    if (back !== null) requestAnimationFrame(() => scrollTo(Math.min(back, items.length - 1)));
+  async function extend(more: number) {
+    if (extending) return;
+    setExtending(true);
+    setEndError("");
+    try {
+      await endRequest.current;
+      await api.updateSession(id, { extend_min: more });
+      const back = reviewRef.current?.cursor ?? overIdx ?? current;
+      endedServer.current = false;
+      endConfirmed.current = false;
+      reviewRef.current = null;
+      setReview(null);
+      setDuration((d) => d + more);
+      setOverIdx(null);
+      setRecapOpen(false);
+      didInitialScroll.current = false;
+      setCurrent(Math.min(back, items.length - 1));
+      prevIdx.current = Math.min(back, items.length - 1);
+      persistActivity.current();
+    } catch (error: any) { setEndError(String(error.message ?? error)); }
+    finally { setExtending(false); }
   }
 
 
@@ -595,9 +717,9 @@ export default function SessionPage() {
   // reader is open (they own their own keys) or while typing.
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
-      if (content || menuOpen || breakdown || saveItem || sourceSel || checkin) return;
+      if (content || menuOpen || breakdown || saveItem || sourceSel || checkin || review) return;
       const t = e.target as HTMLElement | null;
-      if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.isContentEditable)) return;
+      if (t?.closest("input,textarea,select,button,a,[contenteditable]")) return;
       switch (e.key) {
         case "ArrowDown":
         case "ArrowRight":
@@ -620,7 +742,7 @@ export default function SessionPage() {
           break;
         case "Backspace":
           e.preventDefault();
-          setRecapOpen(true); // #149: ending shows the recap, same as every other end route
+          finishSession();
           break;
       }
     }
@@ -628,14 +750,15 @@ export default function SessionPage() {
     return () => window.removeEventListener("keydown", onKey);
   });
 
-  if (err) return <div className="err">Couldn't resume your session: {err}</div>;
-  if (loading) return <div className="spinner">resuming…</div>;
+  if (err) return <div className="focus-session afterglow-session"><div className="center"><p className="err">Couldn't resume your session: {err}</p><button className="btn" onClick={() => window.location.reload()}>Retry</button></div><ContextInstrument mode="app" eyebrow="Session" label="Could not load" action={{ label: "Back", onClick: () => nav("/") }} /></div>;
+  if (loading) return <div className="focus-session afterglow-session"><div className="spinner">Loading session…</div><ContextInstrument mode="session" eyebrow="Session" label="Loading" action={{ label: "Back", onClick: () => nav("/") }} /></div>;
   if (items.length === 0) {
     return (
       <div className="center">
-        <p className="display">Nothing left to surface.</p>
-        <p>You're caught up on {themes.length ? themes.join(", ") : "everything you follow"}.</p>
-        <button className="btn ghost" onClick={goHome}>Back to intent</button>
+        <p className="display">No items available.</p>
+        <p>No eligible items in {themes.length ? themes.join(", ") : "your sources"}.</p>
+        <button className="btn ghost" onClick={goHome}>New session</button>
+        <ContextInstrument mode="app" eyebrow="Session" label="No items available" action={{ label: "Back", onClick: goHome }} />
       </div>
     );
   }
@@ -643,7 +766,7 @@ export default function SessionPage() {
   const shownItems = overIdx !== null ? items.slice(0, visibleCount) : items;
 
   return (
-    <div className="focus-session">
+    <div className="focus-session afterglow-session">
       {/* Desktop-only keyboard hint (#4); hidden on mobile so the top is clean. */}
       <div className="timestrip">
         <span className="kbd-hint" aria-hidden>
@@ -666,12 +789,12 @@ export default function SessionPage() {
           <p>{fastStreak.current} cards passed without opening any.</p>
           <div className="checkin-actions">
             <button className="mini" onClick={dismissCheckin}>Keep going</button>
-            <button className="mini solid" onClick={() => { setCheckin(null); setRecapOpen(true); }}>End session</button>
+            <button className="mini solid" onClick={() => { setCheckin(null); finishSession(); }}>End session</button>
           </div>
         </div>
       )}
 
-      <div className="stage" ref={stageRef} style={cardVars(SHIPPED_VARS)}>
+      {!review && <div className="stage" ref={stageRef} style={cardVars(SHIPPED_VARS)}>
         {shownItems.map((it, i) => (
           <SessionCard
             key={`${it.item.id}-${i}`}
@@ -691,6 +814,7 @@ export default function SessionPage() {
             onSource={(s) => setSourceSel(s)}
             onMenu={() => setMenuOpen(true)}
             onFirstPlay={(s) => {
+              played.current.add(s.item.id);
               recordOpen(s);
               startRead(s);
             }}
@@ -714,101 +838,36 @@ export default function SessionPage() {
             itemEls.current[visibleCount] = el;
           }}
         >
-          {/* #142: the session-over hub. When time's up it's not a hard stop -
-              add more time, start fresh, or end and see the recap. All three are
-              first-class here (extend is not buried as a fine-print link). */}
-          <div className="center session-over" style={{ padding: "20px 0" }}>
-            <p className="display">{overIdx !== null ? "That's your session." : "That's everything new."}</p>
-            <p>
-              {overIdx !== null
-                ? `The ${duration} minutes you set are up - ${mins(elapsed)} of reading so far.`
-                : `You're caught up on ${themes.length ? themes.join(", ") : "everything you follow"}.`}
-            </p>
-            <div className="session-over-actions">
-              {overIdx !== null && (
-                <div className="extend-row">
-                  <button className="btn ghost" onClick={() => extend(5)}>+5 min</button>
-                  <button className="btn ghost" onClick={() => extend(10)}>+10 min</button>
-                </div>
-              )}
-              <button className="btn" onClick={goHome}>Start a new session</button>
-              <button className="btn" onClick={() => setRecapOpen(true)}>End session</button>
-            </div>
-          </div>
+          <div className="center"><p>Session complete</p></div>
         </div>
-      </div>
+      </div>}
 
-      {/* #142: no timer, no progress bar. Watching the countdown while swiping
-          added stress and made reading feel like a race against the clock - the
-          exact opposite of the intent. The time budget still runs in the
-          background (it surfaces the session-over hub when it's up); we just don't
-          show it ticking. All that stays here is a quiet way to end on your own
-          terms, any time - which opens the recap. */}
-      <div className="session-foot">
-        <button className="session-end" onClick={() => setRecapOpen(true)}>
-          End session
+      {review && <div className="session-ending">
+        <Brand compact />
+        <h1>Session complete</h1>
+        <button className="session-review-entry" onClick={() => setRecapOpen(true)}>
+          <BookOpen size={22} strokeWidth={1.6} aria-hidden /><span>Review session</span><ChevronRight size={19} aria-hidden />
         </button>
-      </div>
+        <div className="session-ending-actions">
+          <button className="btn" onClick={goHome} disabled={extending || ending}>New session</button>
+          <button className="btn ghost" onClick={() => void extend(5)} disabled={extending || ending}>+5 min</button>
+          <button className="btn ghost" onClick={() => void extend(10)} disabled={extending || ending}>+10 min</button>
+        </div>
+        {endError && <div><p className="err" role="alert">{endError}</p>{!endedServer.current && <button className="btn ghost" onClick={endServer} disabled={extending || ending}>Retry ending session</button>}</div>}
+        <SessionPresetPrompt sessionId={id} />
+      </div>}
 
-      {/* #149: the end-of-session recap - a plain account of where the time went,
-          nothing more. Each row is a fact (count + the time it took); rows with a
-          zero value are omitted, and the session total sits at the bottom. No
-          verdicts, no "come back when you like" - the numbers speak for themselves. */}
-      <Dialog open={recapOpen} onClose={() => setRecapOpen(false)} kicker="Session recap">
-        {(() => {
-          const openedItems = items.filter((s) => opened.current.has(s.item.id));
-          const kind = (k: "video" | "audio" | "read") => openedItems.filter((s) => contentKind(s.item) === k).length;
-          const articleCount = kind("read");
-          const videoCount = kind("video");
-          const audioCount = kind("audio");
-          const activeSec = elapsed;
-          const awaySec = awayMs.current / 1000;
-          const r = readMsByKind.current;
-          const consumedSec = (r.read + r.video + r.audio) / 1000;
-          const browseSec = Math.max(0, activeSec - consumedSec);
-          const totalSec = activeSec + awaySec;
-          // Show a duration only when it rounds to at least a minute, so a row never
-          // reads "1 · <1 min". Rows themselves are dropped when their count is zero.
-          const dur = (sec: number) => (Math.round(sec / 60) >= 1 ? mins(sec) : null);
-          const rows: { label: string; count?: number; time?: string | null }[] = [];
-          if (articleCount >= 1) rows.push({ label: articleCount === 1 ? "Article opened" : "Articles opened", count: articleCount, time: dur(r.read / 1000) });
-          if (videoCount >= 1) rows.push({ label: videoCount === 1 ? "Video played" : "Videos played", count: videoCount, time: dur(r.video / 1000) });
-          if (audioCount >= 1) rows.push({ label: audioCount === 1 ? "Audio played" : "Audio played", count: audioCount, time: dur(r.audio / 1000) });
-          if (skipCount.current >= 1) rows.push({ label: "Headlines passed", count: skipCount.current, time: dur(browseSec) });
-          if (Math.round(awaySec / 60) >= 1) rows.push({ label: "Time away", time: mins(awaySec) });
-          if (exposedSources.current.size >= 1) rows.push({ label: "Sources", count: exposedSources.current.size });
-          return (
-            <div className="recap">
-              {/* #150: a real 3-column grid (label | count | time). Each row is
-                  display:contents so the counts share one right-aligned column and the
-                  durations share another - no more numbers ping-ponging left/right as
-                  rows do or don't carry a time. Empty cells hold the column. */}
-              <dl className="recap-stats">
-                {rows.map((row) => (
-                  <div className="recap-row" key={row.label}>
-                    <dt>{row.label}</dt>
-                    <span className="recap-count">{row.count != null ? row.count : ""}</span>
-                    <span className="recap-time">{row.time ?? ""}</span>
-                  </div>
-                ))}
-                <div className="recap-row recap-total">
-                  <dt>Session</dt>
-                  <span className="recap-count"></span>
-                  <span className="recap-time">{mins(totalSec)}</span>
-                </div>
-              </dl>
-              <div className="recap-actions">
-                <button className="btn" onClick={goHome}>
-                  Start a new session
-                </button>
-                <button className="intent-link" onClick={() => setRecapOpen(false)}>
-                  back to reading
-                </button>
-              </div>
-            </div>
-          );
-        })()}
-      </Dialog>
+      <ContextInstrument mode={review ? "app" : "session"} eyebrow={review ? "Session complete" : "Session"}
+        label={review ? "Review session" : elapsed >= durationSec ? "Session time reached" : durationSec - elapsed <= 120 ? "A little time left" : durationSec - elapsed <= 300 ? "A few minutes left" : "Session in progress"}
+        onMenu={review ? undefined : () => setMenuOpen(true)} menuLabel="Article and session actions"
+        onLabel={review ? () => setRecapOpen(true) : undefined}
+        action={review ? { label: "Done", onClick: goHome, disabled: extending || ending } : { label: "Next", onClick: next, icon: <ArrowDown size={18} aria-hidden /> }} />
+
+      {review && recapOpen && <SessionReview review={review} onClose={() => setRecapOpen(false)} saved={saved} onSave={save}
+        onRead={(sel) => { if (isMedia(sel.item)) setReviewMedia(sel); else openContent(sel); }} />}
+      <BottomSheet open={reviewMedia !== null} onClose={() => setReviewMedia(null)} kicker={reviewMedia?.source_title} variant="tall">
+        {reviewMedia && <InlineMedia item={reviewMedia.item} onOpenOriginal={() => openExternal(reviewMedia)} onSave={() => save(reviewMedia)} ytHistory={ytHistory} />}
+      </BottomSheet>
 
       <ItemActions
         selected={atEnd ? null : cur}
@@ -822,6 +881,8 @@ export default function SessionPage() {
           setMenuOpen(false);
           setSaveItem(it);
         }}
+        onOpenOriginal={() => { setMenuOpen(false); if (cur) openExternal(cur); }}
+        onEnd={finishSession}
         onWhy={() => {
           setMenuOpen(false);
           if (cur) setBreakdown(cur);
@@ -840,7 +901,7 @@ export default function SessionPage() {
         onClose={closeContent}
         onOpen={() => shown && openExternal(shown)}
         onSave={() => shown && setSaveItem(shown.item)}
-        onNext={readerNext}
+        onNext={review ? undefined : readerNext}
       />
 
       {/* Source context menu (#75): tapping the source name on a card opens this -
@@ -856,7 +917,10 @@ export default function SessionPage() {
 
       {/* Save picker (#57): the deliberate save destination for the card Save,
           the ··· menu, and the reader/player. */}
-      <SavePicker item={saveItem} open={saveItem !== null} onClose={() => setSaveItem(null)} />
+      <SavePicker item={saveItem} open={saveItem !== null} onClose={closeSave} onChange={(item, contains) => {
+        setSaved((previous) => ({ ...previous, [item.id]: contains }));
+        if (contains && !reviewRef.current) engaged.current.add(item.id);
+      }} />
     </div>
   );
 }

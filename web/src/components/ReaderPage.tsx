@@ -5,6 +5,9 @@ import { renderSummary } from "@/lib/html";
 import { fmtDate, readTime, authorRedundant } from "@/lib/format";
 import { ShareActions } from "./ReaderActions";
 import { ImageViewer } from "./ImageViewer";
+import { ContextInstrument } from "./ContextInstrument";
+import { BottomSheet } from "./BottomSheet";
+import "./session-afterglow.css";
 import { Overlay, usePresence } from "./Overlay";
 
 // Shared full-page article reader. Overlay owns its history entry so each
@@ -49,6 +52,7 @@ export function ReaderPage({
   if (currentItem) previousItem.current = currentItem;
   const item = currentItem ?? previousItem.current;
   const { mounted, visible: inView } = usePresence(open);
+  const [menuOpen, setMenuOpen] = useState(false);
   const [drag, setDrag] = useState<number | null>(null);
   const [dragging, setDragging] = useState(false);
   const [advanced, setAdvanced] = useState(false);
@@ -70,6 +74,9 @@ export function ReaderPage({
   const [revealed, setRevealed] = useState(false);
   const lastY = useRef(0);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const pageRef = useRef<HTMLDivElement>(null);
+  const readerActions = useRef({ onNext, onClose });
+  readerActions.current = { onNext, onClose };
   const itemId = item?.id ?? 0;
 
   // Load the reader body when the page opens (or the item changes). Prefer the
@@ -194,6 +201,7 @@ export function ReaderPage({
     setDragging(false);
   }
   function onPointerDown(e: ReactPointerEvent) {
+    if (e.pointerType === "touch") return;
     pointers.current.add(e.pointerId);
     if (pointers.current.size !== 1 || !e.isPrimary || (window.visualViewport?.scale ?? 1) > 1.05) {
       cancelGesture();
@@ -249,6 +257,56 @@ export function ReaderPage({
     pointers.current.delete(e.pointerId);
     cancelGesture();
   }
+
+  // Native touch listeners retain the bottom-start gesture when the browser
+  // takes over vertical panning and cancels its pointer stream.
+  useEffect(() => {
+    const page = pageRef.current;
+    if (!open || !mounted || !page) return;
+    let touch: { id: number; x: number; y: number; time: number; bottom: boolean; axis: string | null } | null = null;
+    const blocked = () => (window.visualViewport?.scale ?? 1) > 1.02 || !!window.getSelection()?.toString();
+    const cancel = () => { touch = null; setDrag(null); setDragging(false); };
+    const down = (event: TouchEvent) => {
+      cancel();
+      if (event.touches.length !== 1 || blocked() || (event.target as Element).closest("button,a,input,textarea,select,iframe,video,audio,img,[contenteditable]")) return;
+      const point = event.touches[0];
+      touch = { id: point.identifier, x: point.clientX, y: point.clientY, time: performance.now(), bottom: atBottom(), axis: null };
+    };
+    const move = (event: TouchEvent) => {
+      if (!touch) return;
+      if (event.touches.length !== 1 || blocked()) { cancel(); return; }
+      const point = event.touches[0];
+      if (point.identifier !== touch.id) { cancel(); return; }
+      const dx = point.clientX - touch.x, dy = point.clientY - touch.y;
+      if (!touch.axis && Math.hypot(dx, dy) > 12) touch.axis = Math.abs(dy) > Math.abs(dx) * 1.2 ? dy < 0 ? "up" : "down" : Math.abs(dx) > Math.abs(dy) * 1.2 ? dx > 0 ? "right" : "left" : "scroll";
+      const next = touch.axis === "up" && touch.bottom && readerActions.current.onNext && dy < -12 && -dy > Math.abs(dx) * 1.5;
+      const back = touch.axis === "right" && touch.x > 24 && dx > 14 && dx > Math.abs(dy) * 1.5;
+      if ((next || back) && event.cancelable) event.preventDefault();
+      if (back) { setDragging(true); setDrag(Math.max(0, dx)); }
+    };
+    const up = (event: TouchEvent) => {
+      const gesture = touch;
+      cancel();
+      if (!gesture || event.touches.length || blocked() || performance.now() - gesture.time > 900) return;
+      const point = Array.from(event.changedTouches).find((point) => point.identifier === gesture.id);
+      if (!point) return;
+      const dx = point.clientX - gesture.x, dy = point.clientY - gesture.y;
+      if (gesture.axis === "up" && gesture.bottom && atBottom() && dy <= -90 && -dy > Math.abs(dx) * 1.5 && readerActions.current.onNext) {
+        setAdvanced(true);
+        readerActions.current.onNext();
+      } else if (gesture.axis === "right" && gesture.x > 24 && dx >= 90 && dx > Math.abs(dy) * 1.5) readerActions.current.onClose();
+    };
+    page.addEventListener("touchstart", down, { passive: true });
+    page.addEventListener("touchmove", move, { passive: false });
+    page.addEventListener("touchend", up, { passive: true });
+    page.addEventListener("touchcancel", cancel, { passive: true });
+    document.addEventListener("visibilitychange", cancel);
+    return () => {
+      page.removeEventListener("touchstart", down); page.removeEventListener("touchmove", move);
+      page.removeEventListener("touchend", up); page.removeEventListener("touchcancel", cancel);
+      document.removeEventListener("visibilitychange", cancel);
+    };
+  }, [open, mounted, itemId]);
 
   const readEst = useMemo(() => (body ? readTime(body.html.replace(/<[^>]+>/g, " ")) : ""), [body]);
 
@@ -312,7 +370,8 @@ export function ReaderPage({
   return (
     <Overlay active={open} label={item.title} onClose={onClose}>
     <div
-      className={`readerpage ${inView ? "in" : ""} ${dragging ? "dragging" : ""}`}
+      ref={pageRef}
+      className={`readerpage afterglow-reader ${inView ? "in" : ""} ${dragging ? "dragging" : ""}`}
       style={drag != null ? { transform: `translateX(${drag}px)` } : undefined}
       onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}
@@ -321,9 +380,7 @@ export function ReaderPage({
     >
       <div className="rp-topbar">
         <div className="readerpage-head">
-        <button className="rp-back" onClick={onClose} aria-label="Back">
-          <ChevronLeft size={20} strokeWidth={1.9} aria-hidden />
-        </button>
+        <span className="rp-section-label">Article</span>
         {readEst && <span className="rp-readtime">{readEst}</span>}
         <div className="rp-actions">
           {onSave && (
@@ -371,8 +428,8 @@ export function ReaderPage({
           <div className="rp-loading" role="status">loading the full text…</div>
         ) : state === "external" ? (
           <div className="reader-empty">
-            <p className="reader-empty-lead">No in-app text for this one.</p>
-            <p>It didn't come with a readable body - open it where it lives.</p>
+            <p className="reader-empty-lead">No article text available.</p>
+            <p>Open the original to read this article.</p>
             <button className="btn" onClick={onOpen}>
               Open original
             </button>
@@ -392,14 +449,21 @@ export function ReaderPage({
                 Open source
               </button>
             </div>
+            {onNext && <p className="reader-next-cue">Swipe up for the next item</p>}
           </>
         )}
       </div>
 
-      {/* #87: thin, always-visible, single-ink scroll-progress bar. */}
-      <div className="rp-progress" aria-hidden>
-        <div className="rp-progress-fill" style={{ transform: `scaleX(${progress})` }} />
-      </div>
+      <ContextInstrument mode="reader" eyebrow="Reading" label={progress >= .96 ? "End of article" : progress > .7 ? "Near the end" : sourceTitle || "Article"}
+        onMenu={() => setMenuOpen(true)} menuLabel="Article actions"
+        action={{ label: "Back", onClick: onClose, icon: <ChevronLeft size={18} aria-hidden /> }} />
+      <BottomSheet open={menuOpen} onClose={() => setMenuOpen(false)} kicker="Article actions">
+        <div className="sheet-rows">
+          {onSave && <button className="sheet-row" onClick={() => { setMenuOpen(false); onSave(); }}><span>Save to collection</span><Bookmark size={18} aria-hidden /></button>}
+          <button className="sheet-row" onClick={onOpen}><span>Open original</span><ExternalLink size={18} aria-hidden /></button>
+          <ShareActions item={item} labeled />
+        </div>
+      </BottomSheet>
 
       {/* #149: full-screen zoomable photo viewer for a tapped article image. */}
       {viewerSrc && <ImageViewer src={viewerSrc} onClose={() => setViewerSrc(null)} />}

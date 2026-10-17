@@ -5,6 +5,7 @@ import { TopicPill, CardSource, SourceAvatar, Byline, Blurb, Media } from "@/com
 import { InlineMedia } from "@/components/InlineMedia";
 import { ShareActions } from "@/components/ReaderActions";
 import { isMedia, isVertical } from "@/lib/render";
+import "./session-afterglow.css";
 import { relTime } from "@/lib/format";
 
 // SessionCard is one item in the session reel, lifted out of SessionPage so the
@@ -301,7 +302,7 @@ export const SessionCard = forwardRef<HTMLDivElement, SessionCardProps>(function
 
   return (
     <div
-      className={`snap ${focused ? "" : "away"} ${activeMedia ? "media-card" : ""} ${vert ? "vertical" : ""} ${audioCard ? "audio-card" : ""}`}
+      className={`snap afterglow-card ${focused ? "" : "away"} ${activeMedia ? "media-card" : ""} ${vert ? "vertical" : ""} ${audioCard ? "audio-card" : ""}`}
       data-idx={index}
       ref={ref}
       onPointerDownCapture={(e) => { if (!e.isPrimary || (window.visualViewport?.scale ?? 1) > 1) onPointerCancel?.(e); }}
@@ -392,8 +393,8 @@ export const SessionCard = forwardRef<HTMLDivElement, SessionCardProps>(function
           {/* The solid button appears only when there is something to open IN the
               app. Without full text there is nothing to read here, so the row is
               icons alone and "open original" carries the weight. */}
-          {primary.action === "content" && (
-            <button className="callout-primary" onClick={() => onOpenContent(it)}>
+          {(
+            <button className="callout-primary" onClick={() => primary.action === "content" ? onOpenContent(it) : onOpenExternal(it)}>
               <primary.Icon size={16} strokeWidth={1.9} aria-hidden />
               {primary.label}
             </button>

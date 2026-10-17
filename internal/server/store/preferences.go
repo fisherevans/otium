@@ -88,7 +88,7 @@ func DefaultPreferences() Preferences {
 	return Preferences{
 		Reader: ReaderPrefs{
 			FontSize: 17, LineHeight: 1.62, Measure: 66, Images: true,
-			FontFamily: "charter", FontWeight: 400, Ink: "soft",
+			FontFamily: "newsreader", FontWeight: 400, Ink: "soft",
 		},
 		Card: CardPrefs{
 			MetaSize: 11, SourceSize: 15, TopicTagSize: 13, DateSize: 13,
@@ -232,7 +232,7 @@ func clampPreferences(p *Preferences) {
 // color: anything unrecognized falls back to the safe default. The client maps
 // each key to a concrete system font stack / grayscale ink (prefsToVars).
 var (
-	fontFamilies = map[string]bool{"charter": true, "book": true, "didot": true, "grotesk": true}
+	fontFamilies = map[string]bool{"newsreader": true, "charter": true, "book": true, "didot": true, "grotesk": true}
 	inkShades    = map[string]bool{"ink": true, "graphite": true, "soft": true, "mute": true}
 	// #97: topic pill ink also allows "topic" = keep the topic's own color tint.
 	topicInkShades = map[string]bool{"topic": true, "ink": true, "graphite": true, "soft": true, "mute": true}

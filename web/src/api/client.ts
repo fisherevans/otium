@@ -373,7 +373,7 @@ export interface Settings {
 // The server fills defaults for a fresh user, so this is always fully populated.
 // #90: font_family and ink are curated enum keys (not free-form) - the client
 // maps them to a system font stack / grayscale ink so styling stays on-theme.
-export type FontKey = "charter" | "book" | "didot" | "grotesk";
+export type FontKey = "newsreader" | "charter" | "book" | "didot" | "grotesk";
 export type InkKey = "ink" | "graphite" | "soft" | "mute";
 // #97: the topic pill ink can also be "topic" (keep the topic's own color tint).
 export type TopicInkKey = InkKey | "topic";
@@ -561,10 +561,10 @@ export const api = {
   // Durable sessions (#67 + #69). createSession builds + stores the queue for a
   // single duration; currentSession resumes the active one (204 -> undefined);
   // updateSession advances the cursor or ends it.
-  createSession: (durationMin: number, themes: string[], sections: string[] = [], includeShorts = true) =>
-    req<SessionResponse>("POST", "/sessions", { duration_min: durationMin, themes, sections, include_shorts: includeShorts }),
+  createSession: (durationMin: number, themes: string[], sections: string[] = [], includeShorts = true, media: "all" | "read" | "video" | "audio" = "all") =>
+    req<SessionResponse>("POST", "/sessions", { duration_min: durationMin, themes, sections, include_shorts: includeShorts, media }),
   currentSession: () => req<SessionResponse | undefined>("GET", "/sessions/current"),
-  updateSession: (id: string, patch: { cursor?: number; status?: "ended" }) =>
+  updateSession: (id: string, patch: { cursor?: number; status?: "ended"; extend_min?: number }) =>
     req<{ ok: boolean }>("PATCH", `/sessions/${id}`, patch),
   // On-demand full-text (#98): the best reader body for an item, fetched +
   // readability-extracted server-side for teaser-only topics and cached. Returns

@@ -203,8 +203,9 @@ export default function SourcePage() {
   }
   async function saveKeywords() {
     const list = parseKeywords(kwDraft);
-    if (!await saveChange(() => api.updateSource(sourceId, { archive_keywords: list.join(", ") }))) return;
+    if (!await saveChange(() => api.updateSource(sourceId, { archive_keywords: list.join(", ") }))) return false;
     reload();
+    return true;
   }
   async function setKeepCount(n: number) {
     if (!await saveChange(() => api.updateSource(sourceId, { archive_keep_count: n }))) return;
@@ -546,7 +547,7 @@ export default function SourcePage() {
         />
         <p className="caphint">An article whose title contains any of these is archived on arrival.</p>
         <div className="dlg-actions">
-          <button className="btn" onClick={() => (saveKeywords(), setControlsOpen(false))}>
+          <button className="btn" onClick={async () => { if (await saveKeywords()) setControlsOpen(false); }}>
             Done
           </button>
         </div>

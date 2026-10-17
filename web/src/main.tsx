@@ -8,6 +8,7 @@ import "@/styles/global.css";
 import "@/styles/flow.css";
 import "@/styles/appearance.css";
 import "@/styles/interface.css";
+import "@/styles/afterglow.css";
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>

@@ -16,7 +16,7 @@ import "@/styles/lab.css";
 import "@/styles/appearance.css";
 import "@/styles/interface.css";
 import { forceWebShare } from "@/lib/share";
-import { solveCard } from "@/lib/cardLayout";
+import { solveWhenReady } from "@/lib/cardLayout";
 
 // Render the phone's full action row here, not the desktop's. See lib/share.ts.
 forceWebShare(true);
@@ -105,42 +105,14 @@ function Screen({
   useLayoutEffect(() => {
     const screen = ref.current;
     if (!screen) return;
-    let cancelled = false;
-    let raf = 0;
-
-    // Images must be decoded before any of this means anything: an <img> with no
-    // intrinsic size yet measures as its borders, which both collapses the hero in
-    // the readout AND makes the solver allocate space against a 2px picture.
-    const run = () => {
-      if (cancelled) return;
-      const gaveUp = solveCard(screen, screen.querySelector<HTMLElement>(".lab-reel")!, screen.querySelector<HTMLElement>(".snap")!, layout);
-      raf = requestAnimationFrame(() => {
-        if (cancelled) return;
-        const card = screen.querySelector<HTMLElement>(".snap");
-        const m = card ? { ...measureCard(card), gaveUp } : null;
-        setMetrics(m);
-        onMetrics?.(m);
-      });
-    };
-
-    const imgs = Array.from(screen.querySelectorAll("img"));
-    const pending = imgs.filter((img) => !img.complete || img.naturalHeight === 0);
-    if (pending.length === 0) {
-      raf = requestAnimationFrame(run);
-    } else {
-      let left = pending.length;
-      const done = () => {
-        if (--left <= 0 && !cancelled) raf = requestAnimationFrame(run);
-      };
-      pending.forEach((img) => {
-        img.addEventListener("load", done, { once: true });
-        img.addEventListener("error", done, { once: true });
-      });
-    }
-    return () => {
-      cancelled = true;
-      cancelAnimationFrame(raf);
-    };
+    const reel = screen.querySelector<HTMLElement>(".lab-reel");
+    const card = screen.querySelector<HTMLElement>(".snap");
+    if (!reel || !card) return;
+    return solveWhenReady(screen, reel, card, layout, (gaveUp) => {
+      const metrics = { ...measureCard(card), gaveUp };
+      setMetrics(metrics);
+      onMetrics?.(metrics);
+    });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [fixtureKey, w, h, JSON.stringify(layout)]);
 

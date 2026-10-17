@@ -1,4 +1,6 @@
-import { useState, type CSSProperties } from "react";
+import { useEffect, useRef, useState, type CSSProperties } from "react";
+import { Expand } from "lucide-react";
+import { ImageViewer } from "./ImageViewer";
 import type { Item, Selected } from "@/api/client";
 import { feedIcon } from "@/lib/feedIcons";
 import { clock, relTime, authorRedundant } from "@/lib/format";
@@ -20,6 +22,30 @@ import { clock, relTime, authorRedundant } from "@/lib/format";
 // otherwise a dithered placeholder, with the right aspect + affordances per type.
 export function Media({ item }: { item: Item }) {
   const t = item.media_type;
+  const [expanded, setExpanded] = useState(false);
+  const hold = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const held = useRef(false);
+  const origin = useRef<{ id: number; x: number; y: number } | null>(null);
+  const cancelHold = () => {
+    if (hold.current) clearTimeout(hold.current);
+    hold.current = null;
+    origin.current = null;
+  };
+  useEffect(() => {
+    const down = (event: PointerEvent) => { if (origin.current && (!event.isPrimary || event.pointerId !== origin.current.id)) cancelHold(); };
+    const move = (event: PointerEvent) => { const start = origin.current; if (start && event.pointerId === start.id && Math.hypot(event.clientX - start.x, event.clientY - start.y) > 10) cancelHold(); };
+    document.addEventListener("pointerdown", down, true);
+    document.addEventListener("pointermove", move, true);
+    document.addEventListener("pointerup", cancelHold, true);
+    document.addEventListener("pointercancel", cancelHold, true);
+    document.addEventListener("visibilitychange", cancelHold);
+    return () => {
+      cancelHold();
+      document.removeEventListener("pointerdown", down, true); document.removeEventListener("pointermove", move, true);
+      document.removeEventListener("pointerup", cancelHold, true); document.removeEventListener("pointercancel", cancelHold, true);
+      document.removeEventListener("visibilitychange", cancelHold);
+    };
+  }, []);
   if (t === "audio") {
     return (
       <div className="wave" aria-label="audio">
@@ -42,10 +68,30 @@ export function Media({ item }: { item: Item }) {
   }
   if (t === "article" && item.thumbnail_url) {
     return (
-      <div className="media h">
-        <img src={item.thumbnail_url} alt="" loading="lazy" />
+      <>
+      <div className="media h"
+        onPointerDown={(e) => {
+          cancelHold();
+          held.current = false;
+          if (!e.isPrimary || e.button !== 0 || (window.visualViewport?.scale ?? 1) > 1.05 || (e.target as Element).closest("button")) return;
+          origin.current = { id: e.pointerId, x: e.clientX, y: e.clientY };
+          hold.current = setTimeout(() => { held.current = true; setExpanded(true); }, 480);
+        }}
+        onPointerMove={(e) => {
+          const start = origin.current;
+          if (start && (start.id !== e.pointerId || Math.hypot(e.clientX - start.x, e.clientY - start.y) > 10)) cancelHold();
+        }}
+        onPointerUp={cancelHold}
+        onPointerCancel={cancelHold}
+        onClickCapture={(e) => { if (held.current) { e.preventDefault(); e.stopPropagation(); held.current = false; } }}
+        onContextMenu={(e) => e.preventDefault()}
+      >
+        <img src={item.thumbnail_url} alt="" loading="lazy" draggable={false} referrerPolicy="no-referrer" />
         <div className="dither" />
+        <button className="image-expand" aria-label="View full image" onPointerDown={(e) => e.stopPropagation()} onClick={(e) => { e.stopPropagation(); setExpanded(true); }}><Expand size={15} aria-hidden /></button>
       </div>
+      {expanded && <ImageViewer src={item.thumbnail_url} onClose={() => setExpanded(false)} />}
+      </>
     );
   }
   return null; // quote / plain text: no media

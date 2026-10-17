@@ -19,7 +19,7 @@ const DEFAULTS: Preferences = {
     line_height: 1.62,
     measure: 66,
     images: true,
-    font_family: "charter",
+    font_family: "newsreader",
     font_weight: 400,
     ink: "soft",
   },
@@ -57,9 +57,10 @@ const DEFAULTS: Preferences = {
 // var() and are substituted at use site). #159: inks must be theme tokens, never
 // hex - a literal here is dark-on-dark once the dark palette applies.
 export const FONT_STACKS: Record<FontKey, string> = {
+  newsreader: "var(--reading)",
   charter: "var(--serif)",
   book: "var(--book)",
-  didot: "var(--didot)",
+  didot: '"Didot", "Hoefler Text", "Baskerville", serif',
   grotesk: "var(--grot)",
 };
 export const INK_SHADES: Record<InkKey, string> = {

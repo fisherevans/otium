@@ -1,9 +1,13 @@
 import { useEffect, useState } from "react";
-import { Link, NavLink, Route, Routes, useLocation, useNavigate } from "react-router-dom";
-import { BookOpen, Library, Bookmark, User } from "lucide-react";
+import { Link, Route, Routes, useLocation, useNavigate } from "react-router-dom";
+import { BookOpen, Library, Bookmark, User, MoreHorizontal, ArrowLeft, ChevronRight, Play } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
+import { api } from "@/api/client";
 import { Brand } from "@/components/Brand";
+import { useBack } from "@/lib/navigation";
 import { ThemeToggle } from "@/components/ThemeToggle";
+import { BottomSheet } from "@/components/BottomSheet";
+import { ContextInstrument, InstrumentProvider, useInstrumentConfig } from "@/components/ContextInstrument";
 import { lazy, Suspense } from "react";
 
 // Dev-only layout lab (/lab). Lazily loaded so it never enters the shipped
@@ -34,9 +38,34 @@ import SectionsPage from "@/pages/SectionsPage";
 // --- end #86 ---
 
 export default function App() {
+  return <InstrumentProvider><AppShell /></InstrumentProvider>;
+}
+
+function AppShell() {
   const { loading, unauthenticated } = useAuth();
-  const { pathname } = useLocation();
+  const location = useLocation();
+  const { pathname } = location;
   const nav = useNavigate();
+  const override = useInstrumentConfig();
+  const [menu, setMenu] = useState(false);
+  const [typeMenu, setTypeMenu] = useState(false);
+  const [resumeId, setResumeId] = useState<string | null>(null);
+  useEffect(() => {
+    const openMenu = () => setMenu(true);
+    window.addEventListener("otium:app-menu", openMenu);
+    return () => window.removeEventListener("otium:app-menu", openMenu);
+  }, []);
+  useEffect(() => {
+    if (loading || unauthenticated || pathname.startsWith("/session")) return;
+    let live = true;
+    api.currentSession().then(session => { if (live) setResumeId(session?.session_id || null); }).catch(() => {});
+    return () => { live = false; };
+  }, [pathname, menu, loading, unauthenticated]);
+  useEffect(() => { setMenu(false); setTypeMenu(false); }, [pathname]);
+  const pageName = pathname === "/" ? "New session" : pathname.startsWith("/settings/appearance") ? "Appearance" : pathname.startsWith("/settings") ? "Settings" : pathname.startsWith("/import") ? "Import" : pathname.startsWith("/insights") ? "Insights" : pathname.startsWith("/you") ? "Your Otium" : /^\/(saved|collections)/.test(pathname) ? "Saved" : pathname.startsWith("/history") ? "History" : "Library";
+  const parent = pathname.endsWith("/articles") ? pathname.replace(/\/articles$/, "") : /^\/(sources|topics)\//.test(pathname) || pathname === "/import" ? "/sections" : pathname.startsWith("/settings") || pathname === "/insights" || pathname === "/history" ? "/you" : "/";
+  const back = useBack((location.state as { returnTo?: string } | null)?.returnTo || parent);
+  const go = (path: string) => { setMenu(false); setTypeMenu(false); nav(path, { state: { returnTo: pathname + location.search + location.hash } }); };
   const focused = pathname.startsWith("/session"); // #67: session is /session/:id, full-screen focused mode
 
   // #152: a 401 makes the API client auto-redirect to /auth/login (which bounces
@@ -78,42 +107,12 @@ export default function App() {
   return (
     <div className={`app ${focused ? "focused" : ""}`}>
       <header className={`topbar ${focused ? "session" : ""}`}>
-        {focused ? (
-          <>
-            <button
-              className="chrome-btn left"
-              onClick={() => {
-                // #149: leaving a session via the header is an "end", so surface the
-                // recap instead of silently navigating away. SessionPage listens and
-                // opens the recap (whose own buttons then go home or resume). If
-                // nothing handles it within a tick (not on a session), fall back to
-                // navigating.
-                let handled = false;
-                window.dispatchEvent(new CustomEvent("otium:request-end", { detail: { ack: () => (handled = true) } }));
-                if (!handled) nav("/");
-              }}
-              aria-label="End session"
-            >
-              End session
-            </button>
-            {/* In a session the theme control sits WITH the wordmark, not beside
-                library: day/night is about the page you are reading, and pairing
-                it with the mark keeps the right edge to one destination. */}
-            <span className="wordmark-slot">
-              <Brand compact />
-              <ThemeToggle />
-            </span>
-            <span className="topbar-right"><button className="chrome-btn right" onClick={() => nav("/sections", { state: { returnTo: pathname } })}>Library</button></span>
-          </>
-        ) : (
-          <>
-            <Brand />
-            <span className="topbar-right">
-              <span className="tagline">attention, on purpose</span>
-              <ThemeToggle />
-            </span>
-          </>
-        )}
+        <Link to="/" aria-label="Otium home"><Brand /></Link>
+        <span className="topbar-right">
+          {focused && <button className="chrome-btn" onClick={() => go("/sections")}>Library</button>}
+          <button className="shell-icon" onClick={() => setMenu(true)} aria-label="App menu"><MoreHorizontal size={23} /></button>
+          <button className="font-button" onClick={() => setTypeMenu(true)} aria-label="Type and appearance">Aa</button>
+        </span>
       </header>
 
       {/* #150: key on pathname so <main> remounts each navigation and its entrance
@@ -142,28 +141,28 @@ export default function App() {
         </Routes>
       </main>
 
-      {/* #84: four-tab Model-A shell. Session (/session/:id) is `focused`, so the
-          nav is hidden there and it stays full-screen, exactly as before. */}
-      {!focused && (
-        <nav className="nav">
-          <NavLink to="/" end className={({ isActive }) => (isActive ? "active" : "")}>
-            <BookOpen size={19} strokeWidth={1.75} aria-hidden />
-            <span>read</span>
-          </NavLink>
-          <Link to="/sections" className={/^\/(sections|topics|sources|import)(\/|$)/.test(pathname) ? "active" : ""} aria-current={/^\/(sections|topics|sources|import)(\/|$)/.test(pathname) ? "page" : undefined}>
-            <Library size={19} strokeWidth={1.75} aria-hidden />
-            <span>library</span>
-          </Link>
-          <Link to="/saved" className={/^\/(saved|collections|history)(\/|$)/.test(pathname) ? "active" : ""} aria-current={/^\/(saved|collections|history)(\/|$)/.test(pathname) ? "page" : undefined}>
-            <Bookmark size={19} strokeWidth={1.75} aria-hidden />
-            <span>saved</span>
-          </Link>
-          <Link to="/you" className={/^\/(you|settings|insights)(\/|$)/.test(pathname) ? "active" : ""} aria-current={/^\/(you|settings|insights)(\/|$)/.test(pathname) ? "page" : undefined}>
-            <User size={19} strokeWidth={1.75} aria-hidden />
-            <span>you</span>
-          </Link>
-        </nav>
-      )}
+      {!focused && <ContextInstrument {...(override || {
+        eyebrow: pageName, label: pathname === "/" ? "Choose a session" : pageName,
+        onMenu: () => setMenu(true), menuLabel: "App menu",
+        onLabel: () => setMenu(true),
+        action: { label: pathname === "/" ? "Library" : "Back", onClick: () => pathname === "/" ? go("/sections") : back(), icon: pathname === "/" ? <Library size={18} /> : <ArrowLeft size={18} /> },
+      })} />}
+      <BottomSheet open={menu} onClose={() => setMenu(false)} kicker="Otium">
+        <div className="shell-menu">
+          {!focused && resumeId && <button onClick={() => go(`/session/${resumeId}`)}><Play size={21}/><span>Return to session</span><ChevronRight size={18}/></button>}
+          {[["/", "New session", BookOpen], ["/sections", "Library", Library], ["/saved", "Saved", Bookmark], ["/you", "Your Otium", User]].map(([path, label, Glyph]) => {
+            const Icon = Glyph as typeof BookOpen;
+            return <button key={String(path)} onClick={() => go(String(path))}><Icon size={21} /><span>{String(label)}</span><ChevronRight size={18} /></button>;
+          })}
+          {focused && <button onClick={() => { setMenu(false); window.dispatchEvent(new CustomEvent("otium:request-end", { detail: { ack: () => {} } })); }}><ArrowLeft size={21} /><span>End session</span></button>}
+        </div>
+      </BottomSheet>
+      <BottomSheet open={typeMenu} onClose={() => setTypeMenu(false)} kicker="Type and appearance">
+        <div className="shell-menu">
+          <button onClick={() => go("/settings/appearance")}><span className="font-button">Aa</span><span>Reading and appearance</span><ChevronRight size={18} /></button>
+          <div className="shell-theme"><span>Light / dark</span><ThemeToggle /></div>
+        </div>
+      </BottomSheet>
     </div>
   );
 }

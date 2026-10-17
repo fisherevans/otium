@@ -245,9 +245,8 @@ export default function CollectionsPage({ embedded = false }: { embedded?: boole
       )}
       <div className="lib-topbar">
         {embedded ? <span /> : <h1 className="display">Collections</h1>}
-        <button className="lib-fsbtn" onClick={() => setCreating((c) => !c)}>{creating ? "Cancel" : "New"}</button>
+        <button className="lib-fsbtn" onClick={() => setCreating((c) => !c)}>{creating ? "Cancel" : "New collection"}</button>
       </div>
-      <p className="sub">Lists you've set items aside into. Saved and Read Later are always here; make your own for anything else.</p>
 
       {err && !manage && <p className="err" role="alert">{err}</p>}
         {notice && <p role="status">{notice}</p>}

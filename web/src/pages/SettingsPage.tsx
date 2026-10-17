@@ -88,9 +88,6 @@ export default function SettingsPage() {
       <div className="lib-topbar">
         <h1 className="display">Settings</h1>
       </div>
-      <p className="sub">
-        otium tracks nothing for engagement or time-in-app. Everything here stays on your own instance.
-      </p>
 
       {err && <div role="alert"><p className="err">{err}</p>{!settings && <button className="btn ghost" onClick={() => setAttempt((n) => n + 1)}>Retry</button>}</div>}
       {!settings && !err && <p role="status">Loading settings…</p>}
@@ -101,7 +98,7 @@ export default function SettingsPage() {
       <button className="settings-link" onClick={() => nav("/settings/appearance")}>
         <div className="settings-copy">
           <b>Appearance</b>
-          <span>Reader typography, card styling, and session-length presets - with a live preview.</span>
+          <span>Fonts, images, text size and session-duration choices.</span>
         </div>
         <span className="settings-link-chev" aria-hidden>
           →
@@ -114,9 +111,7 @@ export default function SettingsPage() {
             <div className="settings-copy">
               <b>Fast-scroll check-in</b>
               <span>
-                After a run of cards passed without opening, liking, or saving anything, otium surfaces a check-in with the
-                count and two options: keep going or end the session. It never re-ranks or changes your topic. Off: no dwell
-                is measured and no check-in appears.
+                Show a check-in after several quick skips, with options to continue or end the session. Turning this off disables skip-pace measurement and the check-in. It never changes ranking.
               </span>
             </div>
             <button
@@ -136,10 +131,7 @@ export default function SettingsPage() {
             <div className="settings-copy">
               <b>Let YouTube log my watches</b>
               <span>
-                Videos normally play through YouTube's private embed, which never touches your account - so nothing shows up
-                in your YouTube history. Turn this on to play them through youtube.com instead, so a watch can appear in your
-                history. It only works when you're signed in to YouTube in this browser and it allows YouTube cookies, and it
-                lets YouTube see what you watch here. Either way, "Open on YouTube" on a video always logs it for sure.
+                Use youtube.com embeds instead of privacy-enhanced embeds. Watches can appear in your YouTube history when you are signed in and this browser allows YouTube cookies. This lets YouTube associate viewing here with your account.
               </span>
               {/* #151: otium can't detect YouTube sign-in (cross-origin), so the only
                   sure check is empirical - sign in, watch one, look at your history. */}

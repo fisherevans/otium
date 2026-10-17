@@ -678,7 +678,8 @@ func (h *Handler) CreateSession(w http.ResponseWriter, r *http.Request) {
 		Sections    []string `json:"sections"` // section slugs; each expands to its member topics (#86)
 		// #152: nil/true = include YouTube Shorts; false = drop short-form video from
 		// this session (long-form videos + everything else stay). Chosen at build time.
-		IncludeShorts *bool `json:"include_shorts"`
+		IncludeShorts *bool  `json:"include_shorts"`
+		Media         string `json:"media"`
 	}
 	if !decode(w, r, &body) {
 		return
@@ -687,8 +688,12 @@ func (h *Handler) CreateSession(w http.ResponseWriter, r *http.Request) {
 		body.DurationMin = 15
 	}
 	includeShorts := body.IncludeShorts == nil || *body.IncludeShorts
+	if !validSessionMedia(body.Media) {
+		http.Error(w, "invalid session media", http.StatusBadRequest)
+		return
+	}
 
-	items, err := h.buildSessionQueue(r.Context(), uid, body.DurationMin, body.Themes, body.Sections, includeShorts)
+	items, err := h.buildSessionQueue(r.Context(), uid, body.DurationMin, body.Themes, body.Sections, includeShorts, body.Media)
 	if err != nil {
 		serverError(w, h.log, "build session", err)
 		return
@@ -742,11 +747,27 @@ func (h *Handler) UpdateSession(w http.ResponseWriter, r *http.Request) {
 	uid := userID(r)
 	id := chi.URLParam(r, "id")
 	var body struct {
-		Cursor *int    `json:"cursor"`
-		Status *string `json:"status"` // "ended"
+		Cursor    *int    `json:"cursor"`
+		Status    *string `json:"status"` // "ended"
+		ExtendMin *int    `json:"extend_min"`
 	}
 	if !decode(w, r, &body) {
 		return
+	}
+	if body.ExtendMin != nil {
+		if *body.ExtendMin < 1 || *body.ExtendMin > 120 || body.Status != nil {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"message": "extend_min must be between 1 and 120 without status"})
+			return
+		}
+		ok, err := h.db.ExtendSession(r.Context(), uid, id, *body.ExtendMin)
+		if err != nil {
+			serverError(w, h.log, "extend session", err)
+			return
+		}
+		if !ok {
+			writeJSON(w, http.StatusConflict, map[string]string{"message": "This session cannot be extended. Start a new session."})
+			return
+		}
 	}
 	if body.Cursor != nil {
 		if err := h.db.UpdateSessionCursor(r.Context(), uid, id, *body.Cursor); err != nil {
@@ -768,7 +789,7 @@ func (h *Handler) UpdateSession(w http.ResponseWriter, r *http.Request) {
 // behavioral stats, runs the ranker for the single duration (fed as both bounds
 // so the existing predict/selectivity path is unchanged), and attaches each
 // item's topic. Returns an empty slice when the selection resolves to no sources.
-func (h *Handler) buildSessionQueue(ctx context.Context, uid int64, durationMin int, themes, sections []string, includeShorts bool) ([]session.Selected, error) {
+func (h *Handler) buildSessionQueue(ctx context.Context, uid int64, durationMin int, themes, sections []string, includeShorts bool, media string) ([]session.Selected, error) {
 	var sourceIDs []int64
 	if len(themes) > 0 || len(sections) > 0 {
 		set := map[int64]struct{}{}
@@ -809,18 +830,7 @@ func (h *Handler) buildSessionQueue(ctx context.Context, uid int64, durationMin 
 	if err != nil {
 		return nil, err
 	}
-	// #152: drop YouTube Shorts from the pool when the session opted out of them.
-	// media_type "short" is otium's marker for vertical/short-form video (ingest set
-	// it from the feed); everything else - long/live video, articles, audio - stays.
-	if !includeShorts {
-		kept := pool[:0]
-		for _, c := range pool {
-			if c.MediaType != "short" {
-				kept = append(kept, c)
-			}
-		}
-		pool = kept
-	}
+	pool = filterSessionMedia(pool, media, includeShorts)
 	stats, err := h.sourceStats(ctx, uid)
 	if err != nil {
 		return nil, err
