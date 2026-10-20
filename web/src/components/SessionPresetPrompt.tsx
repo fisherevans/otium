@@ -1,7 +1,7 @@
 import { useState } from "react";
-import { Bookmark, X } from "lucide-react";
+import { Bookmark } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
-import { Overlay } from "@/components/Overlay";
+import { Dialog } from "@/components/Dialog";
 import { getSessionSetup, isSavedSetup, loadSessionPresets, mediaLabel, saveSessionPreset, type SessionSetup } from "@/lib/sessionPresets";
 import "@/styles/launcher.css";
 
@@ -10,20 +10,19 @@ export function SavePresetDialog({ setup, onClose, name = "", editId }: { setup:
     const [title, setTitle] = useState(name || `${setup.minutes} min ${mediaLabel[setup.media].toLowerCase()}`);
     const [makeDefault, setMakeDefault] = useState(false);
     const [error, setError] = useState("");
-    return <Overlay label={editId ? "Edit preset" : "Save preset"} onClose={onClose}>
-        <form className="launcher-sheet" onSubmit={(event) => {
+    return <Dialog open kicker={editId ? "Edit preset" : "Save preset"} onClose={onClose}>
+        <form className="launcher-sheet-body" onSubmit={(event) => {
             event.preventDefault();
             if (user && saveSessionPreset(user.id, setup, title, makeDefault, editId)) onClose();
             else setError("Couldn't save this preset. Check that browser storage is available and retry.");
         }}>
-            <div className="launcher-sheet-head"><h2>{editId ? "Edit preset" : "Save preset"}</h2><button type="button" className="icon-btn" aria-label="Close" onClick={onClose}><X size={20}/></button></div>
             <label className="launcher-field">Name<input autoFocus maxLength={80} className="field" value={title} onChange={(event) => setTitle(event.target.value)} /></label>
             <label className="launcher-check"><input type="checkbox" checked={makeDefault} onChange={(event) => setMakeDefault(event.target.checked)}/>Use as default</label>
             <p className="launcher-meta">Saved on this device for your account.</p>
             {error && <p role="alert">{error}</p>}
             <button className="btn" type="submit" disabled={!title.trim()}>Save preset</button>
         </form>
-    </Overlay>;
+    </Dialog>;
 }
 export function SessionPresetPrompt({ sessionId }: { sessionId: string }) {
     const { user } = useAuth();

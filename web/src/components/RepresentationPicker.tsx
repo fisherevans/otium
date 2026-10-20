@@ -4,12 +4,12 @@ import { BUCKETS, REP_FREQ, REP_HINT, type Bucket } from "@/lib/represent";
 // plus one hint line for the selected level, instead of five tall radio rows that
 // dominated the modal. Shared by the source-page feed controls and the add-source
 // wizard so the vocabulary and layout stay identical.
-export function RepresentationPicker({ value, onChange }: { value: Bucket; onChange: (b: Bucket) => void }) {
+export function RepresentationPicker({ value, onChange, disabled = false }: { value: Bucket; onChange: (b: Bucket) => void; disabled?: boolean }) {
   return (
     <div className="rep-picker">
-      <div className="rep-scale">
+      <div className="rep-scale" role="group" aria-label="Representation">
         {BUCKETS.map((b) => (
-          <button key={b} className={`rep-seg ${value === b ? "on" : ""}`} onClick={() => onChange(b)}>
+          <button key={b} type="button" disabled={disabled} aria-pressed={value === b} className={`rep-seg ${value === b ? "on" : ""}`} onClick={() => onChange(b)}>
             {REP_FREQ[b]}
           </button>
         ))}

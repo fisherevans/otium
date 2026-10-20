@@ -86,9 +86,9 @@ export default function HistoryPage({ embedded = false }: { embedded?: boolean }
       .history(filter, PAGE, 0)
       .then((rows) => {
         if (!live) return;
-        setItems(rows);
+        setItems(rows ?? []);
         setLoadedFilter(filter);
-        setAtEnd(rows.length < PAGE);
+        setAtEnd((rows ?? []).length < PAGE);
       })
       .catch((e) => live && setErr(String(e.message ?? e)))
       .finally(() => live && setLoading(false));
@@ -104,8 +104,8 @@ export default function HistoryPage({ embedded = false }: { embedded?: boolean }
     api
       .history(filter, PAGE, items.length)
       .then((rows) => {
-        setItems((prev) => [...prev, ...rows]);
-        if (rows.length < PAGE) setAtEnd(true);
+        setItems((prev) => [...prev, ...(rows ?? [])]);
+        if ((rows ?? []).length < PAGE) setAtEnd(true);
       })
       .catch((e) => setErr(String(e.message ?? e)))
       .finally(() => setLoadingMore(false));

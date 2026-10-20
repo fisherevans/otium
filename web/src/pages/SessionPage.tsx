@@ -9,7 +9,7 @@ import { ArrowDown, BookOpen, ChevronRight } from "lucide-react";
 import { ContextInstrument } from "@/components/ContextInstrument";
 import { Brand } from "@/components/Brand";
 import { BottomSheet } from "@/components/BottomSheet";
-import { InlineMedia } from "@/components/InlineMedia";
+import { Player } from "@/components/Player";
 import { SessionReview, type SessionReviewData } from "@/components/SessionReview";
 import { SessionPresetPrompt } from "@/components/SessionPresetPrompt";
 import { useAuth } from "@/context/AuthContext";
@@ -780,19 +780,15 @@ export default function SessionPage() {
         </span>
       </div>
 
-      {/* #68/#149: the fast-scroll check-in - a plain fact (how many cards went by
-          unopened) plus two neutral choices, never a topic change. "Keep going" just
-          dismisses; "End session" ends and returns home. Neither re-ranks or re-fetches.
-          It states the count and lets the reader decide - it doesn't editorialize. */}
-      {checkin === "fast" && (
-        <div className="checkin">
+      <BottomSheet open={checkin === "fast"} onClose={dismissCheckin} kicker="Session">
+        <div className="session-checkin">
           <p>{fastStreak.current} cards passed without opening any.</p>
-          <div className="checkin-actions">
-            <button className="mini" onClick={dismissCheckin}>Keep going</button>
-            <button className="mini solid" onClick={() => { setCheckin(null); finishSession(); }}>End session</button>
+          <div className="session-checkin-actions">
+            <button className="btn ghost" onClick={dismissCheckin}>Keep going</button>
+            <button className="btn" onClick={() => { setCheckin(null); finishSession(); }}>End session</button>
           </div>
         </div>
-      )}
+      </BottomSheet>
 
       {!review && <div className="stage" ref={stageRef} style={cardVars(SHIPPED_VARS)}>
         {shownItems.map((it, i) => (
@@ -865,9 +861,9 @@ export default function SessionPage() {
 
       {review && recapOpen && <SessionReview review={review} onClose={() => setRecapOpen(false)} saved={saved} onSave={save}
         onRead={(sel) => { if (isMedia(sel.item)) setReviewMedia(sel); else openContent(sel); }} />}
-      <BottomSheet open={reviewMedia !== null} onClose={() => setReviewMedia(null)} kicker={reviewMedia?.source_title} variant="tall">
-        {reviewMedia && <InlineMedia item={reviewMedia.item} onOpenOriginal={() => openExternal(reviewMedia)} onSave={() => save(reviewMedia)} ytHistory={ytHistory} />}
-      </BottomSheet>
+      <Player item={reviewMedia?.item ?? null} sourceTitle={reviewMedia?.source_title} open={reviewMedia !== null}
+        onClose={() => setReviewMedia(null)} onOpenOriginal={() => { if (reviewMedia) openExternal(reviewMedia); }}
+        onSave={() => { if (reviewMedia) save(reviewMedia); }} />
 
       <ItemActions
         selected={atEnd ? null : cur}

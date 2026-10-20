@@ -68,7 +68,7 @@ export default function CollectionsPage({ embedded = false }: { embedded?: boole
   const shownKind = content ? contentKind(content) : null;
 
   function reload() {
-    api.collections().then(setCols).catch((e) => setErr(String(e.message ?? e))).finally(() => setLoaded(true));
+    api.collections().then((rows) => setCols(rows ?? [])).catch((e) => setErr(String(e.message ?? e))).finally(() => setLoaded(true));
   }
   useEffect(() => { reload(); }, []);
 
@@ -83,7 +83,7 @@ export default function CollectionsPage({ embedded = false }: { embedded?: boole
     let live = true;
     setLoadingItems(true);
     setErr("");
-    api.collectionItems(selectedId, sort).then((rows) => { if (live) { setItems(rows); setLoadedItemsFor(`${selectedId}:${sort}`); } })
+    api.collectionItems(selectedId, sort).then((rows) => { if (live) { setItems(rows ?? []); setLoadedItemsFor(`${selectedId}:${sort}`); } })
       .catch((e) => live && setErr(String(e.message ?? e)))
       .finally(() => live && setLoadingItems(false));
     return () => { live = false; };

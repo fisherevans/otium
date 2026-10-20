@@ -138,7 +138,7 @@ export function ItemActions({
 
       <div className="sheet-rows">
         {onOpenOriginal && <button className="sheet-row" onClick={onOpenOriginal}><span>Open original</span><ExternalLink size={16} aria-hidden /></button>}
-        <ShareActions item={item} />
+        <ShareActions item={item} labeled />
         {onEnd && <button className="sheet-row" onClick={onEnd}><span>End session</span><ChevronRight size={18} className="sheet-chev inline-icon" aria-hidden /></button>}
       </div>
 

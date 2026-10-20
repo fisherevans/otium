@@ -5,7 +5,7 @@ import { api, type Source } from "@/api/client";
 import { BottomSheet } from "./BottomSheet";
 import { SourceItems } from "./SourceItems";
 import { bucketOf, type Bucket } from "@/lib/represent";
-import { RepresentationControl } from "./RepresentationControl";
+import { RepresentationPicker } from "./RepresentationPicker";
 
 // #75: the source context menu, reached by tapping the source name on a session
 // card. A calm bottom sheet that keeps you in the session while you dig into or
@@ -36,19 +36,31 @@ export function SourceSheet({
   const nav = useNavigate();
   const [source, setSource] = useState<Source | null>(null);
   const [bucket, setBucket] = useState<Bucket>("normal");
+  const [error, setError] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [loadAttempt, setLoadAttempt] = useState(0);
   const [history, setHistory] = useState(false);
 
   useEffect(() => {
     if (!open || !sourceId) return;
+    let cancelled = false;
+    setSource(null);
+    setLoading(true);
+    setError("");
     api
       .sources()
       .then((list) => {
+        if (cancelled) return;
         const s = list.find((x) => x.id === sourceId) ?? null;
         setSource(s);
         if (s) setBucket(bucketOf(s.weight));
+        else setError("This source is no longer available.");
       })
-      .catch(() => {});
-  }, [open, sourceId]);
+      .catch(() => { if (!cancelled) setError("Could not load this source. Try again."); })
+      .finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+  }, [open, sourceId, loadAttempt]);
 
   // Collapse the history sub-sheet when the whole menu is dismissed.
   useEffect(() => {
@@ -56,8 +68,12 @@ export function SourceSheet({
   }, [open]);
 
   async function setWeight(b: Bucket) {
-    setBucket(b);
-    await api.updateSource(sourceId, { weight_bucket: b }).catch(() => {});
+    if (saving) return;
+    setSaving(true);
+    setError("");
+    try { await api.updateSource(sourceId, { weight_bucket: b }); setBucket(b); }
+    catch (error: any) { setError(error.message || "Could not save representation. Try again."); }
+    finally { setSaving(false); }
   }
 
   const title = sourceTitle || source?.title || "Source";
@@ -72,7 +88,10 @@ export function SourceSheet({
           <div className="ctl-label" style={{ margin: "0 0 6px" }}>
             Quick representation
           </div>
-          <RepresentationControl value={bucket} onChange={setWeight} />
+          <RepresentationPicker value={bucket} onChange={setWeight} disabled={saving || loading || !source} />
+          {loading && <p role="status">Loading source…</p>}
+          {error && <p className="err" role="alert">{error}</p>}
+          {!loading && !source && <button className="btn ghost" onClick={() => setLoadAttempt((n) => n + 1)}>Retry</button>}
         </div>
 
         <div className="sheet-rows">

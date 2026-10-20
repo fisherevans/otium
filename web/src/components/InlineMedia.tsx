@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent } from "react";
-import { ExternalLink, Bookmark, FileText, ChevronLeft, Play, SlidersHorizontal, MoreHorizontal } from "lucide-react";
+import { ExternalLink, Bookmark, FileText, ChevronUp, Play, SlidersHorizontal, MoreHorizontal } from "lucide-react";
 import type { Item } from "@/api/client";
 import { ShareActions } from "./ReaderActions";
 import { renderSummary } from "@/lib/html";
@@ -218,7 +218,7 @@ export function InlineMedia({
     }
   }
 
-  const notesLabel = notes ? "Back" : video ? "Show notes" : "Transcript";
+  const notesLabel = notes ? (video ? "Hide notes" : "Hide transcript") : video ? "Show notes" : "Transcript";
 
   return (
     <div className={`inline-media ${vertical ? "v" : "h"} ${notes ? "notes" : ""}`}>
@@ -296,7 +296,7 @@ export function InlineMedia({
         <div className="im-actions">
           {hasNotes && (
             <button className={`im-act im-notes-toggle ${notes ? "on" : ""}`} onClick={() => setNotes((n) => !n)}>
-              {notes ? <ChevronLeft size={16} strokeWidth={1.9} aria-hidden /> : <FileText size={16} strokeWidth={1.75} aria-hidden />}
+              {notes ? <ChevronUp size={16} strokeWidth={1.9} aria-hidden /> : <FileText size={16} strokeWidth={1.75} aria-hidden />}
               {notesLabel}
             </button>
           )}

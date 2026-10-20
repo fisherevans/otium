@@ -80,7 +80,7 @@ export function BottomSheet({
   } | null>(null);
 
   function scroller() {
-    return sheetRef.current?.querySelector<HTMLElement>(".reader, .src-detail, .src-items") ?? null;
+    return sheetRef.current?.querySelector<HTMLElement>(".reader, .src-detail, .src-items") ?? sheetRef.current;
   }
 
   function onPointerDown(e: ReactPointerEvent) {

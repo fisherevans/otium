@@ -5,7 +5,7 @@ import { api, type Topic, type Section, type Source } from "@/api/client";
 import { usePreferences } from "@/context/PreferencesContext";
 import { useAuth } from "@/context/AuthContext";
 import { useInstrument } from "@/components/ContextInstrument";
-import { Overlay } from "@/components/Overlay";
+import { BottomSheet } from "@/components/BottomSheet";
 import { HowItWorks } from "@/components/HowItWorks";
 import { SavePresetDialog } from "@/components/SessionPresetPrompt";
 import { defaultSetup, initialPresets, isSavedSetup, loadSessionPresets, mediaLabel, recordSessionSetup, repeatSuggestion, setupKey, storeSessionPresets, type SessionPreset, type SessionPresets, type SessionSetup } from "@/lib/sessionPresets";
@@ -148,7 +148,7 @@ export default function HomePage() {
             <button className="launcher-advanced" onClick={() => setSheet("advanced")}><SlidersHorizontal size={17}/>Topics, sections and Shorts<ChevronRight size={17}/></button>
             <div className="launcher-begin">{!hasSupply(setup) && <p className="launcher-meta">No new items in this scope.</p>}<button className="launcher-save-link" onClick={() => setSave({ setup })}><Bookmark size={16}/>Save preset</button></div>
         </>}
-        {sheet && <Overlay label={sheet === "advanced" ? "Session options" : sheet === "recent" ? "Recent sessions" : "Presets"} onClose={() => setSheet(null)}><div className="launcher-sheet"><div className="launcher-sheet-head"><h2>{sheet === "advanced" ? "Session options" : sheet === "recent" ? "Recent sessions" : "Presets"}</h2><button className="icon-btn" aria-label="Close" onClick={() => setSheet(null)}><X size={20}/></button></div>
+        {sheet && <BottomSheet open kicker={sheet === "advanced" ? "Session options" : sheet === "recent" ? "Recent sessions" : "Presets"} onClose={() => setSheet(null)}><div className="launcher-sheet-body">
             {sheet === "advanced" ? <>
                 <h3>Sections</h3><label className="launcher-check"><input type="checkbox" checked={!setup.sections.length} onChange={() => setSetup({ ...setup, sections: [], excluded: [] })}/>Everything</label>
                 {sections.map((section) => <label className="launcher-check" key={section.slug}><input type="checkbox" checked={setup.sections.includes(section.slug)} onChange={() => setSetup({ ...setup, sections: setup.sections.includes(section.slug) ? setup.sections.filter((slug) => slug !== section.slug) : [...setup.sections, section.slug], excluded: [] })}/>{section.name}</label>)}
@@ -156,7 +156,7 @@ export default function HomePage() {
                 {(setup.media === "all" || setup.media === "video") && <label className="launcher-check"><input type="checkbox" checked={setup.includeShorts} onChange={(event) => setSetup({ ...setup, includeShorts: event.target.checked })}/>Include YouTube Shorts</label>}
                 <button className="btn" onClick={() => setSheet(null)}>Done</button>
             </> : sheet === "presets" ? <><p className="launcher-meta">Saved on this device for your account.</p>{data.presets.map((preset) => <div className="launcher-preset" key={preset.id}><button className="launcher-row" disabled={busy || !hasSupply(preset.setup) || invalidSetup(preset.setup)} onClick={() => begin(preset.setup)}><span><strong>{preset.name}{preset.id === data.defaultId ? " · Default" : ""}</strong><small>{setupLabel(preset.setup)}</small></span><ArrowRight size={18}/></button><div className="launcher-preset-actions"><button onClick={() => { setSheet(null); setSetup(preset.setup); setCustom(true); }}>Customize</button><button onClick={() => setSave({ setup: preset.setup, preset })}>Rename</button>{preset.id !== data.defaultId && <button onClick={() => updateData({ ...data, defaultId: preset.id })}>Make default</button>}<button onClick={() => updateData({ ...data, presets: data.presets.filter((p) => p.id !== preset.id), defaultId: data.defaultId === preset.id ? data.presets.find((p) => p.id !== preset.id)?.id ?? "" : data.defaultId })}>Remove</button></div></div>)}<button className="btn" onClick={() => { setSheet(null); setCustom(true); }}>Custom session</button></> : <>{recent.length ? recent.map((value) => <div className="launcher-recent" key={setupKey(value)}><button className="launcher-row" onClick={() => { setSheet(null); setSetup(value); setCustom(true); }}><span><strong>{value.minutes} min {mediaLabel[value.media].toLowerCase()}</strong><small>{setupLabel(value)}</small></span><ChevronRight size={18}/></button><button className="icon-btn" aria-label={`Save ${value.minutes} minute session as preset`} onClick={() => setSave({ setup: value })}><Bookmark size={18}/></button></div>) : <p>No unsaved sessions.</p>}</>}
-        </div></Overlay>}
+        </div></BottomSheet>}
         {save && <SavePresetDialog setup={save.setup} name={save.preset?.name} editId={save.preset?.id} onClose={() => setSave(null)}/>}
     </section>;
 }

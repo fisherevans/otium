@@ -2,8 +2,9 @@ import { ArrowLeft } from "lucide-react";
 import { useBack } from "@/lib/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { api, type Topic, type InsightsResponse, type InsightsSource } from "@/api/client";
-import { BUCKETS, REP_BLABEL, bucketOf, type Bucket } from "@/lib/represent";
+import { REP_BLABEL, bucketOf, type Bucket } from "@/lib/represent";
 import { feedIcon } from "@/lib/feedIcons";
+import { RepresentationPicker } from "@/components/RepresentationPicker";
 import { BottomSheet } from "@/components/BottomSheet";
 
 // The insights view (#49): each source's live effective share of the topic, paired
@@ -115,6 +116,7 @@ export default function InsightsPage() {
   const [toast, setToast] = useState<string | null>(null);
 
   function load() {
+    setErr("");
     api
       .insights(scope ?? undefined)
       .then(setData)
@@ -131,9 +133,8 @@ export default function InsightsPage() {
   const sources = useMemo(() => {
     const list = [...(data?.sources ?? [])];
     if (sort === "inefficiency") {
-      // Inefficiency = how big it wants to be × how much you reject it. Uses
-      // intended_share (before the skip penalty self-suppresses) so a wanted-but-
-      // skipped source rises to the top.
+      // Sort by intended share multiplied by the observed skip percentage.
+      // This is descriptive only; skips never change source allocation.
       list.sort((a, b) => b.intended_share * b.skip_pct - a.intended_share * a.skip_pct);
     } else {
       list.sort((a, b) => b.effective_share - a.effective_share);
@@ -179,8 +180,7 @@ export default function InsightsPage() {
       <button className="mgmt-back" onClick={back}><ArrowLeft size={18} className="inline-icon" aria-hidden /> Back</button>
       <h1 className="display">Topic insights</h1>
       <p className="sub">
-        What each source actually is in your topic right now, next to how much of it you skip. A big slice you mostly
-        skip is worth turning down.
+        Source shares and reading activity across your topics. Representation changes only when you adjust it.
       </p>
 
       {/* scope: all topics <-> within one topic */}
@@ -199,7 +199,7 @@ export default function InsightsPage() {
         })}
       </div>
 
-      {err && <p className="err">{err}</p>}
+      {err && !sheet && <p className="err" role="alert">{err}</p>}
 
       {data && sources.length === 0 && (
         <p className="insights-empty">No live content in this scope yet. Fetch some sources, then check back.</p>
@@ -212,7 +212,7 @@ export default function InsightsPage() {
           <div className="lib-sub">
             {(["share", "inefficiency"] as const).map((s) => (
               <button key={s} className={`lib-seg ${sort === s ? "on" : ""}`} onClick={() => setSort(s)}>
-                {s === "share" ? "by share" : "by inefficiency"}
+                {s === "share" ? "By share" : "By skip share"}
               </button>
             ))}
             <span className="lib-count">{data?.totals.source_count ?? 0} sources</span>
@@ -229,7 +229,7 @@ export default function InsightsPage() {
               const ghost = s.intended_share > s.effective_share * 1.15;
               const ghostW = ghost ? (Math.min(s.intended_share, maxShare) / maxShare) * 100 - fillW : 0;
               return (
-                <button className={`insights-row ${prune ? "prune" : ""}`} key={s.source_id} onClick={() => setSheet(s)}>
+                <button className={`insights-row ${prune ? "prune" : ""}`} key={s.source_id} onClick={() => { setErr(""); setSheet(s); }}>
                   <div className="insights-row-top">
                     <span className="insights-ico" aria-hidden>
                       {Ic ? <Ic size={15} strokeWidth={1.75} /> : <span className="insights-dot" />}
@@ -251,7 +251,7 @@ export default function InsightsPage() {
                         <span className="insights-wants">wants {pct(s.intended_share)}</span>
                       </>
                     )}
-                    {prune && <span className="insights-prune-tag">prune?</span>}
+                    {prune && <span className="insights-prune-tag">Often skipped</span>}
                   </div>
                 </button>
               );
@@ -260,7 +260,7 @@ export default function InsightsPage() {
         </>
       )}
 
-      <BottomSheet open={!!sheet} onClose={() => setSheet(null)} kicker={sheet?.source_title}>
+      <BottomSheet open={!!sheet} onClose={() => { setSheet(null); setErr(""); }} kicker={sheet?.source_title}>
         {err && <p className="err" role="alert">{err}</p>}
         {sheet && (
           <div className="insights-sheet">
@@ -281,17 +281,7 @@ export default function InsightsPage() {
             </div>
 
             <div className="ctl-label">Representation</div>
-            <div className="repbuckets">
-              {BUCKETS.map((bk) => (
-                <button
-                  key={bk}
-                  className={`repbucket ${bucketOf(sheet.weight) === bk ? "on" : ""}`}
-                  onClick={() => setWeight(sheet, bk)}
-                >
-                  {REP_BLABEL[bk]}
-                </button>
-              ))}
-            </div>
+            <RepresentationPicker value={bucketOf(sheet.weight)} onChange={(value) => setWeight(sheet, value)} />
 
             <div className="lib-actions">
               <button onClick={() => archive(sheet)}>Archive</button>

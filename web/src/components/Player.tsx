@@ -4,6 +4,8 @@ import { api, type Item } from "@/api/client";
 import { InlineMedia } from "./InlineMedia";
 import { SavePicker } from "./SavePicker";
 import { Overlay, usePresence } from "./Overlay";
+import { ContextInstrument } from "./ContextInstrument";
+import "./session-afterglow.css";
 
 // The same media controls and privacy preference used in a session, presented
 // over the originating list. Closing keeps that list and its position intact.
@@ -31,15 +33,17 @@ export function Player({ item, sourceTitle, open, onClose, onOpenOriginal, onSav
   return (
     <>
     <Overlay active={open} label={shown.title} onClose={onClose}>
-      <div className={`readerpage ${visible ? "in" : ""}`}>
+      <div className={`readerpage afterglow-reader reader-player ${visible ? "in" : ""}`}>
         <div className="readerpage-head">
-          <button className="rp-back" onClick={onClose} aria-label="Back"><ChevronLeft size={20} aria-hidden /></button>
+          <span className="rp-section-label">{shown.media_type === "audio" ? "Audio" : "Video"}</span>
           <span className="rp-readtime">{sourceTitle}</span>
         </div>
         <div className="readerpage-body reader-player-body">
           <h1 className="rp-title">{shown.title}</h1>
           {open && <InlineMedia key={shown.id} item={shown} onSave={onSave ?? (() => setSaveItem(shown))} onOpenOriginal={onOpenOriginal} ytHistory={ytHistory} />}
         </div>
+        <ContextInstrument mode="reader" eyebrow={shown.media_type === "audio" ? "Audio" : "Video"} label={sourceTitle || "Player"}
+          action={{ label: "Back", onClick: onClose, icon: <ChevronLeft size={18} aria-hidden /> }} />
       </div>
     </Overlay>
     <SavePicker item={saveItem} open={saveItem !== null} onClose={() => setSaveItem(null)} />

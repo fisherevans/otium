@@ -1102,36 +1102,6 @@ h1.display {
   color: var(--ink);
 }
 
-/* pacing check-in */
-.checkin {
-  border: 1.5px solid var(--rule-hard);
-  background: var(--paper-3);
-  padding: 14px 16px;
-  margin: 12px 16px;
-}
-.checkin p {
-  margin: 0 0 12px;
-  font-size: 15px;
-}
-.checkin-actions {
-  display: flex;
-  gap: 8px;
-}
-.checkin-actions .mini {
-  flex: 1;
-  padding: 10px;
-  border: 1.5px solid var(--rule-hard);
-  background: var(--paper);
-  font-family: var(--grot);
-  font-size: 12px;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-}
-.checkin-actions .mini.solid {
-  background: var(--ink);
-  color: var(--paper);
-}
-
 /* settings (#68) - preferences list with a hard-rule toggle. */
 .settings-list {
   margin: 18px 0;

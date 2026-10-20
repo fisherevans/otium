@@ -20,6 +20,16 @@ Library leads with Add source and Import. Adding chooses a topic, or creates one
 
 You leads with Settings, Appearance, Insights and Reading history. Reading activity is an explicit disclosure. There are no streaks, badges or engagement targets.
 
+## Shared secondary surfaces
+
+Management pages, source setup, presets, collection forms, Insights and error states use the same type and control hierarchy as the session. Use the shared `Dialog` for focused edits and `BottomSheet` for contextual choices. Both dim the background and retain the native modal focus/back contract. Do not mount a bare `Overlay` for a form or menu without its shared presentation.
+
+Short sheets can scroll when their actions exceed the viewport; the heading stays visible and the final action remains reachable. The fast-scroll check-in is a sheet over the unchanged article stage. It reports the unopened count and offers Keep going or End session without moving the article.
+
+Representation uses one shared segmented picker across source setup, source controls and Insights. An unsuccessful save leaves the previous selection intact. Long list titles wrap, and empty API arrays or null collection/history responses render an empty state.
+
+Media opened from a list or session review uses the shared full-page player and contextual Back instrument. Show notes and Hide notes affect the media details; Back returns to the originating list. Media remains contained within the reading column.
+
 ## Reading
 
 A session presents one item at a time. The card combines source and topic context, a restrained headline, creator/date, contained imagery and a short summary. Fraunces supplies titles; Newsreader is the default reading face. Existing alternate reading-font choices remain available. Headline and content carry the emphasis. Shared `SessionCard` markup and the runtime solver own this layout; Appearance and the layout lab use those same surfaces.
@@ -52,6 +62,9 @@ The reusable browser regressions run against a local Vite dev server:
 ```sh
 BASE_URL=http://127.0.0.1:5173 node web/tools/verify-overlays.mjs
 node web/tools/verify-appearance.mjs http://127.0.0.1:5173
+BASE_URL=http://127.0.0.1:5173 node web/tools/verify-launcher.mjs
+BASE_URL=http://127.0.0.1:5173 node web/tools/verify-session-afterglow.mjs
+BASE_URL=http://127.0.0.1:5173 node web/tools/verify-surface-refresh.mjs
 ```
 
 They intercept the APIs they modify and do not write account data. Install the matching Playwright Chromium/WebKit engines before running them. The overlay harness also accepts `PLAYWRIGHT_MODULE` for an existing matched installation.

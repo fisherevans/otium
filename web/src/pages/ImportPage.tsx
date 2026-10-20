@@ -66,7 +66,7 @@ export default function ImportPage() {
   if (result) {
     return (
       <div className="center">
-        <p className="display">Imported.</p>
+        <h1 className="display">Import complete</h1>
         <p style={{ color: "var(--ink-soft)" }}>
           {result.created} added
           {result.already_had > 0 && `, ${result.already_had} already followed`}
@@ -114,7 +114,7 @@ export default function ImportPage() {
             onChange={(e) => setPaste(e.target.value)}
           />
           <button className="btn ghost" onClick={() => parse(paste)}>
-            Parse pasted text
+            Preview import
           </button>
           {err && <p className="err">{err}</p>}
         </>
