@@ -1,5 +1,5 @@
 import { ExternalLink, Check, ChevronRight } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { api, type Item, type Selected, type Source } from "@/api/client";
 import { BottomSheet } from "./BottomSheet";
@@ -45,6 +45,11 @@ export function ItemActions({
   const [kwOpen, setKwOpen] = useState(false);
   const [kw, setKw] = useState("");
   const [note, setNote] = useState("");
+  const noteRef = useRef<HTMLParagraphElement>(null);
+
+  useEffect(() => {
+    if (note) noteRef.current?.scrollIntoView({ block: "nearest", behavior: "instant" });
+  }, [note]);
 
   useEffect(() => {
     if (!open || !sourceId) return;
@@ -67,6 +72,7 @@ export function ItemActions({
   const sourceLabel = selected?.source_title ?? source?.title ?? "this source";
   async function muteCategory(cat: string) {
     if (!item || muted.includes(cat)) return;
+    setNote("");
     setMuted((m) => [...m, cat]);
     try {
       await api.filterFromItem(item.id, { categories: [cat] });
@@ -79,6 +85,7 @@ export function ItemActions({
   async function addKeyword() {
     const word = kw.trim();
     if (!item || !word) return;
+    setNote("");
     try {
       await api.filterFromItem(item.id, { keywords: [word] });
       setNote(`Muted posts from ${sourceLabel} with “${word}” in the title.`);
@@ -185,7 +192,7 @@ export function ItemActions({
             </button>
           </div>
         )}
-        {note && <p className="ia-filter-note">{note}</p>}
+        {note && <p className="ia-filter-note" ref={noteRef} role="status">{note}</p>}
       </div>
     </BottomSheet>
   );

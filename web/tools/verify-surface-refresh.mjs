@@ -37,9 +37,10 @@ for (const [name, engine] of Object.entries({ chromium, webkit }).filter(([name]
             const context = await browser.newContext({ viewport: { width: 390, height: 664 }, hasTouch: true });
             const page = await context.newPage();
             page.setDefaultTimeout(10000);
+            page.setDefaultNavigationTimeout(30000);
             const errors = [];
             const unexpected = [];
-            const state = { collectionItems: null, active: true, cursor: 0, ended: 0, failWeight: true, weightPatches: [], filters: [] };
+            const state = { collectionItems: null, active: true, cursor: 0, ended: 0, failFilter: false, failWeight: true, weightPatches: [], filters: [] };
             page.on('pageerror', error => errors.push(error.message));
             await page.route('**/api/v1/**', async route => {
                 const request = route.request();
@@ -70,6 +71,7 @@ for (const [name, engine] of Object.entries({ chromium, webkit }).filter(([name]
                     return json({ ok: true });
                 }
                 if (method === 'POST' && /^\/items\/\d+\/filter$/.test(path)) {
+                    if (state.failFilter) return route.fulfill({ status: 503, json: { message: "Filter could not be saved." } });
                     state.filters.push(request.postDataJSON());
                     return json({ ok: true, source_id: source.id });
                 }
@@ -133,6 +135,15 @@ for (const [name, engine] of Object.entries({ chromium, webkit }).filter(([name]
             await menu.getByRole('button', { name: 'or filter by a word in the title…', exact: true }).click();
             assert.ok(await sheet.evaluate(el => el.scrollTop > 0), 'last control is reached inside the menu');
             await menu.getByPlaceholder('word or phrase in the title').fill('notices');
+            state.failFilter = true;
+            await menu.getByRole('button', { name: 'Mute', exact: true }).click();
+            const status = menu.getByRole('status');
+            await status.filter({ hasText: "Couldn't save that filter" }).waitFor();
+            const noteBox = await status.boundingBox();
+            const sheetBox = await sheet.boundingBox();
+            assert.ok(noteBox.y >= sheetBox.y && noteBox.y + noteBox.height <= sheetBox.y + sheetBox.height, 'failed filter feedback is visible without another scroll');
+            assert.equal(await menu.getByPlaceholder('word or phrase in the title').inputValue(), 'notices');
+            state.failFilter = false;
             await menu.getByRole('button', { name: 'Mute', exact: true }).click();
             await menu.getByText(/Muted posts from Test Gazette with/).waitFor();
             assert.deepEqual(state.filters, [{ categories: [], keywords: ['notices'] }]);

@@ -80,17 +80,13 @@ function AppShell() {
     return () => window.clearTimeout(t);
   }, [unauthenticated]);
 
-  if (loading) return <div className="spinner">otium…</div>;
-  if (unauthenticated) {
+  if (loading || unauthenticated) {
     return (
-      <div className="center">
-        <div className="spinner">signing in…</div>
-        {showManualSignin && (
-          <a className="btn" href="/auth/login" style={{ marginTop: 18 }}>
-            Sign in
-          </a>
-        )}
-      </div>
+      <main className="entry-screen">
+        <Brand />
+        <h1 role="status">{loading ? "Loading" : "Signing in"}</h1>
+        {!loading && showManualSignin && <a className="btn" href="/auth/login">Sign in</a>}
+      </main>
     );
   }
 

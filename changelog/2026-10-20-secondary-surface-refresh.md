@@ -9,7 +9,7 @@
 
 Shared typography, spacing, SVG controls and rounded controls now cover Library organization, source setup and settings, topic edits, Saved, History, Import, Insights, Appearance and account activity. Presets use the same sheets and edit dialogs, including their backdrop and nested focus handling. The fast-scroll prompt uses a contextual sheet without shrinking the article. List and session-review media use the same player with the persistent Back instrument.
 
-Visual review also caught and fixed null collection/history responses, clipped long menus, overflowing article titles, duplicated Insights errors, silent failed source representation changes and a retired desktop navigation grid that offset the content. Media notes use explicit Hide notes/Hide transcript labels to distinguish them from Back.
+Visual review also caught and fixed null collection/history responses, clipped long menus, overflowing article titles, duplicated Insights errors, silent failed source representation changes and a retired desktop navigation grid that offset the content. Media notes use explicit Hide notes/Hide transcript labels to distinguish them from Back. Filter feedback is announced and scrolled into view, and loading/sign-in uses the same branded typography.
 
 ## Why
 
