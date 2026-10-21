@@ -14,6 +14,12 @@ on:
     branches: [main, master]
     tags: ["v*"]
   workflow_dispatch:
+  # Weekly rebuild of the default branch on a fresh base (nottingham-cloud#800).
+  # Publishes only the rolling tags (:main/:latest/:sha-*); a version tag
+  # is never rebuilt, so a pinned deploy cannot move. See
+  # nottingham-cloud agent/app-contract.md.
+  schedule:
+    - cron: '27 9 * * 6'
 
 permissions:
   contents: read
@@ -62,6 +68,10 @@ jobs:
           context: ${{ matrix.context }}
           file: ${{ matrix.dockerfile }}
           push: true
+          # Scheduled and manual rebuilds skip the layer cache and re-pull the
+          # base, or a cached `apk add`/`apt-get install` layer keeps the stale package.
+          pull: true
+          no-cache: ${{ github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha,scope=${{ matrix.image }}
