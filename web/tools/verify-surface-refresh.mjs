@@ -125,10 +125,12 @@ for (const [name, engine] of Object.entries({ chromium, webkit }).filter(([name]
             assert.equal(await page.getByRole('button', { name: 'Review session', exact: true }).count(), 1);
         });
 
-        await scenario('long article menu scrolls to working final controls', async (page, state) => {
+        await scenario('long article details sheet scrolls to working final controls', async (page, state) => {
             await page.goto(`${base}/session/surface-test`);
+            // #180: filters live in Details (provenance), reached from the actions sheet.
             await page.getByRole('button', { name: 'Article and session actions', exact: true }).click();
-            const menu = page.getByRole('dialog', { name: source.title, exact: true });
+            await page.getByRole('dialog', { name: source.title, exact: true }).getByRole('button', { name: /Details and why/ }).click();
+            const menu = page.getByRole('dialog', { name: 'Details', exact: true });
             const sheet = menu.locator('.sheet');
             await page.waitForTimeout(300);
             assert.ok(await sheet.evaluate(el => el.scrollHeight > el.clientHeight + 100), 'fixture requires menu scrolling');

@@ -117,6 +117,23 @@ export function InlineMedia({
   const [blocked, setBlocked] = useState(false);
   const [failed, setFailed] = useState(false);
   const audioRef = useRef<HTMLAudioElement>(null);
+  // #180: elapsed/remaining readout. Polls the player only while it plays; the
+  // feed's duration stands in until the player reports its own.
+  const [clock, setClock] = useState({ at: 0, total: item.duration_sec || 0 });
+  useEffect(() => { setClock({ at: 0, total: item.duration_sec || 0 }); }, [item.id, item.duration_sec]);
+  useEffect(() => {
+    if (!video || !ytId) return;
+    const read = () => {
+      const p = playerRef.current;
+      const at = Number(p?.getCurrentTime?.()) || 0;
+      const total = Number(p?.getDuration?.()) || item.duration_sec || 0;
+      setClock((c) => (Math.floor(c.at) === Math.floor(at) && Math.round(c.total) === Math.round(total) ? c : { at, total }));
+    };
+    read();
+    if (!playing) return;
+    const timer = window.setInterval(read, 250);
+    return () => window.clearInterval(timer);
+  }, [playing, video, ytId, item.duration_sec]);
   const latest = useRef({ active, autoPlay, muted, captions, ytId, itemId: item.id, positionMemory, onFirstPlay, onPlaybackChange, onMutedChange });
   latest.current = { active, autoPlay, muted, captions, ytId, itemId: item.id, positionMemory, onFirstPlay, onPlaybackChange, onMutedChange };
   const loadedId = useRef<string | null>(null);
@@ -528,6 +545,10 @@ export function InlineMedia({
             title={nativeControls ? "Simple controls" : "YouTube controls"}>
             <SlidersHorizontal size={18} aria-hidden /><span>Player</span>
           </button>
+          {clock.total > 0 && <span className="im-time" aria-label={`${formatClock(clock.total - clock.at)} left of ${formatClock(clock.total)}`}>
+            <span className="im-time-left">{formatClock(Math.max(0, clock.total - clock.at))} left</span>
+            <span className="im-time-total">of {formatClock(clock.total)}</span>
+          </span>}
         </div>}
 
         {!compact && <div className="im-actions">
@@ -562,4 +583,10 @@ export function InlineMedia({
       )}
     </div>
   );
+}
+
+function formatClock(seconds: number) {
+  const s = Math.max(0, Math.round(seconds));
+  const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), r = s % 60;
+  return h ? `${h}:${String(m).padStart(2, "0")}:${String(r).padStart(2, "0")}` : `${m}:${String(r).padStart(2, "0")}`;
 }

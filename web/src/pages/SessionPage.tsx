@@ -2,6 +2,7 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState, type Pointer
 import { useNavigate, useParams } from "react-router-dom";
 import { api, type Item, type ItemContent, type ItemRender, type Selected } from "@/api/client";
 import { ItemActions } from "@/components/ItemActions";
+import { ItemDetails } from "@/components/ItemDetails";
 import { ReaderPage } from "@/components/ReaderPage";
 import { SavePicker } from "@/components/SavePicker";
 import { ScoreBreakdownSheet } from "@/components/ScoreBreakdown";
@@ -66,6 +67,7 @@ export default function SessionPage() {
   const [err, setErr] = useState("");
   const [saveItem, setSaveItem] = useState<Item | null>(null); // Save picker target (#57)
   const [menuOpen, setMenuOpen] = useState(false);
+  const [detailsOpen, setDetailsOpen] = useState(false);
   const [recapOpen, setRecapOpen] = useState(false);
   const [review, setReview] = useState<SessionReviewData | null>(null);
   const reviewRef = useRef<SessionReviewData | null>(null);
@@ -170,6 +172,7 @@ export default function SessionPage() {
     setReview(snapshot);
     setCheckin(null);
     setMenuOpen(false);
+    setDetailsOpen(false);
     endServer();
     persistActivity.current();
   }
@@ -751,7 +754,7 @@ export default function SessionPage() {
   // reader is open (they own their own keys) or while typing.
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
-      if (content || menuOpen || breakdown || saveItem || sourceSel || checkin || review) return;
+      if (content || menuOpen || detailsOpen || breakdown || saveItem || sourceSel || checkin || review) return;
       const t = e.target as HTMLElement | null;
       if (t?.closest("input,textarea,select,button,a,[contenteditable]")) return;
       switch (e.key) {
@@ -800,7 +803,7 @@ export default function SessionPage() {
   const focusedShort = shortsMode && cur?.item.media_type === "short" && !review ? cur : null;
   if (focusedShort) lastShort.current = focusedShort;
   const short = lastShort.current;
-  const playbackActive = !content && !menuOpen && !breakdown && !saveItem && !sourceSel && !checkin && !review;
+  const playbackActive = !content && !menuOpen && !detailsOpen && !breakdown && !saveItem && !sourceSel && !checkin && !review;
 
   const shownItems = overIdx !== null ? items.slice(0, visibleCount) : items;
 
@@ -839,7 +842,7 @@ export default function SessionPage() {
             shortsMode={shortsMode}
             persistentShorts
             shortsPosition={shortsPosition}
-            playbackActive={i === current && !content && !menuOpen && !breakdown && !saveItem && !sourceSel && !checkin && !review}
+            playbackActive={i === current && !content && !menuOpen && !detailsOpen && !breakdown && !saveItem && !sourceSel && !checkin && !review}
             muted={playback.muted}
             onMutedChange={playback.setMuted}
             onPlaybackChange={(playing) => {
@@ -858,6 +861,7 @@ export default function SessionPage() {
             onSave={save}
             onSource={(s) => setSourceSel(s)}
             onMenu={() => setMenuOpen(true)}
+            onDetails={() => setDetailsOpen(true)}
             onFirstPlay={(s, explicit) => {
               played.current.add(s.item.id);
               if (explicit) recordOpen(s);
@@ -944,9 +948,23 @@ export default function SessionPage() {
         }}
         onOpenOriginal={() => { setMenuOpen(false); if (cur) openExternal(cur); }}
         onEnd={finishSession}
-        onWhy={() => {
+        onDetails={() => {
           setMenuOpen(false);
+          setDetailsOpen(true);
+        }}
+      />
+
+      <ItemDetails
+        selected={atEnd ? null : cur}
+        open={detailsOpen}
+        onClose={() => setDetailsOpen(false)}
+        onWhy={() => {
+          setDetailsOpen(false);
           if (cur) setBreakdown(cur);
+        }}
+        onActions={review ? undefined : () => {
+          setDetailsOpen(false);
+          setMenuOpen(true);
         }}
       />
 

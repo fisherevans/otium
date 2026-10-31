@@ -1,28 +1,27 @@
-import { ExternalLink, Check, ChevronRight } from "lucide-react";
+import { ChevronRight, Download, ExternalLink, Info, Link2, Share2, Tv, Bookmark, BookOpen, Check } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { api, type Item, type Selected, type Source } from "@/api/client";
 import { BottomSheet } from "./BottomSheet";
-import { bucketOf, REP_LABEL } from "@/lib/represent";
-import { RepDots } from "./RepDots";
-import { ShareActions } from "./ReaderActions";
+import { ManualCopy } from "./ReaderActions";
 import { ShortsModeToggle } from "./ShortsModeToggle";
-import { renderSummary } from "@/lib/html";
+import { canWebShare, copyText, shareOrCopy } from "@/lib/share";
 import { isMedia } from "@/lib/render";
+import { parseYouTubeId } from "@/lib/youtube";
 
-// The "…" overflow for the current session item (#43), restyled to match the
-// management surfaces (#120): the item's rank score with a chronological note (a
-// source's articles are surfaced newest-first), the source's representation shown
-// read-only exactly as the source page shows it, then the plain actions. Editing
-// representation now lives on the source page - "View source" jumps straight there
-// (the session is durable, so it resumes). Nothing here emits an engagement event.
+// What to do with the current session item, and where to go from it (#180): the
+// pill's ··· opens this. Share the clip itself or its link, download it, open it
+// or its channel on YouTube, jump to the source in Otium, save it; then session
+// controls (Shorts mode, End session). Where the item came from and why it
+// surfaced is ItemDetails, a separate sheet. Nothing here emits an engagement
+// event.
 export function ItemActions({
   selected,
   open,
   onClose,
   onRead,
   onSave,
-  onWhy,
+  onDetails,
   onOpenOriginal,
   onEnd,
   shortsMode,
@@ -33,7 +32,7 @@ export function ItemActions({
   onClose: () => void;
   onRead: () => void;
   onSave?: (item: Item) => void;
-  onWhy: () => void;
+  onDetails?: () => void;
   onOpenOriginal?: () => void;
   onEnd?: () => void;
   shortsMode?: boolean;
@@ -43,19 +42,8 @@ export function ItemActions({
   const item = selected?.item ?? null;
   const sourceId = item?.source_id ?? 0;
   const [source, setSource] = useState<Source | null>(null);
-
-  // #142: "filter this out" - mute the item's RSS categories or add a word filter
-  // to its source, straight from the card. `muted` tracks what's been muted this
-  // open so the chip shows confirmed; `note` is the calm confirmation line.
-  const [muted, setMuted] = useState<string[]>([]);
-  const [kwOpen, setKwOpen] = useState(false);
-  const [kw, setKw] = useState("");
-  const [note, setNote] = useState("");
-  const noteRef = useRef<HTMLParagraphElement>(null);
-
-  useEffect(() => {
-    if (note) noteRef.current?.scrollIntoView({ block: "nearest", behavior: "instant" });
-  }, [note]);
+  const [toast, setToast] = useState("");
+  const [manual, setManual] = useState(false);
 
   useEffect(() => {
     if (!open || !sourceId) return;
@@ -64,144 +52,175 @@ export function ItemActions({
       .then((list) => setSource(list.find((x) => x.id === sourceId) ?? null))
       .catch(() => {});
   }, [open, sourceId]);
-
-  // Reset the filter UI each time the sheet opens on a fresh item.
-  useEffect(() => {
-    setMuted([]);
-    setKwOpen(false);
-    setKw("");
-    setNote("");
-  }, [open, item?.id]);
+  useEffect(() => { setToast(""); setManual(false); }, [open, item?.id]);
 
   if (!item) return null;
+  const youTube = parseYouTubeId(item.url) !== null;
+  const channel = youTube ? channelURL(source) : "";
+  const clip = youTube && (item.media_type === "short" || (item.duration_sec > 0 && item.duration_sec <= 180));
 
-  const sourceLabel = selected?.source_title ?? source?.title ?? "this source";
-  async function muteCategory(cat: string) {
-    if (!item || muted.includes(cat)) return;
-    setNote("");
-    setMuted((m) => [...m, cat]);
-    try {
-      await api.filterFromItem(item.id, { categories: [cat] });
-      setNote(`Muted “${cat}” from ${sourceLabel} - new posts in it won't surface.`);
-    } catch {
-      setMuted((m) => m.filter((c) => c !== cat));
-      setNote("Couldn't save that filter - try again.");
-    }
+  function flash(msg: string) {
+    setToast(msg);
+    window.setTimeout(() => setToast((t) => (t === msg ? "" : t)), 1800);
   }
-  async function addKeyword() {
-    const word = kw.trim();
-    if (!item || !word) return;
-    setNote("");
-    try {
-      await api.filterFromItem(item.id, { keywords: [word] });
-      setNote(`Muted posts from ${sourceLabel} with “${word}” in the title.`);
-      setKw("");
-      setKwOpen(false);
-    } catch {
-      setNote("Couldn't save that filter - try again.");
-    }
+  async function shareLink() {
+    if (!item) return;
+    const r = await shareOrCopy({ title: item.title, url: item.url });
+    if (r === "copied") flash("Link copied");
+    else if (r === "failed") setManual(true);
   }
-
-  const categories = item.categories ?? [];
-
-  const bucket = source ? bucketOf(source.weight) : "normal";
-  const score = selected?.score ?? 0;
+  async function copyLink() {
+    if (!item) return;
+    if (await copyText(item.url)) flash("Link copied");
+    else setManual(true);
+  }
 
   return (
     <BottomSheet open={open} onClose={onClose} kicker={selected?.source_title ?? "Item"}>
       <div className="ia-title">{item.title}</div>
-      {onShortsModeChange && <ShortsModeToggle enabled={shortsMode ?? false} onChange={onShortsModeChange} />}
-      {item.media_type === "short" && <div className="shorts-details-copy" dangerouslySetInnerHTML={{ __html: renderSummary(item.content?.trim() ? item.content : item.summary).html }} />}
 
-      {/* Score + chronological note, mirroring the source drill-down. */}
-      <div className="ia-scoreline">
-        <span className="va-bar" aria-hidden>
-          <span className="va-bar-fill" style={{ width: `${Math.round(Math.min(1, score) * 100)}%` }} />
-        </span>
-        <span className="va-score">{score.toFixed(2)}</span>
-        <button className="va-explore" onClick={onWhy}>
-          Explore score
+      {clip && <VideoFileActions item={item} />}
+
+      <div className="sheet-rows">
+        {canWebShare() && (
+          <button className="sheet-row" onClick={shareLink}>
+            <span className="sheet-row-label"><Share2 size={18} aria-hidden /> Share link</span>
+          </button>
+        )}
+        <button className="sheet-row" onClick={copyLink}>
+          <span className="sheet-row-label"><Link2 size={18} aria-hidden /> Copy link</span>
         </button>
-      </div>
-      <p className="ia-sub">Surfaced by recency - a source's articles come up newest first.</p>
-
-      {/* Representation, read-only, exactly as the source page renders it. */}
-      <div className="ia-rep">
-        <RepDots bucket={bucket} />
-        <span className="ia-rep-label">{REP_LABEL[bucket]}</span>
+        {onOpenOriginal && (
+          <button className="sheet-row" onClick={onOpenOriginal}>
+            <span className="sheet-row-label"><ExternalLink size={18} aria-hidden /> {youTube ? "Open in YouTube" : "Open original"}</span>
+          </button>
+        )}
+        {channel && (
+          <a className="sheet-row" href={channel} target="_blank" rel="noopener noreferrer">
+            <span className="sheet-row-label"><Tv size={18} aria-hidden /> Open channel on YouTube</span>
+          </a>
+        )}
       </div>
 
       <div className="sheet-rows">
-        {/* Media plays inline in the card - no in-app reader to open. */}
         {!isMedia(item) && (
           <button className="sheet-row" onClick={onRead}>
-            <span>Read in app</span>
-            <ChevronRight size={18} className="sheet-chev inline-icon" aria-hidden />
+            <span className="sheet-row-label"><BookOpen size={18} aria-hidden /> Read in app</span>
           </button>
         )}
         {onSave && (
           <button className="sheet-row" onClick={() => onSave(item)}>
-            <span>Save to collection</span>
-            <ChevronRight size={18} className="sheet-chev inline-icon" aria-hidden />
+            <span className="sheet-row-label"><Bookmark size={18} aria-hidden /> Save to collection</span>
           </button>
         )}
         <button className="sheet-row" onClick={() => nav(`/sources/${sourceId}`)}>
-          <span>View source</span>
+          <span>Go to {selected?.source_title ?? "source"} in Otium</span>
           <ChevronRight size={18} className="sheet-chev inline-icon" aria-hidden />
         </button>
-      </div>
-
-      <div className="sheet-rows">
-        {onOpenOriginal && <button className="sheet-row" onClick={onOpenOriginal}><span>Open original</span><ExternalLink size={16} aria-hidden /></button>}
-        <ShareActions item={item} labeled />
-        {onEnd && <button className="sheet-row" onClick={onEnd}><span>End session</span><ChevronRight size={18} className="sheet-chev inline-icon" aria-hidden /></button>}
-      </div>
-
-      {/* #142: filter this kind of post out of future sessions. Tap a category to
-          mute it, or add a word from the title - both apply to this source going
-          forward (obituaries, legal notices, and the like). */}
-      <div className="ia-filter">
-        <div className="ia-filter-label">Filter out of future sessions</div>
-        {categories.length > 0 ? (
-          <div className="ia-filter-chips">
-            {categories.map((c) => {
-              const done = muted.includes(c);
-              return (
-                <button
-                  key={c}
-                  className={`ia-fchip ${done ? "done" : ""}`}
-                  disabled={done}
-                  onClick={() => muteCategory(c)}
-                >
-                  {done && <Check size={15} className="inline-icon" aria-hidden />} {c}
-                </button>
-              );
-            })}
-          </div>
-        ) : (
-          <p className="ia-filter-empty">This post carries no category tags to filter on.</p>
-        )}
-        {!kwOpen ? (
-          <button className="ia-filter-word" onClick={() => setKwOpen(true)}>
-            or filter by a word in the title…
+        {onDetails && (
+          <button className="sheet-row" onClick={onDetails}>
+            <span className="sheet-row-label"><Info size={18} aria-hidden /> Details and why it's here</span>
+            <ChevronRight size={18} className="sheet-chev inline-icon" aria-hidden />
           </button>
-        ) : (
-          <div className="ia-kw">
-            <input
-              className="field"
-              placeholder="word or phrase in the title"
-              value={kw}
-              autoFocus
-              onChange={(e) => setKw(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && addKeyword()}
-            />
-            <button className="btn" onClick={addKeyword} disabled={!kw.trim()}>
-              Mute
-            </button>
-          </div>
         )}
-        {note && <p className="ia-filter-note" ref={noteRef} role="status">{note}</p>}
       </div>
+
+      {(onShortsModeChange || onEnd) && (
+        <div className="sheet-rows">
+          {onShortsModeChange && <ShortsModeToggle enabled={shortsMode ?? false} onChange={onShortsModeChange} />}
+          {onEnd && <button className="sheet-row" onClick={onEnd}><span>End session</span><ChevronRight size={18} className="sheet-chev inline-icon" aria-hidden /></button>}
+        </div>
+      )}
+
+      {manual && <ManualCopy url={item.url} onClose={() => setManual(false)} />}
+      {toast && <div className="toast over-sheet"><Check size={15} strokeWidth={2} aria-hidden /> {toast}</div>}
     </BottomSheet>
   );
+}
+
+// Share the clip itself (#180). The server fetches the MP4 on first request
+// (several seconds), then serves it from cache. iOS only opens the share sheet
+// close to a tap, so a slow first fetch can leave the file ready but unshared -
+// the row then reads "Share video" and the next tap shares instantly. In the
+// share sheet, Save Video puts it in Photos.
+function VideoFileActions({ item }: { item: Item }) {
+  const [state, setState] = useState<"idle" | "loading" | "ready" | "error">("idle");
+  const [message, setMessage] = useState("");
+  const file = useRef<File | null>(null);
+  useEffect(() => { file.current = null; setState("idle"); setMessage(""); }, [item.id]);
+
+  const href = `/api/v1/items/${item.id}/video`;
+  const name = fileName(item.title);
+
+  async function share() {
+    if (file.current) return shareFile(file.current);
+    setState("loading");
+    setMessage("");
+    try {
+      const res = await fetch(href);
+      if (!res.ok) {
+        let msg = "Couldn't get this video.";
+        try { msg = (await res.json()).message || msg; } catch { /* keep default */ }
+        throw new Error(msg);
+      }
+      const blob = await res.blob();
+      file.current = new File([blob], name, { type: "video/mp4" });
+    } catch (e) {
+      setState("error");
+      setMessage(e instanceof Error ? e.message : "Couldn't get this video.");
+      return;
+    }
+    await shareFile(file.current);
+  }
+  async function shareFile(f: File) {
+    const files = [f];
+    if (typeof navigator.share !== "function" || !navigator.canShare?.({ files })) {
+      setState("ready");
+      setMessage("This browser can't share files. Use Download video.");
+      return;
+    }
+    try {
+      await navigator.share({ files });
+      setState("ready");
+    } catch (e) {
+      setState("ready");
+      const reason = e instanceof DOMException ? e.name : "";
+      if (reason === "NotAllowedError") setMessage("Video ready. Tap Share video to open the share sheet.");
+      else if (reason !== "AbortError") setMessage("Couldn't open the share sheet. Try again, or use Download video.");
+    }
+  }
+
+  return (
+    <div className="sheet-rows">
+      <button className="sheet-row" onClick={share} disabled={state === "loading"} aria-busy={state === "loading"}>
+        <span className="sheet-row-label"><Share2 size={18} aria-hidden />
+          {state === "loading" ? "Preparing video…" : state === "ready" ? "Share video" : "Save or share video"}
+        </span>
+      </button>
+      <a className="sheet-row" href={`${href}?download=1`} download={name}>
+        <span className="sheet-row-label"><Download size={18} aria-hidden /> Download video</span>
+      </a>
+      <p className="ia-sub" role="status">{message || "Save or share opens the share sheet. Choose Save Video for Photos."}</p>
+    </div>
+  );
+}
+
+function fileName(title: string) {
+  const base = title.replace(/[^A-Za-z0-9 ._-]+/g, "").trim().slice(0, 60).trim();
+  return `${base || "video"}.mp4`;
+}
+
+// The source's YouTube channel page: its homepage when that is a YouTube URL,
+// otherwise derived from the channel feed's channel_id.
+function channelURL(source: Source | null) {
+  if (!source) return "";
+  try {
+    const home = new URL(source.homepage_url);
+    if (/(^|\.)youtube\.com$/.test(home.hostname)) return home.toString();
+  } catch { /* fall through */ }
+  try {
+    const id = new URL(source.feed_url).searchParams.get("channel_id");
+    if (id) return `https://www.youtube.com/channel/${id}`;
+  } catch { /* none */ }
+  return "";
 }
