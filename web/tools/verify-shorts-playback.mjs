@@ -546,6 +546,13 @@ for (const [name, engine] of Object.entries({ chromium, webkit }).filter(([name]
             assert.ok(Math.abs(view.video.height - view.video.width * 16 / 9) <= 2 && view.video.width <= view.w + 1, 'fitted at 9:16, letterboxed rather than cropped');
             assert.ok(Math.abs(view.progress.top - view.frame.top) <= 1, 'progress runs along the top edge of the clip');
             assert.equal(view.next, null, 'no Next button in full screen: you swipe');
+            // #193: the poster you see while a card is focused but not yet playing has
+            // exactly the player's box, so nothing jumps when the player takes over.
+            const boxes = await page.evaluate(() => ['.afterglow-card:not(.away) .im-slot-poster', '.session-shorts-player[data-active="true"] .im-poster', '.session-shorts-player[data-active="true"] .im-frame iframe', '.afterglow-card[data-idx="1"] .im-slot-poster']
+                .map(sel => { const r = document.querySelector(sel).getBoundingClientRect(); return [Math.round(r.width), Math.round(r.height)]; }));
+            assert.deepEqual(boxes[0], boxes[1], 'focused slot poster matches the player poster');
+            assert.deepEqual(boxes[1], boxes[2], 'player poster matches the video');
+            assert.deepEqual(boxes[3], boxes[2], 'the next card\'s poster is the same size too');
             assert.equal(await page.locator('.afterglow-card[data-idx="1"] .im-veil-rest').count(), 1, 'the incoming clip arrives already veiled');
             // The one-time sound hint points at the sound control, and leaves on sound on.
             await page.locator('.sound-hint').waitFor();
