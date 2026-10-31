@@ -4,7 +4,7 @@ import type { ShortsBus } from "@/lib/shortsBus";
 import { Bookmark, BookOpen, Play, ExternalLink, MoreHorizontal, ChevronRight, Maximize2, Minimize2 } from "lucide-react";
 import type { Item, ItemRender, Selected } from "@/api/client";
 import { TopicPill, CardSource, SourceAvatar, Byline, Blurb, Media } from "@/components/CardParts";
-import { Aura, InlineMedia, type MediaPosition } from "@/components/InlineMedia";
+import { InlineMedia, type MediaPosition } from "@/components/InlineMedia";
 import { ShareActions } from "@/components/ReaderActions";
 import { isMedia, isVertical, videoAspect } from "@/lib/render";
 import "./session-afterglow.css";
@@ -405,9 +405,9 @@ export const SessionCard = forwardRef<HTMLDivElement, SessionCardProps>(function
         // poster underneath is what you see while scrolling in or out.
         <div className="card-media shorts-player-slot" aria-hidden="true">
           <div className="inline-media im-compact"><div className="im-stage">
-            <div className="im-frame" style={{ "--ar": String(videoAspect(it.item)), ...(it.item.thumbnail_url ? { backgroundImage: `url(${it.item.thumbnail_url})` } : {}) } as React.CSSProperties}>
-              {/* #184: an incoming clip is about to play, not waiting for a tap. */}
-              <Aura on={!hostsPlayer} />
+            <div className="im-frame" style={{ "--ar": String(videoAspect(it.item)) } as React.CSSProperties}>
+              {/* The incoming clip's poster, framed exactly like the player's. */}
+              {it.item.thumbnail_url && <span className="im-slot-poster" style={{ backgroundImage: `url(${it.item.thumbnail_url})` }} />}
             </div>
           </div></div>
         </div>

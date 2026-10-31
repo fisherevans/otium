@@ -47,7 +47,8 @@ function installFakeYT({ mode, held, blocked }) {
             this.iframe.className = node.className;
             this.iframe.dataset.video = this.videoId;
             this.iframe.src = `${options.host}/embed/${this.videoId}`;
-            this.iframe.style.cssText = 'width:100%;height:100%;border:0';
+            // Like the real API: size attributes, no inline style, so app CSS sizes it.
+            this.iframe.width = '640'; this.iframe.height = '360'; this.iframe.style.border = '0';
             node.replaceWith(this.iframe);
             state.players.push(this);
             state.log.push({ action: 'create', id: this.videoId });
@@ -500,7 +501,7 @@ for (const [name, engine] of Object.entries({ chromium, webkit }).filter(([name]
             await shot('actions');
             const sheet = page.locator('dialog[open]');
             for (const name of ['Save or share video', 'Copy link', 'Open in YouTube', 'Post details', 'End session'])
-                assert.equal(await sheet.getByRole('button', { name, exact: false }).count() > 0, true, `actions: ${name}`);
+                await sheet.getByRole('button', { name, exact: false }).first().waitFor({ timeout: 3000 }).catch(() => assert.fail(`actions: ${name}`));
             assert.equal(await sheet.getByRole('link', { name: 'Download video' }).getAttribute('href'), '/api/v1/items/101/video?download=1');
             assert.equal(await sheet.getByRole('link', { name: 'Open channel on YouTube' }).getAttribute('href'), 'https://www.youtube.com/channel/UCsynthetic0000000000000');
             assert.equal(await sheet.getByRole('switch', { name: 'Shorts viewing mode' }).count(), 1, 'session controls live in actions');
@@ -527,43 +528,46 @@ for (const [name, engine] of Object.entries({ chromium, webkit }).filter(([name]
             await waitPlaying(true);
             assert.equal(count('open'), 0, 'sheets and sharing are not opens');
         });
-        await scenario('full screen: clip fills the screen, chrome floats over it, aura instead of Play while loading', async ({ page, state, waitPlaying, advance, count }) => {
+        await scenario('full screen: controls on top, captions never cropped, timed veil instead of Play while loading', async ({ page, state, waitPlaying, advance, count }) => {
             await waitPlaying(true);
             const view = await page.evaluate(() => {
                 const box = el => { const r = document.querySelector(el)?.getBoundingClientRect(); return r && { top: r.top, bottom: r.bottom, left: r.left, right: r.right, width: r.width, height: r.height }; };
-                return { frame: box('.session-shorts-player[data-active="true"] .im-frame'), footer: box('.afterglow-card:not(.away) .shorts-card-footer'),
-                    next: box('.immersive-next'), header: box('.topbar'), pill: document.querySelectorAll('.context-instrument').length,
-                    hidden: ['.topbar .chrome-btn', '.topbar .font-button'].map(s => getComputedStyle(document.querySelector(s)).display),
+                return { frame: box('.session-shorts-player[data-active="true"] .im-frame'), video: box('.session-shorts-player[data-active="true"] .im-frame iframe'),
+                    bar: box('.afterglow-card:not(.away) .shorts-card-footer'), next: box('.immersive-next'), progress: box('.session-shorts-player .im-progress'),
+                    pill: document.querySelectorAll('.context-instrument').length, header: getComputedStyle(document.querySelector('.topbar')).opacity,
                     root: [document.documentElement.dataset.immersive, document.documentElement.dataset.overVideo], w: innerWidth, h: innerHeight };
             });
             assert.equal(view.pill, 0, 'no bottom pill in full screen');
-            assert.deepEqual(view.hidden, ['none', 'none'], 'Library and Aa fold into the ··· menu');
-            assert.ok(view.frame.width >= view.w - 1 && view.frame.top >= view.header.bottom - 1 && view.frame.bottom <= view.footer.top + 1, 'the clip fills the space between header and creator strip');
-            assert.ok(view.footer.bottom >= view.h - 20, 'creator strip is the bottom element');
-            assert.ok(view.next.right >= view.w - 20 && view.next.bottom <= view.footer.top, 'Next floats bottom-right, above the strip');
+            assert.equal(view.header, '0', 'the Otium header steps aside over a Short');
+            assert.ok(view.bar.top <= 1 && view.bar.bottom <= view.frame.top + 1, 'controls are one bar above the clip');
+            assert.ok(Math.abs(view.video.top - view.frame.top) <= 1 && view.video.bottom <= view.frame.bottom + 1 && view.video.bottom <= view.h + 1, 'the clip is never cropped top or bottom (captions stay whole)');
+            assert.ok(Math.abs(view.video.height - view.video.width * 16 / 9) <= 2 && view.video.width <= view.w + 1, 'fitted at 9:16, letterboxed rather than cropped');
+            assert.ok(Math.abs(view.progress.top - view.frame.top) <= 1, 'progress runs along the top edge of the clip');
+            assert.ok(view.next.right >= view.w - 20 && view.next.bottom >= view.h - 70, 'Next floats bottom-right');
             assert.deepEqual(view.root, ['on', 'on']);
             await page.locator('.afterglow-card:not(.away) .shorts-details').click();
             await page.locator('dialog[open]').getByRole('button', { name: 'Post details' }).waitFor();
             await page.keyboard.press('Escape'); await page.waitForFunction(() => !document.querySelector('dialog[open]'));
             await waitPlaying(true);
-            assert.equal(await page.locator('.session-shorts-player .im-aura').getAttribute('data-on'), 'false', 'no aura while playing');
+            assert.equal(await page.locator('.session-shorts-player .im-veil').getAttribute('data-on'), 'false', 'no veil while playing');
             // A held load is "about to play": aura on, no Play glyph to tap.
             await page.evaluate(() => { window.__yt.holdLoads = true; });
             await advance(1, false);
-            await page.waitForFunction(() => document.querySelector('.session-shorts-player .im-aura')?.dataset.on === 'true');
+            await page.waitForFunction(() => document.querySelector('.session-shorts-player .im-veil')?.dataset.on === 'true');
             assert.equal(await page.locator('.session-shorts-player .im-play').count(), 0, 'no Play button while it is about to play');
-            assert.equal(await page.locator('.afterglow-card[data-idx="2"] .shorts-player-slot .im-aura').getAttribute('data-on'), 'true', 'incoming cards show the aura too');
+            assert.match(await page.locator('.session-shorts-player .im-veil').getAttribute('style'), /--expect: \d+ms/, 'the veil is timed to the expected start');
             await page.evaluate(() => { window.__yt.holdLoads = false; window.__yt.current().emit(1); });
             await waitPlaying(true);
-            await page.waitForFunction(() => document.querySelector('.session-shorts-player .im-aura')?.dataset.on === 'false');
-            // Buffering mid-play is waiting too; a deliberate pause shows Play instead.
+            await page.waitForFunction(() => document.querySelector('.session-shorts-player .im-veil')?.dataset.on === 'false');
+            assert.ok(await page.evaluate(() => JSON.parse(localStorage.getItem('otium:shorts-start-ms') || '[]').length > 0), 'start times are remembered for the next prediction');
+            // Buffering mid-play dims the frozen frame; a deliberate pause shows Play instead.
             await page.evaluate(() => window.__yt.current().emit(3));
-            await page.waitForFunction(() => document.querySelector('.session-shorts-player .im-aura')?.dataset.on === 'true');
+            await page.waitForFunction(() => document.querySelector('.session-shorts-player .im-buffer')?.dataset.on === 'true');
             await page.evaluate(() => window.__yt.current().emit(1));
             await waitPlaying(true);
             await page.getByRole('button', { name: 'Pause', exact: true }).click();
             await waitPlaying(false);
-            assert.equal(await page.locator('.session-shorts-player .im-aura').getAttribute('data-on'), 'false', 'a deliberate pause is not loading');
+            assert.equal(await page.locator('.session-shorts-player .im-buffer').getAttribute('data-on'), 'false', 'a deliberate pause is not loading');
             assert.equal(await page.locator('.session-shorts-player .im-gesture .im-play').count(), 1, 'Play shows after a deliberate pause');
             await page.getByRole('button', { name: 'Play', exact: true }).click();
             await waitPlaying(true);

@@ -30,14 +30,15 @@
    poster-to-video change is close to invisible. */
 .session-shorts-player .im-poster { background-size: cover; background-repeat: no-repeat; background-color: #000; }
 
-.shorts-player-slot .im-frame { background: #000 center / cover no-repeat; }
+.shorts-player-slot .im-frame { background: #000; }
+.im-slot-poster { position: absolute; inset: 0; background: center / cover no-repeat; }
 /* Shorts read as one strip: the incoming clip is not dimmed like a card. */
 .snap.away.shorts-card { opacity: 1; }
 
 /* #182: the poster fades out on the first frame; it reappears instantly on a
    clip change so YouTube's loading state never shows. */
 .im-poster { transition: none; }
-.im-poster[data-hidden=true] { opacity: 0; pointer-events: none; transition: opacity .18s ease-out; }
+.im-poster[data-hidden=true] { opacity: 0; pointer-events: none; transition: opacity .5s cubic-bezier(.4, 0, .2, 1); }
 
 /* Progress hairline along the bottom edge of a Short; not interactive. */
 .im-progress { position: absolute; z-index: 6; left: 14px; right: 14px; bottom: 6px; height: 2px; border-radius: 2px; background: rgb(255 255 255 / .22); overflow: hidden; pointer-events: none; }
@@ -51,39 +52,24 @@
 .shorts-quiet-btn:focus-visible { outline: 2px solid var(--ink); outline-offset: -2px; }
 .shorts-age { font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
-/* #184/#186: the "about to play" aura. The clip underneath drops into shadow
-   and slow, saturated colour fields morph and drift through it like light in
-   smoke - deliberately a little strange, never a spinner. It fades in after a
-   beat so a fast start never flashes it, and out on the first frame. Blobs move
-   by transform; their outlines morph via border-radius. Still under reduced motion. */
-.im-aura { position: absolute; inset: 0; z-index: 2; overflow: hidden; pointer-events: none; border-radius: inherit; isolation: isolate;
-  opacity: 0; transition: opacity .35s ease-out;
-  background: radial-gradient(130% 90% at 50% 45%, rgb(10 8 16 / .42), rgb(6 5 10 / .78)); }
-.im-aura[data-on=true] { opacity: 1; transition: opacity .7s ease-in .2s; }
-.im-aura::before { content: ""; position: absolute; inset: -40%; opacity: .55; mix-blend-mode: screen; filter: blur(34px);
-  background: conic-gradient(from 0deg, rgb(255 179 92 / .0), rgb(255 95 162 / .55), rgb(143 107 255 / .5), rgb(63 208 201 / .45), rgb(255 179 92 / .5), rgb(255 179 92 / .0));
-  animation: aura-swirl 18s linear infinite; animation-play-state: paused; }
-.im-aura-blob { position: absolute; width: 70%; aspect-ratio: 1; mix-blend-mode: screen; filter: blur(14px); opacity: .7;
-  border-radius: 42% 58% 63% 37% / 41% 44% 56% 59%;
-  animation: var(--drift) 11s ease-in-out infinite alternate, aura-morph 7s ease-in-out infinite alternate;
-  animation-play-state: paused; will-change: transform; }
-.im-aura[data-on=true] .im-aura-blob, .im-aura[data-on=true]::before { animation-play-state: running; }
-.im-aura-blob.a { --drift: aura-a; left: -12%; top: 6%; background: radial-gradient(closest-side, rgb(255 166 77 / .85), rgb(255 166 77 / 0)); }
-.im-aura-blob.b { --drift: aura-b; right: -18%; top: 30%; background: radial-gradient(closest-side, rgb(255 84 160 / .7), rgb(255 84 160 / 0)); animation-duration: 13s, 9s; }
-.im-aura-blob.c { --drift: aura-c; left: 10%; bottom: -14%; background: radial-gradient(closest-side, rgb(110 120 255 / .7), rgb(110 120 255 / 0)); animation-duration: 15s, 8s; }
-@keyframes aura-swirl { to { transform: rotate(1turn) scale(1.08); } }
-@keyframes aura-morph { 0% { border-radius: 42% 58% 63% 37% / 41% 44% 56% 59%; } 50% { border-radius: 63% 37% 41% 59% / 58% 61% 39% 42%; } 100% { border-radius: 37% 63% 55% 45% / 46% 35% 65% 54%; } }
-@keyframes aura-a { 0% { transform: translate(0, 0) scale(.85) rotate(0); } 100% { transform: translate(34%, 22%) scale(1.25) rotate(40deg); } }
-@keyframes aura-b { 0% { transform: translate(0, 0) scale(1.15) rotate(0); } 100% { transform: translate(-36%, -20%) scale(.8) rotate(-50deg); } }
-@keyframes aura-c { 0% { transform: translate(0, 0) scale(.9) rotate(0); } 100% { transform: translate(24%, -30%) scale(1.3) rotate(30deg); } }
-@media (prefers-reduced-motion: reduce) { .im-aura-blob, .im-aura::before { animation: none; } }
+/* #189: waiting for a clip. The veil settles over the poster across the time
+   recent clips took to start here (--expect, from lib/loadTiming), so it is at its
+   deepest just as the clip is expected; then the poster - veil included -
+   dissolves into the video. A slow start breathes gently instead of spinning. */
+.im-veil { position: absolute; inset: 0; z-index: 1; pointer-events: none; background: #07060a; opacity: 0; }
+.im-veil[data-on=true] { animation: veil-settle var(--expect, 1200ms) cubic-bezier(.35, .1, .3, 1) forwards, veil-breathe 2.6s ease-in-out var(--expect, 1200ms) infinite alternate; }
+@keyframes veil-settle { from { opacity: 0; } to { opacity: .58; } }
+@keyframes veil-breathe { from { opacity: .58; } to { opacity: .34; } }
+.im-buffer { position: absolute; inset: 0; z-index: 2; pointer-events: none; background: #07060a; opacity: 0; transition: opacity .35s ease-out; }
+.im-buffer[data-on=true] { opacity: .4; transition: opacity .6s ease-in .3s; }
+@media (prefers-reduced-motion: reduce) { .im-veil[data-on=true] { animation: none; opacity: .45; } }
 
 /* #184: full-screen Shorts. For the whole session the reel fills the viewport and
    the header and pill float over it, so every card has the same geometry and a
    swipe between a Short and an article never resizes the reel. Shorts cards go
    edge to edge: the clip is cropped to fill (like TikTok/Reels), with scrims and
    the creator line on top. Articles keep their card, padded clear of the chrome. */
-:root[data-immersive=on] { --imm-top: calc(50px + env(safe-area-inset-top, 0px)); --imm-foot: calc(56px + env(safe-area-inset-bottom, 0px)); --imm-bottom: calc(var(--imm-foot) + 64px); }
+:root[data-immersive=on] { --imm-top: calc(50px + env(safe-area-inset-top, 0px)); --imm-bottom: calc(env(safe-area-inset-bottom, 0px) + 76px); }
 /* #186: a smaller wordmark tucked to the corner; Library and Aa live in the ··· menu. */
 :root[data-immersive=on] .topbar.session { min-height: 0; height: var(--imm-top); box-sizing: border-box; padding: env(safe-area-inset-top, 0px) 8px 0 14px; gap: 4px; }
 :root[data-immersive=on] .topbar.session .brand-name { font-size: 22px; }
@@ -97,35 +83,34 @@
 
 :root[data-immersive=on] .stage .snap.shorts-card { padding: 0; background: #000; overflow: hidden; }
 .snap.shorts-card .shorts-details-label { display: none; }
+/* #189: Shorts in full screen. One bar on top - creator, time, sound, CC, full
+   screen, ··· - and the clip directly below it, fitted to the width and never
+   cropped top or bottom, so YouTube's captions and bottom rows stay whole. A clip
+   taller than the space letterboxes at the sides instead. The Otium header steps
+   aside over a Short; its menu is reachable from the bar's ···. */
+:root[data-immersive=on] { --imm-bar: calc(env(safe-area-inset-top, 0px) + 52px); }
 :root[data-immersive=on] .snap.shorts-card .shorts-player-slot { position: absolute; inset: 0; margin: 0; }
 :root[data-immersive=on] .snap.shorts-card .shorts-player-slot :is(.inline-media, .im-stage) { width: 100%; height: 100%; }
-:root[data-immersive=on] :is(.stage) .snap.afterglow-card.shorts-card .shorts-player-slot .inline-media .im-frame { position: absolute; inset: var(--imm-top) 0 var(--imm-foot); width: auto; height: auto; max-width: none; aspect-ratio: auto; border-radius: 0; }
-/* #186: the clip sits between two thin black bands - the header above, the
-   creator strip below - so neither our chrome nor YouTube's in-embed title and
-   caption rows land on each other. */
-:root[data-immersive=on] .snap.shorts-card .shorts-card-footer { position: absolute; z-index: 5; left: 0; right: 0; bottom: calc(env(safe-area-inset-bottom, 0px) + 8px); padding: 0 10px 0 16px; color: #fff; text-shadow: 0 1px 2px rgb(0 0 0 / .45); }
+:root[data-immersive=on] :is(.stage) .snap.afterglow-card.shorts-card .shorts-player-slot .inline-media .im-frame { position: absolute; inset: var(--imm-bar) 0 0; width: auto; height: auto; max-width: none; aspect-ratio: auto; border-radius: 0; container-type: size; }
+:root[data-immersive=on] .snap.shorts-card .shorts-card-footer { position: absolute; z-index: 5; left: 0; right: 0; top: env(safe-area-inset-top, 0px); bottom: auto; height: 52px; padding: 0 6px 0 14px; color: #fff; }
 :root[data-immersive=on] .snap.shorts-card :is(.shorts-creator, .shorts-details) { color: #fff; }
-:root[data-immersive=on] .snap.shorts-card .shorts-age { color: rgb(255 255 255 / .78); }
-:root[data-immersive=on] .snap.shorts-card .shorts-quiet-btn { color: rgb(255 255 255 / .62); }
+:root[data-immersive=on] .snap.shorts-card .shorts-age { color: rgb(255 255 255 / .72); }
+:root[data-immersive=on] .snap.shorts-card .shorts-quiet-btn { color: rgb(255 255 255 / .6); }
 :root[data-immersive=on] .snap.shorts-card .shorts-quiet-btn[data-on=true] { color: #fff; }
 
-/* The shared player fills the card; the iframe is scaled to cover it, cropping
-   the long edge, and the progress hairline sits just above the pill. */
-:root[data-immersive=on] .session-shorts-player > .inline-media.im-compact .im-stage .im-frame { width: 100%; margin-top: var(--imm-top); height: calc(var(--shorts-slot-height) - var(--imm-top) - var(--imm-foot)); border-radius: 0; container-type: size; }
-/* Shorts are 9:16 whatever the feed metadata says (it is often missing, which
-   reads as 16:9 and would over-crop); a landscape clip letterboxes inside. */
-:root[data-immersive=on] .session-shorts-player .im-frame :is(iframe, .im-yt) { inset: auto; left: 50%; top: 50%; width: max(100cqw, calc(100cqh * 9 / 16)); height: max(100cqh, calc(100cqw * 16 / 9)); transform: translate(-50%, -50%); }
-
-/* Chrome over a Short: light text, glassy pill, no paper fade. */
-:root[data-over-video=on] .topbar.session { color: #fff; }
-:root[data-over-video=on] .topbar.session :is(.chrome-btn, .shell-icon, .font-button, .brand-mark, .brand-name) { color: #fff; border-color: rgb(255 255 255 / .45); }
-:root[data-over-video=on] .context-instrument-wrap { background: none; }
-:root[data-over-video=on] .context-instrument { background: rgb(18 14 10 / .42); border-color: rgb(255 255 255 / .16); box-shadow: none; -webkit-backdrop-filter: blur(16px) saturate(1.2); backdrop-filter: blur(16px) saturate(1.2); }
-:root[data-over-video=on] .context-instrument :is(.instrument-menu, .instrument-meaning, .instrument-label, .instrument-eyebrow) { color: #fff; border-color: rgb(255 255 255 / .2); }
+:root[data-immersive=on] .session-shorts-player > .inline-media.im-compact .im-stage .im-frame { width: 100%; margin-top: var(--imm-bar); height: calc(var(--shorts-slot-height) - var(--imm-bar)); border-radius: 0; container-type: size; background: #000; }
+/* The clip box: full width at 9:16, or full height if that would overflow. The
+   iframe, its poster and the incoming card's poster all share it exactly. */
+:root[data-immersive=on] :is(.session-shorts-player .im-frame :is(iframe, .im-yt, .im-poster), .shorts-player-slot .im-slot-poster) {
+  inset: auto; left: 50%; top: 0; transform: translateX(-50%);
+  width: min(100cqw, calc(100cqh * 9 / 16)); height: calc(min(100cqw, calc(100cqh * 9 / 16)) * 16 / 9); }
+:root[data-immersive=on] .session-shorts-player .im-progress { top: 0; bottom: auto; left: 0; right: 0; border-radius: 0; }
+:root[data-over-video=on] .topbar.session { opacity: 0; pointer-events: none; }
+:root[data-immersive=on] .topbar.session { transition: opacity .2s; }
 
 /* #186: in full screen the pill is gone; Next floats bottom-right, above the
    creator strip, as a light outline that reads over video and paper alike. */
-.immersive-next { position: fixed; z-index: 20; right: 14px; bottom: calc(var(--imm-foot, 56px) + 16px); display: inline-flex; align-items: center; gap: 6px;
+.immersive-next { position: fixed; z-index: 20; right: 14px; bottom: calc(env(safe-area-inset-bottom, 0px) + 14px); display: inline-flex; align-items: center; gap: 6px;
   min-height: 44px; padding: 0 16px 0 18px; border-radius: 999px; border: 1.5px solid var(--ink-soft); background: transparent; color: var(--ink);
   font: 450 18px/1 var(--heading, serif); -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px); }
 :root[data-over-video=on] .immersive-next { border-color: rgb(255 255 255 / .9); color: #fff; background: rgb(0 0 0 / .3); text-shadow: 0 1px 2px rgb(0 0 0 / .35); }

@@ -142,6 +142,12 @@ export function ItemActions({
       {(onShortsModeChange || onEnd || onNativeControls || onImmersiveChange) && (
         <div className="sheet-rows">
           {onShortsModeChange && <ShortsModeToggle enabled={shortsMode ?? false} onChange={onShortsModeChange} />}
+          {status && (
+            <button className="sheet-row" onClick={() => { onClose(); window.dispatchEvent(new Event("otium:app-menu")); }}>
+              <span>Library, Saved and settings</span>
+              <ChevronRight size={18} className="sheet-chev inline-icon" aria-hidden />
+            </button>
+          )}
           {immersive !== undefined && onImmersiveChange && (
             <button className="sheet-row" role="switch" aria-checked={immersive} aria-label="Full-screen Shorts"
               onClick={() => onImmersiveChange(!immersive)}>
