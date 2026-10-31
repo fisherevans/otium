@@ -24,6 +24,8 @@ export type ChromePolicy = "full" | "slim" | "none";
 export type ReasonPolicy = "top" | "hidden";
 
 export interface LayoutOptions {
+  /** Use the compact, video-first card for short videos only. */
+  shortsMode: boolean;
   /** Run the budget solver after paint (sizes media from leftover space). */
   solve: boolean;
   title: TitlePolicy;
@@ -67,6 +69,7 @@ export interface LayoutOptions {
 }
 
 export const DEFAULT_LAYOUT: LayoutOptions = {
+  shortsMode: false,
   solve: false,
   title: "clamp3",
   titleMin: 16,
@@ -323,7 +326,7 @@ export function measureCard(card: HTMLElement): Omit<FitResult, "gaveUp" | "titl
   // card it actually filled 81% of.
   const budget = card.offsetHeight;
   const contentH = card.scrollHeight;
-  const actions = card.querySelector<HTMLElement>(".im-actions, .card-callout");
+  const actions = card.querySelector<HTMLElement>(".shorts-card-footer, .im-actions, .card-callout");
   const bottomClearance = actions
     ? Math.round(cr.bottom - actions.getBoundingClientRect().bottom)
     : 0;

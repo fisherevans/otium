@@ -17,9 +17,11 @@ npm run dev        # then open http://localhost:5173/lab
 npm run lab        # build a standalone single-file lab -> dist-lab/lab-standalone.html
 ```
 
-The standalone build inlines everything into one HTML file with no external
-requests, so it can be opened from disk, attached to a message, or published as an
-artifact for review. `dist-lab/` is gitignored.
+The standalone build inlines the app, styles, fonts and fixture images into one
+HTML file, so it can be opened from disk or published as an artifact for review.
+The interactive player can still contact YouTube. The measurement command stubs
+that player and measures the fixture posters without external media requests;
+it verifies geometry, not playback. `dist-lab/` is gitignored.
 
 State lives in the URL hash (device, fixture, and the full layout object), so any
 view you reach is a link you can send or script. `reset` restores the shipped
@@ -47,6 +49,11 @@ deterministic and needs no network.
 Add a fixture whenever you find a new way to break it. That is how the list earns
 its keep.
 
+The Shorts mode switch uses the real compact card and solver. Portrait, square
+and landscape short videos exercise its contained frame, compact creator/date
+and Details control. A long portrait video verifies that geometry alone does
+not activate this mode.
+
 ## Measuring
 
 Screenshots are not enough - this layout is solved at runtime, so the numbers only
@@ -61,6 +68,7 @@ sandboxes that ship a preinstalled binary, not a normal-machine requirement).
 
 ```sh
 npm run measure -- --lab dist-lab/lab-standalone.html      # design against this
+npm run measure -- --lab dist-lab/lab-standalone.html --shorts-mode
 npm run measure -- --app http://localhost:5173             # verify what ships
 npm run measure -- --lab dist-lab/lab-standalone.html --shots /tmp/cards
 ```

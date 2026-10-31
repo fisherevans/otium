@@ -65,6 +65,10 @@ The Go module is standalone (not in `~/dev/go.work`). Build/test/run it with
 `GOWORK=off` - the Makefile already does. Data lands in `./data/otium.db`
 (gitignored).
 
+### Shorts viewing mode
+
+`useShortsMode` remembers the viewing choice per account in this browser, independently of saved feed presets. Only short-video cards use the compact layout and autoplay. `InlineMedia` owns playback lifecycle, blocked-autoplay fallback and sound; `SessionPage` keeps automatic playback separate from explicit opens and times only actual playing intervals. Never count an automatic start as engagement. The shared layout solver and lab include a Shorts-mode branch; measure both modes after layout changes.
+
 ### Changing the session card
 
 The card's layout is **solved at runtime** (`web/src/lib/cardLayout.ts`), not set

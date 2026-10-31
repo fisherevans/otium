@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent } from "react";
-import { ExternalLink, Bookmark, FileText, ChevronUp, Play, SlidersHorizontal, MoreHorizontal } from "lucide-react";
+import { ExternalLink, Bookmark, FileText, ChevronUp, Play, SlidersHorizontal, MoreHorizontal, Volume2, VolumeX } from "lucide-react";
 import type { Item } from "@/api/client";
 import { ShareActions } from "./ReaderActions";
 import { renderSummary } from "@/lib/html";
 import { parseYouTubeId, loadYouTubeIframeAPI } from "@/lib/youtube";
+import "./shorts-mode.css";
 import { videoAspect, isVertical, isVideo } from "@/lib/render";
 
 // InlineMedia is the in-feed player (multimedia overhaul). Media is consumed IN the
@@ -28,9 +29,9 @@ import { videoAspect, isVertical, isVideo } from "@/lib/render";
 // notes"/"Transcript" toggle sticks the player to the top and scrolls the text below
 // WITHOUT remounting the player node, so playback never pauses.
 //
-// onFirstPlay fires once, on the first real PLAYING state, so the session counts the
-// watch as an `open` and starts the active-time timer (#135). onNext/onPrev advance
-// the feed from a swipe over the video.
+// onFirstPlay distinguishes observed playback from the first explicit play
+// interaction; autoplay never creates an open. onPlaybackChange owns playing-time
+// accounting. onNext/onPrev advance the feed from a swipe over the video.
 export function InlineMedia({
   item,
   onSave,
@@ -40,6 +41,12 @@ export function InlineMedia({
   onNext,
   onPrev,
   ytHistory = false,
+  compact = false,
+  autoPlay = false,
+  active = true,
+  muted = true,
+  onMutedChange,
+  onPlaybackChange,
 }: {
   item: Item;
   onSave?: () => void;
@@ -47,12 +54,18 @@ export function InlineMedia({
   // The card's ··· overflow, when it lives in this row rather than above the card.
   // Optional so the shipped placement stays untouched.
   onMenu?: () => void;
-  onFirstPlay?: () => void;
+  onFirstPlay?: (explicit: boolean) => void;
   onNext?: () => void;
   onPrev?: () => void;
   // #151: when true, embed from youtube.com (not nocookie) so a watch can reach the
   // user's YouTube history. Opt-in via Settings; default private.
   ytHistory?: boolean;
+  compact?: boolean;
+  autoPlay?: boolean;
+  active?: boolean;
+  muted?: boolean;
+  onMutedChange?: (muted: boolean) => void;
+  onPlaybackChange?: (playing: boolean) => void;
 }) {
   const [notes, setNotes] = useState(false);
   const [playing, setPlaying] = useState(false);
@@ -81,21 +94,122 @@ export function InlineMedia({
 
   const mountRef = useRef<HTMLDivElement>(null); // stable container React owns
   const frameRef = useRef<HTMLDivElement>(null);
+  const mediaRef = useRef<HTMLDivElement>(null);
   const playerRef = useRef<any>(null);
 
-  function markPlayed() {
-    if (played.current) return;
-    played.current = true;
-    onFirstPlay?.();
-  }
+  const explicitPlayed = useRef(false);
+  const explicitIntent = useRef(false);
+  const playingRef = useRef(false);
+  const ready = useRef(false);
+  const autoTried = useRef(false);
+  const resumeAfterSuspend = useRef(false);
+  const suspended = useRef(false);
+  const sound = useRef(autoPlay ? muted : false);
+  const [soundMuted, setSoundMuted] = useState(sound.current);
+  const [blocked, setBlocked] = useState(false);
+  const [failed, setFailed] = useState(false);
+  const audioRef = useRef<HTMLAudioElement>(null);
+  const latest = useRef({ active, autoPlay, onFirstPlay, onPlaybackChange, onMutedChange });
+  latest.current = { active, autoPlay, onFirstPlay, onPlaybackChange, onMutedChange };
 
-  // Create the YT player for the focused video card; destroy it on unmount (the card
-  // losing focus unmounts InlineMedia, so the player is torn down and audio stops).
-  // Recreated when `nativeControls` flips, since `controls` is construction-time only.
-  // The player is mounted into an imperatively-created child of mountRef (not a
-  // React-managed node) because YT.Player REPLACES its target element with an iframe;
-  // letting React own that node would break on the recreate. onReady restores the
-  // saved playhead so a toggle mid-watch resumes in place.
+  function markPlayed(explicit: boolean) {
+    if (explicit && !explicitPlayed.current) {
+      explicitPlayed.current = true;
+      played.current = true;
+      latest.current.onFirstPlay?.(true);
+    } else if (!played.current) {
+      played.current = true;
+      latest.current.onFirstPlay?.(false);
+    }
+  }
+  function reportPlaying(value: boolean) {
+    if (playingRef.current === value) return;
+    playingRef.current = value;
+    setPlaying(value);
+    latest.current.onPlaybackChange?.(value);
+  }
+  function available() {
+    const root = mediaRef.current;
+    // Shared Overlay portals mount in opening order; a review can remain open
+    // underneath its player. Only the top dialog owns interaction.
+    const topDialog = Array.from(document.querySelectorAll("dialog[open]")).at(-1);
+    return latest.current.active && !document.hidden && !!root?.isConnected &&
+      (!topDialog || topDialog.contains(root));
+  }
+  function setSound(value: boolean) {
+    sound.current = value;
+    setSoundMuted(value);
+    if (latest.current.autoPlay) latest.current.onMutedChange?.(value);
+    const player = playerRef.current;
+    if (value) player?.mute?.(); else player?.unMute?.();
+  }
+  function requestPlay(explicit = false) {
+    if (!ready.current || !available()) return;
+    explicitIntent.current = explicitIntent.current || explicit;
+    setBlocked(false);
+    setSound(sound.current);
+    playerRef.current?.playVideo?.();
+  }
+  function syncPlayback() {
+    if (!available()) {
+      if (!suspended.current) resumeAfterSuspend.current = playingRef.current;
+      suspended.current = true;
+      playerRef.current?.pauseVideo?.();
+      audioRef.current?.pause();
+      reportPlaying(false);
+      return;
+    }
+    const shouldResume = suspended.current && resumeAfterSuspend.current;
+    suspended.current = false;
+    resumeAfterSuspend.current = false;
+    if (!ready.current) return;
+    if (latest.current.autoPlay && (!autoTried.current || shouldResume)) {
+      autoTried.current = true;
+      requestPlay();
+    }
+  }
+  const sync = useRef(syncPlayback);
+  sync.current = syncPlayback;
+
+  useEffect(() => {
+    const change = () => sync.current();
+    const hide = () => {
+      playerRef.current?.pauseVideo?.();
+      audioRef.current?.pause();
+      reportPlaying(false);
+    };
+    document.addEventListener("visibilitychange", change);
+    window.addEventListener("pagehide", hide);
+    // Also covers shared header dialogs whose state is outside SessionPage.
+    const observer = new MutationObserver(change);
+    observer.observe(document.body, { subtree: true, attributes: true, attributeFilter: ["open"], childList: true });
+    return () => {
+      document.removeEventListener("visibilitychange", change);
+      window.removeEventListener("pagehide", hide);
+      observer.disconnect();
+    };
+  }, []);
+
+  const previousAutoPlay = useRef(autoPlay);
+  useEffect(() => {
+    if (previousAutoPlay.current !== autoPlay) {
+      previousAutoPlay.current = autoPlay;
+      autoTried.current = false;
+      resumeAfterSuspend.current = false;
+      if (!autoPlay) {
+        setSound(false);
+        playerRef.current?.pauseVideo?.();
+        reportPlaying(false);
+      }
+    }
+    sync.current();
+  }, [active, autoPlay]);
+  useEffect(() => {
+    if (autoPlay) setSound(muted);
+  }, [muted, autoPlay]);
+
+  // One player for the focused card. Native controls require a rebuild; retain
+  // its playhead, but always recheck focus, dialogs and visibility before playing.
   useEffect(() => {
     if (!video || !ytId) return;
     let cancelled = false;
@@ -107,55 +221,75 @@ export function InlineMedia({
       mountRef.current.appendChild(host);
       player = new YT.Player(host, {
         videoId: ytId,
-        // #151: youtube.com (cookies -> a watch can land in the user's history) only
-        // when they've opted in; otherwise the private nocookie embed.
         host: ytHistory ? "https://www.youtube.com" : "https://www.youtube-nocookie.com",
-        playerVars: { rel: 0, modestbranding: 1, playsinline: 1, controls: nativeControls ? 1 : 0 },
+        playerVars: { rel: 0, playsinline: 1, controls: nativeControls ? 1 : 0, origin: window.location.origin },
         events: {
           onReady: () => {
+            if (cancelled || playerRef.current !== player) return;
+            ready.current = true;
+            player.getIframe?.()?.setAttribute("allow", "autoplay; encrypted-media; picture-in-picture; fullscreen");
+            setSound(sound.current);
             const { at, playing: wasPlaying } = resume.current;
             if (at > 0) player.seekTo?.(at, true);
-            if (wasPlaying) player.playVideo?.(); // may be blocked without a gesture; native controls are right there
+            if (wasPlaying && available()) requestPlay();
+            else sync.current();
           },
           onStateChange: (e: any) => {
-            const s = e.data;
-            if (s === YT.PlayerState.PLAYING) {
-              setPlaying(true);
+            if (cancelled || playerRef.current !== player) return;
+            if (e.data === YT.PlayerState.PLAYING) {
+              if (!available()) { player.pauseVideo?.(); reportPlaying(false); return; }
+              setBlocked(false);
               setStarted(true);
-              markPlayed();
-            } else if (s === YT.PlayerState.PAUSED || s === YT.PlayerState.ENDED) {
-              setPlaying(false);
+              reportPlaying(true);
+              markPlayed(explicitIntent.current || !latest.current.autoPlay);
+            } else {
+              reportPlaying(false);
             }
+          },
+          onAutoplayBlocked: () => {
+            if (cancelled || playerRef.current !== player || !available()) return;
+            reportPlaying(false);
+            if (!sound.current && latest.current.autoPlay) {
+              // A following clip may lose the previous tap's audio permission.
+              setSound(true);
+              requestPlay();
+            } else setBlocked(true);
+          },
+          onError: () => {
+            if (cancelled || playerRef.current !== player) return;
+            setFailed(true);
+            reportPlaying(false);
           },
         },
       });
       playerRef.current = player;
-    });
+    }).catch(() => { if (!cancelled) setFailed(true); });
     return () => {
       cancelled = true;
-      // Save the playhead so the recreate resumes in place.
+      ready.current = false;
       try {
-        const p = playerRef.current;
-        if (p?.getCurrentTime) resume.current = { at: p.getCurrentTime() || 0, playing: p.getPlayerState?.() === 1 };
-      } catch {
-        /* player may not have initialized */
-      }
-      try {
+        if (player?.getCurrentTime) resume.current = { at: player.getCurrentTime() || 0, playing: playingRef.current || resumeAfterSuspend.current };
         player?.destroy?.();
-      } catch {
-        /* player may not have initialized */
-      }
-      playerRef.current = null;
-      if (mountRef.current) mountRef.current.innerHTML = ""; // drop the iframe YT left behind
+      } catch { /* A player can be removed before its API is ready. */ }
+      if (playerRef.current === player) playerRef.current = null;
+      reportPlaying(false);
+      if (mountRef.current) mountRef.current.innerHTML = "";
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [video, ytId, nativeControls, ytHistory]);
 
   function togglePlay() {
-    const p = playerRef.current;
-    if (!p) return;
-    if (playing) p.pauseVideo?.();
-    else p.playVideo?.();
+    if (!available()) return;
+    if (playingRef.current) {
+      resumeAfterSuspend.current = false;
+      playerRef.current?.pauseVideo?.();
+      reportPlaying(false);
+    } else requestPlay(true);
+  }
+  function toggleSound() {
+    explicitIntent.current = true;
+    setSound(!sound.current);
+    if (playingRef.current) markPlayed(true);
+    else requestPlay(true);
   }
 
   // Gesture overlay: distinguish a tap (play/pause) from a swipe (navigate). A raw
@@ -221,7 +355,7 @@ export function InlineMedia({
   const notesLabel = notes ? (video ? "Hide notes" : "Hide transcript") : video ? "Show notes" : "Transcript";
 
   return (
-    <div className={`inline-media ${vertical ? "v" : "h"} ${notes ? "notes" : ""}`}>
+    <div ref={mediaRef} className={`inline-media ${vertical ? "v" : "h"} ${notes ? "notes" : ""} ${compact ? "im-compact" : ""}`}>
       <div className="im-stage">
         {video && ytId ? (
           <div ref={frameRef} className="im-frame" style={frameStyle}>
@@ -271,18 +405,26 @@ export function InlineMedia({
                 bottom control bar. */}
             <button
               className={`im-ctltoggle ${nativeControls ? "on" : ""}`}
-              onClick={() => setNativeControls((v) => !v)}
+              onClick={() => { explicitIntent.current = true; setNativeControls((v) => !v); }}
               aria-pressed={nativeControls}
               aria-label={nativeControls ? "Use simple controls" : "Use YouTube controls"}
               title={nativeControls ? "Simple controls" : "YouTube controls"}
             >
               <SlidersHorizontal size={15} strokeWidth={2} aria-hidden />
             </button>
+            {autoPlay && <button type="button" className="im-sound" onClick={toggleSound}
+              aria-label={soundMuted ? "Turn sound on" : "Mute video"}>
+              {soundMuted ? <VolumeX size={17} aria-hidden /> : <Volume2 size={17} aria-hidden />}
+              {soundMuted ? "Sound on" : "Mute"}
+            </button>}
+            {(blocked || failed) && <div className="im-playback-message" role="status">
+              {failed ? <>Video unavailable here.<button onClick={onOpenOriginal}>Open original</button></> : "Tap the video to play"}
+            </div>}
           </div>
         ) : audio ? (
           <div className="im-audio">
             {item.thumbnail_url && <img className="im-audio-art" src={item.thumbnail_url} alt="" loading="lazy" />}
-            <audio src={item.url} controls preload="none" onPlay={markPlayed} />
+            <audio ref={audioRef} src={item.url} controls preload="none" onPlay={() => { if (!available()) { audioRef.current?.pause(); return; } markPlayed(true); reportPlaying(true); }} onPause={() => reportPlaying(false)} onEnded={() => reportPlaying(false)} />
             {!notes && item.summary?.trim() && <p className="im-audio-blurb">{item.summary}</p>}
           </div>
         ) : (
@@ -293,7 +435,7 @@ export function InlineMedia({
           </div>
         )}
 
-        <div className="im-actions">
+        {!compact && <div className="im-actions">
           {hasNotes && (
             <button className={`im-act im-notes-toggle ${notes ? "on" : ""}`} onClick={() => setNotes((n) => !n)}>
               {notes ? <ChevronUp size={16} strokeWidth={1.9} aria-hidden /> : <FileText size={16} strokeWidth={1.75} aria-hidden />}
@@ -314,10 +456,10 @@ export function InlineMedia({
               <MoreHorizontal size={18} strokeWidth={1.75} aria-hidden />
             </button>
           )}
-        </div>
+        </div>}
       </div>
 
-      {notes && hasNotes && (
+      {!compact && notes && hasNotes && (
         <div className="im-notes-panel">
           <div className="im-notes-title">{video ? "Show notes" : "Transcript"}</div>
           <div className="reader-body" dangerouslySetInnerHTML={{ __html: desc.html }} />

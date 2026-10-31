@@ -177,6 +177,23 @@ export function solveCard(vars: HTMLElement, reel: HTMLElement, card: HTMLElemen
   if (frame) frame.style.removeProperty("height");
   if (!opts.solve) return [];
 
+  if (card.classList.contains("shorts-card") && frame) {
+    const footer = card.querySelector<HTMLElement>(".shorts-card-footer");
+    const cs = getComputedStyle(card);
+    const column = card.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight);
+    const chrome = parseFloat(cs.paddingTop) + parseFloat(cs.paddingBottom)
+      + (footer?.offsetHeight ?? 0) + (parseFloat(cs.rowGap) || 0);
+    const ar = parseFloat(getComputedStyle(frame).getPropertyValue("--ar")) || 0.5625;
+    const room = Math.max(0, budget - chrome);
+    const height = Math.floor(Math.min(room, column / ar));
+    vars.style.setProperty("--card-frame-h", `${height}px`);
+    frame.style.height = `${height}px`;
+    // A width-bound square/landscape Short keeps its full frame and centers in
+    // the remaining space. Portrait video uses the full available height.
+    vars.style.setProperty("--card-center-pad", `${Math.floor(Math.max(0, room - height) / 2)}px`);
+    return [];
+  }
+
   const gaveUp: string[] = [];
   let cap = opts.heroCap;
   let ti = 0;

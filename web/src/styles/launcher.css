@@ -48,10 +48,14 @@
 .launcher-check input { width: 20px; height: 20px; accent-color: var(--ink-soft); }
 .launcher-preset-actions { display: flex; flex-wrap: wrap; gap: 14px; }
 .launcher button:disabled { opacity: .5; }
-@media (max-height: 740px) { .launcher { gap: 9px; padding-top: 10px; } .launcher-default { gap: 7px; padding: 12px 16px; } .launcher-custom-action { min-height: 52px; } .launcher-row { min-height: 54px; } .launcher-custom .launcher-back { min-height: 34px; } .launcher-custom .launcher-group legend { margin-bottom: 5px; } .launcher-custom .launcher-duration input { min-height: 32px; } }
+@media (max-height: 740px) { .launcher { gap: 9px; padding-top: 10px; } .launcher-custom { gap: 6px; } .launcher-default { gap: 7px; padding: 12px 16px; } .launcher-custom-action { min-height: 52px; } .launcher-row { min-height: 54px; } .launcher-custom .launcher-back { min-height: 34px; } .launcher-custom .launcher-group legend { margin-bottom: 5px; } .launcher-custom .launcher-duration input { min-height: 32px; } }
 @media (max-width: 350px) { .launcher { padding-inline: 0; } .launcher-options { gap: 4px; } .launcher-options button { font-size: 12px; } }
 
 @media (max-height: 650px) { .launcher { gap: 6px; padding-top: 0; } .launcher-custom h1 { font-size: 27px; } .launcher-custom .launcher-field { gap: 5px; } .launcher-custom .launcher-group { gap: 5px; } .launcher-default h2 { font-size: 22px; } .launcher-default { padding: 10px 14px; gap: 5px; } .launcher-custom-action { min-height: 48px; } .launcher-list-head { margin-bottom: -8px; } .launcher-row { min-height: 48px; } }
 @media (max-height: 650px) { .launcher-custom { gap: 4px; } }
 
 .launcher-sheet-body { display: flex; flex-direction: column; gap: 16px; }
+
+.launcher-custom-actions { display: flex; align-items: center; gap: 12px; }
+.launcher-custom-actions .launcher-advanced { flex: 1; min-width: 0; border-bottom: 0; }
+.launcher-custom-actions .launcher-save-link { flex-shrink: 0; padding-inline: 0; }
