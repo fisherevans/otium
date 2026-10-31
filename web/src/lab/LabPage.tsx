@@ -149,6 +149,7 @@ function Screen({
                 hierarchy={layout.hierarchy === "plain" ? "pill" : (layout.hierarchy as "pill" | "stack" | "breadcrumb" | "overline")}
                 sectionName={fx.section}
                 menuPlacement={layout.menu}
+                shortsMode={layout.shortsMode}
                 onOpenContent={() => {}}
                 onOpenExternal={() => {}}
                 onSave={() => {}}
@@ -297,6 +298,12 @@ export function LabPage() {
 
           <div className="lab-fieldset">
             <h2>layout</h2>
+            <div className="lab-row">
+              <span>Shorts mode</span>
+              <button type="button" className={`lab-btn ${st.layout.shortsMode ? "on" : ""}`} aria-pressed={st.layout.shortsMode} onClick={() => setL({ shortsMode: !st.layout.shortsMode })}>
+                {st.layout.shortsMode ? "on" : "off"}
+              </button>
+            </div>
             <div className="lab-row">
               <span>solve</span>
               <button type="button" className={`lab-btn ${st.layout.solve ? "on" : ""}`} onClick={() => setL({ solve: !st.layout.solve })}>

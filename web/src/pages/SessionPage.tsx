@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { api, type Item, type ItemContent, type ItemRender, type Selected } from "@/api/client";
 import { ItemActions } from "@/components/ItemActions";
@@ -15,6 +15,7 @@ import { SessionPresetPrompt } from "@/components/SessionPresetPrompt";
 import { useAuth } from "@/context/AuthContext";
 import { SourceSheet } from "@/components/SourceSheet";
 import { SessionCard } from "@/components/SessionCard";
+import { useShortsMode } from "@/lib/shortsMode";
 import { cardRender, isMedia, isVideo } from "@/lib/render";
 import { usePreferences } from "@/context/PreferencesContext";
 import { SHIPPED_LAYOUT, SHIPPED_VARS, cardVars, solveWhenReady } from "@/lib/cardLayout";
@@ -47,6 +48,8 @@ export default function SessionPage() {
   const { id = "" } = useParams();
   const nav = useNavigate();
   const { user } = useAuth();
+  const [shortsMode, setShortsMode] = useShortsMode();
+  const [shortsMuted, setShortsMuted] = useState(true);
   const cacheKey = `otium:session:${user?.id ?? "unknown"}`;
   const { motionAllowed, prefs, presentation } = usePreferences();
 
@@ -106,6 +109,7 @@ export default function SessionPage() {
   const shownIds = useRef<Set<number>>(new Set());
   const engaged = useRef<Set<number>>(new Set()); // ids that got open/save
   const played = useRef<Set<number>>(new Set());
+  const autoplayed = useRef<Set<number>>(new Set());
   const opened = useRef<Set<number>>(new Set()); // ids that fired an `open` event (dedupe, #51)
   // #135 active-reading timer: the in-app read/watch currently being timed.
   const readTimer = useRef<{ itemId: number; kind: string; openedAt: number; hiddenMs: number; hiddenSince: number | null } | null>(null);
@@ -142,7 +146,7 @@ export default function SessionPage() {
       const lightweight = (list: Selected[]) => list.map((sel) => ({ ...sel, item: { ...sel.item, content: "" } }));
       localStorage.setItem(cacheKey, JSON.stringify({ id, items: lightweight(items), duration, themes, endConfirmed: endConfirmed.current,
         review: reviewRef.current ? { ...reviewRef.current, items: lightweight(reviewRef.current.items) } : null,
-        elapsed, seen: [...shownIds.current], opened: [...opened.current], played: [...played.current], engaged: [...engaged.current],
+        elapsed, seen: [...shownIds.current], opened: [...opened.current], played: [...played.current], autoplayed: [...autoplayed.current], engaged: [...engaged.current],
         skipped: [...skippedIds.current], skips: skipCount.current, reading: readMsByKind.current,
         sources: [...exposedSources.current], away: awayMs.current }));
     } catch { /* Local storage may be unavailable; the server still owns the queue. */ }
@@ -247,6 +251,7 @@ export default function SessionPage() {
     engaged.current = new Set(cached?.engaged ?? []);
     opened.current = new Set(cached?.opened ?? []);
     played.current = new Set(cached?.played ?? []);
+    autoplayed.current = new Set(cached?.autoplayed ?? []);
     readMsByKind.current = cached?.reading ?? { read: 0, video: 0, audio: 0 };
     skipCount.current = cached?.skips ?? 0;
     skippedIds.current = new Set(cached?.skipped ?? []);
@@ -319,7 +324,29 @@ export default function SessionPage() {
       observer.disconnect();
       window.removeEventListener("resize", onResize);
     };
-  }, [current, items, renderMap, prefs, presentation, review]);
+  }, [current, items, renderMap, prefs, presentation, review, shortsMode]);
+
+  // Once a card becomes the focus, finish its snap before painting. WebKit can
+  // reset an in-flight smooth scroll when the previous card's iframe is removed.
+  // The same anchor keeps this card in place when the instrument changes height
+  // between Shorts and ordinary cards, or the viewport is resized.
+  useLayoutEffect(() => {
+    const stage = stageRef.current;
+    if (!stage || loading || review) return;
+    const anchor = () => {
+      const top = current * stage.clientHeight;
+      if (Math.abs(stage.scrollTop - top) > 1) stage.scrollTop = top;
+    };
+    anchor();
+    let height = stage.clientHeight;
+    const observer = new ResizeObserver(() => {
+      if (stage.clientHeight === height) return;
+      height = stage.clientHeight;
+      anchor();
+    });
+    observer.observe(stage);
+    return () => observer.disconnect();
+  }, [current, loading, review, shortsMode]);
 
   // Resume scroll: after the queue renders, jump (no animation) to the stored
   // cursor so a refresh lands where the user left off.
@@ -338,7 +365,7 @@ export default function SessionPage() {
     // re-enable cursor persistence so genuine advances save again.
     const target = current;
     const jump = () => {
-      stage.scrollTop = target * stage.clientHeight;
+      if (prevIdx.current === target) stage.scrollTop = target * stage.clientHeight;
     };
     requestAnimationFrame(jump);
     window.setTimeout(() => {
@@ -492,11 +519,10 @@ export default function SessionPage() {
               // or saved - all land in engaged.current. That's the "genuinely
               // consuming it" read.
               const wasEngaged = engaged.current.has(left.item.id);
-              // Advancing forward without engaging is a skip (next == skip). This
-              // is an EXPLICIT curation signal - always fired, independent of the
-              // dwell setting. Engagement = opened the reader/player, clicked
-              // through, or saved.
-              if (!wasEngaged) {
+              const autoWatched = autoplayed.current.has(left.item.id);
+              // An actual autoplay is playback, not an explicit open or rejection.
+              // Keep its provenance separate from engagement and headline skips.
+              if (!wasEngaged && !autoWatched) {
                 api.itemEvent(left.item.id, "skip", id).catch(() => {});
                 skipCount.current += 1;
                 skippedIds.current.add(left.item.id); // #149: a headline passed without opening
@@ -511,7 +537,7 @@ export default function SessionPage() {
                 // engagement (open/like/save) resets the streak, so this only trips
                 // on a genuine "scrolling past everything" run, never on skimming a
                 // few headlines looking for something worth opening.
-                if (!wasEngaged) {
+                if (!wasEngaged && !autoWatched) {
                   fastStreak.current += 1;
                   if (fastStreak.current >= FAST_STREAK && !checkin) setCheckin("fast");
                 } else {
@@ -627,6 +653,8 @@ export default function SessionPage() {
   // the tab is visible; pause while hidden (see the visibilitychange effect).
   function startRead(sel: Selected) {
     if (reviewRef.current) return;
+    if (readTimer.current?.itemId === sel.item.id) return;
+    stopRead();
     readTimer.current = {
       itemId: sel.item.id,
       kind: readKind(sel.item),
@@ -750,8 +778,8 @@ export default function SessionPage() {
     return () => window.removeEventListener("keydown", onKey);
   });
 
-  if (err) return <div className="focus-session afterglow-session"><div className="center"><p className="err">Couldn't resume your session: {err}</p><button className="btn" onClick={() => window.location.reload()}>Retry</button></div><ContextInstrument mode="app" eyebrow="Session" label="Could not load" action={{ label: "Back", onClick: () => nav("/") }} /></div>;
-  if (loading) return <div className="focus-session afterglow-session"><div className="spinner">Loading session…</div><ContextInstrument mode="session" eyebrow="Session" label="Loading" action={{ label: "Back", onClick: () => nav("/") }} /></div>;
+  if (err) return <div className={`focus-session afterglow-session ${!review && shortsMode && cur?.item.media_type === "short" ? "shorts-viewing" : ""}`}><div className="center"><p className="err">Couldn't resume your session: {err}</p><button className="btn" onClick={() => window.location.reload()}>Retry</button></div><ContextInstrument mode="app" eyebrow="Session" label="Could not load" action={{ label: "Back", onClick: () => nav("/") }} /></div>;
+  if (loading) return <div className={`focus-session afterglow-session ${!review && shortsMode && cur?.item.media_type === "short" ? "shorts-viewing" : ""}`}><div className="spinner">Loading session…</div><ContextInstrument mode="session" eyebrow="Session" label="Loading" action={{ label: "Back", onClick: () => nav("/") }} /></div>;
   if (items.length === 0) {
     return (
       <div className="center">
@@ -766,7 +794,7 @@ export default function SessionPage() {
   const shownItems = overIdx !== null ? items.slice(0, visibleCount) : items;
 
   return (
-    <div className="focus-session afterglow-session">
+    <div className={`focus-session afterglow-session ${!review && shortsMode && cur?.item.media_type === "short" ? "shorts-viewing" : ""}`}>
       {/* Desktop-only keyboard hint (#4); hidden on mobile so the top is clean. */}
       <div className="timestrip">
         <span className="kbd-hint" aria-hidden>
@@ -797,6 +825,14 @@ export default function SessionPage() {
             sel={it}
             index={i}
             focused={i === current}
+            shortsMode={shortsMode}
+            playbackActive={i === current && !content && !menuOpen && !breakdown && !saveItem && !sourceSel && !checkin && !review}
+            muted={shortsMuted}
+            onMutedChange={setShortsMuted}
+            onPlaybackChange={(playing) => {
+              if (playing) startRead(it);
+              else if (readTimer.current?.itemId === it.item.id) stopRead();
+            }}
             render={renderOf(it.item)}
             hierarchy="taxonomy-credit"
             sectionName={it.topic?.section_name}
@@ -809,10 +845,10 @@ export default function SessionPage() {
             onSave={save}
             onSource={(s) => setSourceSel(s)}
             onMenu={() => setMenuOpen(true)}
-            onFirstPlay={(s) => {
+            onFirstPlay={(s, explicit) => {
               played.current.add(s.item.id);
-              recordOpen(s);
-              startRead(s);
+              if (explicit) recordOpen(s);
+              else autoplayed.current.add(s.item.id);
             }}
             onNext={next}
             onPrev={prev}
@@ -868,6 +904,8 @@ export default function SessionPage() {
       <ItemActions
         selected={atEnd ? null : cur}
         open={menuOpen}
+        shortsMode={shortsMode}
+        onShortsModeChange={setShortsMode}
         onClose={() => setMenuOpen(false)}
         onRead={() => {
           setMenuOpen(false);

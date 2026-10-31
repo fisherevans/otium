@@ -10,6 +10,8 @@ import { HowItWorks } from "@/components/HowItWorks";
 import { SavePresetDialog } from "@/components/SessionPresetPrompt";
 import { contentLabel, contentTypeLabel, contentTypes, defaultSetup, initialPresets, isSavedSetup, loadSessionPresets, recordSessionSetup, repeatSuggestion, setupKey, storeSessionPresets, type SessionPreset, type SessionPresets, type SessionSetup } from "@/lib/sessionPresets";
 import "@/styles/launcher.css";
+import { useShortsMode } from "@/lib/shortsMode";
+import { ShortsModeToggle } from "@/components/ShortsModeToggle";
 
 export default function HomePage() {
     const nav = useNavigate();
@@ -20,6 +22,7 @@ export default function HomePage() {
     }, [search]);
     const { prefs } = usePreferences();
     const { user } = useAuth();
+    const [shortsMode, setShortsMode] = useShortsMode();
     const [custom, setCustom] = useState(false);
     const [setup, setSetup] = useState<SessionSetup>(defaultSetup);
     const [data, setData] = useState<SessionPresets>(initialPresets);
@@ -167,8 +170,10 @@ export default function HomePage() {
             <fieldset className="launcher-group"><legend>Duration</legend><div className="launcher-options">{prefs.presets.slice(0, 4).map((minutes) => <button key={minutes} aria-pressed={setup.minutes === minutes} onClick={() => setSetup({ ...setup, minutes })}>{minutes} min</button>)}</div><label className="launcher-duration">Minutes<input type="number" min={5} max={120} value={setup.minutes} onChange={(event) => setSetup({ ...setup, minutes: Math.round(Math.max(5, Math.min(120, Number(event.target.value) || 5))) })}/></label></fieldset>
             <label className="launcher-field">Scope<select value={setup.sections.length === 0 ? "" : setup.sections.length === 1 ? setup.sections[0] : "__multiple"} onChange={(event) => setSetup({ ...setup, sections: event.target.value ? [event.target.value] : [], excluded: [] })}><option value="">Everything</option>{sections.map((section) => <option key={section.slug} value={section.slug}>{section.name}</option>)}{setup.sections.length > 1 && <option value="__multiple">{setup.sections.length} sections</option>}</select></label>
             <fieldset className="launcher-group" aria-describedby="content-types-help"><legend>Content</legend><div className="launcher-options launcher-content-options">{contentTypes.map((type) => <button key={type} aria-pressed={setup.contentTypes.includes(type)} onClick={() => setSetup({ ...setup, contentTypes: contentTypes.filter((candidate) => candidate === type ? !setup.contentTypes.includes(type) : setup.contentTypes.includes(candidate)) })}>{contentTypeLabel[type]}</button>)}</div><p id="content-types-help" className="launcher-meta">{setup.contentTypes.length ? "Articles includes audio. Choose any combination." : "Choose at least one content type."}</p></fieldset>
-            <button className="launcher-advanced" onClick={() => setSheet("advanced")}><SlidersHorizontal size={17}/>Topics and sections<ChevronRight size={17}/></button>
-            <div className="launcher-begin">{!hasSupply(setup) && <p className="launcher-meta">No new items in this scope.</p>}<button className="launcher-save-link" disabled={!setup.contentTypes.length} onClick={() => setSave({ setup })}><Bookmark size={16}/>Save preset</button></div>
+            {setup.contentTypes.includes("short") && <ShortsModeToggle enabled={shortsMode} onChange={setShortsMode} />}
+            <div className="launcher-custom-actions"><button className="launcher-advanced" onClick={() => setSheet("advanced")}><SlidersHorizontal size={17}/>Topics and sections<ChevronRight size={17}/></button>
+            <button className="launcher-save-link" disabled={!setup.contentTypes.length} onClick={() => setSave({ setup })}><Bookmark size={16}/>Save preset</button></div>
+            {!hasSupply(setup) && <p className="launcher-meta">No new items in this scope.</p>}
         </>}
         {sheet && <BottomSheet open kicker={sheet === "advanced" ? "Session options" : sheet === "recent" ? "Recent sessions" : "Presets"} onClose={() => setSheet(null)}><div className="launcher-sheet-body">
             {sheet === "advanced" ? <>

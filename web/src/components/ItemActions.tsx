@@ -6,6 +6,8 @@ import { BottomSheet } from "./BottomSheet";
 import { bucketOf, REP_LABEL } from "@/lib/represent";
 import { RepDots } from "./RepDots";
 import { ShareActions } from "./ReaderActions";
+import { ShortsModeToggle } from "./ShortsModeToggle";
+import { renderSummary } from "@/lib/html";
 import { isMedia } from "@/lib/render";
 
 // The "…" overflow for the current session item (#43), restyled to match the
@@ -23,6 +25,8 @@ export function ItemActions({
   onWhy,
   onOpenOriginal,
   onEnd,
+  shortsMode,
+  onShortsModeChange,
 }: {
   selected: Selected | null;
   open: boolean;
@@ -32,6 +36,8 @@ export function ItemActions({
   onWhy: () => void;
   onOpenOriginal?: () => void;
   onEnd?: () => void;
+  shortsMode?: boolean;
+  onShortsModeChange?: (enabled: boolean) => void;
 }) {
   const nav = useNavigate();
   const item = selected?.item ?? null;
@@ -104,6 +110,8 @@ export function ItemActions({
   return (
     <BottomSheet open={open} onClose={onClose} kicker={selected?.source_title ?? "Item"}>
       <div className="ia-title">{item.title}</div>
+      {onShortsModeChange && <ShortsModeToggle enabled={shortsMode ?? false} onChange={onShortsModeChange} />}
+      {item.media_type === "short" && <div className="shorts-details-copy" dangerouslySetInnerHTML={{ __html: renderSummary(item.content?.trim() ? item.content : item.summary).html }} />}
 
       {/* Score + chronological note, mirroring the source drill-down. */}
       <div className="ia-scoreline">

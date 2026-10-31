@@ -64,7 +64,13 @@ export interface SessionCardProps {
   onSave: (sel: Selected) => void;
   onSource: (sel: Selected) => void;
   onMenu: () => void;
-  onFirstPlay?: (sel: Selected) => void;
+  onFirstPlay?: (sel: Selected, explicit: boolean) => void;
+  /** Video-first presentation applies only to short videos. */
+  shortsMode?: boolean;
+  playbackActive?: boolean;
+  muted?: boolean;
+  onMutedChange?: (muted: boolean) => void;
+  onPlaybackChange?: (playing: boolean) => void;
   onNext?: () => void;
   onPrev?: () => void;
   ytHistory?: boolean;
@@ -278,6 +284,11 @@ export const SessionCard = forwardRef<HTMLDivElement, SessionCardProps>(function
     onSource,
     onMenu,
     onFirstPlay,
+    shortsMode = false,
+    playbackActive = true,
+    muted = true,
+    onMutedChange,
+    onPlaybackChange,
     onNext,
     onPrev,
     ytHistory,
@@ -299,10 +310,12 @@ export const SessionCard = forwardRef<HTMLDivElement, SessionCardProps>(function
   const activeMedia = focused && isMedia(it.item);
   const vert = activeMedia && isVertical(it.item);
   const audioCard = activeMedia && it.item.media_type === "audio";
+  const compactShort = shortsMode && it.item.media_type === "short";
+  const age = compactShort ? relTime(it.item.published_at || it.item.fetched_at) : "";
 
   return (
     <div
-      className={`snap afterglow-card ${focused ? "" : "away"} ${activeMedia ? "media-card" : ""} ${vert ? "vertical" : ""} ${audioCard ? "audio-card" : ""}`}
+      className={`snap afterglow-card ${focused ? "" : "away"} ${activeMedia ? "media-card" : ""} ${vert ? "vertical" : ""} ${audioCard ? "audio-card" : ""} ${compactShort ? "shorts-card" : ""}`}
       data-idx={index}
       ref={ref}
       onPointerDownCapture={(e) => { if (!e.isPrimary || (window.visualViewport?.scale ?? 1) > 1) onPointerCancel?.(e); }}
@@ -312,7 +325,9 @@ export const SessionCard = forwardRef<HTMLDivElement, SessionCardProps>(function
       onPointerCancel={onPointerCancel}
       onClick={onClick}
       role="article"
+      aria-label={compactShort ? it.item.title : undefined}
     >
+      {!compactShort && <>
       {/* Quiet reason line (de-noised, no box) + the ··· overflow. */}
       {(menuPlacement === "top" || it.reason) && (
         <div className="card-top" onClick={(e) => e.stopPropagation()}>
@@ -358,6 +373,7 @@ export const SessionCard = forwardRef<HTMLDivElement, SessionCardProps>(function
       ) : (
         <Byline item={it.item} sourceTitle={it.source_title} />
       )}
+      </>}
 
       {activeMedia ? (
         // The focused media card: the player is embedded and paused (one tap to
@@ -375,7 +391,13 @@ export const SessionCard = forwardRef<HTMLDivElement, SessionCardProps>(function
             onSave={() => onSave(it)}
             onOpenOriginal={() => onOpenExternal(it)}
             onMenu={menuPlacement === "actions" ? onMenu : undefined}
-            onFirstPlay={() => onFirstPlay?.(it)}
+            onFirstPlay={(explicit) => onFirstPlay?.(it, explicit)}
+            compact={compactShort}
+            autoPlay={compactShort}
+            active={playbackActive}
+            muted={muted}
+            onMutedChange={onMutedChange}
+            onPlaybackChange={onPlaybackChange}
             onNext={onNext}
             onPrev={onPrev}
             ytHistory={ytHistory}
@@ -384,8 +406,30 @@ export const SessionCard = forwardRef<HTMLDivElement, SessionCardProps>(function
       ) : (
         <>
           <Media item={it.item} />
-          <Blurb item={it.item} />
+          {!compactShort && <Blurb item={it.item} />}
         </>
+      )}
+
+      {compactShort && (
+        <div
+          className="shorts-card-footer"
+          onPointerDown={(e) => { onPointerCancel?.(e); e.stopPropagation(); }}
+          onPointerMove={(e) => e.stopPropagation()}
+          onPointerUp={(e) => e.stopPropagation()}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <button className="shorts-creator" type="button" onClick={() => onSource(it)}>
+            <SourceAvatar url={it.source_icon_url} title={it.source_title} color={it.topic?.color} />
+            <span className="shorts-credit-text">
+              <span className="shorts-creator-name">{it.source_title}</span>
+              {age && <span className="shorts-age">{age}</span>}
+            </span>
+          </button>
+          <button className="shorts-details" type="button" onClick={onMenu} disabled={!focused}>
+            <MoreHorizontal size={18} aria-hidden />
+            Details
+          </button>
+        </div>
       )}
 
       {focused && !isMedia(it.item) && (
