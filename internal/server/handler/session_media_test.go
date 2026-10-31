@@ -47,3 +47,35 @@ func TestValidSessionMedia(t *testing.T) {
 		t.Fatal("accepted unknown media restriction")
 	}
 }
+
+func TestContentGroupCombinations(t *testing.T) {
+	kinds := []string{"article", "audio", "unknown", "", "long", "live", "video", "short"}
+	tests := []struct {
+		name        string
+		types, want []string
+	}{
+		{"articles include podcasts", []string{"article"}, kinds[:4]},
+		{"long includes live", []string{"long"}, kinds[4:7]},
+		{"shorts only", []string{"short"}, kinds[7:]},
+		{"articles and long", []string{"article", "long"}, kinds[:7]},
+		{"articles and short", []string{"article", "short"}, []string{"article", "audio", "unknown", "", "short"}},
+		{"all videos", []string{"long", "short"}, kinds[4:]},
+		{"everything", []string{"article", "long", "short"}, kinds},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var pool []store.Candidate
+			for _, kind := range kinds {
+				pool = append(pool, store.Candidate{Item: store.Item{MediaType: kind}})
+			}
+			got := filterContentTypes(pool, tt.types)
+			var actual []string
+			for _, c := range got {
+				actual = append(actual, c.MediaType)
+			}
+			if !reflect.DeepEqual(actual, tt.want) {
+				t.Fatalf("got %v, want %v", actual, tt.want)
+			}
+		})
+	}
+}

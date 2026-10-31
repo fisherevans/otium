@@ -2,12 +2,12 @@ import { useState } from "react";
 import { Bookmark } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { Dialog } from "@/components/Dialog";
-import { getSessionSetup, isSavedSetup, loadSessionPresets, mediaLabel, saveSessionPreset, type SessionSetup } from "@/lib/sessionPresets";
+import { contentLabel, getSessionSetup, isSavedSetup, loadSessionPresets, saveSessionPreset, type SessionSetup } from "@/lib/sessionPresets";
 import "@/styles/launcher.css";
 
 export function SavePresetDialog({ setup, onClose, name = "", editId }: { setup: SessionSetup; onClose: () => void; name?: string; editId?: string }) {
     const { user } = useAuth();
-    const [title, setTitle] = useState(name || `${setup.minutes} min ${mediaLabel[setup.media].toLowerCase()}`);
+    const [title, setTitle] = useState(name || `${setup.minutes} min ${contentLabel(setup).toLowerCase()}`);
     const [makeDefault, setMakeDefault] = useState(false);
     const [error, setError] = useState("");
     return <Dialog open kicker={editId ? "Edit preset" : "Save preset"} onClose={onClose}>

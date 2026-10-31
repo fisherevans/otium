@@ -58,3 +58,11 @@ build a session from the **intent** screen.
 
 Config is env-driven; see [.env.example](.env.example). In prod, set
 `OTIUM_OIDC_*` instead of `OTIUM_DEV_USER`.
+
+`OTIUM_FETCH_INTERVAL_MIN` controls the scheduled refresh loop (default 30; zero
+disables it). For larger YouTube libraries, set
+`OTIUM_YOUTUBE_FETCH_INTERVAL_MIN=120` to refresh each YouTube source at most once
+every two hours while RSS follows the normal loop. Its default of zero preserves
+the shared interval. New sources fetch immediately, and manual refresh always
+bypasses this minimum age. With an API key, each channel refresh uses one uploads
+request and one video-details request when there are videos to fetch.

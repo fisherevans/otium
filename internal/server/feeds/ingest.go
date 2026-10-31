@@ -14,6 +14,7 @@ import (
 
 	"github.com/mmcdole/gofeed"
 
+	"github.com/fisherevans/otium/internal/server/media"
 	"github.com/fisherevans/otium/internal/server/store"
 	"github.com/fisherevans/otium/internal/server/youtube"
 )
@@ -120,13 +121,29 @@ func (ing *Ingester) fetchYouTube(ctx context.Context, s store.Source) (int, err
 // FetchAll fetches every non-archived source for a user, sequentially (homelab
 // scale; no need to hammer). Returns total new items.
 func (ing *Ingester) FetchAll(ctx context.Context, userID int64) (int, error) {
+	return ing.FetchAllDue(ctx, userID, 0)
+}
+
+// FetchAllDue refreshes all non-archived sources except YouTube sources fetched
+// within youtubeMinAge. New sources fetch immediately; zero forces every source.
+func (ing *Ingester) FetchAllDue(ctx context.Context, userID int64, youtubeMinAge time.Duration) (int, error) {
 	sources, err := ing.db.SourcesToFetch(ctx, userID)
 	if err != nil {
 		return 0, err
 	}
 	total := 0
+	cutoff := time.Now().Add(-youtubeMinAge)
 	for _, s := range sources {
+		if err := ctx.Err(); err != nil {
+			return total, err
+		}
+		if youtubeMinAge > 0 && s.Kind == "youtube" && s.LastFetchAt != nil && s.LastFetchAt.After(cutoff) {
+			continue
+		}
 		n, err := ing.FetchSource(ctx, s)
+		if ctx.Err() != nil {
+			return total, ctx.Err()
+		}
 		if err != nil {
 			ing.log.Warn("fetch source failed", "source", s.Title, "url", s.FeedURL, "err", err)
 			continue
@@ -193,15 +210,7 @@ func classify(s store.Source, e *gofeed.Item, dur int) string {
 		return "audio"
 	}
 	if s.Kind == "youtube" || hasEnclosureType(e, "video") {
-		// YouTube Shorts carry a /shorts/ URL - an exact type signal even though
-		// the RSS feed never ships a duration (#117).
-		if strings.Contains(e.Link, "/shorts/") {
-			return "short"
-		}
-		if dur > 0 && dur <= 90 {
-			return "short"
-		}
-		return "long"
+		return media.VideoType("", e.Link, dur, 0)
 	}
 	return "article"
 }

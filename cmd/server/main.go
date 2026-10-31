@@ -109,10 +109,6 @@ func main() {
 	// fetching every source across all users (single-tenant, so this is fine).
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
-	if cfg.FetchIntervalMin > 0 {
-		go ingestLoop(ctx, db, ing, cfg, log)
-	}
-
 	// A configured Data API key makes YouTube a first-class source kind (#126):
 	// ongoing fetch, backlog import, and duration enrichment all go through the API
 	// instead of RSS + HTML scraping. One client, shared across the three paths.
@@ -121,6 +117,9 @@ func main() {
 		ytClient = youtube.NewClient(cfg.YouTubeAPIKey)
 		ing.SetYouTube(ytClient)
 		h.SetYouTube(ytClient)
+	}
+	if cfg.FetchIntervalMin > 0 {
+		go ingestLoop(ctx, db, ing, cfg, log)
 	}
 
 	// Durable out-of-band metadata enrichment (#120). Generic worker; YouTube video
@@ -182,7 +181,7 @@ func ingestLoop(ctx context.Context, db *store.DB, ing *feeds.Ingester, cfg *ser
 		} else if grouped > 0 {
 			log.Info("videos backfill: grouped untagged youtube sources", "count", grouped)
 		}
-		n, err := ing.FetchAll(ctx, u.ID)
+		n, err := ing.FetchAllDue(ctx, u.ID, time.Duration(cfg.YouTubeFetchIntervalMin)*time.Minute)
 		if err != nil {
 			log.Warn("ingest loop error", "err", err)
 			return

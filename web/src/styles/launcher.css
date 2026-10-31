@@ -7,6 +7,10 @@
 .launcher-custom-action { display: flex; align-items: center; gap: 12px; min-height: 58px; padding: 12px 16px; border: 1px solid var(--rule); border-radius: 16px; background: var(--paper-2); color: var(--ink); font: 500 19px var(--heading); text-align: left; }
 .launcher-custom-action span { flex: 1; }
 .launcher-default { border: 1px solid var(--rule); background: var(--paper-2); border-radius: 23px; padding: 15px 18px; display: grid; gap: 10px; }
+.launcher-default-actions, .launcher-preset-entry { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.launcher-default-actions .btn, .launcher-preset-entry .launcher-row { flex: 1; min-width: 0; }
+.launcher-customize { min-height: 44px; padding: 0 4px; border: 0; background: transparent; color: var(--ink-soft); font: 12px var(--grot, sans-serif); }
+.launcher-content-options button { line-height: 1.3; }
 .launcher-kicker { display: flex; align-items: center; justify-content: space-between; min-height: 28px; text-transform: uppercase; letter-spacing: .11em; font-size: 10px; color: var(--ink-mute); }
 .launcher .icon-btn, .launcher-sheet-body .icon-btn { min-width: 44px; min-height: 44px; padding: 0; display: inline-flex; align-items: center; justify-content: center; border: 0; border-radius: 50%; background: transparent; color: inherit; }
 .launcher-kicker .icon-btn { margin: -8px -8px -8px 0; }
@@ -48,5 +52,6 @@
 @media (max-width: 350px) { .launcher { padding-inline: 0; } .launcher-options { gap: 4px; } .launcher-options button { font-size: 12px; } }
 
 @media (max-height: 650px) { .launcher { gap: 6px; padding-top: 0; } .launcher-custom h1 { font-size: 27px; } .launcher-custom .launcher-field { gap: 5px; } .launcher-custom .launcher-group { gap: 5px; } .launcher-default h2 { font-size: 22px; } .launcher-default { padding: 10px 14px; gap: 5px; } .launcher-custom-action { min-height: 48px; } .launcher-list-head { margin-bottom: -8px; } .launcher-row { min-height: 48px; } }
+@media (max-height: 650px) { .launcher-custom { gap: 4px; } }
 
 .launcher-sheet-body { display: flex; flex-direction: column; gap: 16px; }

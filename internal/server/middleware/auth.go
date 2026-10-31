@@ -56,12 +56,16 @@ func DevAuth(db *store.DB, username string) func(http.Handler) http.Handler {
 	email := username + "@dev.local"
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			user, err := db.UpsertUserByUsername(r.Context(), username, email)
+			user, err := db.UpsertUserByUsername(r.Context(), username, "")
 			if err != nil {
 				jsonError(w, http.StatusInternalServerError, "server_error", "could not resolve dev user")
 				return
 			}
-			identity := &Identity{UserID: user.ID, Username: username, Email: email}
+			identityEmail := user.Email
+			if identityEmail == "" {
+				identityEmail = email
+			}
+			identity := &Identity{UserID: user.ID, Username: username, Email: identityEmail}
 			ctx := context.WithValue(r.Context(), identityKey, identity)
 			next.ServeHTTP(w, r.WithContext(ctx))
 		})

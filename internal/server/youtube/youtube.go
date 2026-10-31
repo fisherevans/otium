@@ -1,7 +1,7 @@
 // Package youtube is a thin read-only client for the YouTube Data API v3, used to
 // backfill a channel's full upload history (#122) - the RSS feed only exposes the
-// ~15 most recent videos. API-key auth (public data only); quota is a non-issue at
-// homelab volume (~1 unit per 50 videos, 10k/day). It fetches structured metadata
+// ~15 most recent videos. API-key auth (public data only); each list request consumes
+// quota, so scheduled refresh frequency must account for the channel count. It fetches structured metadata
 // the RSS never ships: duration and live view/like counts.
 package youtube
 
@@ -40,10 +40,10 @@ type Video struct {
 	DurationSec  int
 	ViewCount    int64
 	LikeCount    int64
-	// AspectRatio is width/height of the actual frame (1.778 = 16:9 landscape,
-	// 0.5625 = 9:16 vertical), read from the API `player` embedHtml. This is the
-	// authoritative "is it vertical" signal - independent of the short/long
-	// duration bucket (a long-form video can be vertical). 0 = not yet known.
+	// AspectRatio is width/height from the API's scaled player embedHtml (1.778
+	// = 16:9, 0.5625 = 9:16). It informs layout and short-form grouping, but is
+	// not proof of YouTube Shorts membership. Unknown API geometry can produce
+	// a default 4:3 player; 0 means no usable dimensions were returned.
 	AspectRatio float64
 }
 
@@ -87,7 +87,7 @@ type ResolvedChannel struct {
 }
 
 // SearchChannels returns up to limit channel matches for a free-text query
-// (search.list, 100 quota units). Backs the add-source wizard's "pick the right
+// (search.list, separately limited). Backs the add-source wizard's "pick the right
 // channel" step, where the user chooses from results rather than trusting a single
 // fuzzy guess.
 func (c *Client) SearchChannels(ctx context.Context, q string, limit int) ([]ResolvedChannel, error) {
@@ -130,7 +130,7 @@ var ucIDRe = regexp.MustCompile(`^UC[0-9A-Za-z_-]{22}$`)
 // ResolveChannel turns user input into a canonical channel identity. It accepts a
 // UC… channel id, an @handle, a channel/handle/user/video URL, or (as a last
 // resort) a free-text name. Direct forms use channels.list (1 unit); a bare name
-// or /c/ custom URL falls back to search.list (100 units, fuzzy - returns the top
+// or /c/ custom URL falls back to search.list (fuzzy - returns the top
 // channel match), and a video URL is resolved via videos.list → its channel.
 func (c *Client) ResolveChannel(ctx context.Context, input string) (ResolvedChannel, error) {
 	input = strings.TrimSpace(input)
@@ -436,9 +436,9 @@ func (c *Client) FillDetails(ctx context.Context, vids []Video) error {
 		ids[i] = v.ID
 	}
 	p := url.Values{}
-	// player + maxHeight makes the API compute an embedHtml whose width/height
-	// reflect the true frame aspect ratio (405x720 for a vertical, 1280x720 for
-	// 16:9) - the one reliable server-side signal for vertical-vs-landscape.
+	// maxHeight requests a scaled player preserving the known video aspect.
+	// Unknown aspect defaults to 4:3, which cannot trigger our <=1 short-form
+	// extension. Player geometry is not an explicit Shorts flag.
 	p.Set("part", "contentDetails,statistics,player")
 	p.Set("maxHeight", "720")
 	p.Set("id", strings.Join(ids, ","))

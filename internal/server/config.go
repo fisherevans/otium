@@ -20,6 +20,10 @@ type Config struct {
 	// it (fetch only on demand).
 	FetchIntervalMin int
 
+	// YouTubeFetchIntervalMin is the minimum age of a YouTube source's last
+	// scheduled fetch. 0 follows the normal loop; manual refresh always runs.
+	YouTubeFetchIntervalMin int
+
 	// DevUser, when non-empty, bypasses all auth and auto-logs in as this user.
 	// NEVER set in production.
 	DevUser string
@@ -60,6 +64,16 @@ func LoadConfig() (*Config, error) {
 			return nil, fmt.Errorf("invalid OTIUM_FETCH_INTERVAL_MIN: %w", err)
 		}
 		cfg.FetchIntervalMin = n
+	}
+	if v := os.Getenv("OTIUM_YOUTUBE_FETCH_INTERVAL_MIN"); v != "" {
+		n, err := strconv.Atoi(v)
+		if err != nil {
+			return nil, fmt.Errorf("invalid OTIUM_YOUTUBE_FETCH_INTERVAL_MIN: %w", err)
+		}
+		if n < 0 {
+			return nil, fmt.Errorf("OTIUM_YOUTUBE_FETCH_INTERVAL_MIN must be nonnegative")
+		}
+		cfg.YouTubeFetchIntervalMin = n
 	}
 
 	cfg.YouTubeAPIKey = os.Getenv("OTIUM_YOUTUBE_API_KEY")

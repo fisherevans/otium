@@ -56,18 +56,20 @@ func (y *YouTube) Wants(c store.EnrichCandidate) bool {
 
 var lengthRe = regexp.MustCompile(`"lengthSeconds":"(\d+)"`)
 
-// commitDuration re-buckets short/long from the real length and stores it with the
-// frame aspect ratio. A successful API fetch that couldn't read dimensions falls
-// back to 16:9 so aspect is always non-zero afterward (Wants stops re-firing).
+// commitDuration stores API metadata; the store merges it with the existing URL
+// and aspect before classifying. A missing aspect gets the existing layout
+// fallback only when no geometry was already known (Wants stops re-firing).
 func (y *YouTube) commitDuration(ctx context.Context, db *store.DB, itemID int64, sec int, aspect float64) (Result, error) {
-	mt := "long"
-	if sec <= 90 {
-		mt = "short"
-	}
 	if aspect == 0 {
-		aspect = 16.0 / 9.0
+		c, found, err := db.EnrichCandidateByID(ctx, itemID)
+		if err != nil {
+			return Result{Retryable: true}, err
+		}
+		if found && c.AspectRatio == 0 {
+			aspect = 16.0 / 9.0
+		}
 	}
-	if err := db.SetItemDuration(ctx, itemID, sec, mt, aspect); err != nil {
+	if err := db.SetItemDuration(ctx, itemID, sec, aspect); err != nil {
 		return Result{Retryable: true}, err // DB hiccup - safe to retry
 	}
 	return Result{}, nil
@@ -164,14 +166,9 @@ func (y *YouTube) enrichScrape(ctx context.Context, db *store.DB, c store.Enrich
 		return Result{Retryable: false}, errors.New("bad duration in watch page")
 	}
 
-	// Re-bucket short vs long from the real length (URL-detected shorts already are
-	// short; a plain video under ~90s becomes short too). The scraper can't read
-	// frame dimensions, so aspect is left untouched (0 -> no write).
-	mt := "long"
-	if sec <= 90 {
-		mt = "short"
-	}
-	if err := db.SetItemDuration(ctx, c.ID, sec, mt, 0); err != nil {
+	// No geometry is scraped. The store retains any known aspect and explicit
+	// Shorts URL when applying the shared short-form grouping rule.
+	if err := db.SetItemDuration(ctx, c.ID, sec, 0); err != nil {
 		return Result{Retryable: true}, err // DB hiccup - safe to retry
 	}
 	return Result{}, nil

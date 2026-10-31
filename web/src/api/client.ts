@@ -2,6 +2,10 @@
 // dev proxies to the Go server, prod nginx does. On 401/403 we bounce to the
 // server-driven OIDC login (there is no login form in the SPA).
 
+// Explicit session selection. Articles includes audio and all non-video media;
+// long includes live and videos without a short-video classification.
+export type SessionContentType = "article" | "long" | "short";
+
 export interface Me {
   id: number;
   username: string;
@@ -561,8 +565,8 @@ export const api = {
   // Durable sessions (#67 + #69). createSession builds + stores the queue for a
   // single duration; currentSession resumes the active one (204 -> undefined);
   // updateSession advances the cursor or ends it.
-  createSession: (durationMin: number, themes: string[], sections: string[] = [], includeShorts = true, media: "all" | "read" | "video" | "audio" = "all") =>
-    req<SessionResponse>("POST", "/sessions", { duration_min: durationMin, themes, sections, include_shorts: includeShorts, media }),
+  createSession: (durationMin: number, themes: string[], sections: string[] = [], contentTypes?: SessionContentType[]) =>
+    req<SessionResponse>("POST", "/sessions", { duration_min: durationMin, themes, sections, ...(contentTypes ? { content_types: contentTypes } : {}) }),
   currentSession: () => req<SessionResponse | undefined>("GET", "/sessions/current"),
   updateSession: (id: string, patch: { cursor?: number; status?: "ended"; extend_min?: number }) =>
     req<{ ok: boolean }>("PATCH", `/sessions/${id}`, patch),

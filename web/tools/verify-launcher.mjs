@@ -1,10 +1,19 @@
 // Browser API fixtures only; no account writes. Run against Vite with BASE_URL.
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
 import { pathToFileURL } from 'node:url';
 const {chromium,webkit,firefox}=await import(process.env.PLAYWRIGHT_MODULE ? pathToFileURL(process.env.PLAYWRIGHT_MODULE).href : 'playwright');
 const base=process.env.BASE_URL || 'http://127.0.0.1:5173';
 for(const [name,type] of [['chromium',chromium],['webkit',webkit],['firefox',firefox]].filter(([name])=>(process.env.BROWSERS||'chromium,webkit').split(',').includes(name))) {
  const b=await type.launch();const p=await b.newPage({viewport:{width:390,height:664},hasTouch:true});const errors=[];p.on('pageerror',e=>errors.push(e.message));
+ await p.addInitScript(() => {
+  const key='otium.session-presets.v1.999';
+  if (!localStorage.getItem(key)) localStorage.setItem(key, JSON.stringify({
+   presets:[{id:'reading',name:'Reading',setup:{minutes:10,sections:[],excluded:[],media:'read',includeShorts:true}},
+    {id:'video',name:'Video',setup:{minutes:40,sections:[],excluded:[],media:'video',includeShorts:true}}],
+   defaultId:'reading',recent:[],lastKey:'',consecutive:0,dismissed:[],sessions:{}
+  }));
+ });
  const topics=[{id:1,name:'Local',slug:'local',section_slug:'news'},{id:2,name:'World',slug:'world',section_slug:'news'},{id:3,name:'Films',slug:'films',section_slug:'videos'}];
  const sections=[{id:1,name:'News',slug:'news',topic_count:2},{id:2,name:'Videos',slug:'videos',topic_count:1}];
  let failLoad=true, activeSession=false;const requests=[];
@@ -21,23 +30,72 @@ for(const [name,type] of [['chromium',chromium],['webkit',webkit],['firefox',fir
  });
  await p.goto(base);
  await p.getByRole('heading',{name:"Couldn't load your library"}).waitFor();failLoad=false;await p.getByRole('button',{name:'Retry',exact:true}).click();
+ if(process.env.ARTIFACT_DIR) {
+  fs.mkdirSync(process.env.ARTIFACT_DIR,{recursive:true});
+  await p.getByRole('button',{name:'Start Reading',exact:true}).waitFor();
+  for(const [width,height] of [[320,568],[390,664]]) {
+   await p.setViewportSize({width,height});
+   await p.screenshot({path:`${process.env.ARTIFACT_DIR}/${name}-presets-${width}.png`,fullPage:true});
+  }
+ }
  await p.getByRole('button',{name:'Start Reading',exact:true}).click();
- await p.getByRole('alert').filter({hasText:'No new items match'}).waitFor();assert.equal(requests[0].media,'read');assert.equal(requests[0].duration_min,10);
+ await p.getByRole('alert').filter({hasText:'No new items match'}).waitFor();assert.deepEqual(requests[0].content_types,['article']);assert.equal('media' in requests[0],false);assert.equal(requests[0].duration_min,10);
  await p.getByRole('button',{name:'Video Preset',exact:false}).click();
- await p.waitForTimeout(50);assert.equal(requests[1].media,'video');assert.equal(requests[1].duration_min,40);
- await p.getByRole('button',{name:'Custom session',exact:true}).click();
+ await p.waitForTimeout(50);assert.deepEqual(requests[1].content_types,['long','short']);assert.equal(requests[1].duration_min,40);
+ await p.getByRole('button',{name:'Customize Video',exact:true}).click();
+ assert.equal(await p.getByRole('button',{name:'Articles',exact:true}).getAttribute('aria-pressed'),'false');
+ assert.equal(await p.getByRole('button',{name:'Short videos',exact:true}).getAttribute('aria-pressed'),'true');
+ await p.getByRole('button',{name:'10 min',exact:true}).click();
  for(const [width,height] of [[390,664],[320,568]]) {
   await p.setViewportSize({width,height});
   assert.equal(await p.evaluate(()=>document.scrollingElement.scrollHeight<=innerHeight+1),true,`${name} ${width} custom has no page scroll`);
-  const save=await p.getByRole('button',{name:'Save preset',exact:true}).boundingBox();const bar=await p.locator('.context-instrument').boundingBox();assert.ok(save.y+save.height<=bar.y,`${name} save above instrument`);
+  await p.evaluate(()=>document.fonts.ready);
+  if(process.env.ARTIFACT_DIR) await p.screenshot({path:`${process.env.ARTIFACT_DIR}/${name}-custom-${width}.png`,fullPage:true});
+  const save=await p.getByRole('button',{name:'Save preset',exact:true}).boundingBox();const bar=await p.locator('.context-instrument').boundingBox();assert.ok(save.y+save.height<=bar.y,`${name} ${width} save above instrument: ${JSON.stringify({save,bar})}`);
  }
  await p.getByRole('combobox',{name:'Scope'}).selectOption('news');
- await p.getByRole('button',{name:'Reading',exact:true}).click();
- await p.getByRole('button',{name:'Topics, sections and Shorts'}).click();
+ await p.getByRole('button',{name:'Articles',exact:true}).click();
+ await p.getByRole('button',{name:'Long videos',exact:true}).click();
+ await p.getByRole('button',{name:'Short videos',exact:true}).click();
+ await p.getByRole('button',{name:'Topics and sections'}).click();
  await p.getByRole('checkbox',{name:'World',exact:true}).uncheck();
  await p.getByRole('button',{name:'Done',exact:true}).click();
  await p.getByRole('button',{name:'Start',exact:true}).click();await p.waitForTimeout(50);
- assert.deepEqual(requests[2],{duration_min:10,themes:['local'],sections:[],include_shorts:true,media:'read'});
+ assert.deepEqual(requests[2],{duration_min:10,themes:['local'],sections:[],content_types:['article']});
+ // Every nonempty combination must reach the API unchanged; no selection cannot start or save.
+ const typeLabels={article:'Articles',long:'Long videos',short:'Short videos'};
+ async function selectContent(selected) {
+  for (const [type,label] of Object.entries(typeLabels)) {
+   const button=p.getByRole('button',{name:label,exact:true});
+   if ((await button.getAttribute('aria-pressed')==='true')!==selected.includes(type)) await button.click();
+  }
+ }
+ await selectContent([]);
+ assert.equal(await p.getByRole('button',{name:'Start',exact:true}).isDisabled(),true);
+ assert.equal(await p.getByRole('button',{name:'Save preset',exact:true}).isDisabled(),true);
+ for (const selected of [['article'],['long'],['short'],['article','long'],['article','short'],['long','short'],['article','long','short']]) {
+  await selectContent(selected);
+  await Promise.all([p.waitForResponse(r=>r.url().endsWith('/sessions')&&r.request().method()==='POST'),p.getByRole('button',{name:'Start',exact:true}).click()]);
+  assert.deepEqual(requests.at(-1),{duration_min:10,themes:['local'],sections:[],content_types:selected});
+ }
+ // Inspectable artifacts use the same mocked screen, without live account data.
+ if(process.env.ARTIFACT_DIR) {
+  fs.mkdirSync(process.env.ARTIFACT_DIR,{recursive:true});
+  await p.getByRole('button',{name:'Back to sessions',exact:true}).click();
+  await p.getByRole('button',{name:'Customize Reading',exact:true}).click();
+  for (const [width,height] of [[320,568],[390,664],[1280,800]]) {
+   await p.setViewportSize({width,height});await selectContent(['short']);
+   assert.equal(await p.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true);
+   assert.equal(await p.evaluate(()=>document.scrollingElement.scrollHeight<=innerHeight+1),true,`${name} ${width} Shorts custom has no page scroll`);
+   await p.screenshot({path:`${process.env.ARTIFACT_DIR}/${name}-shorts-${width}.png`,fullPage:true});
+  }
+  await p.setViewportSize({width:320,height:568});
+  await p.getByRole('combobox',{name:'Scope'}).selectOption('news');
+  await p.getByRole('button',{name:'Topics and sections'}).click();
+  await p.getByRole('checkbox',{name:'World',exact:true}).uncheck();
+  await p.getByRole('button',{name:'Done',exact:true}).click();
+ }
+ await selectContent(['article']);
  await p.getByRole('button',{name:'Save preset',exact:true}).click();
  await p.getByRole('textbox',{name:'Name',exact:true}).fill('Local reading');
  await p.getByRole('checkbox',{name:'Use as default'}).check();
@@ -49,6 +107,36 @@ for(const [name,type] of [['chromium',chromium],['webkit',webkit],['firefox',fir
  await p.reload();await p.getByRole('button',{name:'Used twice. Save as preset?'}).waitFor();
  assert.equal(await p.evaluate(()=>document.scrollingElement.scrollHeight<=innerHeight+1),true,`${name} populated start has no page scroll`);
  await p.getByRole('button',{name:'Dismiss preset suggestion'}).click();await p.reload();await p.getByRole('heading',{name:'New session'}).waitFor();assert.equal(await p.getByRole('button',{name:'Used twice. Save as preset?'}).count(),0);
+ await p.getByRole('button',{name:'Custom session',exact:true}).click();
+ await selectContent(['short']);
+ await p.getByRole('button',{name:'Save preset',exact:true}).click();
+ await p.getByRole('textbox',{name:'Name',exact:true}).fill('Short break');
+ await p.getByRole('checkbox',{name:'Use as default'}).check();
+ await p.getByRole('dialog',{name:'Save preset',exact:true}).getByRole('button',{name:'Save preset',exact:true}).click();
+ await p.getByRole('button',{name:'Back to sessions',exact:true}).click();await p.reload();
+ await Promise.all([p.waitForResponse(r=>r.url().endsWith('/sessions')&&r.request().method()==='POST'),p.getByRole('button',{name:'Start Short break',exact:true}).click()]);
+ assert.deepEqual(requests.at(-1).content_types,['short']);
+ await p.getByRole('button',{name:'Customize Short break',exact:true}).click();
+ assert.equal(await p.getByRole('button',{name:'Articles',exact:true}).getAttribute('aria-pressed'),'false');
+ assert.equal(await p.getByRole('button',{name:'Long videos',exact:true}).getAttribute('aria-pressed'),'false');
+ assert.equal(await p.getByRole('button',{name:'Short videos',exact:true}).getAttribute('aria-pressed'),'true');
+ await p.getByRole('button',{name:'Back to sessions',exact:true}).click();
  activeSession=true;await p.reload();await p.getByRole('button',{name:'Resume',exact:true}).waitFor();assert.equal(await p.evaluate(()=>document.scrollingElement.scrollHeight<=innerHeight+1),true,`${name} resumable start has no page scroll`);await p.getByRole('button',{name:'Resume',exact:true}).click();await p.waitForURL('**/session/resumable-session');
- assert.deepEqual(errors,[]);await b.close();console.log(name,'launcher load retry, media/scope requests, empty supply response, preset save/reload/default, repeat dismissal, compact viewport PASS');
+ // Shared setup links preselect a custom draft without starting or replacing device defaults.
+ const beforeLinkRequests=requests.length;
+ const beforeLinkStorage=await p.evaluate(()=>localStorage.getItem('otium.session-presets.v1.999'));
+ await p.goto(`${base}/?sections=videos&content=short&minutes=15`);
+ await p.getByRole('heading',{name:'Custom session',exact:true}).waitFor();
+ assert.equal(await p.getByRole('combobox',{name:'Scope'}).inputValue(),'videos');
+ assert.equal(await p.getByRole('spinbutton',{name:'Minutes',exact:true}).inputValue(),'15');
+ assert.equal(await p.getByRole('button',{name:'Short videos',exact:true}).getAttribute('aria-pressed'),'true');
+ assert.equal(await p.getByRole('button',{name:'Articles',exact:true}).getAttribute('aria-pressed'),'false');
+ assert.equal(await p.getByRole('button',{name:'Long videos',exact:true}).getAttribute('aria-pressed'),'false');
+ assert.equal(requests.length,beforeLinkRequests);
+ assert.equal(await p.evaluate(()=>localStorage.getItem('otium.session-presets.v1.999')),beforeLinkStorage);
+ await p.goto(`${base}/?sections=missing&content=short&minutes=15`);
+ await p.getByRole('alert').filter({hasText:'This session link has an unavailable'}).waitFor();
+ assert.equal(await p.getByRole('heading',{name:'Custom session',exact:true}).count(),0);
+ assert.equal(requests.length,beforeLinkRequests);
+ assert.deepEqual(errors,[]);await b.close();console.log(name,'launcher load retry, all seven content combinations, legacy preset migration, scope requests, empty supply response, preset save/reload/default, repeat dismissal, setup links without auto-start, compact viewport PASS');
 }

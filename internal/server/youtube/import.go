@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/fisherevans/otium/internal/server/media"
 	"github.com/fisherevans/otium/internal/server/store"
 )
 
@@ -87,14 +88,11 @@ func (c *Client) ImportPage(ctx context.Context, db *store.DB, s store.Source, p
 
 // ToItem maps a video to an otium item. External id matches the RSS ingest form
 // (yt:video:<id>) so the RSS and Data-API paths dedupe onto the same row.
-// media_type is bucketed from the real duration; body is the description (video
+// media_type uses duration and available aspect; body is the description (video
 // items ship no other body). Shared by the backlog importer and the API-native
 // ongoing ingest.
 func ToItem(v Video, sourceID int64) *store.Item {
-	mt := "long"
-	if v.DurationSec > 0 && v.DurationSec <= 90 {
-		mt = "short"
-	}
+	mt := media.VideoType("", "", v.DurationSec, v.AspectRatio)
 	content := ""
 	if d := strings.TrimSpace(v.Description); d != "" {
 		content = "<p>" + strings.ReplaceAll(html.EscapeString(d), "\n", "<br>") + "</p>"

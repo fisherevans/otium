@@ -5,6 +5,8 @@ import (
 	"database/sql"
 	"strings"
 	"time"
+
+	"github.com/fisherevans/otium/internal/server/media"
 )
 
 // Durable metadata-enrichment queue (#120). A generic mechanism: each row is one
@@ -185,22 +187,122 @@ func (db *DB) ItemsMissingAspect(ctx context.Context, limit int) ([]AspectBackfi
 	return out, rows.Err()
 }
 
-// SetItemAspect writes a video item's frame aspect ratio (backfill path).
+// SetItemAspect writes a video's aspect and reclassifies it using its known
+// duration. The aspect backfill can therefore recover 91-180 second short videos.
 func (db *DB) SetItemAspect(ctx context.Context, id int64, aspect float64) error {
-	_, err := db.sql.ExecContext(ctx, `UPDATE items SET aspect_ratio=? WHERE id=?`, aspect, id)
+	return db.SetItemDuration(ctx, id, 0, aspect)
+}
+
+// SetItemDuration merges positive duration/aspect values, then classifies the
+// video from all available metadata. Missing values never erase known ones.
+func (db *DB) SetItemDuration(ctx context.Context, itemID int64, durationSec int, aspect float64) error {
+	tx, err := db.sql.BeginTx(ctx, nil)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	if err := setVideoMetadata(ctx, tx, itemID, durationSec, aspect); err != nil {
+		return err
+	}
+	return tx.Commit()
+}
+
+func setVideoMetadata(ctx context.Context, tx *sql.Tx, itemID int64, durationSec int, aspect float64) error {
+	var mt, rawURL string
+	var sec int
+	var ratio float64
+	err := tx.QueryRowContext(ctx,
+		`SELECT media_type, url, duration_sec, aspect_ratio FROM items WHERE id=?`, itemID).
+		Scan(&mt, &rawURL, &sec, &ratio)
+	if err == sql.ErrNoRows {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	if durationSec > 0 {
+		sec = durationSec
+	}
+	if aspect > 0 {
+		ratio = aspect
+	}
+	if mt == "short" || mt == "long" || mt == "live" {
+		mt = media.VideoType(mt, rawURL, sec, ratio)
+	}
+	_, err = tx.ExecContext(ctx,
+		`UPDATE items SET duration_sec=?, aspect_ratio=?, media_type=? WHERE id=?`, sec, ratio, mt, itemID)
 	return err
 }
 
-// SetItemDuration is how an enricher applies fetched video length: sets duration and
-// (unless the item was a livestream) re-buckets short/long from the real duration.
-// aspect is the frame aspect ratio (w/h); it's only written when > 0 so a fallback
-// path with no aspect data (the watch-page scraper) never clobbers a known value.
-func (db *DB) SetItemDuration(ctx context.Context, itemID int64, durationSec int, mediaType string, aspect float64) error {
-	_, err := db.sql.ExecContext(ctx,
-		`UPDATE items SET duration_sec=?, media_type=?,
-		        aspect_ratio = CASE WHEN ? > 0 THEN ? ELSE aspect_ratio END
-		 WHERE id=?`, durationSec, mediaType, aspect, aspect, itemID)
-	return err
+// repairVideoTypes promotes long rows and explicit legacy Shorts URLs once using
+// the writers' rule. Read bounded batches so large libraries stay bounded in memory.
+func repairVideoTypes(sdb *sql.DB) error {
+	var cols, metaExists int
+	if err := sdb.QueryRow(`SELECT COUNT(*) FROM pragma_table_info('items')
+		WHERE name IN ('id','url','media_type','duration_sec','aspect_ratio')`).Scan(&cols); err != nil {
+		return err
+	}
+	if err := sdb.QueryRow(`SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='meta'`).Scan(&metaExists); err != nil {
+		return err
+	}
+	if cols != 5 || metaExists == 0 {
+		return nil // partial databases used by additive-schema tests
+	}
+	tx, err := sdb.Begin()
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback()
+	const key = "video_types_172"
+	var done string
+	err = tx.QueryRow(`SELECT value FROM meta WHERE key=?`, key).Scan(&done)
+	if err == nil {
+		return nil
+	}
+	if err != sql.ErrNoRows {
+		return err
+	}
+	var after int64
+	for {
+		rows, err := tx.Query(`SELECT id, url, duration_sec, aspect_ratio FROM items
+			WHERE (media_type='long' OR (media_type IN ('unknown','video') AND url LIKE '%/shorts/%'))
+			AND id>? ORDER BY id LIMIT 256`, after)
+		if err != nil {
+			return err
+		}
+		var promote []int64
+		count := 0
+		for rows.Next() {
+			var rawURL string
+			var sec int
+			var ratio float64
+			if err := rows.Scan(&after, &rawURL, &sec, &ratio); err != nil {
+				rows.Close()
+				return err
+			}
+			count++
+			if media.VideoType("long", rawURL, sec, ratio) == "short" {
+				promote = append(promote, after)
+			}
+		}
+		err = rows.Err()
+		rows.Close()
+		if err != nil {
+			return err
+		}
+		for _, id := range promote {
+			if _, err := tx.Exec(`UPDATE items SET media_type='short' WHERE id=?`, id); err != nil {
+				return err
+			}
+		}
+		if count < 256 {
+			break
+		}
+	}
+	if _, err := tx.Exec(`INSERT INTO meta (key,value) VALUES (?, 'done')`, key); err != nil {
+		return err
+	}
+	return tx.Commit()
 }
 
 // MetaGet / MetaSet back the global (non-user) system cursors, e.g. the enrichment

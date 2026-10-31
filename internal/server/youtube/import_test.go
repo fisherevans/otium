@@ -118,3 +118,36 @@ func TestImportPageCutoff(t *testing.T) {
 		t.Fatalf("expected 1 imported + cutoff, got %+v", res)
 	}
 }
+
+func TestDetailsToItemShortFormGeometry(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Query().Get("maxHeight") != "720" {
+			t.Error("expected scaled player geometry request")
+		}
+		w.Write([]byte(`{"items":[
+			{"id":"vertical","contentDetails":{"duration":"PT1M35S"},"player":{"embedHtml":"<iframe width=\"405\" height=\"720\"></iframe>"}},
+			{"id":"square","contentDetails":{"duration":"PT3M"},"player":{"embedHtml":"<iframe width=\"720\" height=\"720\"></iframe>"}},
+			{"id":"landscape","contentDetails":{"duration":"PT1M35S"},"player":{"embedHtml":"<iframe width=\"1280\" height=\"720\"></iframe>"}},
+			{"id":"unknown","contentDetails":{"duration":"PT1M35S"}},
+			{"id":"default","contentDetails":{"duration":"PT1M35S"},"player":{"embedHtml":"<iframe width=\"960\" height=\"720\"></iframe>"}},
+			{"id":"too-long","contentDetails":{"duration":"PT3M1S"},"player":{"embedHtml":"<iframe width=\"405\" height=\"720\"></iframe>"}}
+		]}`))
+	}))
+	defer srv.Close()
+	old := baseURL
+	baseURL = srv.URL
+	defer func() { baseURL = old }()
+	vids := []Video{{ID: "vertical"}, {ID: "square"}, {ID: "landscape"}, {ID: "unknown"}, {ID: "default"}, {ID: "too-long"}}
+	if err := NewClient("k").FillDetails(context.Background(), vids); err != nil {
+		t.Fatal(err)
+	}
+	for i, v := range vids {
+		want := "long"
+		if i < 2 {
+			want = "short"
+		}
+		if got := ToItem(v, 1).MediaType; got != want {
+			t.Errorf("%s: type=%s, want %s (duration=%d, aspect=%v)", v.ID, got, want, v.DurationSec, v.AspectRatio)
+		}
+	}
+}

@@ -211,23 +211,6 @@ func migrate(sdb *sql.DB) error {
 	if err := ensureColumn(sdb, "source_import", "seen", `ALTER TABLE source_import ADD COLUMN seen INTEGER NOT NULL DEFAULT 0`); err != nil {
 		return err
 	}
-	// Backfill YouTube Shorts classification from the URL (#117): items with a
-	// /shorts/ URL are shorts even though the RSS feed shipped no duration.
-	// Condition-idempotent (only touches mis-classified rows); guarded on the items
-	// table so it no-ops on a partial DB (a test that sets up only some tables).
-	{
-		var cols int
-		if err := sdb.QueryRowContext(context.Background(),
-			`SELECT COUNT(*) FROM pragma_table_info('items') WHERE name IN ('url','media_type')`).Scan(&cols); err != nil {
-			return err
-		}
-		if cols == 2 {
-			if _, err := sdb.ExecContext(context.Background(),
-				`UPDATE items SET media_type='short' WHERE url LIKE '%/shorts/%' AND media_type != 'short'`); err != nil {
-				return err
-			}
-		}
-	}
 	// Per-source freshness half-life override (#76): source override > topic > global.
 	if err := ensureColumn(sdb, "sources", "half_life_days", `ALTER TABLE sources ADD COLUMN half_life_days REAL NOT NULL DEFAULT 0`); err != nil {
 		return err
@@ -237,6 +220,11 @@ func migrate(sdb *sql.DB) error {
 	// enricher backfills existing video items (it now wants any youtube video with
 	// aspect_ratio=0).
 	if err := ensureColumn(sdb, "items", "aspect_ratio", `ALTER TABLE items ADD COLUMN aspect_ratio REAL NOT NULL DEFAULT 0`); err != nil {
+		return err
+	}
+	// #172 replaces the URL-only #117 repair with a marker-guarded promotion
+	// using all known metadata. No demotions, network fetches or per-boot scan.
+	if err := repairVideoTypes(sdb); err != nil {
 		return err
 	}
 	// items.content (#58): full article body as raw HTML, rendered in the reader.
@@ -1165,7 +1153,7 @@ func (db *DB) DeleteSource(ctx context.Context, userID, id int64) error {
 // SourcesToFetch returns non-archived sources for a user, for the ingest loop.
 func (db *DB) SourcesToFetch(ctx context.Context, userID int64) ([]Source, error) {
 	rows, err := db.sql.QueryContext(ctx,
-		`SELECT id, kind, title, feed_url, homepage_url, icon_url, weight, state, per_session_cap
+		`SELECT id, kind, title, feed_url, homepage_url, icon_url, weight, state, per_session_cap, last_fetch_at
 		 FROM sources WHERE user_id = ? AND state != 'archived'`, userID)
 	if err != nil {
 		return nil, err
@@ -1174,10 +1162,15 @@ func (db *DB) SourcesToFetch(ctx context.Context, userID int64) ([]Source, error
 	var out []Source
 	for rows.Next() {
 		var s Source
+		var lastFetch sql.NullString
 		s.UserID = userID
 		if err := rows.Scan(&s.ID, &s.Kind, &s.Title, &s.FeedURL, &s.HomepageURL, &s.IconURL,
-			&s.Weight, &s.State, &s.PerSessionCap); err != nil {
+			&s.Weight, &s.State, &s.PerSessionCap, &lastFetch); err != nil {
 			return nil, err
+		}
+		if lastFetch.Valid {
+			t := parseTime(lastFetch.String)
+			s.LastFetchAt = &t
 		}
 		out = append(out, s)
 	}
@@ -1277,28 +1270,44 @@ func (db *DB) UpsertYouTubeItem(ctx context.Context, it *Item) (bool, error) {
 	if n, _ := res.RowsAffected(); n > 0 {
 		return true, nil // genuinely new insert
 	}
-	// Existing row: refresh authoritative API metadata. Duration/media_type/aspect only
-	// when the API actually returned them (>0); thumbnail always; summary/content only
-	// to fill an empty body (don't clobber an edited/existing one).
-	_, err = db.sql.ExecContext(ctx,
+	// Merge duration/aspect before classification, retaining a known aspect or
+	// explicit Shorts URL when the API doesn't return that evidence this time.
+	tx, err := db.sql.BeginTx(ctx, nil)
+	if err != nil {
+		return false, err
+	}
+	defer tx.Rollback()
+	var itemID int64
+	if err := tx.QueryRowContext(ctx, `SELECT id FROM items WHERE source_id=? AND external_id=?`,
+		it.SourceID, it.ExternalID).Scan(&itemID); err != nil {
+		return false, err
+	}
+	// Older YouTube rows may predate video classification. Limit normalization
+	// to confirmed YouTube sources so other content kinds keep their meaning.
+	if _, err := tx.ExecContext(ctx, `UPDATE items SET media_type='long'
+		WHERE id=? AND media_type IN ('unknown','video')
+		AND EXISTS (SELECT 1 FROM sources s WHERE s.id=items.source_id AND s.kind='youtube')`, itemID); err != nil {
+		return false, err
+	}
+	if err := setVideoMetadata(ctx, tx, itemID, it.DurationSec, it.AspectRatio); err != nil {
+		return false, err
+	}
+	_, err = tx.ExecContext(ctx,
 		`UPDATE items SET
-		   duration_sec   = CASE WHEN ? > 0 THEN ? ELSE duration_sec END,
-		   media_type     = CASE WHEN ? > 0 THEN ? ELSE media_type END,
-		   aspect_ratio   = CASE WHEN ? > 0 THEN ? ELSE aspect_ratio END,
 		   thumbnail_url  = CASE WHEN ? <> '' THEN ? ELSE thumbnail_url END,
 		   summary        = CASE WHEN summary = '' AND ? <> '' THEN ? ELSE summary END,
 		   content        = CASE WHEN content = '' AND ? <> '' THEN ? ELSE content END,
 		   content_source = CASE WHEN content = '' AND ? <> '' THEN ? ELSE content_source END
 		 WHERE source_id = ? AND external_id = ?`,
-		it.DurationSec, it.DurationSec,
-		it.DurationSec, def(it.MediaType, "unknown"),
-		it.AspectRatio, it.AspectRatio,
 		it.ThumbnailURL, it.ThumbnailURL,
 		it.Summary, it.Summary,
 		it.Content, it.Content,
 		it.Content, def(it.ContentSource, ContentSourceRSS),
 		it.SourceID, it.ExternalID)
-	return false, err
+	if err != nil {
+		return false, err
+	}
+	return false, tx.Commit()
 }
 
 func (db *DB) MarkFetched(ctx context.Context, sourceID int64, fetchErr string) error {
