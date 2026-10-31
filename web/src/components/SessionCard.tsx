@@ -2,9 +2,9 @@ import { forwardRef, type PointerEvent as ReactPointerEvent } from "react";
 import { Bookmark, BookOpen, Play, ExternalLink, MoreHorizontal, ChevronRight } from "lucide-react";
 import type { Item, ItemRender, Selected } from "@/api/client";
 import { TopicPill, CardSource, SourceAvatar, Byline, Blurb, Media } from "@/components/CardParts";
-import { InlineMedia } from "@/components/InlineMedia";
+import { InlineMedia, type MediaPosition } from "@/components/InlineMedia";
 import { ShareActions } from "@/components/ReaderActions";
-import { isMedia, isVertical } from "@/lib/render";
+import { isMedia, isVertical, videoAspect } from "@/lib/render";
 import "./session-afterglow.css";
 import { relTime } from "@/lib/format";
 
@@ -68,6 +68,8 @@ export interface SessionCardProps {
   onFirstPlay?: (sel: Selected, explicit: boolean) => void;
   /** Video-first presentation applies only to short videos. */
   shortsMode?: boolean;
+  persistentShorts?: boolean;
+  shortsPosition?: React.RefObject<MediaPosition | null>;
   playbackActive?: boolean;
   muted?: boolean;
   onMutedChange?: (muted: boolean) => void;
@@ -286,6 +288,8 @@ export const SessionCard = forwardRef<HTMLDivElement, SessionCardProps>(function
     onMenu,
     onFirstPlay,
     shortsMode = false,
+    persistentShorts = false,
+    shortsPosition,
     playbackActive = true,
     muted = true,
     onMutedChange,
@@ -376,7 +380,14 @@ export const SessionCard = forwardRef<HTMLDivElement, SessionCardProps>(function
       )}
       </>}
 
-      {activeMedia ? (
+      {compactShort && focused && persistentShorts ? (
+        <div className="card-media shorts-player-slot" aria-hidden="true">
+          <div className="inline-media im-compact"><div className="im-stage">
+            <div className="im-frame" style={{ "--ar": String(videoAspect(it.item)) } as React.CSSProperties} />
+            <div className="im-controls" />
+          </div></div>
+        </div>
+      ) : activeMedia ? (
         // The focused player uses its real aspect ratio. Shorts mode requests
         // autoplay and moves secondary actions into Details.
         <div
@@ -398,6 +409,7 @@ export const SessionCard = forwardRef<HTMLDivElement, SessionCardProps>(function
             active={playbackActive}
             muted={muted}
             onMutedChange={onMutedChange}
+            positionMemory={it.item.media_type === "short" ? shortsPosition : undefined}
             onPlaybackChange={onPlaybackChange}
             onNext={onNext}
             onPrev={onPrev}

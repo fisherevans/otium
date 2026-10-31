@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useRef, useState, type CSSProperties, type PointerEvent as ReactPointerEvent } from "react";
-import { ExternalLink, Bookmark, FileText, ChevronUp, Play, SlidersHorizontal, MoreHorizontal, Volume2, VolumeX } from "lucide-react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type RefObject, type PointerEvent as ReactPointerEvent } from "react";
+import { ExternalLink, Bookmark, FileText, ChevronUp, Play, SlidersHorizontal, MoreHorizontal, Volume2, VolumeX, Captions } from "lucide-react";
 import type { Item } from "@/api/client";
 import { ShareActions } from "./ReaderActions";
 import { renderSummary } from "@/lib/html";
@@ -32,6 +32,8 @@ import { videoAspect, isVertical, isVideo } from "@/lib/render";
 // onFirstPlay distinguishes observed playback from the first explicit play
 // interaction; autoplay never creates an open. onPlaybackChange owns playing-time
 // accounting. onNext/onPrev advance the feed from a swipe over the video.
+export type MediaPosition = { itemId: number; at: number };
+
 export function InlineMedia({
   item,
   onSave,
@@ -46,6 +48,9 @@ export function InlineMedia({
   active = true,
   muted = true,
   onMutedChange,
+  captions = autoPlay ? true : undefined,
+  onCaptionsChange,
+  positionMemory,
   onPlaybackChange,
 }: {
   item: Item;
@@ -65,6 +70,9 @@ export function InlineMedia({
   active?: boolean;
   muted?: boolean;
   onMutedChange?: (muted: boolean) => void;
+  captions?: boolean;
+  onCaptionsChange?: (captions: boolean) => void;
+  positionMemory?: RefObject<MediaPosition | null>;
   onPlaybackChange?: (playing: boolean) => void;
 }) {
   const [notes, setNotes] = useState(false);
@@ -109,8 +117,43 @@ export function InlineMedia({
   const [blocked, setBlocked] = useState(false);
   const [failed, setFailed] = useState(false);
   const audioRef = useRef<HTMLAudioElement>(null);
-  const latest = useRef({ active, autoPlay, onFirstPlay, onPlaybackChange, onMutedChange });
-  latest.current = { active, autoPlay, onFirstPlay, onPlaybackChange, onMutedChange };
+  const latest = useRef({ active, autoPlay, muted, captions, ytId, itemId: item.id, positionMemory, onFirstPlay, onPlaybackChange, onMutedChange });
+  latest.current = { active, autoPlay, muted, captions, ytId, itemId: item.id, positionMemory, onFirstPlay, onPlaybackChange, onMutedChange };
+  const loadedId = useRef<string | null>(null);
+  const loadedItem = useRef(item.id);
+
+  function rememberPosition() {
+    const memory = latest.current.positionMemory;
+    if (!ready.current || !memory) return;
+    const at = playerRef.current?.getCurrentTime?.();
+    if (Number.isFinite(at)) memory.current = { itemId: loadedItem.current, at };
+  }
+  function restorePosition(fallback = 0) {
+    const player = playerRef.current;
+    const memory = latest.current.positionMemory?.current;
+    const at = memory?.itemId === latest.current.itemId ? memory.at : fallback;
+    if (at <= 0 || Math.abs((player?.getCurrentTime?.() || 0) - at) <= 0.5) return;
+    const state = player?.getPlayerState?.();
+    // seekTo starts an unstarted/cued YouTube player. Restore a manual card
+    // with cueVideoById so changing layout cannot manufacture a play/open.
+    if (state === -1 || state === 5 || state === undefined) {
+      player?.cueVideoById?.({ videoId: latest.current.ytId, startSeconds: at });
+    } else player?.seekTo?.(at, true);
+  }
+
+  function applyCaptions() {
+    const player = playerRef.current;
+    if (!ready.current || !player || latest.current.captions === undefined) return;
+    if (latest.current.captions) {
+      player.loadModule?.("captions");
+    } else {
+      player.unloadModule?.("captions");
+    }
+  }
+  function currentVideo() {
+    const actual = playerRef.current?.getVideoData?.()?.video_id;
+    return loadedId.current === latest.current.ytId && (!actual || actual === latest.current.ytId);
+  }
 
   function markPlayed(explicit: boolean) {
     if (explicit && !explicitPlayed.current) {
@@ -136,10 +179,10 @@ export function InlineMedia({
     return latest.current.active && !document.hidden && !!root?.isConnected &&
       (!topDialog || topDialog.contains(root));
   }
-  function setSound(value: boolean) {
+  function setSound(value: boolean, deliberate = false) {
     sound.current = value;
     setSoundMuted(value);
-    if (latest.current.autoPlay) latest.current.onMutedChange?.(value);
+    if (deliberate && latest.current.autoPlay) latest.current.onMutedChange?.(value);
     const player = playerRef.current;
     if (value) player?.mute?.(); else player?.unMute?.();
   }
@@ -152,17 +195,22 @@ export function InlineMedia({
   }
   function syncPlayback() {
     if (!available()) {
-      if (!suspended.current) resumeAfterSuspend.current = playingRef.current;
+      if (!suspended.current) {
+        resumeAfterSuspend.current = playingRef.current;
+        rememberPosition();
+      }
       suspended.current = true;
       playerRef.current?.pauseVideo?.();
       audioRef.current?.pause();
       reportPlaying(false);
       return;
     }
-    const shouldResume = suspended.current && resumeAfterSuspend.current;
+    const wasSuspended = suspended.current;
+    const shouldResume = wasSuspended && resumeAfterSuspend.current;
     suspended.current = false;
     resumeAfterSuspend.current = false;
     if (!ready.current) return;
+    if (wasSuspended) restorePosition();
     if (latest.current.autoPlay && (!autoTried.current || shouldResume)) {
       autoTried.current = true;
       requestPlay();
@@ -208,7 +256,45 @@ export function InlineMedia({
     if (autoPlay) setSound(muted);
   }, [muted, autoPlay]);
 
-  // One player for the focused card. Native controls require a rebuild; retain
+  const previousCaptions = useRef(captions);
+  useEffect(() => {
+    applyCaptions();
+    if (captions && !previousCaptions.current) playerRef.current?.setOption?.("captions", "reload", true);
+    previousCaptions.current = captions;
+  }, [captions]);
+
+  function selectVideo() {
+    const player = playerRef.current;
+    const nextId = latest.current.ytId;
+    if (!ready.current || !nextId || loadedId.current === nextId) return;
+    player.pauseVideo?.();
+    loadedId.current = nextId;
+    loadedItem.current = latest.current.itemId;
+    setSound(latest.current.autoPlay ? latest.current.muted : false);
+    applyCaptions();
+    if (latest.current.autoPlay && available()) {
+      autoTried.current = true;
+      player.loadVideoById?.(nextId);
+    } else player.cueVideoById?.(nextId);
+  }
+
+  useLayoutEffect(() => {
+    played.current = false;
+    explicitPlayed.current = false;
+    explicitIntent.current = false;
+    autoTried.current = false;
+    resumeAfterSuspend.current = false;
+    resume.current = { at: 0, playing: false };
+    setStarted(false);
+    setBlocked(false);
+    setFailed(false);
+    setNotes(false);
+    reportPlaying(false);
+    selectVideo();
+  }, [ytId]);
+
+  // Reuse the iframe across clips, preserving the browser's sound permission.
+  // Native controls require a rebuild; retain
   // its playhead, but always recheck focus, dialogs and visibility before playing.
   useEffect(() => {
     if (!video || !ytId) return;
@@ -220,25 +306,29 @@ export function InlineMedia({
       host.className = "im-yt";
       mountRef.current.appendChild(host);
       player = new YT.Player(host, {
-        videoId: ytId,
+        videoId: latest.current.ytId,
         host: ytHistory ? "https://www.youtube.com" : "https://www.youtube-nocookie.com",
-        playerVars: { rel: 0, playsinline: 1, controls: nativeControls ? 1 : 0, origin: window.location.origin },
+        playerVars: { rel: 0, playsinline: 1, controls: nativeControls ? 1 : 0, cc_load_policy: latest.current.captions ? 1 : 0, origin: window.location.origin },
         events: {
           onReady: () => {
             if (cancelled || playerRef.current !== player) return;
             ready.current = true;
             player.getIframe?.()?.setAttribute("allow", "autoplay; encrypted-media; picture-in-picture; fullscreen");
             setSound(sound.current);
+            applyCaptions();
+            if (loadedId.current !== latest.current.ytId) { selectVideo(); return; }
             const { at, playing: wasPlaying } = resume.current;
-            if (at > 0) player.seekTo?.(at, true);
+            restorePosition(at);
             if (wasPlaying && available()) requestPlay();
             else sync.current();
           },
+          onApiChange: () => { if (!cancelled && playerRef.current === player) applyCaptions(); },
           onStateChange: (e: any) => {
-            if (cancelled || playerRef.current !== player) return;
+            if (cancelled || playerRef.current !== player || !currentVideo()) return;
             if (e.data === YT.PlayerState.PLAYING) {
               if (!available()) { player.pauseVideo?.(); reportPlaying(false); return; }
               setBlocked(false);
+              applyCaptions();
               setStarted(true);
               reportPlaying(true);
               markPlayed(explicitIntent.current || !latest.current.autoPlay);
@@ -247,26 +337,30 @@ export function InlineMedia({
             }
           },
           onAutoplayBlocked: () => {
-            if (cancelled || playerRef.current !== player || !available()) return;
+            if (cancelled || playerRef.current !== player || !currentVideo() || !available()) return;
             reportPlaying(false);
             if (!sound.current && latest.current.autoPlay) {
-              // A following clip may lose the previous tap's audio permission.
+              // Browser fallback affects this attempt, never the saved sound choice.
               setSound(true);
               requestPlay();
             } else setBlocked(true);
           },
           onError: () => {
-            if (cancelled || playerRef.current !== player) return;
+            if (cancelled || playerRef.current !== player || !currentVideo()) return;
             setFailed(true);
             reportPlaying(false);
           },
         },
       });
       playerRef.current = player;
+      loadedId.current = latest.current.ytId;
+      loadedItem.current = latest.current.itemId;
     }).catch(() => { if (!cancelled) setFailed(true); });
     return () => {
       cancelled = true;
+      if (!suspended.current) rememberPosition();
       ready.current = false;
+      loadedId.current = null;
       try {
         if (player?.getCurrentTime) resume.current = { at: player.getCurrentTime() || 0, playing: playingRef.current || resumeAfterSuspend.current };
         player?.destroy?.();
@@ -275,7 +369,7 @@ export function InlineMedia({
       reportPlaying(false);
       if (mountRef.current) mountRef.current.innerHTML = "";
     };
-  }, [video, ytId, nativeControls, ytHistory]);
+  }, [video, nativeControls, ytHistory]);
 
   function togglePlay() {
     if (!available()) return;
@@ -287,7 +381,7 @@ export function InlineMedia({
   }
   function toggleSound() {
     explicitIntent.current = true;
-    setSound(!sound.current);
+    setSound(!sound.current, true);
     if (playingRef.current) markPlayed(true);
     else requestPlay(true);
   }
@@ -400,23 +494,6 @@ export function InlineMedia({
                 </div>
               </>
             )}
-            {/* Subtle toggle to YouTube's native controls (#149): captions, quality,
-                the YouTube link, native fullscreen. Sits top-right, clear of YouTube's
-                bottom control bar. */}
-            <button
-              className={`im-ctltoggle ${nativeControls ? "on" : ""}`}
-              onClick={() => { explicitIntent.current = true; setNativeControls((v) => !v); }}
-              aria-pressed={nativeControls}
-              aria-label={nativeControls ? "Use simple controls" : "Use YouTube controls"}
-              title={nativeControls ? "Simple controls" : "YouTube controls"}
-            >
-              <SlidersHorizontal size={15} strokeWidth={2} aria-hidden />
-            </button>
-            {autoPlay && <button type="button" className="im-sound" onClick={toggleSound}
-              aria-label={soundMuted ? "Turn sound on" : "Mute video"}>
-              {soundMuted ? <VolumeX size={17} aria-hidden /> : <Volume2 size={17} aria-hidden />}
-              {soundMuted ? "Sound on" : "Mute"}
-            </button>}
             {(blocked || failed) && <div className="im-playback-message" role="status">
               {failed ? <>Video unavailable here.<button onClick={onOpenOriginal}>Open original</button></> : "Tap the video to play"}
             </div>}
@@ -434,6 +511,24 @@ export function InlineMedia({
             </button>
           </div>
         )}
+
+        {video && ytId && <div className="im-controls" role="group" aria-label="Playback controls">
+          {autoPlay && <button type="button" className="im-control im-sound" onClick={toggleSound}
+            aria-label={soundMuted ? "Turn sound on" : "Mute video"} aria-pressed={!soundMuted}>
+            {soundMuted ? <VolumeX size={18} aria-hidden /> : <Volume2 size={18} aria-hidden />}
+            <span>Sound {soundMuted ? "off" : "on"}</span>
+          </button>}
+          {onCaptionsChange && <button type="button" className="im-control" aria-label="Captions" aria-pressed={captions}
+            onClick={() => onCaptionsChange(!captions)} title="YouTube captions; text in the video stays visible">
+            <Captions size={19} aria-hidden /><span>CC {captions ? "on" : "off"}</span>
+          </button>}
+          <button type="button" className="im-control im-player-settings" aria-pressed={nativeControls}
+            onClick={() => { explicitIntent.current = true; setNativeControls(v => !v); }}
+            aria-label={nativeControls ? "Use simple controls" : "Use YouTube controls"}
+            title={nativeControls ? "Simple controls" : "YouTube controls"}>
+            <SlidersHorizontal size={18} aria-hidden /><span>Player</span>
+          </button>
+        </div>}
 
         {!compact && <div className="im-actions">
           {hasNotes && (

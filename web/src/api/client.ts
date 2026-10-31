@@ -441,11 +441,14 @@ function handleAuth(status: number) {
   }
 }
 
-async function req<T>(method: string, path: string, body?: unknown): Promise<T> {
+// keepalive lets a write fired while the page unloads (reload, pagehide) finish
+// instead of being cancelled - WebKit drops those otherwise.
+async function req<T>(method: string, path: string, body?: unknown, keepalive = false): Promise<T> {
   const res = await fetch(`/api/v1${path}`, {
     method,
     headers: body ? { "Content-Type": "application/json" } : undefined,
     body: body ? JSON.stringify(body) : undefined,
+    keepalive,
   });
   if (res.status === 401 || res.status === 403) {
     if (!location.pathname.startsWith("/auth/")) {
@@ -585,7 +588,7 @@ export const api = {
   // open carries external=true, ms=0 (unmeasured - counted as engagement, excluded
   // from reading-time averages).
   recordRead: (id: number, sessionId: string, ms: number, external: boolean, kind: string) =>
-    req<{ ok: boolean }>("POST", `/items/${id}/read`, { session_id: sessionId, ms, external, kind }),
+    req<{ ok: boolean }>("POST", `/items/${id}/read`, { session_id: sessionId, ms, external, kind }, true),
   // #142: filter noise from an item's source straight from the card - mute one or
   // more of its RSS categories and/or add a title/summary keyword. Both append
   // (deduped) to that source's auto-archive blocklists; applies to future sessions.

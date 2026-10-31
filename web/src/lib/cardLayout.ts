@@ -182,7 +182,8 @@ export function solveCard(vars: HTMLElement, reel: HTMLElement, card: HTMLElemen
     const cs = getComputedStyle(card);
     const column = card.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight);
     const chrome = parseFloat(cs.paddingTop) + parseFloat(cs.paddingBottom)
-      + (footer?.offsetHeight ?? 0) + (parseFloat(cs.rowGap) || 0);
+      + (footer?.offsetHeight ?? 0) + (card.querySelector<HTMLElement>(".im-controls")?.offsetHeight ?? 0)
+      + (parseFloat(cs.rowGap) || 0);
     const ar = parseFloat(getComputedStyle(frame).getPropertyValue("--ar")) || 0.5625;
     const room = Math.max(0, budget - chrome);
     const height = Math.floor(Math.min(room, column / ar));
