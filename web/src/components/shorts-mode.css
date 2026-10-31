@@ -19,6 +19,9 @@
 .im-control:focus-visible { outline: 2px solid var(--ink); outline-offset: -2px; }
 /* #182: lives inside the reel's scroll content (.stage is the containing block). */
 .stage:has(> .session-shorts-player) { position: relative; }
+/* The page anchors the reel itself (index * height); the browser's scroll
+   anchoring shifted it by a card's internal layout change (#184). */
+.stage { overflow-anchor: none; }
 .session-shorts-player { position: absolute; z-index: 3; }
 .session-shorts-player .inline-media, .session-shorts-player .im-stage { width: 100%; align-items: center; }
 .session-shorts-player > .inline-media.im-compact .im-stage .im-frame { height: var(--shorts-frame-height); width: min(100%, calc(var(--shorts-frame-height) * var(--ar))); max-height: none; max-width: 100%; margin: 0; border: 0; border-radius: 18px; }
@@ -46,4 +49,66 @@
 .shorts-quiet-btn { display: inline-grid; place-items: center; width: 40px; height: 44px; border: 0; padding: 0; background: transparent; color: var(--ink-mute); border-radius: 8px; }
 .shorts-quiet-btn[data-on=true] { color: var(--ink); }
 .shorts-quiet-btn:focus-visible { outline: 2px solid var(--ink); outline-offset: -2px; }
-.shorts-age { font-variant-numeric: tabular-nums; }
+.shorts-age { font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* #184: the "about to play" aura. Three large soft colour fields drift and breathe
+   over the poster while a clip loads or buffers. It fades in after a short delay so
+   a fast start never flashes it, and fades out on the first frame. Only transform
+   and opacity animate (compositor-only); the animation is paused when hidden. */
+.im-aura { position: absolute; inset: 0; z-index: 2; overflow: hidden; pointer-events: none; border-radius: inherit;
+  opacity: 0; transition: opacity .35s ease-out; background: radial-gradient(120% 80% at 50% 50%, transparent 40%, rgb(0 0 0 / .28)); }
+.im-aura[data-on=true] { opacity: 1; transition: opacity .6s ease-in .25s; }
+.im-aura-blob { position: absolute; width: 85%; aspect-ratio: 1; border-radius: 50%; mix-blend-mode: screen; opacity: .5;
+  animation-duration: 9s; animation-timing-function: ease-in-out; animation-iteration-count: infinite; animation-direction: alternate;
+  animation-play-state: paused; will-change: transform, opacity; }
+.im-aura[data-on=true] .im-aura-blob { animation-play-state: running; }
+.im-aura-blob.a { left: -20%; top: 8%; background: radial-gradient(closest-side, rgb(232 176 104 / .75), rgb(232 176 104 / 0)); animation-name: aura-a; }
+.im-aura-blob.b { right: -25%; top: 34%; background: radial-gradient(closest-side, rgb(214 128 160 / .6), rgb(214 128 160 / 0)); animation-name: aura-b; animation-duration: 11s; }
+.im-aura-blob.c { left: 5%; bottom: -18%; background: radial-gradient(closest-side, rgb(120 176 210 / .55), rgb(120 176 210 / 0)); animation-name: aura-c; animation-duration: 13s; }
+@keyframes aura-a { 0% { transform: translate(0, 0) scale(.9); opacity: .35; } 50% { opacity: .65; } 100% { transform: translate(28%, 18%) scale(1.15); opacity: .4; } }
+@keyframes aura-b { 0% { transform: translate(0, 0) scale(1.1); opacity: .5; } 50% { opacity: .3; } 100% { transform: translate(-30%, -16%) scale(.85); opacity: .6; } }
+@keyframes aura-c { 0% { transform: translate(0, 0) scale(.95); opacity: .3; } 50% { opacity: .55; } 100% { transform: translate(20%, -24%) scale(1.2); opacity: .35; } }
+@media (prefers-reduced-motion: reduce) { .im-aura-blob { animation: none; } }
+
+/* #184: full-screen Shorts. For the whole session the reel fills the viewport and
+   the header and pill float over it, so every card has the same geometry and a
+   swipe between a Short and an article never resizes the reel. Shorts cards go
+   edge to edge: the clip is cropped to fill (like TikTok/Reels), with scrims and
+   the creator line on top. Articles keep their card, padded clear of the chrome. */
+:root[data-immersive=on] { --imm-top: calc(64px + env(safe-area-inset-top, 0px)); --imm-bottom: calc(96px + env(safe-area-inset-bottom, 0px)); }
+:root[data-immersive=on] .topbar.session { position: fixed; z-index: 15; top: 0; left: 0; right: 0; background: transparent; transition: color .2s; }
+:root[data-immersive=on] .content-session { padding: 0; }
+:root[data-immersive=on] .focus-session.afterglow-session { position: fixed; inset: 0; height: auto; padding: 0; z-index: 1; }
+:root[data-immersive=on] .focus-session .stage { height: 100%; }
+:root[data-immersive=on] .stage .snap.afterglow-card:not(.shorts-card) { padding-top: var(--imm-top); padding-bottom: var(--imm-bottom); }
+
+:root[data-immersive=on] .stage .snap.shorts-card { padding: 0; background: #000; overflow: hidden; }
+:root[data-immersive=on] .snap.shorts-card .shorts-details-label { display: none; }
+:root[data-immersive=on] .snap.shorts-card .shorts-player-slot { position: absolute; inset: 0; margin: 0; }
+:root[data-immersive=on] .snap.shorts-card .shorts-player-slot :is(.inline-media, .im-stage) { width: 100%; height: 100%; }
+:root[data-immersive=on] :is(.stage) .snap.afterglow-card.shorts-card .shorts-player-slot .inline-media .im-frame { position: absolute; inset: 0; width: auto; height: auto; max-width: none; aspect-ratio: auto; border-radius: 0; }
+/* Scrims keep the floating chrome and creator line legible over any clip. */
+:root[data-immersive=on] .snap.shorts-card::before,
+:root[data-immersive=on] .snap.shorts-card::after { content: ""; position: absolute; z-index: 4; left: 0; right: 0; pointer-events: none; }
+:root[data-immersive=on] .snap.shorts-card::before { top: 0; height: calc(var(--imm-top) + 40px); background: linear-gradient(rgb(0 0 0 / .45), transparent); }
+:root[data-immersive=on] .snap.shorts-card::after { bottom: 0; height: 42%; background: linear-gradient(transparent, rgb(0 0 0 / .62)); }
+:root[data-immersive=on] .snap.shorts-card .shorts-card-footer { position: absolute; z-index: 5; left: 0; right: 0; bottom: calc(var(--imm-bottom) + 8px); padding: 0 10px 0 16px; color: #fff; text-shadow: 0 1px 2px rgb(0 0 0 / .45); }
+:root[data-immersive=on] .snap.shorts-card :is(.shorts-creator, .shorts-details) { color: #fff; }
+:root[data-immersive=on] .snap.shorts-card .shorts-age { color: rgb(255 255 255 / .78); }
+:root[data-immersive=on] .snap.shorts-card .shorts-quiet-btn { color: rgb(255 255 255 / .62); }
+:root[data-immersive=on] .snap.shorts-card .shorts-quiet-btn[data-on=true] { color: #fff; }
+
+/* The shared player fills the card; the iframe is scaled to cover it, cropping
+   the long edge, and the progress hairline sits just above the pill. */
+:root[data-immersive=on] .session-shorts-player > .inline-media.im-compact .im-stage .im-frame { width: 100%; height: var(--shorts-slot-height); border-radius: 0; container-type: size; }
+/* Shorts are 9:16 whatever the feed metadata says (it is often missing, which
+   reads as 16:9 and would over-crop); a landscape clip letterboxes inside. */
+:root[data-immersive=on] .session-shorts-player .im-frame :is(iframe, .im-yt) { inset: auto; left: 50%; top: 50%; width: max(100cqw, calc(100cqh * 9 / 16)); height: max(100cqh, calc(100cqw * 16 / 9)); transform: translate(-50%, -50%); }
+:root[data-immersive=on] .session-shorts-player .im-progress { bottom: calc(var(--imm-bottom) - 2px); left: 16px; right: 16px; }
+
+/* Chrome over a Short: light text, glassy pill, no paper fade. */
+:root[data-over-video=on] .topbar.session { color: #fff; }
+:root[data-over-video=on] .topbar.session :is(.chrome-btn, .shell-icon, .font-button, .brand-mark, .brand-name) { color: #fff; border-color: rgb(255 255 255 / .45); }
+:root[data-over-video=on] .context-instrument-wrap { background: none; }
+:root[data-over-video=on] .context-instrument { background: rgb(18 14 10 / .42); border-color: rgb(255 255 255 / .16); box-shadow: none; -webkit-backdrop-filter: blur(16px) saturate(1.2); backdrop-filter: blur(16px) saturate(1.2); }
+:root[data-over-video=on] .context-instrument :is(.instrument-menu, .instrument-meaning, .instrument-label, .instrument-eyebrow) { color: #fff; border-color: rgb(255 255 255 / .2); }

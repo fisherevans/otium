@@ -28,6 +28,8 @@ export function ItemActions({
   onShortsModeChange,
   nativeControls,
   onNativeControls,
+  immersive,
+  onImmersiveChange,
 }: {
   selected: Selected | null;
   open: boolean;
@@ -43,6 +45,8 @@ export function ItemActions({
   // here from the row under the video.
   nativeControls?: boolean;
   onNativeControls?: () => void;
+  immersive?: boolean;
+  onImmersiveChange?: (value: boolean) => void;
 }) {
   const nav = useNavigate();
   const item = selected?.item ?? null;
@@ -131,9 +135,16 @@ export function ItemActions({
         )}
       </div>
 
-      {(onShortsModeChange || onEnd || onNativeControls) && (
+      {(onShortsModeChange || onEnd || onNativeControls || onImmersiveChange) && (
         <div className="sheet-rows">
           {onShortsModeChange && <ShortsModeToggle enabled={shortsMode ?? false} onChange={onShortsModeChange} />}
+          {immersive !== undefined && onImmersiveChange && (
+            <button className="sheet-row" role="switch" aria-checked={immersive} aria-label="Full-screen Shorts"
+              onClick={() => onImmersiveChange(!immersive)}>
+              <span>Full-screen Shorts</span>
+              <span className="shorts-mode-state">{immersive ? "On" : "Off"}</span>
+            </button>
+          )}
           {onNativeControls && (
             <button className="sheet-row" onClick={onNativeControls} aria-pressed={!!nativeControls}
               aria-label={nativeControls ? "Use simple controls" : "Use YouTube controls"}>

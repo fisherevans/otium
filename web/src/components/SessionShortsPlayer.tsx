@@ -45,6 +45,8 @@ export function SessionShortsPlayer({ stage, index, visible, nextItem, ...media 
                 visibility: "visible",
             });
             container.style.setProperty("--shorts-frame-height", `${frame?.offsetHeight ?? 0}px`);
+            // Full-screen Shorts (#184) fill the whole slot, i.e. the card.
+            container.style.setProperty("--shorts-slot-height", `${box.height}px`);
         };
         align();
         setDriftProbe(() => {

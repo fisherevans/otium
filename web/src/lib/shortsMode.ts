@@ -5,8 +5,18 @@ const changed = "otium-shorts-mode-change";
 
 // A viewing choice belongs to this browser and account, independent of feed presets.
 export function useShortsMode() {
+    return useViewingChoice("shorts-mode");
+}
+
+// #184: Shorts fill the whole portrait screen, with the app chrome floating over
+// them. On by default; independent of Shorts mode itself.
+export function useImmersiveShorts() {
+    return useViewingChoice("shorts-immersive");
+}
+
+function useViewingChoice(name: string) {
     const { user } = useAuth();
-    const key = `otium:shorts-mode:${user?.id ?? "unknown"}`;
+    const key = `otium:${name}:${user?.id ?? "unknown"}`;
     const read = () => {
         try { return localStorage.getItem(key) !== "off"; }
         catch { return true; }

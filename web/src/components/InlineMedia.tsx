@@ -83,6 +83,10 @@ export function InlineMedia({
   const [notes, setNotes] = useState(false);
   const [playing, setPlaying] = useState(false);
   const [started, setStarted] = useState(false); // has playback ever begun
+  // #184: why the clip is not playing. YouTube's last state (-1 unstarted, 0
+  // ended, 1 playing, 2 paused, 3 buffering, 5 cued) and whether you paused it.
+  const [ytState, setYtState] = useState(-1);
+  const [userPaused, setUserPaused] = useState(false);
   const played = useRef(false);
 
   const video = isVideo(item);
@@ -312,6 +316,8 @@ export function InlineMedia({
     resumeAfterSuspend.current = false;
     resume.current = { at: 0, playing: false };
     setStarted(false);
+    setYtState(-1);
+    setUserPaused(false);
     setBlocked(false);
     setFailed(false);
     setNotes(false);
@@ -351,6 +357,7 @@ export function InlineMedia({
           onApiChange: () => { if (!cancelled && playerRef.current === player) applyCaptions(); },
           onStateChange: (e: any) => {
             if (cancelled || playerRef.current !== player || !currentVideo()) return;
+            setYtState(e.data);
             if (e.data === YT.PlayerState.PLAYING) {
               if (!available()) { player.pauseVideo?.(); reportPlaying(false); return; }
               setBlocked(false);
@@ -402,9 +409,10 @@ export function InlineMedia({
     if (!available()) return;
     if (playingRef.current) {
       resumeAfterSuspend.current = false;
+      setUserPaused(true);
       playerRef.current?.pauseVideo?.();
       reportPlaying(false);
-    } else requestPlay(true);
+    } else { setUserPaused(false); requestPlay(true); }
   }
   function toggleSound() {
     explicitIntent.current = true;
@@ -498,6 +506,12 @@ export function InlineMedia({
     }
   }
 
+  // #184: the clip will play as soon as it can - loading after a swipe, or
+  // buffering mid-play. Shown as an ambient aura, never as a Play button, which
+  // would ask for a tap that is not needed.
+  const waiting = !!(video && ytId && autoPlay && active && !nativeControls && !playing && !blocked && !failed
+    && !userPaused && ytState !== 0);
+
   const notesLabel = notes ? (video ? "Hide notes" : "Hide transcript") : video ? "Show notes" : "Transcript";
 
   return (
@@ -528,6 +542,7 @@ export function InlineMedia({
                     </span>
                   )}
                 </div>
+                <Aura on={waiting} />
                 {compact && <span className="im-progress" aria-hidden><span ref={progressRef} /></span>}
                 <div
                   className="im-gesture"
@@ -542,7 +557,7 @@ export function InlineMedia({
                 >
                   {/* Calm play affordance for the paused-mid-video state (controls:0 shows
                       nothing there); the unstarted poster keeps YouTube's own button. */}
-                  {!playing && started && (
+                  {!playing && started && !waiting && (
                     <span className="im-play" aria-hidden>
                       <Play size={30} strokeWidth={1.5} fill="currentColor" />
                     </span>
@@ -624,3 +639,15 @@ export function InlineMedia({
   );
 }
 
+// #184: the "about to play" signal - slow, soft colour fields drifting over the
+// poster. Deliberately not a spinner: it reads as the clip getting ready rather
+// than as a stalled load. Pure transform/opacity animation; paused while hidden.
+export function Aura({ on }: { on: boolean }) {
+  return (
+    <span className="im-aura" data-on={on} aria-hidden>
+      <span className="im-aura-blob a" />
+      <span className="im-aura-blob b" />
+      <span className="im-aura-blob c" />
+    </span>
+  );
+}
