@@ -1,0 +1,17 @@
+/* #186: the "building your session" screen. Paper background, the Afterglow
+   palette, one small moving thing. Tiles move by transform only. */
+.session-building { position: fixed; inset: 0; z-index: 40; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 18px;
+  background: var(--paper); animation: building-in .18s ease-out both; }
+/* Continuing from Home's screen: no second fade. */
+.session-building.continued { animation: none; }
+@keyframes building-in { from { opacity: 0; } to { opacity: 1; } }
+.building-tray { position: relative; width: 84px; height: 84px; padding: 4px; border-radius: 14px; background: var(--paper-3); box-sizing: content-box; }
+.building-tile { position: absolute; left: 4px; top: 4px; width: 28px; height: 28px; padding: 2px; box-sizing: border-box;
+  transition: transform .34s cubic-bezier(.3, .7, .2, 1); }
+.building-tile::before { content: ""; display: block; width: 100%; height: 100%; border-radius: 7px; }
+.building-tile.a::before { background: var(--accent, #8c7145); }
+.building-tile.b::before { background: color-mix(in srgb, var(--accent, #8c7145) 45%, var(--paper)); }
+.building-tile.c::before { background: color-mix(in srgb, var(--ink, #2a2622) 20%, var(--paper)); }
+.building-label { margin: 0; font: 450 22px/1.2 var(--heading, serif); color: var(--ink); }
+.building-detail { margin: -10px 0 0; font: 13px/1.4 var(--grot, sans-serif); color: var(--ink-mute); }
+@media (prefers-reduced-motion: reduce) { .building-tile { transition: none; } }

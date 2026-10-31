@@ -469,7 +469,8 @@ export const SessionCard = forwardRef<HTMLDivElement, SessionCardProps>(function
               {immersive ? <Minimize2 size={18} strokeWidth={1.7} aria-hidden /> : <Maximize2 size={18} strokeWidth={1.7} aria-hidden />}
             </button>
           )}
-          <button className="shorts-details" type="button" onClick={onDetails ?? onMenu} disabled={!focused} aria-label="Details">
+          <button className="shorts-details" type="button" onClick={immersive ? onMenu : (onDetails ?? onMenu)} disabled={!focused}
+            aria-label={immersive ? "Article and session actions" : "Details"}>
             <MoreHorizontal size={18} aria-hidden />
             <span className="shorts-details-label">Details</span>
           </button>
