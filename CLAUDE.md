@@ -181,6 +181,13 @@ git log --grep '#14' --oneline                    # every commit in issue 14
   the "predicted items" math leans on a per-feed default. The truer signal is
   behavioral per-feed pace, measurable now via the single-item view - tracked in
   the Session engine milestone.
+- **Short videos** (#172) is Otium's viewing group, not exact YouTube Shorts
+  membership: explicit `/shorts/` URLs, videos up to 90 seconds (existing behavior),
+  and known square/vertical videos up to 180 seconds. Unknown duration or aspect
+  does not qualify for the extension. Live remains live. The pure rule lives in
+  `internal/server/media`; imports and metadata updates share it. API player
+  dimensions inform geometry but can fall back to 4:3 when the aspect is unknown
+  ([YouTube API](https://developers.google.com/youtube/v3/docs/videos#player)).
 - The `db/` schema is embedded into the `store` package (`schema.sql`), applied
   idempotently on boot. There is no migrate Job - just additive
   `CREATE … IF NOT EXISTS`. A destructive migration would need real thought.
