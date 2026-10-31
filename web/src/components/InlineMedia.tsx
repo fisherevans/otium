@@ -3,6 +3,8 @@ import { ExternalLink, Bookmark, FileText, ChevronUp, Play, SlidersHorizontal, M
 import type { Item } from "@/api/client";
 import { ShareActions } from "./ReaderActions";
 import { renderSummary } from "@/lib/html";
+import * as perf from "@/lib/perf";
+import { formatClock, type ShortsBus } from "@/lib/shortsBus";
 import { parseYouTubeId, loadYouTubeIframeAPI } from "@/lib/youtube";
 import "./shorts-mode.css";
 import { videoAspect, isVertical, isVideo } from "@/lib/render";
@@ -42,6 +44,7 @@ export function InlineMedia({
   onFirstPlay,
   onNext,
   onPrev,
+  bus,
   ytHistory = false,
   compact = false,
   autoPlay = false,
@@ -62,6 +65,8 @@ export function InlineMedia({
   onFirstPlay?: (explicit: boolean) => void;
   onNext?: () => void;
   onPrev?: () => void;
+  // #182: Shorts publish their state here and take sound/CC from the card footer.
+  bus?: ShortsBus;
   // #151: when true, embed from youtube.com (not nocookie) so a watch can reach the
   // user's YouTube history. Opt-in via Settings; default private.
   ytHistory?: boolean;
@@ -120,6 +125,7 @@ export function InlineMedia({
   // #180: elapsed/remaining readout. Polls the player only while it plays; the
   // feed's duration stands in until the player reports its own.
   const [clock, setClock] = useState({ at: 0, total: item.duration_sec || 0 });
+  const progressRef = useRef<HTMLSpanElement>(null);
   useEffect(() => { setClock({ at: 0, total: item.duration_sec || 0 }); }, [item.id, item.duration_sec]);
   useEffect(() => {
     if (!video || !ytId) return;
@@ -127,13 +133,15 @@ export function InlineMedia({
       const p = playerRef.current;
       const at = Number(p?.getCurrentTime?.()) || 0;
       const total = Number(p?.getDuration?.()) || item.duration_sec || 0;
+      if (progressRef.current) progressRef.current.style.transform = `scaleX(${total > 0 ? Math.min(1, at / total) : 0})`;
+      if (bus) { bus.set({ at: Math.floor(at), total: Math.round(total) }); return; }
       setClock((c) => (Math.floor(c.at) === Math.floor(at) && Math.round(c.total) === Math.round(total) ? c : { at, total }));
     };
     read();
     if (!playing) return;
     const timer = window.setInterval(read, 250);
     return () => window.clearInterval(timer);
-  }, [playing, video, ytId, item.duration_sec]);
+  }, [playing, video, ytId, item.duration_sec, bus]);
   const latest = useRef({ active, autoPlay, muted, captions, ytId, itemId: item.id, positionMemory, onFirstPlay, onPlaybackChange, onMutedChange });
   latest.current = { active, autoPlay, muted, captions, ytId, itemId: item.id, positionMemory, onFirstPlay, onPlaybackChange, onMutedChange };
   const loadedId = useRef<string | null>(null);
@@ -291,6 +299,7 @@ export function InlineMedia({
     applyCaptions();
     if (latest.current.autoPlay && available()) {
       autoTried.current = true;
+      perf.clipLoading();
       player.loadVideoById?.(nextId);
     } else player.cueVideoById?.(nextId);
   }
@@ -348,6 +357,7 @@ export function InlineMedia({
               applyCaptions();
               setStarted(true);
               reportPlaying(true);
+              if (latest.current.autoPlay) perf.clipPlaying();
               markPlayed(explicitIntent.current || !latest.current.autoPlay);
             } else {
               reportPlaying(false);
@@ -403,6 +413,27 @@ export function InlineMedia({
     else requestPlay(true);
   }
 
+  // #182: the card footer's quiet controls read and drive this player.
+  const controls = useRef({ toggleSound, toggleCaptions: () => {}, toggleNative: () => {} });
+  controls.current = {
+    toggleSound,
+    toggleCaptions: () => onCaptionsChange?.(!captions),
+    toggleNative: () => { explicitIntent.current = true; setNativeControls((v) => !v); },
+  };
+  useEffect(() => {
+    if (!bus) return;
+    bus.bind({
+      toggleSound: () => controls.current.toggleSound(),
+      toggleCaptions: () => controls.current.toggleCaptions(),
+      toggleNative: () => controls.current.toggleNative(),
+    });
+    return () => bus.bind(null);
+  }, [bus]);
+  useEffect(() => {
+    bus?.set({ itemId: item.id, muted: soundMuted, captions: !!captions, playing, native: nativeControls });
+  }, [bus, item.id, soundMuted, captions, playing, nativeControls]);
+  useEffect(() => { bus?.set({ at: 0, total: item.duration_sec || 0 }); }, [bus, item.id, item.duration_sec]);
+
   // Gesture overlay: distinguish a tap (play/pause) from a swipe (navigate). A raw
   // iframe can't do this - it eats the events - which is the whole reason for the
   // IFrame API. In notes mode we only tap-toggle and let vertical drags scroll the
@@ -444,6 +475,9 @@ export function InlineMedia({
       if (Math.abs(dx) < TAP_SLOP && Math.abs(dy) < TAP_SLOP) togglePlay();
       return;
     }
+    // #182: on touch, vertical movement is the reel's native scroll (pan-y), which
+    // cancels this pointer. A vertical release that still arrives is not a tap.
+    if (e.pointerType === "touch" && Math.abs(dy) > TAP_SLOP && Math.abs(dy) >= Math.abs(dx)) return;
     // A navigation gesture must be a genuine flick: past the distance threshold AND
     // quick. Everything else - a tap, a sloppy tap, or a slow freeze-drift - is
     // play/pause, never an accidental jump to the next item.
@@ -453,6 +487,7 @@ export function InlineMedia({
       togglePlay();
       return;
     }
+    perf.noteTrigger("flick");
     if (Math.abs(dy) >= Math.abs(dx)) {
       if (dy <= -SWIPE) onNext?.(); // flick up -> next
       else onPrev?.(); // flick down -> previous
@@ -480,19 +515,23 @@ export function InlineMedia({
                 {/* Our own poster covers YouTube's unstarted branding (title / channel /
                     "Watch on YouTube" / big button) so the pre-play state is clean. The
                     player is loaded underneath, so a tap plays straight into it. */}
-                {!started && (
-                  <div
-                    className="im-poster"
-                    style={item.thumbnail_url ? { backgroundImage: `url(${item.thumbnail_url})` } : undefined}
-                  >
+                {/* #182: stays mounted and fades out on the first frame, so a clip
+                    change never flashes YouTube's loading state. */}
+                <div
+                  className="im-poster"
+                  data-hidden={started}
+                  style={item.thumbnail_url ? { backgroundImage: `url(${item.thumbnail_url})` } : undefined}
+                >
+                  {(!autoPlay || blocked) && (
                     <span className="im-play" aria-hidden>
                       <Play size={30} strokeWidth={1.5} fill="currentColor" />
                     </span>
-                  </div>
-                )}
+                  )}
+                </div>
+                {compact && <span className="im-progress" aria-hidden><span ref={progressRef} /></span>}
                 <div
                   className="im-gesture"
-                  style={notes ? { touchAction: "pan-y" } : { touchAction: "none" }}
+                  style={{ touchAction: "pan-y" }}
                   onPointerDown={onDown}
                   onPointerUp={onUp}
                   onPointerCancel={() => { g.current = null; }}
@@ -529,7 +568,7 @@ export function InlineMedia({
           </div>
         )}
 
-        {video && ytId && <div className="im-controls" role="group" aria-label="Playback controls">
+        {video && ytId && !compact && <div className="im-controls" role="group" aria-label="Playback controls">
           {autoPlay && <button type="button" className="im-control im-sound" onClick={toggleSound}
             aria-label={soundMuted ? "Turn sound on" : "Mute video"} aria-pressed={!soundMuted}>
             {soundMuted ? <VolumeX size={18} aria-hidden /> : <Volume2 size={18} aria-hidden />}
@@ -585,8 +624,3 @@ export function InlineMedia({
   );
 }
 
-function formatClock(seconds: number) {
-  const s = Math.max(0, Math.round(seconds));
-  const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), r = s % 60;
-  return h ? `${h}:${String(m).padStart(2, "0")}:${String(r).padStart(2, "0")}` : `${m}:${String(r).padStart(2, "0")}`;
-}

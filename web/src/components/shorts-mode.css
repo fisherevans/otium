@@ -17,9 +17,33 @@
 .im-time-left { color: var(--ink); }
 @media (max-width: 400px) { .im-player-settings span { display: none; } .im-control { padding: 0 8px; } }
 .im-control:focus-visible { outline: 2px solid var(--ink); outline-offset: -2px; }
-.session-shorts-player { position: fixed; z-index: 3; }
+/* #182: lives inside the reel's scroll content (.stage is the containing block). */
+.stage:has(> .session-shorts-player) { position: relative; }
+.session-shorts-player { position: absolute; z-index: 3; }
 .session-shorts-player .inline-media, .session-shorts-player .im-stage { width: 100%; align-items: center; }
 .session-shorts-player > .inline-media.im-compact .im-stage .im-frame { height: var(--shorts-frame-height); width: min(100%, calc(var(--shorts-frame-height) * var(--ar))); max-height: none; max-width: 100%; margin: 0; border: 0; border-radius: 18px; }
-.session-shorts-player .im-poster { background-size: contain; background-repeat: no-repeat; }
+/* YouTube's hqdefault thumbnail is 4:3 with the clip pillarboxed inside it;
+   cover against the clip-shaped frame crops exactly to the picture, so the
+   poster-to-video change is close to invisible. */
+.session-shorts-player .im-poster { background-size: cover; background-repeat: no-repeat; background-color: #000; }
 
-.shorts-player-slot .im-frame { background: transparent; }
+.shorts-player-slot .im-frame { background: #000 center / cover no-repeat; }
+/* Shorts read as one strip: the incoming clip is not dimmed like a card. */
+.snap.away.shorts-card { opacity: 1; }
+
+/* #182: the poster fades out on the first frame; it reappears instantly on a
+   clip change so YouTube's loading state never shows. */
+.im-poster { transition: none; }
+.im-poster[data-hidden=true] { opacity: 0; pointer-events: none; transition: opacity .18s ease-out; }
+
+/* Progress hairline along the bottom edge of a Short; not interactive. */
+.im-progress { position: absolute; z-index: 6; left: 14px; right: 14px; bottom: 6px; height: 2px; border-radius: 2px; background: rgb(255 255 255 / .22); overflow: hidden; pointer-events: none; }
+.im-progress > span { display: block; height: 100%; background: rgb(255 255 255 / .85); transform-origin: left center; transform: scaleX(0); transition: transform .25s linear; }
+
+/* Quiet sound and CC icons in the Shorts footer: no labels, no boxes. Off is
+   the struck-through glyph in the muted ink; on is the full ink. */
+.shorts-quiet { display: inline-flex; align-items: center; flex: 0 0 auto; }
+.shorts-quiet-btn { display: inline-grid; place-items: center; width: 40px; height: 44px; border: 0; padding: 0; background: transparent; color: var(--ink-mute); border-radius: 8px; }
+.shorts-quiet-btn[data-on=true] { color: var(--ink); }
+.shorts-quiet-btn:focus-visible { outline: 2px solid var(--ink); outline-offset: -2px; }
+.shorts-age { font-variant-numeric: tabular-nums; }

@@ -1,4 +1,6 @@
 import { forwardRef, type PointerEvent as ReactPointerEvent } from "react";
+import { ShortsMeta, ShortsQuietControls } from "./ShortsQuietControls";
+import type { ShortsBus } from "@/lib/shortsBus";
 import { Bookmark, BookOpen, Play, ExternalLink, MoreHorizontal, ChevronRight } from "lucide-react";
 import type { Item, ItemRender, Selected } from "@/api/client";
 import { TopicPill, CardSource, SourceAvatar, Byline, Blurb, Media } from "@/components/CardParts";
@@ -71,6 +73,10 @@ export interface SessionCardProps {
   /** Video-first presentation applies only to short videos. */
   shortsMode?: boolean;
   persistentShorts?: boolean;
+  // #182: this card's slot currently hosts the shared player; its footer
+  // carries the live sound/CC/time controls from the bus.
+  hostsPlayer?: boolean;
+  shortsBus?: ShortsBus;
   shortsPosition?: React.RefObject<MediaPosition | null>;
   playbackActive?: boolean;
   muted?: boolean;
@@ -292,6 +298,8 @@ export const SessionCard = forwardRef<HTMLDivElement, SessionCardProps>(function
     onFirstPlay,
     shortsMode = false,
     persistentShorts = false,
+    hostsPlayer = false,
+    shortsBus,
     shortsPosition,
     playbackActive = true,
     muted = true,
@@ -315,7 +323,10 @@ export const SessionCard = forwardRef<HTMLDivElement, SessionCardProps>(function
   const primary = primaryFor(it.item, render);
   // Media on the focused card plays inline (no modal); off-screen cards stay
   // lightweight thumbnails. A vertical frame gets the compact chrome layout.
-  const activeMedia = focused && isMedia(it.item);
+  // #182: every Shorts card keeps the media layout whether or not it is focused,
+  // so a card never reflows as the reel's focus passes over it mid-swipe.
+  const stableShort = shortsMode && persistentShorts && it.item.media_type === "short";
+  const activeMedia = (focused || stableShort) && isMedia(it.item);
   const vert = activeMedia && isVertical(it.item);
   const audioCard = activeMedia && it.item.media_type === "audio";
   const compactShort = shortsMode && it.item.media_type === "short";
@@ -325,6 +336,7 @@ export const SessionCard = forwardRef<HTMLDivElement, SessionCardProps>(function
     <div
       className={`snap afterglow-card ${focused ? "" : "away"} ${activeMedia ? "media-card" : ""} ${vert ? "vertical" : ""} ${audioCard ? "audio-card" : ""} ${compactShort ? "shorts-card" : ""}`}
       data-idx={index}
+      data-player={hostsPlayer || undefined}
       ref={ref}
       onPointerDownCapture={(e) => { if (!e.isPrimary || (window.visualViewport?.scale ?? 1) > 1) onPointerCancel?.(e); }}
       onPointerDown={onPointerDown}
@@ -383,11 +395,12 @@ export const SessionCard = forwardRef<HTMLDivElement, SessionCardProps>(function
       )}
       </>}
 
-      {compactShort && focused && persistentShorts ? (
+      {stableShort ? (
+        // The shared player floats over this slot while the card hosts it; the
+        // poster underneath is what you see while scrolling in or out.
         <div className="card-media shorts-player-slot" aria-hidden="true">
           <div className="inline-media im-compact"><div className="im-stage">
-            <div className="im-frame" style={{ "--ar": String(videoAspect(it.item)) } as React.CSSProperties} />
-            <div className="im-controls" />
+            <div className="im-frame" style={{ "--ar": String(videoAspect(it.item)), ...(it.item.thumbnail_url ? { backgroundImage: `url(${it.item.thumbnail_url})` } : {}) } as React.CSSProperties} />
           </div></div>
         </div>
       ) : activeMedia ? (
@@ -438,9 +451,10 @@ export const SessionCard = forwardRef<HTMLDivElement, SessionCardProps>(function
             <SourceAvatar url={it.source_icon_url} title={it.source_title} color={it.topic?.color} />
             <span className="shorts-credit-text">
               <span className="shorts-creator-name">{it.source_title}</span>
-              {age && <span className="shorts-age">{age}</span>}
+              <ShortsMeta bus={hostsPlayer ? shortsBus : undefined} age={age} duration={it.item.duration_sec} />
             </span>
           </button>
+          {hostsPlayer && shortsBus && <ShortsQuietControls bus={shortsBus} />}
           <button className="shorts-details" type="button" onClick={onDetails ?? onMenu} disabled={!focused}>
             <MoreHorizontal size={18} aria-hidden />
             Details

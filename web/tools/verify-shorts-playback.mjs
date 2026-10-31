@@ -166,6 +166,7 @@ for (const [name, engine] of Object.entries({ chromium, webkit }).filter(([name]
                     state.ended = patch.status === 'ended' || state.ended;
                     return json({ ok: true });
                 }
+                if (method === 'POST' && path === '/client-metrics') return route.fulfill({ status: 204, body: '' });
                 const event = path.match(/^\/items\/(\d+)\/(event|read|dwell)$/);
                 if (method === 'POST' && event) {
                     state[{ event: 'events', read: 'reads', dwell: 'dwells' }[event[2]]].push({ itemId: Number(event[1]), ...request.postDataJSON() });
@@ -185,9 +186,12 @@ for (const [name, engine] of Object.entries({ chromium, webkit }).filter(([name]
             const advance = async (index, loaded = true) => {
                 await page.getByRole('button', { name: 'Next', exact: true }).click();
                 await page.waitForFunction(i => document.querySelector('.afterglow-card:not(.away)')?.dataset.idx === String(i), index);
+                // #182: the shared player moves to a Shorts card once the scroll settles.
+                await page.waitForFunction(i => !document.querySelector('.session-shorts-player[data-active="true"]') || document.querySelector('[data-player]')?.dataset.idx === String(i), index);
                 if (loaded) await page.waitForFunction(videoId => window.__yt.current()?.videoId === videoId, new URL(items[index].item.url).pathname.split('/').at(-1));
             };
             const menu = () => page.getByRole('button', { name: 'Article and session actions', exact: true }).click();
+            const native = async name => { await menu(); await page.locator('dialog[open]').getByRole('button', { name, exact: true }).click(); await page.waitForFunction(() => !document.querySelector('dialog[open]')); };
             const close = async () => { await page.keyboard.press('Escape'); await page.waitForFunction(() => !document.querySelector('dialog[open]')); };
             const setMode = async enabled => {
                 await menu();
@@ -201,7 +205,7 @@ for (const [name, engine] of Object.entries({ chromium, webkit }).filter(([name]
                 await page.locator('.afterglow-card:not(.away)').waitFor();
                 await page.waitForFunction(() => window.__yt.players.some(p => !p.destroyed));
                 await page.waitForTimeout(350);
-                await run({ page, state, waitPlaying, advance, menu, close, setMode, count });
+                await run({ page, state, waitPlaying, advance, menu, close, setMode, count, native });
                 assert.ok(await page.evaluate(() => window.__yt.players.filter(p => !p.destroyed && p.state === 1).length <= 1), 'no hidden standby playback');
                 assert.deepEqual(errors, [], `${name}: ${label}: no page errors`);
                 assert.deepEqual(unexpected, [], `${name}: ${label}: only mocked APIs`);
@@ -212,7 +216,7 @@ for (const [name, engine] of Object.entries({ chromium, webkit }).filter(([name]
             } finally { await context.close(); }
         }
 
-        await scenario('autoplay, explicit intent, pause timing, visibility, dialogs and controls', async ({ page, state, waitPlaying, menu, close, setMode, count }) => {
+        await scenario('autoplay, explicit intent, pause timing, visibility, dialogs and controls', async ({ page, state, waitPlaying, menu, close, setMode, count, native }) => {
             await waitPlaying(true);
             assert.equal(count('open'), 0, 'autoplay is not an explicit open');
             assert.equal(await page.evaluate(() => window.__yt.current().muted), true, 'default autoplay is muted');
@@ -250,12 +254,12 @@ for (const [name, engine] of Object.entries({ chromium, webkit }).filter(([name]
             await page.evaluate(() => document.getElementById('external-dialog').remove());
             await waitPlaying(true);
             await page.evaluate(() => window.__yt.current().seekTo(17, true));
-            await page.getByRole('button', { name: 'Use YouTube controls', exact: true }).click();
+            await native('Use YouTube controls');
             await waitPlaying(true);
             assert.equal(await page.locator('.im-gesture').count(), 0, 'native controls own their gestures');
             assert.ok(await page.evaluate(() => window.__yt.current().getCurrentTime() >= 17), 'rebuild retains position');
             assert.equal(await page.evaluate(() => window.__yt.players.filter(p => !p.destroyed).length), 1, 'one live player');
-            await page.getByRole('button', { name: 'Use simple controls', exact: true }).click();
+            await native('Use simple controls');
             await waitPlaying(true);
             await page.evaluate(() => window.__yt.current().emit(0));
             await menu(); await close(); await waitPlaying(false);
@@ -265,7 +269,7 @@ for (const [name, engine] of Object.entries({ chromium, webkit }).filter(([name]
             assert.equal(await page.locator('.shorts-card').count(), 0, 'mode choice survives reload');
         });
 
-        await scenario('passive watches never manufacture opens, skips or fast-scroll nudges', async ({ page, state, waitPlaying, advance, menu, count }) => {
+        await scenario('passive watches never manufacture opens, skips or fast-scroll nudges', async ({ page, state, waitPlaying, advance, menu, count, native }) => {
             await waitPlaying(true);
             await page.evaluate(() => { window.__originalFrame = window.__yt.current().iframe; });
             for (let index = 1; index <= 8; index++) {
@@ -288,7 +292,7 @@ for (const [name, engine] of Object.entries({ chromium, webkit }).filter(([name]
             assert.match(stats, /Skips\s+0/);
         });
 
-        await scenario('blocked autoplay, manual recovery and unavailable video', async ({ page, waitPlaying, advance, count }) => {
+        await scenario('blocked autoplay, manual recovery and unavailable video', async ({ page, waitPlaying, advance, count, native }) => {
             await page.getByText('Tap the video to play', { exact: true }).waitFor();
             await waitPlaying(false);
             assert.equal(count('open'), 0);
@@ -303,7 +307,7 @@ for (const [name, engine] of Object.entries({ chromium, webkit }).filter(([name]
             assert.equal(count('open'), 1, 'error feedback does not open the original');
         }, { blocked: true });
 
-        await scenario('review player can play above its own dialog and pauses for a nested picker', async ({ page, waitPlaying, menu, count }) => {
+        await scenario('review player can play above its own dialog and pauses for a nested picker', async ({ page, waitPlaying, menu, count, native }) => {
             await waitPlaying(true);
             await menu(); await page.getByRole('button', { name: 'End session', exact: true }).click();
             await page.getByRole('heading', { name: 'Session complete', exact: true }).waitFor();
@@ -327,7 +331,7 @@ for (const [name, engine] of Object.entries({ chromium, webkit }).filter(([name]
             assert.equal(count('open'), 0, 'review playback does not emit session engagement');
         });
 
-        await scenario('late player callbacks cannot revive old or hidden cards', async ({ page, waitPlaying, advance, count }) => {
+        await scenario('late player callbacks cannot revive old or hidden cards', async ({ page, waitPlaying, advance, count, native }) => {
             assert.equal(await page.evaluate(() => window.__yt.log.filter(e => e.action === 'play').length), 0);
             await advance(1, false);
             await page.evaluate(() => { window.__yt.visibility(true); window.__yt.current().ready(); });
@@ -345,7 +349,7 @@ for (const [name, engine] of Object.entries({ chromium, webkit }).filter(([name]
             assert.deepEqual(await page.evaluate(() => JSON.parse(localStorage.getItem('otium:session:1')).played), [102], 'stale callbacks do not count old video playback');
         }, { held: true });
 
-        await scenario('only Shorts autoplay and mode-off keeps manual playback', async ({ page, waitPlaying, advance, setMode, count }) => {
+        await scenario('only Shorts autoplay and mode-off keeps manual playback', async ({ page, waitPlaying, advance, setMode, count, native }) => {
             await waitPlaying(false);
             assert.equal(await page.locator('.afterglow-card:not(.away).shorts-card').count(), 0, 'long video keeps full card');
             await advance(1); await waitPlaying(true);
@@ -375,7 +379,7 @@ for (const [name, engine] of Object.entries({ chromium, webkit }).filter(([name]
             assert.equal(count('skip'), 2, 'both untouched long videos remain ordinary skips');
         }, { items: [make(1, 'long'), make(2), make(3, 'long'), make(4)] });
 
-        await scenario('autoplay provenance survives reload and turning mode off', async ({ page, waitPlaying, setMode, advance, count }) => {
+        await scenario('autoplay provenance survives reload and turning mode off', async ({ page, waitPlaying, setMode, advance, count, native }) => {
             await waitPlaying(true);
             await setMode(false); await waitPlaying(false);
             await page.evaluate(() => window.dispatchEvent(new Event('pagehide')));
@@ -386,26 +390,25 @@ for (const [name, engine] of Object.entries({ chromium, webkit }).filter(([name]
             assert.equal(count('skip'), 0, 'reloaded passive watch is not a rejection');
         });
 
-        await scenario('toolbar stays outside video and sound/captions survive navigation and reload', async ({ page, state, waitPlaying, advance, count }) => {
+        await scenario('toolbar stays outside video and sound/captions survive navigation and reload', async ({ page, state, waitPlaying, advance, count, native }) => {
             await waitPlaying(true);
             assert.equal(await page.getByRole('button', { name: 'Captions', exact: true }).getAttribute('aria-pressed'), 'true');
             assert.equal(await page.evaluate(() => window.__yt.current().captionModules.has('captions')), true, 'captions requested by default');
             for (const width of [320, 390]) {
                 await page.setViewportSize({ width, height: 664 });
                 await page.waitForTimeout(100);
-                const geometry = await page.locator('.session-shorts-player[data-active="true"]').evaluate(root => {
-                    const frame = root.querySelector('.im-frame');
-                    const box = frame.getBoundingClientRect();
-                    return [...root.querySelectorAll('.im-controls button')].map(button => {
+                const geometry = await page.evaluate(() => {
+                    const frame = document.querySelector('.session-shorts-player[data-active="true"] .im-frame').getBoundingClientRect();
+                    return [...document.querySelectorAll('.afterglow-card:not(.away) .shorts-quiet button')].map(button => {
                         const rect = button.getBoundingClientRect();
-                        return { name: button.getAttribute('aria-label'), insideFrame: frame.contains(button), above: rect.bottom <= box.top + 1, below: rect.top >= box.bottom - 1, left: rect.left, right: rect.right };
+                        return { name: button.getAttribute('aria-label'), below: rect.top >= frame.bottom - 1, left: rect.left, right: rect.right, height: rect.height };
                     });
                 });
-                assert.equal(geometry.length, 3);
+                assert.equal(geometry.length, 2, 'sound and captions only; player controls live in Actions');
                 for (const control of geometry) {
-                    assert.equal(control.insideFrame, false, `${width}px ${control.name} is outside the frame DOM`);
-                    assert.ok(control.above || control.below, `${width}px ${control.name} does not cover video pixels`);
+                    assert.ok(control.below, `${width}px ${control.name} does not cover video pixels`);
                     assert.ok(control.left >= -1 && control.right <= width + 1, `${width}px ${control.name} fits the viewport`);
+                    assert.ok(control.height >= 44, `${width}px ${control.name} keeps a 44px target`);
                 }
             }
             await page.getByRole('button', { name: 'Turn sound on', exact: true }).click();
@@ -423,11 +426,11 @@ for (const [name, engine] of Object.entries({ chromium, webkit }).filter(([name]
             assert.equal(await page.evaluate(() => window.__yt.current().muted), false, 'same-session reload keeps sound');
             assert.equal(await page.getByRole('button', { name: 'Captions', exact: true }).getAttribute('aria-pressed'), 'false');
             assert.equal(await page.evaluate(() => window.__yt.current().captionModules.has('captions')), false);
-            await page.getByRole('button', { name: 'Use YouTube controls', exact: true }).click();
+            await native('Use YouTube controls');
             await waitPlaying(true);
             assert.equal(await page.evaluate(() => window.__yt.current().muted), false, 'native control rebuild keeps sound');
             assert.equal(await page.evaluate(() => window.__yt.current().captionModules.has('captions')), false, 'native control rebuild keeps captions');
-            await page.getByRole('button', { name: 'Use simple controls', exact: true }).click();
+            await native('Use simple controls');
             await waitPlaying(true);
             await page.getByRole('button', { name: 'Captions', exact: true }).click();
             await page.waitForFunction(() => window.__yt.current().captionModules.has('captions'));
@@ -450,7 +453,7 @@ for (const [name, engine] of Object.entries({ chromium, webkit }).filter(([name]
             assert.equal(await page.getByRole('button', { name: 'Captions', exact: true }).getAttribute('aria-pressed'), 'true', 'new session starts with captions');
         });
 
-        await scenario('blocked audible autoplay preserves the desired sound choice', async ({ page, waitPlaying, advance, count }) => {
+        await scenario('blocked audible autoplay preserves the desired sound choice', async ({ page, waitPlaying, advance, count, native }) => {
             await waitPlaying(true);
             await page.getByRole('button', { name: 'Turn sound on', exact: true }).click();
             await page.waitForFunction(() => window.__yt.current().muted === false);
@@ -468,7 +471,7 @@ for (const [name, engine] of Object.entries({ chromium, webkit }).filter(([name]
             assert.equal(await page.evaluate(() => window.__yt.current().muted), true, 'deliberate mute stays in effect');
         });
 
-        await scenario('delayed old-video events cannot count a newly loaded clip', async ({ page, waitPlaying, advance, count }) => {
+        await scenario('delayed old-video events cannot count a newly loaded clip', async ({ page, waitPlaying, advance, count, native }) => {
             await waitPlaying(true);
             await page.evaluate(() => { window.__yt.holdLoads = true; });
             await advance(1); await waitPlaying(false);
@@ -481,15 +484,15 @@ for (const [name, engine] of Object.entries({ chromium, webkit }).filter(([name]
             await page.evaluate(() => window.dispatchEvent(new Event('pagehide')));
             assert.deepEqual(await page.evaluate(() => JSON.parse(localStorage.getItem('otium:session:1')).played), [101, 102], 'only a matching current-video PLAYING event counts');
         });
-        await scenario('actions and details are separate sheets; clip file shares; time readout', async ({ page, waitPlaying, menu, close, count, state }) => {
+        await scenario('actions and details are separate sheets; clip file shares; time readout', async ({ page, waitPlaying, menu, close, count, state, native }) => {
             await waitPlaying(true);
-            await page.locator('.session-shorts-player[data-active="true"] .im-time').waitFor();
-            assert.match(await page.locator('.session-shorts-player[data-active="true"] .im-time').innerText(), /0:\d\d left\s+of 0:45/);
+            await page.waitForFunction(() => /· 0:\d\d left$/.test(document.querySelector('.afterglow-card:not(.away) .shorts-age')?.textContent ?? ''));
+            assert.equal(await page.locator('.session-shorts-player .im-progress').count(), 1, 'progress hairline');
             const shot = async label => { if (process.env.SHOTS) { await page.waitForTimeout(400); await page.screenshot({ path: `${process.env.SHOTS}/${name}-${page.viewportSize().width}-${label}.png` }); } };
             for (const width of process.env.SHOTS ? [320, 390] : []) {
                 await page.setViewportSize({ width, height: 700 }); await shot('card');
-                const row = await page.locator('.session-shorts-player[data-active="true"] .im-controls').evaluate(el => ({ fits: el.scrollWidth <= el.clientWidth + 1, right: el.getBoundingClientRect().right }));
-                assert.ok(row.fits && row.right <= width + 1, `${width}px controls row fits`);
+                const row = await page.locator('.afterglow-card:not(.away) .shorts-card-footer').evaluate(el => ({ fits: el.scrollWidth <= el.clientWidth + 1, right: el.getBoundingClientRect().right }));
+                assert.ok(row.fits && row.right <= width + 1, `${width}px footer fits`);
             }
             await menu();
             await shot('actions');

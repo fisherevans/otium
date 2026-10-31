@@ -26,6 +26,8 @@ export function ItemActions({
   onEnd,
   shortsMode,
   onShortsModeChange,
+  nativeControls,
+  onNativeControls,
 }: {
   selected: Selected | null;
   open: boolean;
@@ -37,6 +39,10 @@ export function ItemActions({
   onEnd?: () => void;
   shortsMode?: boolean;
   onShortsModeChange?: (enabled: boolean) => void;
+  // #182: YouTube's own controls (quality, caption tracks, scrubbing), moved
+  // here from the row under the video.
+  nativeControls?: boolean;
+  onNativeControls?: () => void;
 }) {
   const nav = useNavigate();
   const item = selected?.item ?? null;
@@ -125,9 +131,16 @@ export function ItemActions({
         )}
       </div>
 
-      {(onShortsModeChange || onEnd) && (
+      {(onShortsModeChange || onEnd || onNativeControls) && (
         <div className="sheet-rows">
           {onShortsModeChange && <ShortsModeToggle enabled={shortsMode ?? false} onChange={onShortsModeChange} />}
+          {onNativeControls && (
+            <button className="sheet-row" onClick={onNativeControls} aria-pressed={!!nativeControls}
+              aria-label={nativeControls ? "Use simple controls" : "Use YouTube controls"}>
+              <span>{nativeControls ? "Use simple controls" : "Use YouTube's player controls"}</span>
+              <ChevronRight size={18} className="sheet-chev inline-icon" aria-hidden />
+            </button>
+          )}
           {onEnd && <button className="sheet-row" onClick={onEnd}><span>End session</span><ChevronRight size={18} className="sheet-chev inline-icon" aria-hidden /></button>}
         </div>
       )}

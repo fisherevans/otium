@@ -20,6 +20,8 @@ import type { MediaPosition } from "@/components/InlineMedia";
 import { SessionShortsPlayer } from "@/components/SessionShortsPlayer";
 import { useSessionPlayback } from "@/lib/sessionPlayback";
 import { useShortsMode } from "@/lib/shortsMode";
+import * as perf from "@/lib/perf";
+import { createShortsBus } from "@/lib/shortsBus";
 import { cardRender, isMedia, isVideo } from "@/lib/render";
 import { usePreferences } from "@/context/PreferencesContext";
 import { SHIPPED_LAYOUT, SHIPPED_VARS, cardVars, solveWhenReady } from "@/lib/cardLayout";
@@ -61,6 +63,21 @@ export default function SessionPage() {
 
   const [items, setItems] = useState<Selected[]>([]);
   const [current, setCurrent] = useState(0);
+  // #182: the card hosting the shared Shorts player. It follows `current` only
+  // once the reel stops scrolling, so YouTube's clip-loading work never lands in
+  // the middle of a swipe; the clip you are leaving keeps playing as it scrolls
+  // away and the incoming card shows its poster.
+  const [playerIdx, setPlayerIdx] = useState(0);
+  const currentRef = useRef(0);
+  currentRef.current = current;
+  const playerCommit = useRef(0);
+  const commitPlayer = useRef(() => {});
+  commitPlayer.current = () => { window.clearTimeout(playerCommit.current); setPlayerIdx(currentRef.current); };
+  const scheduleCommit = useRef((delay: number) => {
+    window.clearTimeout(playerCommit.current);
+    playerCommit.current = window.setTimeout(() => commitPlayer.current(), delay);
+  });
+  const shortsBus = useRef(createShortsBus()).current;
   const [duration, setDuration] = useState(15); // minutes; the single chosen length (#69)
   const [themes, setThemes] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
@@ -516,7 +533,10 @@ export default function SessionPage() {
           if (Number.isNaN(idx)) continue;
           // Leaving a card flushes any inline watch/read time it accrued (#135):
           // media plays in-card with no open/close event to hang the flush on.
-          if (idx !== prevIdx.current) stopRead();
+          if (idx !== prevIdx.current) {
+            stopRead();
+            perf.focusChanged(prevIdx.current, idx, items[idx]?.item.media_type ?? "end");
+          }
           setCurrent(idx);
           // Finalize the item we just moved past.
           if (idx > prevIdx.current) {
@@ -574,9 +594,37 @@ export default function SessionPage() {
       { root: stage, threshold: 0.6 },
     );
     itemEls.current.forEach((el) => el && obs.observe(el));
-    return () => obs.disconnect();
+    // #182: scroll idle closes a transition's settle time. scrollend where
+    // supported; a short debounce elsewhere.
+    let idle = 0;
+    // scrollend hands the player over as soon as the snap finishes. A busy main
+    // thread can space scroll events further apart than a short debounce, which
+    // would start the next clip's load mid-swipe, so the idle fallback is long
+    // where scrollend exists (WebKit skips it for some instant scrolls) and
+    // moderate where it does not.
+    const idleMs = "onscrollend" in window ? 400 : 220;
+    const onScroll = () => {
+      window.clearTimeout(idle);
+      window.clearTimeout(playerCommit.current);
+      idle = window.setTimeout(() => { perf.scrollSettled(); commitPlayer.current(); }, idleMs);
+    };
+    const onScrollEnd = () => { window.clearTimeout(idle); perf.scrollSettled(); commitPlayer.current(); };
+    stage.addEventListener("scroll", onScroll, { passive: true });
+    stage.addEventListener("scrollend", onScrollEnd);
+    return () => {
+      obs.disconnect();
+      window.clearTimeout(idle);
+      stage.removeEventListener("scroll", onScroll);
+      stage.removeEventListener("scrollend", onScrollEnd);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [items, id, checkin, visibleCount, review]);
+
+  useEffect(() => {
+    if (playerIdx !== current) scheduleCommit.current(160);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [current]);
+  useEffect(() => () => window.clearTimeout(playerCommit.current), []);
 
   function scrollTo(idx: number) {
     const el = itemEls.current[idx];
@@ -757,6 +805,7 @@ export default function SessionPage() {
       if (content || menuOpen || detailsOpen || breakdown || saveItem || sourceSel || checkin || review) return;
       const t = e.target as HTMLElement | null;
       if (t?.closest("input,textarea,select,button,a,[contenteditable]")) return;
+      if (e.key.startsWith("Arrow") || e.key === "j" || e.key === "k") perf.noteTrigger("key");
       switch (e.key) {
         case "ArrowDown":
         case "ArrowRight":
@@ -800,7 +849,8 @@ export default function SessionPage() {
     );
   }
 
-  const focusedShort = shortsMode && cur?.item.media_type === "short" && !review ? cur : null;
+  const hosted = items[playerIdx];
+  const focusedShort = shortsMode && hosted?.item.media_type === "short" && playerIdx < visibleCount && !review ? hosted : null;
   if (focusedShort) lastShort.current = focusedShort;
   const short = lastShort.current;
   const playbackActive = !content && !menuOpen && !detailsOpen && !breakdown && !saveItem && !sourceSel && !checkin && !review;
@@ -841,6 +891,8 @@ export default function SessionPage() {
             focused={i === current}
             shortsMode={shortsMode}
             persistentShorts
+            hostsPlayer={!!focusedShort && i === playerIdx}
+            shortsBus={shortsBus}
             shortsPosition={shortsPosition}
             playbackActive={i === current && !content && !menuOpen && !detailsOpen && !breakdown && !saveItem && !sourceSel && !checkin && !review}
             muted={playback.muted}
@@ -891,8 +943,8 @@ export default function SessionPage() {
         </div>
       </div>}
 
-      {short && <SessionShortsPlayer key={`${user?.id}:${id}`} stage={stageRef} index={current}
-        visible={!!focusedShort} item={short.item} nextItem={shownItems[current + 1]?.item}
+      {short && <SessionShortsPlayer key={`${user?.id}:${id}`} stage={stageRef} index={playerIdx}
+        visible={!!focusedShort} item={short.item} nextItem={shownItems[playerIdx + 1]?.item} bus={shortsBus}
         active={playbackActive} muted={playback.muted} onMutedChange={playback.setMuted}
         positionMemory={shortsPosition} captions={playback.captions} onCaptionsChange={playback.setCaptions} ytHistory={ytHistory}
         onOpenOriginal={() => openExternal(short)} onNext={next} onPrev={prev}
@@ -924,7 +976,7 @@ export default function SessionPage() {
         label={review ? "Review session" : elapsed >= durationSec ? "Session time reached" : durationSec - elapsed <= 120 ? "A little time left" : durationSec - elapsed <= 300 ? "A few minutes left" : "Session in progress"}
         onMenu={review ? undefined : () => setMenuOpen(true)} menuLabel="Article and session actions"
         onLabel={review ? () => setRecapOpen(true) : undefined}
-        action={review ? { label: "Done", onClick: goHome, disabled: extending || ending } : { label: "Next", onClick: next, icon: <ArrowDown size={18} aria-hidden /> }} />
+        action={review ? { label: "Done", onClick: goHome, disabled: extending || ending } : { label: "Next", onClick: () => { perf.noteTrigger("button"); next(); }, icon: <ArrowDown size={18} aria-hidden /> }} />
 
       {review && recapOpen && <SessionReview review={review} onClose={() => setRecapOpen(false)} saved={saved} onSave={save}
         onRead={(sel) => { if (isMedia(sel.item)) setReviewMedia(sel); else openContent(sel); }} />}
@@ -937,6 +989,8 @@ export default function SessionPage() {
         open={menuOpen}
         shortsMode={shortsMode}
         onShortsModeChange={setShortsMode}
+        nativeControls={shortsBus.get().native}
+        onNativeControls={focusedShort && focusedShort === cur ? () => { setMenuOpen(false); shortsBus.controls.toggleNative(); } : undefined}
         onClose={() => setMenuOpen(false)}
         onRead={() => {
           setMenuOpen(false);

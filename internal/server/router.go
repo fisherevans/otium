@@ -98,8 +98,9 @@ func NewRouter(h *handler.Handler, authMiddleware func(http.Handler) http.Handle
 			r.Post("/items/{id}/event", h.ItemEvent)
 			// Dwell (#68): append-only engagement measurement, never into the ranker.
 			r.Post("/items/{id}/dwell", h.ItemDwell)
-			r.Post("/items/{id}/read", h.ItemRead)         // #135: active read/watch time
-			r.Get("/items/{id}/video", h.ItemVideo)        // #180: a Short as an MP4 to save or share
+			r.Post("/items/{id}/read", h.ItemRead) // #135: active read/watch time
+			r.Get("/items/{id}/video", h.ItemVideo)
+			r.Post("/client-metrics", h.ClientMetrics)     // #182: device timing records, logged only        // #180: a Short as an MP4 to save or share
 			r.Post("/items/{id}/filter", h.FilterFromItem) // #142: mute a category / add a keyword from the card
 			r.Post("/fetch", h.FetchNow)
 
