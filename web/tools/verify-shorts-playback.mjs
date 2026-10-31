@@ -187,7 +187,9 @@ for (const [name, engine] of Object.entries({ chromium, webkit }).filter(([name]
                 return !!player && (player.state === 1) === expected;
             }, playing);
             const advance = async (index, loaded = true) => {
-                await page.getByRole('button', { name: 'Next', exact: true }).click();
+                // Full screen has no Next (#191): swipe, i.e. scroll the reel a card.
+                if (await page.getByRole('button', { name: 'Next', exact: true }).count()) await page.getByRole('button', { name: 'Next', exact: true }).click();
+                else await page.evaluate(i => { const s = document.querySelector('.stage'); s.scrollTo({ top: i * s.clientHeight, behavior: 'instant' }); }, index);
                 await page.waitForFunction(i => document.querySelector('.afterglow-card:not(.away)')?.dataset.idx === String(i), index);
                 // #182: the shared player moves to a Shorts card once the scroll settles.
                 await page.waitForFunction(i => !document.querySelector('.session-shorts-player[data-active="true"]') || document.querySelector('[data-player]')?.dataset.idx === String(i), index);
@@ -533,7 +535,7 @@ for (const [name, engine] of Object.entries({ chromium, webkit }).filter(([name]
             const view = await page.evaluate(() => {
                 const box = el => { const r = document.querySelector(el)?.getBoundingClientRect(); return r && { top: r.top, bottom: r.bottom, left: r.left, right: r.right, width: r.width, height: r.height }; };
                 return { frame: box('.session-shorts-player[data-active="true"] .im-frame'), video: box('.session-shorts-player[data-active="true"] .im-frame iframe'),
-                    bar: box('.afterglow-card:not(.away) .shorts-card-footer'), next: box('.immersive-next'), progress: box('.session-shorts-player .im-progress'),
+                    bar: box('.afterglow-card:not(.away) .shorts-card-footer'), next: box('.immersive-next') ?? null, progress: box('.session-shorts-player .im-progress'),
                     pill: document.querySelectorAll('.context-instrument').length, header: getComputedStyle(document.querySelector('.topbar')).opacity,
                     root: [document.documentElement.dataset.immersive, document.documentElement.dataset.overVideo], w: innerWidth, h: innerHeight };
             });
@@ -543,7 +545,18 @@ for (const [name, engine] of Object.entries({ chromium, webkit }).filter(([name]
             assert.ok(Math.abs(view.video.top - view.frame.top) <= 1 && view.video.bottom <= view.frame.bottom + 1 && view.video.bottom <= view.h + 1, 'the clip is never cropped top or bottom (captions stay whole)');
             assert.ok(Math.abs(view.video.height - view.video.width * 16 / 9) <= 2 && view.video.width <= view.w + 1, 'fitted at 9:16, letterboxed rather than cropped');
             assert.ok(Math.abs(view.progress.top - view.frame.top) <= 1, 'progress runs along the top edge of the clip');
-            assert.ok(view.next.right >= view.w - 20 && view.next.bottom >= view.h - 70, 'Next floats bottom-right');
+            assert.equal(view.next, null, 'no Next button in full screen: you swipe');
+            assert.equal(await page.locator('.afterglow-card[data-idx="1"] .im-veil-rest').count(), 1, 'the incoming clip arrives already veiled');
+            // The one-time sound hint points at the sound control, and leaves on sound on.
+            await page.locator('.sound-hint').waitFor();
+            assert.equal(await page.locator('.sound-hint').innerText(), 'Press this to turn the sound on.');
+            const hint = await page.locator('.sound-hint').boundingBox(), sound = await page.getByRole('button', { name: 'Turn sound on', exact: true }).boundingBox();
+            assert.ok(hint.y >= sound.y + sound.height - 1, 'in full screen the hint sits below the top bar, under the sound icon');
+            await page.getByRole('button', { name: 'Turn sound on', exact: true }).click();
+            await page.locator('.sound-hint').waitFor({ state: 'detached' });
+            await page.getByRole('button', { name: 'Mute video', exact: true }).click();
+            await page.waitForTimeout(1200);
+            assert.equal(await page.locator('.sound-hint').count(), 0, 'shown once per session');
             assert.deepEqual(view.root, ['on', 'on']);
             await page.locator('.afterglow-card:not(.away) .shorts-details').click();
             await page.locator('dialog[open]').getByRole('button', { name: 'Post details' }).waitFor();
@@ -581,7 +594,7 @@ for (const [name, engine] of Object.entries({ chromium, webkit }).filter(([name]
             await page.getByRole('button', { name: 'Full screen', exact: true }).click();
             await page.waitForFunction(() => document.documentElement.dataset.immersive === 'on');
             await waitPlaying(true);
-            assert.ok(count('open') <= 1, 'full screen and the aura do not count as opens');
+            assert.equal(count('open'), 2, 'only the deliberate sound-on and Play count as opens; full screen, the veil and the hint add none');
         }, { immersive: true });
     } finally { await browser.close(); }
 }

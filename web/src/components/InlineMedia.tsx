@@ -649,10 +649,10 @@ export function InlineMedia({
   );
 }
 
-// #184/#189: the "about to play" signal. A dark veil settles over the poster over
-// the time recent clips have taken to start on this device, so it arrives at its
-// deepest just as the clip is expected; the video then dissolves in through it.
-// A slow start settles into a gentle breathing pulse rather than a spinner.
+// #184/#189/#191: the "about to play" signal. The veil starts at the depth the
+// incoming card arrived with and lifts over the time recent clips have taken to
+// start on this device, so it is nearly clear just as the clip is expected; the
+// video then dissolves in through it. A slow start breathes gently, no spinner.
 export function ReadyVeil({ on }: { on: boolean }) {
   return <span className="im-veil" data-on={on} aria-hidden style={{ "--expect": `${expectedStart()}ms` } as CSSProperties} />;
 }
