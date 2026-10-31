@@ -65,6 +65,10 @@ The Go module is standalone (not in `~/dev/go.work`). Build/test/run it with
 `GOWORK=off` - the Makefile already does. Data lands in `./data/otium.db`
 (gitignored).
 
+### Session starters
+
+`sessionPresets.ts` supplies News, Shorts and Long videos starters through a one-time, account-keyed browser migration. Home resolves the News section before loading them. Preserve edited/custom presets, default selection and history; never recreate a deliberately removed starter on every load. Presets remain browser-local. The start page shows direct starters first, while customization and recent unsaved setups are secondary.
+
 ### Shorts viewing mode
 
 `useShortsMode` remembers the viewing choice per account in this browser, independently of saved feed presets. Only short-video cards use the compact layout and autoplay. `InlineMedia` owns playback lifecycle, blocked-autoplay fallback and sound; `SessionPage` keeps automatic playback separate from explicit opens and times only actual playing intervals. Never count an automatic start as engagement. The shared layout solver and lab include a Shorts-mode branch; measure both modes after layout changes.

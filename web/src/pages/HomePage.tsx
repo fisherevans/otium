@@ -8,7 +8,7 @@ import { useInstrument } from "@/components/ContextInstrument";
 import { BottomSheet } from "@/components/BottomSheet";
 import { HowItWorks } from "@/components/HowItWorks";
 import { SavePresetDialog } from "@/components/SessionPresetPrompt";
-import { contentLabel, contentTypeLabel, contentTypes, defaultSetup, initialPresets, isSavedSetup, loadSessionPresets, recordSessionSetup, repeatSuggestion, setupKey, storeSessionPresets, type SessionPreset, type SessionPresets, type SessionSetup } from "@/lib/sessionPresets";
+import { contentLabel, contentTypeLabel, contentTypes, defaultSetup, initialPresets, isSavedSetup, loadSessionPresets, recordSessionSetup, repeatSuggestion, setupKey, starterPresetIds, storeSessionPresets, type SessionPreset, type SessionPresets, type SessionSetup } from "@/lib/sessionPresets";
 import "@/styles/launcher.css";
 import { useShortsMode } from "@/lib/shortsMode";
 import { ShortsModeToggle } from "@/components/ShortsModeToggle";
@@ -39,13 +39,14 @@ export default function HomePage() {
     const [save, setSave] = useState<{ setup: SessionSetup; preset?: SessionPreset } | null>(null);
     const accountId = user?.id;
     useEffect(() => {
-        if (accountId == null) return;
-        const refresh = () => setData(loadSessionPresets(accountId));
+        if (accountId == null || !loaded) return;
+        const news = sections.find((section) => section.slug.toLowerCase() === "news" || section.name.toLowerCase() === "news");
+        const refresh = () => setData(loadSessionPresets(accountId, news?.slug));
         refresh();
         window.addEventListener("otium-presets-change", refresh);
         window.addEventListener("storage", refresh);
         return () => { window.removeEventListener("otium-presets-change", refresh); window.removeEventListener("storage", refresh); };
-    }, [accountId]);
+    }, [accountId, loaded, sections]);
     useEffect(() => {
         let live = true;
         setLoadError(""); setLoaded(false);
@@ -84,7 +85,8 @@ export default function HomePage() {
     }, [prefs.presets, sessionLink]);
     const scopedTopics = useMemo(() => topics.filter((topic) => !setup.sections.length || setup.sections.includes(topic.section_slug ?? "")), [topics, setup.sections]);
     const defaultPreset = data.presets.find((preset) => preset.id === data.defaultId) ?? data.presets[0];
-    const otherPresets = data.presets.filter((preset) => preset.id !== defaultPreset?.id);
+    const homePresets = [defaultPreset, ...starterPresetIds.map((id) => data.presets.find((preset) => preset.id === id))]
+        .filter((preset, index, all): preset is SessionPreset => !!preset && all.findIndex((entry) => entry?.id === preset.id) === index);
     const recent = data.recent.filter((value) => !isSavedSetup(data, value));
     const suggestion = repeatSuggestion(data);
     function scopeLabel(value: SessionSetup) {
@@ -154,17 +156,19 @@ export default function HomePage() {
         <header className="launcher-head"><h1>{custom ? "Custom session" : "New session"}</h1></header>
         {error && <p className="launcher-error" role="alert">{error}</p>}
         {!custom ? <>
-            <button className="launcher-custom-action" onClick={() => { setError(""); setCustom(true); }}><Plus size={21}/><span>Custom session</span><ChevronRight size={18}/></button>
-            {defaultPreset && <div className="launcher-default">
-                <div className="launcher-kicker">Default<button className="icon-btn" aria-label="Manage presets" onClick={() => setSheet("presets")}><MoreHorizontal size={20}/></button></div>
-                <p className="launcher-meta">{setupLabel(defaultPreset.setup)}</p>
-                <div className="launcher-default-actions"><button className="btn" disabled={busy || !hasSupply(defaultPreset.setup) || invalidSetup(defaultPreset.setup)} onClick={() => begin(defaultPreset.setup)}>{busy ? "Gathering…" : `Start ${defaultPreset.name}`}<ArrowRight size={18}/></button><button className="launcher-customize" aria-label={`Customize ${defaultPreset.name}`} onClick={() => { setError(""); setSetup(defaultPreset.setup); setCustom(true); }}>Customize</button></div>
-            </div>}
-
-            {otherPresets.slice(0, 1).map((preset) => <div className="launcher-preset-entry" key={preset.id}><button className="launcher-row" disabled={busy || !hasSupply(preset.setup) || invalidSetup(preset.setup)} onClick={() => begin(preset.setup)}><span><strong>{preset.name}</strong><small>Preset · {setupLabel(preset.setup)}</small></span><ChevronRight size={18}/></button><button className="launcher-customize" aria-label={`Customize ${preset.name}`} onClick={() => { setError(""); setSetup(preset.setup); setCustom(true); }}>Customize</button></div>)}
-            {!otherPresets.length && <button className="launcher-row" onClick={() => setCustom(true)}><span>Create a preset</span><Plus size={18}/></button>}
-            {recent[0] && <><div className="launcher-recent"><button className="launcher-row" onClick={() => setSheet("recent")}><span><strong>{recent[0].minutes} min {contentLabel(recent[0]).toLowerCase()}</strong><small>Recent · {scopeLabel(recent[0])}</small></span><ChevronRight size={18}/></button><button className="icon-btn" aria-label="Save recent session as preset" onClick={() => setSave({ setup: recent[0] })}><Bookmark size={18}/></button></div></>}
-            {suggestion && <div className="launcher-suggestion"><button onClick={() => setSave({ setup: suggestion })}>Used twice. Save as preset?</button><button className="icon-btn" aria-label="Dismiss preset suggestion" onClick={() => updateData({ ...data, dismissed: [...data.dismissed, setupKey(suggestion)] })}><X size={16}/></button></div>}
+            <div className="launcher-starters">
+                {homePresets.map((preset) => <div className={`launcher-starter ${preset.id === data.defaultId ? "is-default" : ""}`} key={preset.id}>
+                    <button className="launcher-starter-start" aria-label={`Start ${preset.name}`} disabled={busy || !hasSupply(preset.setup) || invalidSetup(preset.setup)} onClick={() => begin(preset.setup)}>
+                        <span><strong>{preset.name}</strong><small>{preset.setup.minutes} min · {scopeLabel(preset.setup)}</small></span><ArrowRight size={21}/>
+                    </button>
+                    <button className="launcher-starter-edit" aria-label={`Customize ${preset.name}`} onClick={() => { setError(""); setSetup(preset.setup); setCustom(true); }}><SlidersHorizontal size={19}/></button>
+                </div>)}
+            </div>
+            <div className="launcher-secondary">
+                <button className="launcher-custom-action" onClick={() => { setError(""); setCustom(true); }}><Plus size={19}/><span>Custom session</span></button>
+                <button className="launcher-manage" aria-label="Manage presets" onClick={() => setSheet("presets")}><MoreHorizontal size={19}/>Presets</button>
+                {recent.length > 0 && <button className="launcher-manage" aria-label="Recent sessions" onClick={() => setSheet("recent")}>Recent</button>}
+            </div>
             {!sources.some((source) => (source.unseen_count ?? 0) > 0) && <p className="launcher-meta">No new items. Add or refresh sources in Library.</p>}
         </> : <>
             <fieldset className="launcher-group"><legend>Duration</legend><div className="launcher-options">{prefs.presets.slice(0, 4).map((minutes) => <button key={minutes} aria-pressed={setup.minutes === minutes} onClick={() => setSetup({ ...setup, minutes })}>{minutes} min</button>)}</div><label className="launcher-duration">Minutes<input type="number" min={5} max={120} value={setup.minutes} onChange={(event) => setSetup({ ...setup, minutes: Math.round(Math.max(5, Math.min(120, Number(event.target.value) || 5))) })}/></label></fieldset>
@@ -181,7 +185,7 @@ export default function HomePage() {
                 {sections.map((section) => <label className="launcher-check" key={section.slug}><input type="checkbox" checked={setup.sections.includes(section.slug)} onChange={() => setSetup({ ...setup, sections: setup.sections.includes(section.slug) ? setup.sections.filter((slug) => slug !== section.slug) : [...setup.sections, section.slug], excluded: [] })}/>{section.name}</label>)}
                 <h3>Topics</h3>{scopedTopics.map((topic) => <label className="launcher-check" key={topic.slug}><input type="checkbox" checked={!setup.excluded.includes(topic.slug)} onChange={() => setSetup({ ...setup, excluded: setup.excluded.includes(topic.slug) ? setup.excluded.filter((slug) => slug !== topic.slug) : [...setup.excluded, topic.slug] })}/>{topic.name}</label>)}
                 <button className="btn" onClick={() => setSheet(null)}>Done</button>
-            </> : sheet === "presets" ? <><p className="launcher-meta">Saved on this device for your account.</p>{data.presets.map((preset) => <div className="launcher-preset" key={preset.id}><button className="launcher-row" disabled={busy || !hasSupply(preset.setup) || invalidSetup(preset.setup)} onClick={() => begin(preset.setup)}><span><strong>{preset.name}{preset.id === data.defaultId ? " · Default" : ""}</strong><small>{setupLabel(preset.setup)}</small></span><ArrowRight size={18}/></button><div className="launcher-preset-actions"><button onClick={() => { setSheet(null); setSetup(preset.setup); setCustom(true); }}>Customize</button><button onClick={() => setSave({ setup: preset.setup, preset })}>Rename</button>{preset.id !== data.defaultId && <button onClick={() => updateData({ ...data, defaultId: preset.id })}>Make default</button>}<button onClick={() => updateData({ ...data, presets: data.presets.filter((p) => p.id !== preset.id), defaultId: data.defaultId === preset.id ? data.presets.find((p) => p.id !== preset.id)?.id ?? "" : data.defaultId })}>Remove</button></div></div>)}<button className="btn" onClick={() => { setSheet(null); setCustom(true); }}>Custom session</button></> : <>{recent.length ? recent.map((value) => <div className="launcher-recent" key={setupKey(value)}><button className="launcher-row" onClick={() => { setSheet(null); setSetup(value); setCustom(true); }}><span><strong>{value.minutes} min {contentLabel(value).toLowerCase()}</strong><small>{setupLabel(value)}</small></span><ChevronRight size={18}/></button><button className="icon-btn" aria-label={`Save ${value.minutes} minute session as preset`} onClick={() => setSave({ setup: value })}><Bookmark size={18}/></button></div>) : <p>No unsaved sessions.</p>}</>}
+            </> : sheet === "presets" ? <><p className="launcher-meta">Saved on this device for your account.</p>{data.presets.map((preset) => <div className="launcher-preset" key={preset.id}><button className="launcher-row" disabled={busy || !hasSupply(preset.setup) || invalidSetup(preset.setup)} onClick={() => begin(preset.setup)}><span><strong>{preset.name}{preset.id === data.defaultId ? " · Default" : ""}</strong><small>{setupLabel(preset.setup)}</small></span><ArrowRight size={18}/></button><div className="launcher-preset-actions"><button onClick={() => { setSheet(null); setSetup(preset.setup); setCustom(true); }}>Customize</button><button onClick={() => setSave({ setup: preset.setup, preset })}>Rename</button>{preset.id !== data.defaultId && <button onClick={() => updateData({ ...data, defaultId: preset.id })}>Make default</button>}<button onClick={() => updateData({ ...data, presets: data.presets.filter((p) => p.id !== preset.id), defaultId: data.defaultId === preset.id ? data.presets.find((p) => p.id !== preset.id)?.id ?? "" : data.defaultId })}>Remove</button></div></div>)}<button className="btn" onClick={() => { setSheet(null); setCustom(true); }}>Custom session</button></> : <>{suggestion && <div className="launcher-suggestion"><button onClick={() => setSave({ setup: suggestion })}>Used twice. Save as preset?</button><button className="icon-btn" aria-label="Dismiss preset suggestion" onClick={() => updateData({ ...data, dismissed: [...data.dismissed, setupKey(suggestion)] })}><X size={16}/></button></div>}{recent.length ? recent.map((value) => <div className="launcher-recent" key={setupKey(value)}><button className="launcher-row" onClick={() => { setSheet(null); setSetup(value); setCustom(true); }}><span><strong>{value.minutes} min {contentLabel(value).toLowerCase()}</strong><small>{setupLabel(value)}</small></span><ChevronRight size={18}/></button><button className="icon-btn" aria-label={`Save ${value.minutes} minute session as preset`} onClick={() => setSave({ setup: value })}><Bookmark size={18}/></button></div>) : <p>No unsaved sessions.</p>}</>}
         </div></BottomSheet>}
         {save && <SavePresetDialog setup={save.setup} name={save.preset?.name} editId={save.preset?.id} onClose={() => setSave(null)}/>}
     </section>;
