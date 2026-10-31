@@ -4,6 +4,7 @@ import type { Item } from "@/api/client";
 import { ShareActions } from "./ReaderActions";
 import { renderSummary } from "@/lib/html";
 import * as perf from "@/lib/perf";
+import { expectedStart, recordStart } from "@/lib/loadTiming";
 import { formatClock, type ShortsBus } from "@/lib/shortsBus";
 import { parseYouTubeId, loadYouTubeIframeAPI } from "@/lib/youtube";
 import "./shorts-mode.css";
@@ -87,6 +88,8 @@ export function InlineMedia({
   // ended, 1 playing, 2 paused, 3 buffering, 5 cued) and whether you paused it.
   const [ytState, setYtState] = useState(-1);
   const [userPaused, setUserPaused] = useState(false);
+  // #189: when the current clip was asked to load, to learn typical start times.
+  const loadStarted = useRef(0);
   const played = useRef(false);
 
   const video = isVideo(item);
@@ -304,6 +307,7 @@ export function InlineMedia({
     if (latest.current.autoPlay && available()) {
       autoTried.current = true;
       perf.clipLoading();
+      loadStarted.current = performance.now();
       player.loadVideoById?.(nextId);
     } else player.cueVideoById?.(nextId);
   }
@@ -362,6 +366,8 @@ export function InlineMedia({
               if (!available()) { player.pauseVideo?.(); reportPlaying(false); return; }
               setBlocked(false);
               applyCaptions();
+              if (loadStarted.current && latest.current.autoPlay) recordStart(performance.now() - loadStarted.current);
+              loadStarted.current = 0;
               setStarted(true);
               reportPlaying(true);
               if (latest.current.autoPlay) perf.clipPlaying();
@@ -387,6 +393,7 @@ export function InlineMedia({
         },
       });
       playerRef.current = player;
+      if (latest.current.autoPlay) loadStarted.current = performance.now();
       loadedId.current = latest.current.ytId;
       loadedItem.current = latest.current.itemId;
     }).catch(() => { if (!cancelled) setFailed(true); });
@@ -541,8 +548,11 @@ export function InlineMedia({
                       <Play size={30} strokeWidth={1.5} fill="currentColor" />
                     </span>
                   )}
+                  {/* Inside the poster, so the poster's fade dissolves both together. */}
+                  <ReadyVeil on={waiting && !started} />
                 </div>
-                <Aura on={waiting} />
+                {/* Buffering mid-play: a plain, quick dimming over the frozen frame. */}
+                <span className="im-buffer" data-on={waiting && started} aria-hidden />
                 {compact && <span className="im-progress" aria-hidden><span ref={progressRef} /></span>}
                 <div
                   className="im-gesture"
@@ -639,15 +649,10 @@ export function InlineMedia({
   );
 }
 
-// #184: the "about to play" signal - slow, soft colour fields drifting over the
-// poster. Deliberately not a spinner: it reads as the clip getting ready rather
-// than as a stalled load. Pure transform/opacity animation; paused while hidden.
-export function Aura({ on }: { on: boolean }) {
-  return (
-    <span className="im-aura" data-on={on} aria-hidden>
-      <span className="im-aura-blob a" />
-      <span className="im-aura-blob b" />
-      <span className="im-aura-blob c" />
-    </span>
-  );
+// #184/#189: the "about to play" signal. A dark veil settles over the poster over
+// the time recent clips have taken to start on this device, so it arrives at its
+// deepest just as the clip is expected; the video then dissolves in through it.
+// A slow start settles into a gentle breathing pulse rather than a spinner.
+export function ReadyVeil({ on }: { on: boolean }) {
+  return <span className="im-veil" data-on={on} aria-hidden style={{ "--expect": `${expectedStart()}ms` } as CSSProperties} />;
 }

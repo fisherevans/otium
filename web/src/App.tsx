@@ -48,6 +48,12 @@ function AppShell() {
   const nav = useNavigate();
   const override = useInstrumentConfig();
   const [menu, setMenu] = useState(false);
+  // #189: full-screen Shorts hide this header; their ··· menu opens this one.
+  useEffect(() => {
+    const open = () => setMenu(true);
+    window.addEventListener("otium:app-menu", open);
+    return () => window.removeEventListener("otium:app-menu", open);
+  }, []);
   const [typeMenu, setTypeMenu] = useState(false);
   const [resumeId, setResumeId] = useState<string | null>(null);
   useEffect(() => {
