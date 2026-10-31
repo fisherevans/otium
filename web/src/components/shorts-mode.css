@@ -52,24 +52,27 @@
 .shorts-quiet-btn:focus-visible { outline: 2px solid var(--ink); outline-offset: -2px; }
 .shorts-age { font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
-/* #189: waiting for a clip. The veil settles over the poster across the time
-   recent clips took to start here (--expect, from lib/loadTiming), so it is at its
-   deepest just as the clip is expected; then the poster - veil included -
-   dissolves into the video. A slow start breathes gently instead of spinning. */
+/* #189/#191: waiting for a clip. An incoming Short scrolls in already veiled
+   (.im-veil-rest on its poster). When the player takes it over, the veil starts
+   at that same depth and lifts across the time recent clips took to start here
+   (--expect, from lib/loadTiming), so it is nearly clear just as the clip is
+   expected; then poster and veil dissolve into the video. A slow start breathes
+   gently at the lifted level instead of spinning. */
+.im-veil-rest { position: absolute; inset: 0; background: #07060a; opacity: .68; }
 .im-veil { position: absolute; inset: 0; z-index: 1; pointer-events: none; background: #07060a; opacity: 0; }
-.im-veil[data-on=true] { animation: veil-settle var(--expect, 1200ms) cubic-bezier(.35, .1, .3, 1) forwards, veil-breathe 2.6s ease-in-out var(--expect, 1200ms) infinite alternate; }
-@keyframes veil-settle { from { opacity: 0; } to { opacity: .58; } }
-@keyframes veil-breathe { from { opacity: .58; } to { opacity: .34; } }
+.im-veil[data-on=true] { opacity: .68; animation: veil-lift var(--expect, 1200ms) cubic-bezier(.4, 0, .6, 1) forwards, veil-breathe 2.6s ease-in-out var(--expect, 1200ms) infinite alternate; }
+@keyframes veil-lift { from { opacity: .68; } to { opacity: .22; } }
+@keyframes veil-breathe { from { opacity: .22; } to { opacity: .4; } }
 .im-buffer { position: absolute; inset: 0; z-index: 2; pointer-events: none; background: #07060a; opacity: 0; transition: opacity .35s ease-out; }
 .im-buffer[data-on=true] { opacity: .4; transition: opacity .6s ease-in .3s; }
-@media (prefers-reduced-motion: reduce) { .im-veil[data-on=true] { animation: none; opacity: .45; } }
+@media (prefers-reduced-motion: reduce) { .im-veil[data-on=true] { animation: none; opacity: .4; } }
 
 /* #184: full-screen Shorts. For the whole session the reel fills the viewport and
    the header and pill float over it, so every card has the same geometry and a
    swipe between a Short and an article never resizes the reel. Shorts cards go
    edge to edge: the clip is cropped to fill (like TikTok/Reels), with scrims and
    the creator line on top. Articles keep their card, padded clear of the chrome. */
-:root[data-immersive=on] { --imm-top: calc(50px + env(safe-area-inset-top, 0px)); --imm-bottom: calc(env(safe-area-inset-bottom, 0px) + 76px); }
+:root[data-immersive=on] { --imm-top: calc(50px + env(safe-area-inset-top, 0px)); --imm-bottom: calc(env(safe-area-inset-bottom, 0px) + 24px); }
 /* #186: a smaller wordmark tucked to the corner; Library and Aa live in the ··· menu. */
 :root[data-immersive=on] .topbar.session { min-height: 0; height: var(--imm-top); box-sizing: border-box; padding: env(safe-area-inset-top, 0px) 8px 0 14px; gap: 4px; }
 :root[data-immersive=on] .topbar.session .brand-name { font-size: 22px; }
@@ -108,11 +111,16 @@
 :root[data-over-video=on] .topbar.session { opacity: 0; pointer-events: none; }
 :root[data-immersive=on] .topbar.session { transition: opacity .2s; }
 
-/* #186: in full screen the pill is gone; Next floats bottom-right, above the
-   creator strip, as a light outline that reads over video and paper alike. */
-.immersive-next { position: fixed; z-index: 20; right: 14px; bottom: calc(env(safe-area-inset-bottom, 0px) + 14px); display: inline-flex; align-items: center; gap: 6px;
-  min-height: 44px; padding: 0 16px 0 18px; border-radius: 999px; border: 1.5px solid var(--ink-soft); background: transparent; color: var(--ink);
-  font: 450 18px/1 var(--heading, serif); -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px); }
-:root[data-over-video=on] .immersive-next { border-color: rgb(255 255 255 / .9); color: #fff; background: rgb(0 0 0 / .3); text-shadow: 0 1px 2px rgb(0 0 0 / .35); }
-.immersive-next:active { transform: scale(.97); }
-.immersive-next:focus-visible { outline: 2px solid currentColor; outline-offset: 3px; }
+/* #191: the one-time sound hint. A small dark bubble pointing at the sound icon:
+   below it when the controls are the top bar (full screen), above it when they
+   are the card footer. Fades and nudges in; tap to dismiss. */
+.sound-hint-anchor { position: relative; display: inline-flex; }
+.sound-hint { position: absolute; z-index: 30; right: -64px; bottom: calc(100% + 10px); width: max-content; max-width: 220px;
+  padding: 9px 12px; border: 0; border-radius: 12px; background: rgb(20 17 13 / .92); color: #fff; text-align: left; text-shadow: none;
+  font: 13px/1.3 var(--grot, sans-serif); box-shadow: 0 6px 20px rgb(0 0 0 / .25); animation: sound-hint-in .35s cubic-bezier(.2, .8, .2, 1) both; }
+.sound-hint::after { content: ""; position: absolute; right: calc(64px + 20px - 6px); top: 100%; border: 6px solid transparent; border-top-color: rgb(20 17 13 / .92); }
+:root[data-immersive=on] .sound-hint { bottom: auto; top: calc(100% + 8px); background: rgb(255 255 255 / .95); color: #1c1a16; animation-name: sound-hint-in-down; }
+:root[data-immersive=on] .sound-hint::after { top: auto; bottom: 100%; border-top-color: transparent; border-bottom-color: rgb(255 255 255 / .95); }
+@keyframes sound-hint-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+@keyframes sound-hint-in-down { from { opacity: 0; transform: translateY(-6px); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) { .sound-hint { animation: none; } }

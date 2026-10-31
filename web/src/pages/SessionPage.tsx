@@ -668,6 +668,29 @@ export default function SessionPage() {
   }, [immersive, overVideo]);
   useEffect(() => () => { delete document.documentElement.dataset.immersive; delete document.documentElement.dataset.overVideo; }, []);
 
+  // #191: once per session (in this tab), the first muted Short points at the
+  // sound control. It leaves after a few seconds, on a tap, on sound on, or when
+  // the player moves on.
+  const [soundHint, setSoundHint] = useState<number | null>(null);
+  const hostedShort = shortsMode && !review && items[playerIdx]?.item.media_type === "short";
+  useEffect(() => {
+    if (!hostedShort || !playback.muted || !id) return;
+    const key = `otium:sound-hint:${id}`;
+    try { if (sessionStorage.getItem(key)) return; } catch { return; }
+    const at = playerIdx;
+    const show = window.setTimeout(() => {
+      try { sessionStorage.setItem(key, "1"); } catch { /* still show once here */ }
+      setSoundHint(at);
+    }, 900);
+    return () => window.clearTimeout(show);
+  }, [hostedShort, playerIdx, playback.muted, id]);
+  useEffect(() => {
+    if (soundHint === null) return;
+    if (!playback.muted || playerIdx !== soundHint) { setSoundHint(null); return; }
+    const hide = window.setTimeout(() => setSoundHint(null), 6000);
+    return () => window.clearTimeout(hide);
+  }, [soundHint, playback.muted, playerIdx]);
+
 
   // The in-app content surface (#51). Retain the item through the close
   // animation so the surface doesn't blank as it slides away.
@@ -930,6 +953,8 @@ export default function SessionPage() {
             hostsPlayer={!!focusedShort && i === playerIdx}
             immersive={immersive}
             onImmersiveChange={setImmersive}
+            soundHint={soundHint === i}
+            onSoundHintDone={() => setSoundHint(null)}
             shortsBus={shortsBus}
             shortsPosition={shortsPosition}
             playbackActive={i === current && !content && !menuOpen && !detailsOpen && !breakdown && !saveItem && !sourceSel && !checkin && !review}
@@ -1010,13 +1035,9 @@ export default function SessionPage() {
         <SessionPresetPrompt sessionId={id} />
       </div>}
 
-      {/* #186: full screen keeps only a floating Next; the session menu is the
-          ··· on each card, and the time phrase is in that menu's header. */}
-      {immersive && !atEnd ? (
-        <button type="button" className="immersive-next" onClick={() => { perf.noteTrigger("button"); next(); }}>
-          Next <ArrowDown size={17} aria-hidden />
-        </button>
-      ) : (
+      {/* #186/#191: full screen has no pill and no Next - you swipe; the session
+          menu is the ··· on each card, with the time phrase in its header. */}
+      {immersive && !atEnd ? null : (
         <ContextInstrument mode={review ? "app" : "session"} eyebrow={review ? "Session complete" : "Session"}
           label={review ? "Review session" : elapsed >= durationSec ? "Session time reached" : durationSec - elapsed <= 120 ? "A little time left" : durationSec - elapsed <= 300 ? "A few minutes left" : "Session in progress"}
           onMenu={review ? undefined : () => setMenuOpen(true)} menuLabel="Article and session actions"

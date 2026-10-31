@@ -79,6 +79,9 @@ export interface SessionCardProps {
   // #184: full-screen Shorts, toggled from this card's footer.
   immersive?: boolean;
   onImmersiveChange?: (value: boolean) => void;
+  // #191: point at the sound control once, at the start of a session.
+  soundHint?: boolean;
+  onSoundHintDone?: () => void;
   shortsBus?: ShortsBus;
   shortsPosition?: React.RefObject<MediaPosition | null>;
   playbackActive?: boolean;
@@ -304,6 +307,8 @@ export const SessionCard = forwardRef<HTMLDivElement, SessionCardProps>(function
     hostsPlayer = false,
     immersive = false,
     onImmersiveChange,
+    soundHint = false,
+    onSoundHintDone,
     shortsBus,
     shortsPosition,
     playbackActive = true,
@@ -407,7 +412,11 @@ export const SessionCard = forwardRef<HTMLDivElement, SessionCardProps>(function
           <div className="inline-media im-compact"><div className="im-stage">
             <div className="im-frame" style={{ "--ar": String(videoAspect(it.item)) } as React.CSSProperties}>
               {/* The incoming clip's poster, framed exactly like the player's. */}
-              {it.item.thumbnail_url && <span className="im-slot-poster" style={{ backgroundImage: `url(${it.item.thumbnail_url})` }} />}
+              <span className="im-slot-poster" style={it.item.thumbnail_url ? { backgroundImage: `url(${it.item.thumbnail_url})` } : undefined}>
+                {/* #191: a clip that will play arrives already veiled; the player's
+                    veil picks up from here and lifts as it starts. */}
+                <span className="im-veil-rest" />
+              </span>
             </div>
           </div></div>
         </div>
@@ -462,7 +471,7 @@ export const SessionCard = forwardRef<HTMLDivElement, SessionCardProps>(function
               <ShortsMeta bus={hostsPlayer ? shortsBus : undefined} age={age} duration={it.item.duration_sec} />
             </span>
           </button>
-          {hostsPlayer && shortsBus && <ShortsQuietControls bus={shortsBus} />}
+          {hostsPlayer && shortsBus && <ShortsQuietControls bus={shortsBus} hint={soundHint} onHintDone={onSoundHintDone} />}
           {hostsPlayer && onImmersiveChange && (
             <button type="button" className="shorts-quiet-btn" onClick={() => onImmersiveChange(!immersive)}
               aria-label={immersive ? "Exit full screen" : "Full screen"} aria-pressed={immersive} data-on={immersive}>
