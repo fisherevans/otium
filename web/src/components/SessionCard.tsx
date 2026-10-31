@@ -17,8 +17,9 @@ import { relTime } from "@/lib/format";
 // arrives as a prop, so the lab can pass no-ops and still get a truthful render.
 //
 // Fixed top->bottom order (#96): TopicPill -> CardSource -> Title -> Byline ->
-// Hero -> Blurb -> callout. On the focused card, media plays inline and owns its
-// own action row; off-screen cards stay lightweight thumbnails.
+// Hero -> Blurb -> callout. Focused media plays inline. Shorts mode replaces the
+// ordinary text and action rows with a compact credit and Details control;
+// off-screen cards stay lightweight thumbnails.
 
 /**
  * How the Section -> Topic -> Source hierarchy is presented. This is a real
@@ -376,8 +377,8 @@ export const SessionCard = forwardRef<HTMLDivElement, SessionCardProps>(function
       </>}
 
       {activeMedia ? (
-        // The focused media card: the player is embedded and paused (one tap to
-        // play), sized by real aspect ratio; it owns its own action row.
+        // The focused player uses its real aspect ratio. Shorts mode requests
+        // autoplay and moves secondary actions into Details.
         <div
           className="card-media"
           // #149: fully isolate the media area from the card's swipe/tap handlers.
