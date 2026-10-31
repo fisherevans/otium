@@ -76,6 +76,7 @@ for (const [name, engine] of Object.entries({ chromium, webkit }).filter(([name]
                     return json({ ok: true, source_id: source.id });
                 }
                 if (method === 'POST' && /^\/items\/\d+\/(event|dwell|read)$/.test(path)) return json({ ok: true });
+                if (method === 'POST' && path === '/client-metrics') return route.fulfill({ status: 204, body: '' }); // #182 perf records
                 unexpected.push(`${method} ${path}`);
                 return route.fulfill({ status: 500, json: { message: 'Unmocked API request in surface test' } });
             });

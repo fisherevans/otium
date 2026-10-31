@@ -1,7 +1,8 @@
-import { useEffect, useLayoutEffect, useRef, type ComponentProps, type RefObject } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type ComponentProps, type RefObject } from "react";
 import { createPortal } from "react-dom";
 import type { Item } from "@/api/client";
 import { InlineMedia } from "./InlineMedia";
+import { setDriftProbe } from "@/lib/perf";
 
 type Props = ComponentProps<typeof InlineMedia> & {
     stage: RefObject<HTMLDivElement | null>;
@@ -12,9 +13,19 @@ type Props = ComponentProps<typeof InlineMedia> & {
 
 // The iframe stays in one DOM location for the whole session. Moving an iframe
 // between cards reloads it in WebKit and loses the user's sound permission.
-// A measured slot keeps the shared card solver in charge of its geometry.
+//
+// #182: that location is inside the reel's scroll content, absolutely positioned
+// over the hosting card's measured slot. It scrolls with the card on the
+// compositor, so a swipe moves video and card together even while YouTube keeps
+// the main thread busy. (It used to be position: fixed in <body>, re-aligned from
+// scroll events, which lagged behind the card on iOS.) It only re-measures when
+// the hosting card or the layout changes, never per scroll frame. The page moves
+// the player to a new card only once the scroll settles.
 export function SessionShortsPlayer({ stage, index, visible, nextItem, ...media }: Props) {
     const root = useRef<HTMLDivElement>(null);
+    const [host, setHost] = useState<HTMLElement | null>(null);
+    useLayoutEffect(() => { setHost(stage.current); }, [stage]);
+
     useLayoutEffect(() => {
         const reel = stage.current;
         const container = root.current;
@@ -28,26 +39,27 @@ export function SessionShortsPlayer({ stage, index, visible, nextItem, ...media 
             const box = slot.getBoundingClientRect();
             const frame = slot.querySelector<HTMLElement>(".im-frame");
             Object.assign(container.style, {
-                left: `${box.left}px`, top: `${box.top}px`, width: `${box.width}px`,
+                top: `${box.top - bounds.top + reel.scrollTop}px`,
+                left: `${box.left - bounds.left + reel.scrollLeft}px`,
+                width: `${box.width}px`,
                 visibility: "visible",
-                clipPath: `inset(${Math.max(0, bounds.top - box.top)}px 0 ${Math.max(0, box.bottom - bounds.bottom)}px 0)`,
             });
             container.style.setProperty("--shorts-frame-height", `${frame?.offsetHeight ?? 0}px`);
         };
         align();
+        setDriftProbe(() => {
+            const frame = container.querySelector(".im-frame")?.getBoundingClientRect();
+            const target = slot.querySelector(".im-frame")?.getBoundingClientRect();
+            return frame && target ? Math.abs(frame.top - target.top) : 0;
+        });
         const observer = new ResizeObserver(align);
         observer.observe(slot);
         observer.observe(reel);
-        reel.addEventListener("scroll", align, { passive: true });
-        window.addEventListener("resize", align);
-        window.visualViewport?.addEventListener("resize", align);
         return () => {
+            setDriftProbe(null);
             observer.disconnect();
-            reel.removeEventListener("scroll", align);
-            window.removeEventListener("resize", align);
-            window.visualViewport?.removeEventListener("resize", align);
         };
-    }, [stage, index, visible, media.item.id]);
+    }, [stage, host, index, visible, media.item.id]);
 
     useEffect(() => {
         if (!visible || !nextItem?.thumbnail_url) return;
@@ -58,8 +70,9 @@ export function SessionShortsPlayer({ stage, index, visible, nextItem, ...media 
         void poster.decode?.().catch(() => {});
     }, [visible, nextItem?.thumbnail_url]);
 
+    if (!host) return null;
     return createPortal(<div ref={root} className="session-shorts-player" data-active={visible} inert={!visible}
         style={{ visibility: "hidden" }}>
         <InlineMedia {...media} active={visible && media.active} compact autoPlay />
-    </div>, document.body);
+    </div>, host);
 }

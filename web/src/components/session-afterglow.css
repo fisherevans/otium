@@ -84,7 +84,7 @@
     margin: 0;
     border: 0;
 }
-.shorts-card .im-poster { background-size: contain; background-repeat: no-repeat; }
+.shorts-card .im-poster { background-size: cover; background-repeat: no-repeat; }
 .shorts-card-footer {
     display: flex;
     align-items: center;
