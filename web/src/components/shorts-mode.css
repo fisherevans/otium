@@ -4,8 +4,19 @@
 .shorts-mode-toggle small { font-size: 11px; color: var(--ink-mute); }
 .shorts-mode-state { flex-shrink: 0; border: 1px solid var(--rule); border-radius: 20px; min-width: 46px; padding: 5px 8px; text-align: center; }
 .shorts-mode-toggle[aria-checked=true] .shorts-mode-state { background: var(--ink-soft); color: var(--paper); border-color: var(--ink-soft); }
-.im-sound { position: absolute; z-index: 6; left: 8px; top: 8px; display: flex; align-items: center; gap: 6px; min-height: 44px; padding: 0 12px; border: 1px solid rgb(255 255 255 / .35); border-radius: 22px; background: rgb(0 0 0 / .72); color: white; font: 12px var(--grot, sans-serif); }
+
 .im-playback-message { position: absolute; z-index: 7; inset: auto 8px 8px; display: flex; justify-content: center; align-items: center; gap: 8px; padding: 7px 10px; border-radius: 10px; background: rgb(0 0 0 / .8); color: white; font: 12px/1.4 var(--grot, sans-serif); text-align: center; }
 .im-playback-message button { min-height: 44px; border: 1px solid currentColor; border-radius: 20px; padding: 0 12px; color: inherit; background: transparent; font: inherit; }
 .shorts-details-copy { font: 16px/1.5 var(--reading-font, var(--serif)); overflow-wrap: anywhere; }
 .shorts-details-copy img, .shorts-details-copy iframe { max-width: 100%; }
+
+.im-controls { display: flex; align-items: center; justify-content: center; gap: 4px; width: 100%; min-height: 44px; flex: 0 0 auto; }
+.im-control { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-width: 44px; min-height: 44px; border: 0; border-radius: 8px; padding: 0 10px; background: transparent; color: var(--ink-soft); font: 12px/1.2 var(--grot, sans-serif); }
+.im-control[aria-pressed=true] { color: var(--ink); }
+.im-control:focus-visible { outline: 2px solid var(--ink); outline-offset: -2px; }
+.session-shorts-player { position: fixed; z-index: 3; }
+.session-shorts-player .inline-media, .session-shorts-player .im-stage { width: 100%; align-items: center; }
+.session-shorts-player > .inline-media.im-compact .im-stage .im-frame { height: var(--shorts-frame-height); width: min(100%, calc(var(--shorts-frame-height) * var(--ar))); max-height: none; max-width: 100%; margin: 0; border: 0; border-radius: 18px; }
+.session-shorts-player .im-poster { background-size: contain; background-repeat: no-repeat; }
+
+.shorts-player-slot .im-frame { background: transparent; }

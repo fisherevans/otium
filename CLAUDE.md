@@ -71,7 +71,7 @@ The Go module is standalone (not in `~/dev/go.work`). Build/test/run it with
 
 ### Shorts viewing mode
 
-`useShortsMode` remembers the viewing choice per account in this browser, independently of saved feed presets. Only short-video cards use the compact layout and autoplay. `InlineMedia` owns playback lifecycle, blocked-autoplay fallback and sound; `SessionPage` keeps automatic playback separate from explicit opens and times only actual playing intervals. Never count an automatic start as engagement. The shared layout solver and lab include a Shorts-mode branch; measure both modes after layout changes.
+`useShortsMode` remembers the viewing choice per account in this browser, independently of saved feed presets. Only short-video cards use the compact layout and autoplay. `SessionShortsPlayer` keeps one iframe in a stable DOM location, aligned with the focused card's measured slot; moving an iframe between cards reloads it in WebKit. `useSessionPlayback` stores requested sound/caption choices per account and active session in tab storage. Never persist browser-muted fallback as a deliberate mute choice. `InlineMedia` owns playback lifecycle, caption application and blocked-autoplay fallback; `SessionPage` keeps automatic playback separate from explicit opens and times only actual playing intervals. Never count an automatic start as engagement. The shared layout solver and lab include a Shorts-mode branch; measure both modes after layout changes.
 
 ### Changing the session card
 

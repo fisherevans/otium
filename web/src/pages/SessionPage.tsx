@@ -15,6 +15,9 @@ import { SessionPresetPrompt } from "@/components/SessionPresetPrompt";
 import { useAuth } from "@/context/AuthContext";
 import { SourceSheet } from "@/components/SourceSheet";
 import { SessionCard } from "@/components/SessionCard";
+import type { MediaPosition } from "@/components/InlineMedia";
+import { SessionShortsPlayer } from "@/components/SessionShortsPlayer";
+import { useSessionPlayback } from "@/lib/sessionPlayback";
 import { useShortsMode } from "@/lib/shortsMode";
 import { cardRender, isMedia, isVideo } from "@/lib/render";
 import { usePreferences } from "@/context/PreferencesContext";
@@ -49,7 +52,9 @@ export default function SessionPage() {
   const nav = useNavigate();
   const { user } = useAuth();
   const [shortsMode, setShortsMode] = useShortsMode();
-  const [shortsMuted, setShortsMuted] = useState(true);
+  const playback = useSessionPlayback(user?.id, id);
+  const lastShort = useRef<Selected | null>(null);
+  const shortsPosition = useRef<MediaPosition | null>(null);
   const cacheKey = `otium:session:${user?.id ?? "unknown"}`;
   const { motionAllowed, prefs, presentation } = usePreferences();
 
@@ -233,6 +238,7 @@ export default function SessionPage() {
     endedServer.current = false;
     endConfirmed.current = false;
     didInitialScroll.current = false;
+    shortsPosition.current = null;
     suppressPersist.current = true;
     setLoading(true);
     setErr("");
@@ -791,6 +797,11 @@ export default function SessionPage() {
     );
   }
 
+  const focusedShort = shortsMode && cur?.item.media_type === "short" && !review ? cur : null;
+  if (focusedShort) lastShort.current = focusedShort;
+  const short = lastShort.current;
+  const playbackActive = !content && !menuOpen && !breakdown && !saveItem && !sourceSel && !checkin && !review;
+
   const shownItems = overIdx !== null ? items.slice(0, visibleCount) : items;
 
   return (
@@ -826,9 +837,11 @@ export default function SessionPage() {
             index={i}
             focused={i === current}
             shortsMode={shortsMode}
+            persistentShorts
+            shortsPosition={shortsPosition}
             playbackActive={i === current && !content && !menuOpen && !breakdown && !saveItem && !sourceSel && !checkin && !review}
-            muted={shortsMuted}
-            onMutedChange={setShortsMuted}
+            muted={playback.muted}
+            onMutedChange={playback.setMuted}
             onPlaybackChange={(playing) => {
               if (playing) startRead(it);
               else if (readTimer.current?.itemId === it.item.id) stopRead();
@@ -873,6 +886,20 @@ export default function SessionPage() {
           <div className="center"><p>Session complete</p></div>
         </div>
       </div>}
+
+      {short && <SessionShortsPlayer key={`${user?.id}:${id}`} stage={stageRef} index={current}
+        visible={!!focusedShort} item={short.item} nextItem={shownItems[current + 1]?.item}
+        active={playbackActive} muted={playback.muted} onMutedChange={playback.setMuted}
+        positionMemory={shortsPosition} captions={playback.captions} onCaptionsChange={playback.setCaptions} ytHistory={ytHistory}
+        onOpenOriginal={() => openExternal(short)} onNext={next} onPrev={prev}
+        onFirstPlay={(explicit) => {
+          played.current.add(short.item.id);
+          if (explicit) recordOpen(short); else autoplayed.current.add(short.item.id);
+        }}
+        onPlaybackChange={(playing) => {
+          if (playing) startRead(short);
+          else if (readTimer.current?.itemId === short.item.id) stopRead();
+        }} />}
 
       {review && <div className="session-ending">
         <Brand compact />
