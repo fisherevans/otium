@@ -864,6 +864,9 @@ func (h *Handler) buildSessionQueue(ctx context.Context, uid int64, durationMin 
 	// a new sample; the stored queue makes resume stable).
 	rng := mrand.New(mrand.NewSource(time.Now().UnixNano()))
 	items := session.Allocate(pool, now, target, rng)
+	if err := h.attachContent(ctx, uid, items); err != nil {
+		return nil, err
+	}
 	h.attachTopics(ctx, uid, items)
 	return items, nil
 }
@@ -920,6 +923,26 @@ func (h *Handler) sourceStats(ctx context.Context, uid int64) (map[int64]session
 		stats[sid] = s
 	}
 	return stats, nil
+}
+
+// attachContent loads the body of each queued item; Candidates leaves Content
+// empty so the build doesn't read every body in the pool.
+func (h *Handler) attachContent(ctx context.Context, uid int64, items []session.Selected) error {
+	if len(items) == 0 {
+		return nil
+	}
+	ids := make([]int64, len(items))
+	for i, it := range items {
+		ids[i] = it.Item.ID
+	}
+	contents, err := h.db.ItemContents(ctx, uid, ids)
+	if err != nil {
+		return err
+	}
+	for i := range items {
+		items[i].Item.Content = contents[items[i].Item.ID]
+	}
+	return nil
 }
 
 // attachTopics fills each item's topic identity for the card's identity line (#86:

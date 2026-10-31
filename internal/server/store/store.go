@@ -1414,22 +1414,44 @@ func (db *DB) ListRecentItemsByTopic(ctx context.Context, userID, topicID int64,
 // diversity, #86). Since a source belongs to exactly one topic, the resolution is
 // a direct lookup on s.topic_id - no multi-topic rule. A topicless source (topic_id
 // NULL) COALESCEs to 0 (global defaults). All callers must select these in this
-// order so scanCandidates can read any result set. The two ? placeholders are the
-// cadence-window bound, twice; arg alignment is identical across callers.
-func candidateCols() string {
-	return `i.id, i.source_id, i.url, i.title, i.summary, i.content, i.content_source, i.author, i.thumbnail_url,
+// order so scanCandidates can read any result set, and must select FROM
+// candidateFrom, which joins the per-source cadence window (alias w). content is
+// the body column (contentCol, or noContentCol to skip reading it) and rank the
+// recency_rank expression (recencyRankCol, or a precomputed column).
+func candidateCols(content, rank string) string {
+	return `i.id, i.source_id, i.url, i.title, i.summary, ` + content + `, i.content_source, i.author, i.thumbnail_url,
 	             i.media_type, i.duration_sec, i.aspect_ratio, i.categories, i.published_at, i.fetched_at,
 	             s.title, s.icon_url, s.weight, s.per_session_cap, s.half_life_days, s.archive_after_days, s.archive_keywords, s.archive_categories,
-	             (SELECT COUNT(*) FROM items i2 WHERE i2.source_id = s.id
-	                AND i2.published_at >= datetime('now', ?)) AS win_count,
-	             (SELECT COALESCE(julianday('now') - julianday(MIN(i2.published_at)), 0)
-	                FROM items i2 WHERE i2.source_id = s.id
-	                AND i2.published_at >= datetime('now', ?)) AS win_span,
+	             COALESCE(w.win_count, 0) AS win_count,
+	             COALESCE(julianday('now') - julianday(w.win_first), 0) AS win_span,
 	             COALESCE((SELECT f.half_life_days FROM topics f WHERE f.id = s.topic_id), 0) AS topic_half_life,
 	             COALESCE((SELECT f.archive_after_days FROM topics f WHERE f.id = s.topic_id), 0) AS topic_archive_after,
 	             s.archive_keep_count, s.archive_combine, s.scoring_config,
-	             ROW_NUMBER() OVER (PARTITION BY i.source_id ORDER BY i.published_at DESC, i.id DESC) AS recency_rank`
+	             ` + rank + ` AS recency_rank`
 }
+
+const (
+	contentCol     = `i.content`
+	noContentCol   = `'' AS content`
+	recencyRankCol = `ROW_NUMBER() OVER (PARTITION BY i.source_id ORDER BY i.published_at DESC, i.id DESC)`
+)
+
+// candidateFrom is the FROM clause every candidateCols query uses: item + source,
+// plus the per-source cadence window (count and earliest publish time of every
+// stored item in the window, seen or not) aggregated once per source. These were
+// correlated subqueries per result row, which re-scanned a source's whole window
+// for each of its items: ~5M index steps for a 20k-row all-sources pool, the bulk
+// of a ~5s Shorts session build (#186). Its one ? placeholder is the cadence-window
+// bound (e.g. "-400 days") and comes before any WHERE args. base is the
+// table expression that binds i and s ahead of the window join.
+func candidateFrom(base string) string {
+	return `FROM ` + base + `
+	      LEFT JOIN (SELECT source_id, COUNT(*) AS win_count, MIN(published_at) AS win_first
+	                 FROM items WHERE published_at >= datetime('now', ?)
+	                 GROUP BY source_id) w ON w.source_id = s.id`
+}
+
+const itemsWithSource = `items i JOIN sources s ON s.id = i.source_id`
 
 // cadence-estimation constants. cadencePerDay powers the informational
 // posts/day figure; engine v2 no longer derives rarity from it (#114).
@@ -1493,22 +1515,30 @@ func scanCandidates(rows *sql.Rows, windowDays int) ([]Candidate, error) {
 // Candidates returns unseen items from the given sources (or all followed
 // sources if sourceIDs is empty), newest first, as ranker input. It computes
 // each source's cadence from accumulated stored history in the same pass.
+//
+// Content is NOT loaded (always ""): the pool is up to `limit` rows but a session
+// keeps a few dozen, and bodies are most of the table's bytes. Callers that return
+// items fill it with ItemContents. The newest-`limit` cut and each item's
+// recency_rank are resolved on narrow rows first, then only the kept rows are
+// joined back to their wide columns, so the sort never carries summaries/URLs.
 func (db *DB) Candidates(ctx context.Context, userID int64, sourceIDs []int64, sinceDays, limit int) ([]Candidate, error) {
-	q := `SELECT ` + candidateCols() + `
-	      FROM items i
-	      JOIN sources s ON s.id = i.source_id
-	      WHERE s.user_id = ? AND s.state IN ('followed','trial')
-	        AND NOT EXISTS (SELECT 1 FROM item_state st WHERE st.item_id = i.id AND st.user_id = ?)`
-	win := fmt.Sprintf("-%d days", sinceDays)
-	args := []any{win, win, userID, userID}
+	q := `WITH pool AS (
+	        SELECT i.id, i.published_at, ` + recencyRankCol + ` AS recency_rank
+	        FROM ` + itemsWithSource + `
+	        WHERE s.user_id = ? AND s.state IN ('followed','trial')
+	          AND NOT EXISTS (SELECT 1 FROM item_state st WHERE st.item_id = i.id AND st.user_id = ?)`
+	args := []any{userID, userID}
 	if len(sourceIDs) > 0 {
 		q += ` AND s.id IN (` + placeholders(len(sourceIDs)) + `)`
 		for _, id := range sourceIDs {
 			args = append(args, id)
 		}
 	}
-	q += ` ORDER BY i.published_at DESC LIMIT ?`
-	args = append(args, limit)
+	q += ` ORDER BY i.published_at DESC LIMIT ?)
+	      SELECT ` + candidateCols(noContentCol, "p.recency_rank") + `
+	      ` + candidateFrom(`pool p JOIN items i ON i.id = p.id JOIN sources s ON s.id = i.source_id`) + `
+	      ORDER BY p.published_at DESC`
+	args = append(args, limit, fmt.Sprintf("-%d days", sinceDays))
 
 	rows, err := db.sql.QueryContext(ctx, q, args...)
 	if err != nil {
@@ -1516,6 +1546,35 @@ func (db *DB) Candidates(ctx context.Context, userID int64, sourceIDs []int64, s
 	}
 	defer rows.Close()
 	return scanCandidates(rows, sinceDays)
+}
+
+// ItemContents returns the stored body of each of the user's items in ids, keyed
+// by item id. Pairs with Candidates, which leaves Content empty.
+func (db *DB) ItemContents(ctx context.Context, userID int64, ids []int64) (map[int64]string, error) {
+	out := make(map[int64]string, len(ids))
+	if len(ids) == 0 {
+		return out, nil
+	}
+	args := []any{userID}
+	for _, id := range ids {
+		args = append(args, id)
+	}
+	rows, err := db.sql.QueryContext(ctx,
+		`SELECT i.id, i.content FROM `+itemsWithSource+`
+		 WHERE s.user_id = ? AND i.id IN (`+placeholders(len(ids))+`)`, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var id int64
+		var content string
+		if err := rows.Scan(&id, &content); err != nil {
+			return nil, err
+		}
+		out[id] = content
+	}
+	return out, rows.Err()
 }
 
 // InsightsItems returns every item belonging to the user's followed/trial sources
@@ -1526,12 +1585,10 @@ func (db *DB) Candidates(ctx context.Context, userID int64, sourceIDs []int64, s
 // decay, not a WHERE clause. cadenceDays sets the rarity-boost cadence window, to
 // match the session builder's rarity semantics. Rows are ordered deterministically.
 func (db *DB) InsightsItems(ctx context.Context, userID int64, sourceIDs []int64, cadenceDays int) ([]Candidate, error) {
-	q := `SELECT ` + candidateCols() + `
-	      FROM items i
-	      JOIN sources s ON s.id = i.source_id
+	q := `SELECT ` + candidateCols(contentCol, recencyRankCol) + ` ` + candidateFrom(itemsWithSource) + `
 	      WHERE s.user_id = ? AND s.state IN ('followed','trial')`
 	win := fmt.Sprintf("-%d days", cadenceDays)
-	args := []any{win, win, userID}
+	args := []any{win, userID}
 	if len(sourceIDs) > 0 {
 		q += ` AND s.id IN (` + placeholders(len(sourceIDs)) + `)`
 		for _, id := range sourceIDs {
@@ -2078,12 +2135,10 @@ func (db *DB) CandidatesByIDs(ctx context.Context, userID int64, ids []int64) ([
 	if len(ids) == 0 {
 		return nil, nil
 	}
-	q := `SELECT ` + candidateCols() + `
-	      FROM items i
-	      JOIN sources s ON s.id = i.source_id
+	q := `SELECT ` + candidateCols(contentCol, recencyRankCol) + ` ` + candidateFrom(itemsWithSource) + `
 	      WHERE s.user_id = ? AND i.id IN (` + placeholders(len(ids)) + `)`
 	win := "-45 days"
-	args := []any{win, win, userID}
+	args := []any{win, userID}
 	for _, id := range ids {
 		args = append(args, id)
 	}
