@@ -30,21 +30,38 @@ for(const [name,type] of [['chromium',chromium],['webkit',webkit],['firefox',fir
  });
  await p.goto(base);
  await p.getByRole('heading',{name:"Couldn't load your library"}).waitFor();failLoad=false;await p.getByRole('button',{name:'Retry',exact:true}).click();
- if(process.env.ARTIFACT_DIR) {
-  fs.mkdirSync(process.env.ARTIFACT_DIR,{recursive:true});
-  await p.getByRole('button',{name:'Start Reading',exact:true}).waitFor();
-  for(const [width,height] of [[320,568],[390,664]]) {
-   await p.setViewportSize({width,height});
-   await p.screenshot({path:`${process.env.ARTIFACT_DIR}/${name}-presets-${width}.png`,fullPage:true});
+ const starters=[
+  ['News',{duration_min:10,themes:[],sections:['news'],content_types:['article']}],
+  ['Shorts',{duration_min:10,themes:[],sections:[],content_types:['short']}],
+  ['Long videos',{duration_min:40,themes:[],sections:[],content_types:['long']}],
+ ];
+ await p.getByRole('button',{name:'Start News',exact:true}).waitFor();
+ assert.equal(await p.getByRole('button',{name:'Start Reading',exact:true}).count(),0);
+ assert.equal(await p.getByRole('button',{name:'Start Video',exact:true}).count(),0);
+ if(process.env.ARTIFACT_DIR) fs.mkdirSync(process.env.ARTIFACT_DIR,{recursive:true});
+ for(const [width,height] of [[320,568],[390,664]]) {
+  await p.setViewportSize({width,height});await p.evaluate(()=>document.fonts.ready);
+  assert.equal(await p.evaluate(()=>document.scrollingElement.scrollHeight<=innerHeight+1),true,`${name} ${width} starters have no page scroll`);
+  for(const [label] of starters) {
+   for(const action of ['Start','Customize']) {
+    const button=p.getByRole('button',{name:`${action} ${label}`,exact:true});
+    const bounds=await button.boundingBox();
+    assert.ok(bounds&&bounds.width>=44&&bounds.height>=44&&bounds.x>=0&&bounds.y>=0&&bounds.x+bounds.width<=width+1&&bounds.y+bounds.height<=height+1,`${name} ${width} ${action} ${label} visible with 44px target: ${JSON.stringify(bounds)}`);
+   }
   }
+  if(process.env.ARTIFACT_DIR) await p.screenshot({path:`${process.env.ARTIFACT_DIR}/${name}-home-${width}.png`,fullPage:true});
  }
- await p.getByRole('button',{name:'Start Reading',exact:true}).click();
- await p.getByRole('alert').filter({hasText:'No new items match'}).waitFor();assert.deepEqual(requests[0].content_types,['article']);assert.equal('media' in requests[0],false);assert.equal(requests[0].duration_min,10);
- await p.getByRole('button',{name:'Video Preset',exact:false}).click();
- await p.waitForTimeout(50);assert.deepEqual(requests[1].content_types,['long','short']);assert.equal(requests[1].duration_min,40);
- await p.getByRole('button',{name:'Customize Video',exact:true}).click();
+ for(const [label,expected] of starters) {
+  const before=requests.length;
+  await Promise.all([p.waitForResponse(r=>r.url().endsWith('/sessions')&&r.request().method()==='POST'),p.getByRole('button',{name:`Start ${label}`,exact:true}).click()]);
+  await p.getByRole('alert').filter({hasText:'No new items match'}).waitFor();
+  assert.equal(requests.length,before+1,`${name} ${label} starts in one click`);
+  assert.deepEqual(requests.at(-1),expected);
+ }
+ await p.getByRole('button',{name:'Customize Long videos',exact:true}).click();
  assert.equal(await p.getByRole('button',{name:'Articles',exact:true}).getAttribute('aria-pressed'),'false');
- assert.equal(await p.getByRole('button',{name:'Short videos',exact:true}).getAttribute('aria-pressed'),'true');
+ assert.equal(await p.getByRole('button',{name:'Long videos',exact:true}).getAttribute('aria-pressed'),'true');
+ assert.equal(await p.getByRole('button',{name:'Short videos',exact:true}).getAttribute('aria-pressed'),'false');
  await p.getByRole('button',{name:'10 min',exact:true}).click();
  for(const [width,height] of [[390,664],[320,568]]) {
   await p.setViewportSize({width,height});
@@ -56,12 +73,11 @@ for(const [name,type] of [['chromium',chromium],['webkit',webkit],['firefox',fir
  await p.getByRole('combobox',{name:'Scope'}).selectOption('news');
  await p.getByRole('button',{name:'Articles',exact:true}).click();
  await p.getByRole('button',{name:'Long videos',exact:true}).click();
- await p.getByRole('button',{name:'Short videos',exact:true}).click();
  await p.getByRole('button',{name:'Topics and sections'}).click();
  await p.getByRole('checkbox',{name:'World',exact:true}).uncheck();
  await p.getByRole('button',{name:'Done',exact:true}).click();
- await p.getByRole('button',{name:'Start',exact:true}).click();await p.waitForTimeout(50);
- assert.deepEqual(requests[2],{duration_min:10,themes:['local'],sections:[],content_types:['article']});
+ await Promise.all([p.waitForResponse(r=>r.url().endsWith('/sessions')&&r.request().method()==='POST'),p.getByRole('button',{name:'Start',exact:true}).click()]);
+ assert.deepEqual(requests.at(-1),{duration_min:10,themes:['local'],sections:[],content_types:['article']});
  // Every nonempty combination must reach the API unchanged; no selection cannot start or save.
  const typeLabels={article:'Articles',long:'Long videos',short:'Short videos'};
  async function selectContent(selected) {
@@ -82,7 +98,7 @@ for(const [name,type] of [['chromium',chromium],['webkit',webkit],['firefox',fir
  if(process.env.ARTIFACT_DIR) {
   fs.mkdirSync(process.env.ARTIFACT_DIR,{recursive:true});
   await p.getByRole('button',{name:'Back to sessions',exact:true}).click();
-  await p.getByRole('button',{name:'Customize Reading',exact:true}).click();
+  await p.getByRole('button',{name:'Customize Shorts',exact:true}).click();
   for (const [width,height] of [[320,568],[390,664],[1280,800]]) {
    await p.setViewportSize({width,height});await selectContent(['short']);
    assert.equal(await p.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true);
@@ -102,11 +118,25 @@ for(const [name,type] of [['chromium',chromium],['webkit',webkit],['firefox',fir
  await p.getByRole('dialog',{name:'Save preset',exact:true}).getByRole('button',{name:'Save preset',exact:true}).click();
  await p.getByRole('button',{name:'Back to sessions',exact:true}).click();await p.getByRole('button',{name:'Start Local reading',exact:true}).waitFor();
  await p.reload();await p.getByRole('button',{name:'Start Local reading',exact:true}).waitFor();
- // Populate repeated recent state and verify it stays reachable without scrolling.
+ // Repeated recent setups remain available in their sheet, leaving the starters compact.
  await p.evaluate(()=>{const k='otium.session-presets.v1.999';const d=JSON.parse(localStorage.getItem(k));const s={minutes:25,sections:[],excluded:[],media:'all',includeShorts:true};d.recent=[s];d.lastKey=JSON.stringify([25,[],[],'all',true]);d.consecutive=2;localStorage.setItem(k,JSON.stringify(d));});
- await p.reload();await p.getByRole('button',{name:'Used twice. Save as preset?'}).waitFor();
+ await p.reload();await p.getByRole('button',{name:'Recent sessions',exact:true}).waitFor();
  assert.equal(await p.evaluate(()=>document.scrollingElement.scrollHeight<=innerHeight+1),true,`${name} populated start has no page scroll`);
- await p.getByRole('button',{name:'Dismiss preset suggestion'}).click();await p.reload();await p.getByRole('heading',{name:'New session'}).waitFor();assert.equal(await p.getByRole('button',{name:'Used twice. Save as preset?'}).count(),0);
+ const recentBounds=await p.getByRole('button',{name:'Recent sessions',exact:true}).boundingBox();
+ const homeBar=await p.locator('.context-instrument').boundingBox();
+ assert.ok(recentBounds.y+recentBounds.height<=homeBar.y,`${name} populated home footer above instrument: ${JSON.stringify({recentBounds,homeBar})}`);
+ for(const [label] of starters) await p.getByRole('button',{name:`Start ${label}`,exact:true}).waitFor();
+ if(process.env.ARTIFACT_DIR) await p.screenshot({path:`${process.env.ARTIFACT_DIR}/${name}-populated-home-320.png`,fullPage:true});
+ assert.equal(await p.getByRole('button',{name:'Used twice. Save as preset?'}).count(),0);
+ await p.getByRole('button',{name:'Recent sessions',exact:true}).click();
+ await p.getByRole('button',{name:'Used twice. Save as preset?'}).waitFor();
+ await p.getByRole('button',{name:'Dismiss preset suggestion'}).click();
+ await p.reload();await p.getByRole('button',{name:'Recent sessions',exact:true}).click();
+ assert.equal(await p.getByRole('button',{name:'Used twice. Save as preset?'}).count(),0);
+ await p.getByRole('button',{name:'25 min all content',exact:false}).click();
+ await p.getByRole('heading',{name:'Custom session',exact:true}).waitFor();
+ assert.equal(await p.getByRole('spinbutton',{name:'Minutes',exact:true}).inputValue(),'25');
+ await p.getByRole('button',{name:'Back to sessions',exact:true}).click();
  await p.getByRole('button',{name:'Custom session',exact:true}).click();
  await selectContent(['short']);
  await p.getByRole('button',{name:'Save preset',exact:true}).click();
@@ -138,5 +168,5 @@ for(const [name,type] of [['chromium',chromium],['webkit',webkit],['firefox',fir
  await p.getByRole('alert').filter({hasText:'This session link has an unavailable'}).waitFor();
  assert.equal(await p.getByRole('heading',{name:'Custom session',exact:true}).count(),0);
  assert.equal(requests.length,beforeLinkRequests);
- assert.deepEqual(errors,[]);await b.close();console.log(name,'launcher load retry, all seven content combinations, legacy preset migration, scope requests, empty supply response, preset save/reload/default, repeat dismissal, setup links without auto-start, compact viewport PASS');
+ assert.deepEqual(errors,[]);await b.close();console.log(name,'launcher load retry, three one-click starters with exact scope/content, 44px targets, all seven content combinations, legacy preset migration, scope requests, empty supply response, preset save/reload/default, recent preview and repeat dismissal, setup links without auto-start, compact viewport PASS');
 }

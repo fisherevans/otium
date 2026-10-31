@@ -10,6 +10,8 @@ export interface SessionSetup {
 }
 export interface SessionPreset { id: string; name: string; setup: SessionSetup }
 export interface SessionPresets {
+    starterVersion: number;
+    newsSectionPending: boolean;
     presets: SessionPreset[];
     defaultId: string;
     recent: SessionSetup[];
@@ -19,6 +21,8 @@ export interface SessionPresets {
     sessions: Record<string, SessionSetup>;
 }
 const prefix = "otium.session-presets.v1.";
+const starterVersion = 2;
+export const starterPresetIds = ["news", "shorts", "long-videos"] as const;
 export const defaultSetup = (): SessionSetup => ({ minutes: 10, sections: [], excluded: [], contentTypes: [...contentTypes] });
 export function contentLabel(setup: SessionSetup): string {
     const selected = contentTypes.filter((type) => setup.contentTypes.includes(type));
@@ -55,27 +59,56 @@ function normalizeKey(value: unknown): string {
         return setup ? setupKey(setup) : "";
     } catch { return ""; }
 }
-export function initialPresets(): SessionPresets {
+export function initialPresets(newsSectionSlug?: string): SessionPresets {
     return {
+        starterVersion,
+        newsSectionPending: false,
         presets: [
-            { id: "reading", name: "Reading", setup: { ...defaultSetup(), contentTypes: ["article"] } },
-            { id: "video", name: "Video", setup: { ...defaultSetup(), minutes: 40, contentTypes: ["long", "short"] } },
+            { id: "news", name: "News", setup: { ...defaultSetup(), sections: newsSectionSlug ? [newsSectionSlug] : [], contentTypes: ["article"] } },
+            { id: "shorts", name: "Shorts", setup: { ...defaultSetup(), contentTypes: ["short"] } },
+            { id: "long-videos", name: "Long videos", setup: { ...defaultSetup(), minutes: 40, contentTypes: ["long"] } },
         ],
-        defaultId: "reading", recent: [], lastKey: "", consecutive: 0, dismissed: [], sessions: {},
+        defaultId: "news", recent: [], lastKey: "", consecutive: 0, dismissed: [], sessions: {},
     };
 }
-export function loadSessionPresets(accountId: number): SessionPresets {
+function rememberMigration(accountId: number, data: SessionPresets): SessionPresets {
+    // Loading must not dispatch the change event that asks subscribers to reload.
+    try { localStorage.setItem(prefix + accountId, JSON.stringify(data)); }
+    catch { /* Keep the migrated choices usable when browser storage is full. */ }
+    return data;
+}
+function migrateStarters(data: SessionPresets, newsSectionSlug: string | undefined, sectionsLoaded: boolean): SessionPresets {
+    const starters = initialPresets(newsSectionSlug).presets;
+    const oldStocks: SessionPreset[] = [
+        { id: "reading", name: "Reading", setup: { ...defaultSetup(), contentTypes: ["article"] } },
+        { id: "video", name: "Video", setup: { ...defaultSetup(), minutes: 40, contentTypes: ["long", "short"] } },
+    ];
+    const replaced = new Set(data.presets.filter((preset) => oldStocks.some((old) =>
+        preset.id === old.id && preset.name === old.name && setupKey(preset.setup) === setupKey(old.setup),
+    )).map((preset) => preset.id));
+    const kept = data.presets.filter((preset) => !replaced.has(preset.id));
+    const added = starters.filter((starter) => !kept.some((preset) => preset.id === starter.id));
+    const presets = [...added, ...kept];
+    const defaultId = replaced.has(data.defaultId) ? data.defaultId === "reading" ? "news" : "long-videos" : data.defaultId;
+    return { ...data, starterVersion, newsSectionPending: !sectionsLoaded && added.some((preset) => preset.id === "news"), presets, defaultId: defaultId || "news" };
+}
+export function loadSessionPresets(accountId: number, newsSectionSlug?: string): SessionPresets {
+    // Home supplies a second argument after loading sections, including undefined
+    // when News is absent. Other surfaces can read before that context exists.
+    const sectionsLoaded = arguments.length > 1;
     try {
         const raw = localStorage.getItem(prefix + accountId);
-        if (!raw) return initialPresets();
+        if (!raw) return rememberMigration(accountId, { ...initialPresets(newsSectionSlug), newsSectionPending: !sectionsLoaded });
         const data = JSON.parse(raw);
-        if (!Array.isArray(data.presets) || !Array.isArray(data.recent)) return initialPresets();
+        if (!Array.isArray(data?.presets) || !Array.isArray(data?.recent)) return { ...initialPresets(newsSectionSlug), newsSectionPending: !sectionsLoaded };
         const presets: SessionPreset[] = data.presets.flatMap((p: SessionPreset) => {
             const setup = normalizeSetup(p?.setup);
             return p && typeof p.id === "string" && typeof p.name === "string" && setup ? [{ id: p.id, name: p.name, setup }] : [];
         });
         const recent = data.recent.map(normalizeSetup).filter((s: SessionSetup | null): s is SessionSetup => s !== null);
-        return {
+        const normalized: SessionPresets = {
+            starterVersion: Number.isInteger(data.starterVersion) ? data.starterVersion : 0,
+            newsSectionPending: data.newsSectionPending === true,
             presets, defaultId: presets.some((p: SessionPreset) => p.id === data.defaultId) ? data.defaultId : presets[0]?.id ?? "",
             recent: recent.filter((s: SessionSetup, i: number) => recent.findIndex((other: SessionSetup) => setupKey(s) === setupKey(other)) === i).slice(0, 12),
             lastKey: normalizeKey(data.lastKey),
@@ -86,7 +119,16 @@ export function loadSessionPresets(accountId: number): SessionPresets {
                 return setup ? [[id, setup]] : [];
             }).slice(-30)),
         };
-    } catch { return initialPresets(); }
+        if (normalized.starterVersion < starterVersion) return rememberMigration(accountId, migrateStarters(normalized, newsSectionSlug, sectionsLoaded));
+        if (normalized.newsSectionPending && sectionsLoaded) {
+            const unscoped = initialPresets().presets[0];
+            const presets = normalized.presets.map((preset) => preset.id === unscoped.id && preset.name === unscoped.name && setupKey(preset.setup) === setupKey(unscoped.setup)
+                ? { ...preset, setup: { ...preset.setup, sections: newsSectionSlug ? [newsSectionSlug] : [] } }
+                : preset);
+            return rememberMigration(accountId, { ...normalized, newsSectionPending: false, presets });
+        }
+        return normalized;
+    } catch { return { ...initialPresets(newsSectionSlug), newsSectionPending: !sectionsLoaded }; }
 }
 export function storeSessionPresets(accountId: number, data: SessionPresets): boolean {
     try {
