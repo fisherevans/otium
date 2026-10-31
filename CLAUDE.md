@@ -73,6 +73,10 @@ The Go module is standalone (not in `~/dev/go.work`). Build/test/run it with
 
 `useShortsMode` remembers the viewing choice per account in this browser, independently of saved feed presets. Only short-video cards use the compact layout and autoplay. `SessionShortsPlayer` keeps one iframe in a stable DOM location, aligned with the focused card's measured slot; moving an iframe between cards reloads it in WebKit. `useSessionPlayback` stores requested sound/caption choices per account and active session in tab storage. Never persist browser-muted fallback as a deliberate mute choice. `InlineMedia` owns playback lifecycle, caption application and blocked-autoplay fallback; `SessionPage` keeps automatic playback separate from explicit opens and times only actual playing intervals. Never count an automatic start as engagement. The shared layout solver and lab include a Shorts-mode branch; measure both modes after layout changes.
 
+### Details vs Actions, and video files
+
+`ItemDetails` is provenance (where it came from, why it surfaced, filters); `ItemActions` is what to do and where to go (share/download the file, links, YouTube, channel, source, save, session controls). Do not merge them back into one menu. `GET /api/v1/items/{id}/video` (`internal/server/videofile`) fetches a Short (or any YouTube video up to three minutes) as an H.264/AAC MP4 with yt-dlp, node as its JavaScript runtime and ffmpeg for merging, cached under `video-cache/` beside the database for seven days. Release images are never rebuilt, so the server copies yt-dlp to `video-cache/.bin` and runs `yt-dlp -U` at most daily before a download; when downloads start failing, check that copy's version first. iOS only opens the share sheet close to a tap, so the client fetches the file, then shares; if the activation lapsed the row becomes "Share video" for an instant second tap.
+
 ### Changing the session card
 
 The card's layout is **solved at runtime** (`web/src/lib/cardLayout.ts`), not set

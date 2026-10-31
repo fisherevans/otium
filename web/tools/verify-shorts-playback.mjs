@@ -11,7 +11,7 @@ assert.ok(['http:', 'https:'].includes(target.protocol) && ['localhost', '127.0.
 const base = target.origin;
 const { chromium, webkit } = await import(process.env.PLAYWRIGHT_MODULE ? pathToFileURL(process.env.PLAYWRIGHT_MODULE).href : 'playwright');
 const stamp = '2026-10-31T12:00:00Z';
-const source = { id: 42, title: 'Test creator', kind: 'youtube', weight: 1, state: 'active', feed_url: 'https://example.test/feed', added_at: stamp };
+const source = { id: 42, title: 'Test creator', kind: 'youtube', weight: 1, state: 'active', feed_url: 'https://www.youtube.com/feeds/videos.xml?channel_id=UCsynthetic0000000000000', added_at: stamp };
 const make = (n, media = 'short') => ({
     item: { id: 100 + n, source_id: source.id, url: `https://www.youtube.com/shorts/test${String(n).padStart(7, '0')}`, title: `Synthetic clip ${n}`, summary: 'Notes for the synthetic clip.', content: '', content_source: 'rss', author: source.title, thumbnail_url: '', media_type: media, duration_sec: media === 'long' ? 1200 : 45, aspect_ratio: media === 'long' ? 16 / 9 : 9 / 16, published_at: stamp, fetched_at: stamp },
     source_title: source.title, topic: { name: 'Comedy', section_name: 'Shorts', slug: 'comedy' }, score: 1, est_duration_sec: 45, reason: '', breakdown: {},
@@ -157,6 +157,7 @@ for (const [name, engine] of Object.entries({ chromium, webkit }).filter(([name]
                     if (path === '/sources') return json([source]);
                     if (path === '/collections') return json([]);
                     if (path === '/sessions/current') return json({ session_id: state.sessionId, cursor: state.cursor, duration_min: 40, themes: ['Shorts'], items });
+                    if (/^\/items\/\d+\/video$/.test(path)) { state.videoFetches = (state.videoFetches || 0) + 1; return route.fulfill({ contentType: 'video/mp4', body: Buffer.alloc(2048) }); }
                     if (/^\/items\/\d+\/content$/.test(path)) return json({ render: 'external', content: '', content_source: 'rss' });
                 }
                 if (method === 'PATCH' && path === `/sessions/${state.sessionId}`) {
@@ -479,6 +480,47 @@ for (const [name, engine] of Object.entries({ chromium, webkit }).filter(([name]
             await waitPlaying(true);
             await page.evaluate(() => window.dispatchEvent(new Event('pagehide')));
             assert.deepEqual(await page.evaluate(() => JSON.parse(localStorage.getItem('otium:session:1')).played), [101, 102], 'only a matching current-video PLAYING event counts');
+        });
+        await scenario('actions and details are separate sheets; clip file shares; time readout', async ({ page, waitPlaying, menu, close, count, state }) => {
+            await waitPlaying(true);
+            await page.locator('.session-shorts-player[data-active="true"] .im-time').waitFor();
+            assert.match(await page.locator('.session-shorts-player[data-active="true"] .im-time').innerText(), /0:\d\d left\s+of 0:45/);
+            const shot = async label => { if (process.env.SHOTS) { await page.waitForTimeout(400); await page.screenshot({ path: `${process.env.SHOTS}/${name}-${page.viewportSize().width}-${label}.png` }); } };
+            for (const width of process.env.SHOTS ? [320, 390] : []) {
+                await page.setViewportSize({ width, height: 700 }); await shot('card');
+                const row = await page.locator('.session-shorts-player[data-active="true"] .im-controls').evaluate(el => ({ fits: el.scrollWidth <= el.clientWidth + 1, right: el.getBoundingClientRect().right }));
+                assert.ok(row.fits && row.right <= width + 1, `${width}px controls row fits`);
+            }
+            await menu();
+            await shot('actions');
+            const sheet = page.locator('dialog[open]');
+            for (const name of ['Save or share video', 'Copy link', 'Open in YouTube', 'Details and why it\'s here', 'End session'])
+                assert.equal(await sheet.getByRole('button', { name, exact: false }).count() > 0, true, `actions: ${name}`);
+            assert.equal(await sheet.getByRole('link', { name: 'Download video' }).getAttribute('href'), '/api/v1/items/101/video?download=1');
+            assert.equal(await sheet.getByRole('link', { name: 'Open channel on YouTube' }).getAttribute('href'), 'https://www.youtube.com/channel/UCsynthetic0000000000000');
+            assert.equal(await sheet.getByRole('switch', { name: 'Shorts viewing mode' }).count(), 1, 'session controls live in actions');
+            assert.equal(await sheet.getByText('Explore score').count(), 0, 'no provenance in actions');
+            await page.evaluate(() => {
+                Object.defineProperty(navigator, 'canShare', { configurable: true, value: data => Array.isArray(data?.files) });
+                Object.defineProperty(navigator, 'share', { configurable: true, value: async data => { window.__shared = data.files.map(f => [f.name, f.type, f.size]); } });
+            });
+            await sheet.getByRole('button', { name: 'Save or share video' }).click();
+            await page.waitForFunction(() => window.__shared);
+            assert.deepEqual(await page.evaluate(() => window.__shared), [['Synthetic clip 1.mp4', 'video/mp4', 2048]]);
+            await sheet.getByRole('button', { name: 'Share video' }).click();
+            assert.equal(state.videoFetches, 1, 'a second share reuses the fetched file');
+            await sheet.getByRole('button', { name: /Details and why/ }).click();
+            await page.waitForFunction(() => document.querySelector('dialog[open]')?.textContent.includes('Explore score'));
+            const details = page.locator('dialog[open]');
+            await shot('details');
+            assert.equal(await details.getByText('Filter out of future sessions').count(), 1);
+            assert.equal(await details.getByRole('button', { name: 'Save or share video' }).count(), 0, 'no actions in details');
+            await close();
+            await page.locator('.afterglow-card:not(.away) .shorts-details').click();
+            await page.waitForFunction(() => document.querySelector('dialog[open]')?.textContent.includes('Explore score'));
+            await close();
+            await waitPlaying(true);
+            assert.equal(count('open'), 0, 'sheets and sharing are not opens');
         });
     } finally { await browser.close(); }
 }

@@ -22,6 +22,7 @@ import (
 	"github.com/fisherevans/otium/internal/server/handler"
 	"github.com/fisherevans/otium/internal/server/middleware"
 	"github.com/fisherevans/otium/internal/server/store"
+	"github.com/fisherevans/otium/internal/server/videofile"
 	"github.com/fisherevans/otium/internal/server/youtube"
 )
 
@@ -50,6 +51,11 @@ func main() {
 
 	ing := feeds.NewIngester(db, log)
 	h := handler.New(db, ing, log)
+	// #180: Shorts as shareable MP4s, cached beside the database. Missing yt-dlp
+	// (e.g. local dev) just makes the endpoint answer 503.
+	vf := videofile.New(filepath.Join(filepath.Dir(cfg.DBPath), "video-cache"), cfg.YtDlp, cfg.YtDlpJSRuntime)
+	vf.UpdateEvery = 24 * time.Hour
+	h.SetVideoFetcher(vf)
 
 	// OIDC (prod) — otium is its own confidential client of auth.fisher.sh. The
 	// session resolver bridges an authenticated subject to an otium user row.

@@ -7,7 +7,16 @@ COPY . .
 RUN CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /bin/server ./cmd/server
 
 FROM alpine:3.22
-RUN apk upgrade --no-cache && apk add --no-cache ca-certificates tzdata
+# Short downloads (#180): yt-dlp (python zipapp), node as its JavaScript runtime
+# for YouTube's player challenges, and ffmpeg to merge video and audio streams.
+# yt-dlp tracks YouTube changes closely, so each build (including the weekly
+# rebuild) takes the latest release, verified against its published checksums.
+RUN apk upgrade --no-cache && apk add --no-cache ca-certificates tzdata python3 nodejs ffmpeg \
+ && wget -q -O /usr/local/bin/yt-dlp https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp \
+ && wget -q -O /tmp/SHA2-256SUMS https://github.com/yt-dlp/yt-dlp/releases/latest/download/SHA2-256SUMS \
+ && (cd /usr/local/bin && grep ' yt-dlp$' /tmp/SHA2-256SUMS | sha256sum -c -) \
+ && chmod 0755 /usr/local/bin/yt-dlp && rm /tmp/SHA2-256SUMS \
+ && yt-dlp --version
 COPY --from=builder /bin/server /bin/server
 # Data (SQLite file) lives on a mounted volume in prod.
 VOLUME ["/data"]

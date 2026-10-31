@@ -13,6 +13,9 @@
 .im-controls { display: flex; align-items: center; justify-content: center; gap: 4px; width: 100%; min-height: 44px; flex: 0 0 auto; }
 .im-control { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-width: 44px; min-height: 44px; border: 0; border-radius: 8px; padding: 0 10px; background: transparent; color: var(--ink-soft); font: 12px/1.2 var(--grot, sans-serif); }
 .im-control[aria-pressed=true] { color: var(--ink); }
+.im-time { display: inline-flex; flex-direction: column; align-items: flex-start; justify-content: center; min-height: 44px; padding: 0 6px 0 4px; color: var(--ink-soft); font: 12px/1.25 var(--grot, sans-serif); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.im-time-left { color: var(--ink); }
+@media (max-width: 400px) { .im-player-settings span { display: none; } .im-control { padding: 0 8px; } }
 .im-control:focus-visible { outline: 2px solid var(--ink); outline-offset: -2px; }
 .session-shorts-player { position: fixed; z-index: 3; }
 .session-shorts-player .inline-media, .session-shorts-player .im-stage { width: 100%; align-items: center; }

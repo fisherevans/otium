@@ -13,7 +13,7 @@ import { canWebShare, copyText, shareOrCopy } from "@/lib/share";
 
 // ManualCopy is the last-resort path when both clipboard strategies fail: show
 // the url in an auto-selected readonly field so the user can long-press -> copy.
-function ManualCopy({ url, onClose }: { url: string; onClose: () => void }) {
+export function ManualCopy({ url, onClose }: { url: string; onClose: () => void }) {
   return (
     <Dialog open onClose={onClose} kicker="Copy link">
       <div>

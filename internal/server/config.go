@@ -42,6 +42,11 @@ type Config struct {
 	// YouTubeAPIKey enables the YouTube Data API backlog importer (#122). Empty =
 	// disabled (the import endpoint 503s), so the public repo runs without it.
 	YouTubeAPIKey string
+
+	// YtDlp and YtDlpJSRuntime drive Short downloads (#180). A missing binary
+	// leaves the endpoint answering 503.
+	YtDlp          string
+	YtDlpJSRuntime string
 }
 
 func LoadConfig() (*Config, error) {
@@ -49,6 +54,8 @@ func LoadConfig() (*Config, error) {
 		Port:             8080,
 		DBPath:           envDefault("OTIUM_DB_PATH", "./data/otium.db"),
 		FetchIntervalMin: 30,
+		YtDlp:            envDefault("OTIUM_YTDLP", "yt-dlp"),
+		YtDlpJSRuntime:   envDefault("OTIUM_YTDLP_JS_RUNTIME", "node"),
 	}
 
 	if v := os.Getenv("PORT"); v != "" {

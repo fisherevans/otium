@@ -14,6 +14,7 @@ import (
 	"github.com/fisherevans/otium/internal/server/middleware"
 	"github.com/fisherevans/otium/internal/server/session"
 	"github.com/fisherevans/otium/internal/server/store"
+	"github.com/fisherevans/otium/internal/server/videofile"
 	"github.com/fisherevans/otium/internal/server/youtube"
 	"github.com/go-chi/chi/v5"
 	"io"
@@ -30,8 +31,9 @@ type Handler struct {
 	ing      *feeds.Ingester
 	ft       *fulltext.Fetcher
 	log      *slog.Logger
-	ytImport bool            // YouTube backlog import enabled (an API key is configured)
-	yt       *youtube.Client // nil unless a Data API key is configured
+	ytImport bool               // YouTube backlog import enabled (an API key is configured)
+	yt       *youtube.Client    // nil unless a Data API key is configured
+	video    *videofile.Fetcher // nil disables video file downloads (#180)
 }
 
 func New(db *store.DB, ing *feeds.Ingester, log *slog.Logger) *Handler {
@@ -41,6 +43,9 @@ func New(db *store.DB, ing *feeds.Ingester, log *slog.Logger) *Handler {
 // SetYouTubeImportEnabled toggles whether creating a YouTube source enqueues a
 // backlog import and whether the re-sync endpoint accepts requests (#122).
 func (h *Handler) SetYouTubeImportEnabled(v bool) { h.ytImport = v }
+
+// SetVideoFetcher enables GET /items/{id}/video (#180).
+func (h *Handler) SetVideoFetcher(f *videofile.Fetcher) { h.video = f }
 
 // SetYouTube supplies the Data API client used to resolve a channel identifier at
 // create time and to answer the youtube-available capability flag (#126).

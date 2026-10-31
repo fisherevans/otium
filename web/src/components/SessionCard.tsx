@@ -65,6 +65,8 @@ export interface SessionCardProps {
   onSave: (sel: Selected) => void;
   onSource: (sel: Selected) => void;
   onMenu: () => void;
+  // #180: the Shorts footer's Details opens provenance, not actions.
+  onDetails?: () => void;
   onFirstPlay?: (sel: Selected, explicit: boolean) => void;
   /** Video-first presentation applies only to short videos. */
   shortsMode?: boolean;
@@ -286,6 +288,7 @@ export const SessionCard = forwardRef<HTMLDivElement, SessionCardProps>(function
     onSave,
     onSource,
     onMenu,
+    onDetails,
     onFirstPlay,
     shortsMode = false,
     persistentShorts = false,
@@ -438,7 +441,7 @@ export const SessionCard = forwardRef<HTMLDivElement, SessionCardProps>(function
               {age && <span className="shorts-age">{age}</span>}
             </span>
           </button>
-          <button className="shorts-details" type="button" onClick={onMenu} disabled={!focused}>
+          <button className="shorts-details" type="button" onClick={onDetails ?? onMenu} disabled={!focused}>
             <MoreHorizontal size={18} aria-hidden />
             Details
           </button>
