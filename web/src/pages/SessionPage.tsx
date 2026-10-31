@@ -19,7 +19,7 @@ import { SessionCard } from "@/components/SessionCard";
 import type { MediaPosition } from "@/components/InlineMedia";
 import { SessionShortsPlayer } from "@/components/SessionShortsPlayer";
 import { useSessionPlayback } from "@/lib/sessionPlayback";
-import { useShortsMode } from "@/lib/shortsMode";
+import { useImmersiveShorts, useShortsMode } from "@/lib/shortsMode";
 import * as perf from "@/lib/perf";
 import { createShortsBus } from "@/lib/shortsBus";
 import { cardRender, isMedia, isVideo } from "@/lib/render";
@@ -55,6 +55,7 @@ export default function SessionPage() {
   const nav = useNavigate();
   const { user } = useAuth();
   const [shortsMode, setShortsMode] = useShortsMode();
+  const [immersivePref, setImmersive] = useImmersiveShorts();
   const playback = useSessionPlayback(user?.id, id);
   const lastShort = useRef<Selected | null>(null);
   const shortsPosition = useRef<MediaPosition | null>(null);
@@ -78,6 +79,8 @@ export default function SessionPage() {
     playerCommit.current = window.setTimeout(() => commitPlayer.current(), delay);
   });
   const shortsBus = useRef(createShortsBus()).current;
+  // Where an in-flight smooth Next/Prev is heading; cleared when the reel settles.
+  const scrollTarget = useRef<number | null>(null);
   const [duration, setDuration] = useState(15); // minutes; the single chosen length (#69)
   const [themes, setThemes] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
@@ -361,6 +364,9 @@ export default function SessionPage() {
     if (!stage || loading || review) return;
     const anchor = () => {
       const top = current * stage.clientHeight;
+      // A smooth Next/Prev already heading here finishes on its own; setting
+      // scrollTop mid-animation made Chromium land 48px off (#184).
+      if (scrollTarget.current === top) return;
       if (Math.abs(stage.scrollTop - top) > 1) stage.scrollTop = top;
     };
     anchor();
@@ -606,9 +612,14 @@ export default function SessionPage() {
     const onScroll = () => {
       window.clearTimeout(idle);
       window.clearTimeout(playerCommit.current);
-      idle = window.setTimeout(() => { perf.scrollSettled(); commitPlayer.current(); }, idleMs);
+      idle = window.setTimeout(() => { finishTarget(); perf.scrollSettled(); commitPlayer.current(); }, idleMs);
     };
-    const onScrollEnd = () => { window.clearTimeout(idle); perf.scrollSettled(); commitPlayer.current(); };
+    const finishTarget = () => {
+      const target = scrollTarget.current;
+      scrollTarget.current = null;
+      if (target !== null && Math.abs(stage.scrollTop - target) > 1) stage.scrollTop = target;
+    };
+    const onScrollEnd = () => { window.clearTimeout(idle); finishTarget(); perf.scrollSettled(); commitPlayer.current(); };
     stage.addEventListener("scroll", onScroll, { passive: true });
     stage.addEventListener("scrollend", onScrollEnd);
     return () => {
@@ -626,13 +637,33 @@ export default function SessionPage() {
   }, [current]);
   useEffect(() => () => window.clearTimeout(playerCommit.current), []);
 
+  // Each card is exactly one stage height, so the target is index * height (the
+  // anchor and resume logic rely on the same). scrollIntoView({block: center})
+  // also weighs the window's viewport and landed 48px short in full-screen
+  // Shorts (#184), leaving the card under the floating header.
   function scrollTo(idx: number) {
-    const el = itemEls.current[idx];
-    if (el) el.scrollIntoView({ block: "center", behavior: motionAllowed ? "smooth" : "instant" });
+    const stage = stageRef.current;
+    if (!stage || !itemEls.current[idx]) return;
+    const top = idx * stage.clientHeight;
+    scrollTarget.current = motionAllowed ? top : null;
+    stage.scrollTo({ top, behavior: motionAllowed ? "smooth" : "instant" });
   }
 
   const cur = items[current];
   const atEnd = current >= visibleCount;
+
+  // #184: full-screen Shorts. The reel takes the whole viewport for the session
+  // (so card geometry never changes between Shorts and articles), and the app
+  // header and pill float over it, restyled while a Short is under them.
+  const immersive = shortsMode && immersivePref && !review;
+  const overVideo = immersive && !atEnd && cur?.item.media_type === "short";
+  useEffect(() => {
+    const root = document.documentElement;
+    if (immersive) root.dataset.immersive = "on"; else delete root.dataset.immersive;
+    if (overVideo) root.dataset.overVideo = "on"; else delete root.dataset.overVideo;
+  }, [immersive, overVideo]);
+  useEffect(() => () => { delete document.documentElement.dataset.immersive; delete document.documentElement.dataset.overVideo; }, []);
+
 
   // The in-app content surface (#51). Retain the item through the close
   // animation so the surface doesn't blank as it slides away.
@@ -892,6 +923,8 @@ export default function SessionPage() {
             shortsMode={shortsMode}
             persistentShorts
             hostsPlayer={!!focusedShort && i === playerIdx}
+            immersive={immersive}
+            onImmersiveChange={setImmersive}
             shortsBus={shortsBus}
             shortsPosition={shortsPosition}
             playbackActive={i === current && !content && !menuOpen && !detailsOpen && !breakdown && !saveItem && !sourceSel && !checkin && !review}
@@ -989,6 +1022,8 @@ export default function SessionPage() {
         open={menuOpen}
         shortsMode={shortsMode}
         onShortsModeChange={setShortsMode}
+        immersive={shortsMode ? immersivePref : undefined}
+        onImmersiveChange={(value) => { setMenuOpen(false); setImmersive(value); }}
         nativeControls={shortsBus.get().native}
         onNativeControls={focusedShort && focusedShort === cur ? () => { setMenuOpen(false); shortsBus.controls.toggleNative(); } : undefined}
         onClose={() => setMenuOpen(false)}

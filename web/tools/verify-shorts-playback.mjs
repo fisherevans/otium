@@ -140,6 +140,8 @@ for (const [name, engine] of Object.entries({ chromium, webkit }).filter(([name]
             const state = { accountId: 1, sessionId: 'shorts-test', cursor: 0, events: [], reads: [], dwells: [], ended: false };
             const items = options.items || Array.from({ length: 10 }, (_, i) => make(i + 1));
             await page.addInitScript(installFakeYT, { mode: options.mode, held: !!options.held, blocked: !!options.blocked });
+            // #184: full-screen Shorts default on; the card-view scenarios opt out.
+            await page.addInitScript(on => { for (const id of [1, 2]) localStorage.setItem(`otium:shorts-immersive:${id}`, on ? 'on' : 'off'); }, !!options.immersive);
             page.on('pageerror', error => errors.push(error.message));
             await context.route('**/*', route => {
                 const request = route.request(), url = new URL(request.url());
@@ -525,5 +527,51 @@ for (const [name, engine] of Object.entries({ chromium, webkit }).filter(([name]
             await waitPlaying(true);
             assert.equal(count('open'), 0, 'sheets and sharing are not opens');
         });
+        await scenario('full screen: clip fills the screen, chrome floats over it, aura instead of Play while loading', async ({ page, state, waitPlaying, advance, count }) => {
+            await waitPlaying(true);
+            const view = await page.evaluate(() => {
+                const frame = document.querySelector('.session-shorts-player[data-active="true"] .im-frame').getBoundingClientRect();
+                const footer = document.querySelector('.afterglow-card:not(.away) .shorts-card-footer').getBoundingClientRect();
+                const pill = document.querySelector('.context-instrument').getBoundingClientRect();
+                const header = document.querySelector('.topbar').getBoundingClientRect();
+                return { frame: [frame.top, frame.left, frame.width, frame.height], footerBottom: footer.bottom, pillTop: pill.top, header: [header.top, header.bottom],
+                    root: [document.documentElement.dataset.immersive, document.documentElement.dataset.overVideo], w: innerWidth, h: innerHeight };
+            });
+            assert.deepEqual(view.frame, [0, 0, view.w, view.h], 'the clip fills the viewport');
+            assert.ok(view.footerBottom <= view.pillTop, 'creator line sits above the pill');
+            assert.equal(view.header[0], 0, 'header floats over the clip');
+            assert.deepEqual(view.root, ['on', 'on']);
+            assert.equal(await page.locator('.session-shorts-player .im-aura').getAttribute('data-on'), 'false', 'no aura while playing');
+            // A held load is "about to play": aura on, no Play glyph to tap.
+            await page.evaluate(() => { window.__yt.holdLoads = true; });
+            await advance(1, false);
+            await page.waitForFunction(() => document.querySelector('.session-shorts-player .im-aura')?.dataset.on === 'true');
+            assert.equal(await page.locator('.session-shorts-player .im-play').count(), 0, 'no Play button while it is about to play');
+            assert.equal(await page.locator('.afterglow-card[data-idx="2"] .shorts-player-slot .im-aura').getAttribute('data-on'), 'true', 'incoming cards show the aura too');
+            await page.evaluate(() => { window.__yt.holdLoads = false; window.__yt.current().emit(1); });
+            await waitPlaying(true);
+            await page.waitForFunction(() => document.querySelector('.session-shorts-player .im-aura')?.dataset.on === 'false');
+            // Buffering mid-play is waiting too; a deliberate pause shows Play instead.
+            await page.evaluate(() => window.__yt.current().emit(3));
+            await page.waitForFunction(() => document.querySelector('.session-shorts-player .im-aura')?.dataset.on === 'true');
+            await page.evaluate(() => window.__yt.current().emit(1));
+            await waitPlaying(true);
+            await page.getByRole('button', { name: 'Pause', exact: true }).click();
+            await waitPlaying(false);
+            assert.equal(await page.locator('.session-shorts-player .im-aura').getAttribute('data-on'), 'false', 'a deliberate pause is not loading');
+            assert.equal(await page.locator('.session-shorts-player .im-gesture .im-play').count(), 1, 'Play shows after a deliberate pause');
+            await page.getByRole('button', { name: 'Play', exact: true }).click();
+            await waitPlaying(true);
+            // Toggle back to the card view and again; the choice persists.
+            await page.getByRole('button', { name: 'Exit full screen', exact: true }).click();
+            await page.waitForFunction(() => !document.documentElement.dataset.immersive);
+            const card = await page.locator('.session-shorts-player[data-active="true"] .im-frame').boundingBox();
+            assert.ok(card.height < 664 - 100, 'card view gives the chrome its space back');
+            assert.equal(await page.evaluate(() => localStorage.getItem('otium:shorts-immersive:1')), 'off');
+            await page.getByRole('button', { name: 'Full screen', exact: true }).click();
+            await page.waitForFunction(() => document.documentElement.dataset.immersive === 'on');
+            await waitPlaying(true);
+            assert.ok(count('open') <= 1, 'full screen and the aura do not count as opens');
+        }, { immersive: true });
     } finally { await browser.close(); }
 }

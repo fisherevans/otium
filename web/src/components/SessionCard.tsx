@@ -1,10 +1,10 @@
 import { forwardRef, type PointerEvent as ReactPointerEvent } from "react";
 import { ShortsMeta, ShortsQuietControls } from "./ShortsQuietControls";
 import type { ShortsBus } from "@/lib/shortsBus";
-import { Bookmark, BookOpen, Play, ExternalLink, MoreHorizontal, ChevronRight } from "lucide-react";
+import { Bookmark, BookOpen, Play, ExternalLink, MoreHorizontal, ChevronRight, Maximize2, Minimize2 } from "lucide-react";
 import type { Item, ItemRender, Selected } from "@/api/client";
 import { TopicPill, CardSource, SourceAvatar, Byline, Blurb, Media } from "@/components/CardParts";
-import { InlineMedia, type MediaPosition } from "@/components/InlineMedia";
+import { Aura, InlineMedia, type MediaPosition } from "@/components/InlineMedia";
 import { ShareActions } from "@/components/ReaderActions";
 import { isMedia, isVertical, videoAspect } from "@/lib/render";
 import "./session-afterglow.css";
@@ -76,6 +76,9 @@ export interface SessionCardProps {
   // #182: this card's slot currently hosts the shared player; its footer
   // carries the live sound/CC/time controls from the bus.
   hostsPlayer?: boolean;
+  // #184: full-screen Shorts, toggled from this card's footer.
+  immersive?: boolean;
+  onImmersiveChange?: (value: boolean) => void;
   shortsBus?: ShortsBus;
   shortsPosition?: React.RefObject<MediaPosition | null>;
   playbackActive?: boolean;
@@ -299,6 +302,8 @@ export const SessionCard = forwardRef<HTMLDivElement, SessionCardProps>(function
     shortsMode = false,
     persistentShorts = false,
     hostsPlayer = false,
+    immersive = false,
+    onImmersiveChange,
     shortsBus,
     shortsPosition,
     playbackActive = true,
@@ -400,7 +405,10 @@ export const SessionCard = forwardRef<HTMLDivElement, SessionCardProps>(function
         // poster underneath is what you see while scrolling in or out.
         <div className="card-media shorts-player-slot" aria-hidden="true">
           <div className="inline-media im-compact"><div className="im-stage">
-            <div className="im-frame" style={{ "--ar": String(videoAspect(it.item)), ...(it.item.thumbnail_url ? { backgroundImage: `url(${it.item.thumbnail_url})` } : {}) } as React.CSSProperties} />
+            <div className="im-frame" style={{ "--ar": String(videoAspect(it.item)), ...(it.item.thumbnail_url ? { backgroundImage: `url(${it.item.thumbnail_url})` } : {}) } as React.CSSProperties}>
+              {/* #184: an incoming clip is about to play, not waiting for a tap. */}
+              <Aura on={!hostsPlayer} />
+            </div>
           </div></div>
         </div>
       ) : activeMedia ? (
@@ -455,9 +463,15 @@ export const SessionCard = forwardRef<HTMLDivElement, SessionCardProps>(function
             </span>
           </button>
           {hostsPlayer && shortsBus && <ShortsQuietControls bus={shortsBus} />}
-          <button className="shorts-details" type="button" onClick={onDetails ?? onMenu} disabled={!focused}>
+          {hostsPlayer && onImmersiveChange && (
+            <button type="button" className="shorts-quiet-btn" onClick={() => onImmersiveChange(!immersive)}
+              aria-label={immersive ? "Exit full screen" : "Full screen"} aria-pressed={immersive} data-on={immersive}>
+              {immersive ? <Minimize2 size={18} strokeWidth={1.7} aria-hidden /> : <Maximize2 size={18} strokeWidth={1.7} aria-hidden />}
+            </button>
+          )}
+          <button className="shorts-details" type="button" onClick={onDetails ?? onMenu} disabled={!focused} aria-label="Details">
             <MoreHorizontal size={18} aria-hidden />
-            Details
+            <span className="shorts-details-label">Details</span>
           </button>
         </div>
       )}
