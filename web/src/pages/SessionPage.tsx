@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useLayoutEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type PointerEvent as ReactPointerEvent, useMemo } from "react";
+import { useNavigate, useParams, useLocation } from "react-router-dom";
 import { api, type Item, type ItemContent, type ItemRender, type Selected } from "@/api/client";
 import { ItemActions } from "@/components/ItemActions";
 import { ItemDetails } from "@/components/ItemDetails";
@@ -18,6 +18,7 @@ import { SourceSheet } from "@/components/SourceSheet";
 import { SessionCard } from "@/components/SessionCard";
 import type { MediaPosition } from "@/components/InlineMedia";
 import { SessionShortsPlayer } from "@/components/SessionShortsPlayer";
+import { SessionBuilding } from "@/components/SessionBuilding";
 import { useSessionPlayback } from "@/lib/sessionPlayback";
 import { useImmersiveShorts, useShortsMode } from "@/lib/shortsMode";
 import * as perf from "@/lib/perf";
@@ -53,6 +54,7 @@ const FAST_STREAK = 8;
 export default function SessionPage() {
   const { id = "" } = useParams();
   const nav = useNavigate();
+  const fromBuild = !!(useLocation().state as { building?: boolean } | null)?.building;
   const { user } = useAuth();
   const [shortsMode, setShortsMode] = useShortsMode();
   const [immersivePref, setImmersive] = useImmersiveShorts();
@@ -655,7 +657,9 @@ export default function SessionPage() {
   // #184: full-screen Shorts. The reel takes the whole viewport for the session
   // (so card geometry never changes between Shorts and articles), and the app
   // header and pill float over it, restyled while a Short is under them.
-  const immersive = shortsMode && immersivePref && !review;
+  // Only sessions that contain Shorts: a News session keeps the normal layout.
+  const hasShorts = useMemo(() => items.some((sel) => sel.item.media_type === "short"), [items]);
+  const immersive = shortsMode && immersivePref && hasShorts && !review;
   const overVideo = immersive && !atEnd && cur?.item.media_type === "short";
   useEffect(() => {
     const root = document.documentElement;
@@ -868,7 +872,8 @@ export default function SessionPage() {
   });
 
   if (err) return <div className={`focus-session afterglow-session ${!review && shortsMode && cur?.item.media_type === "short" ? "shorts-viewing" : ""}`}><div className="center"><p className="err">Couldn't resume your session: {err}</p><button className="btn" onClick={() => window.location.reload()}>Retry</button></div><ContextInstrument mode="app" eyebrow="Session" label="Could not load" action={{ label: "Back", onClick: () => nav("/") }} /></div>;
-  if (loading) return <div className={`focus-session afterglow-session ${!review && shortsMode && cur?.item.media_type === "short" ? "shorts-viewing" : ""}`}><div className="spinner">Loading session…</div><ContextInstrument mode="session" eyebrow="Session" label="Loading" action={{ label: "Back", onClick: () => nav("/") }} /></div>;
+  // #186: the same building screen Home showed while the server made the session.
+  if (loading) return <div className="focus-session afterglow-session"><SessionBuilding label={fromBuild ? "Building your session" : "Opening your session"} continued={fromBuild} /><ContextInstrument mode="session" eyebrow="Session" label="Loading" action={{ label: "Back", onClick: () => nav("/") }} /></div>;
   if (items.length === 0) {
     return (
       <div className="center">
@@ -1005,11 +1010,19 @@ export default function SessionPage() {
         <SessionPresetPrompt sessionId={id} />
       </div>}
 
-      <ContextInstrument mode={review ? "app" : "session"} eyebrow={review ? "Session complete" : "Session"}
-        label={review ? "Review session" : elapsed >= durationSec ? "Session time reached" : durationSec - elapsed <= 120 ? "A little time left" : durationSec - elapsed <= 300 ? "A few minutes left" : "Session in progress"}
-        onMenu={review ? undefined : () => setMenuOpen(true)} menuLabel="Article and session actions"
-        onLabel={review ? () => setRecapOpen(true) : undefined}
-        action={review ? { label: "Done", onClick: goHome, disabled: extending || ending } : { label: "Next", onClick: () => { perf.noteTrigger("button"); next(); }, icon: <ArrowDown size={18} aria-hidden /> }} />
+      {/* #186: full screen keeps only a floating Next; the session menu is the
+          ··· on each card, and the time phrase is in that menu's header. */}
+      {immersive && !atEnd ? (
+        <button type="button" className="immersive-next" onClick={() => { perf.noteTrigger("button"); next(); }}>
+          Next <ArrowDown size={17} aria-hidden />
+        </button>
+      ) : (
+        <ContextInstrument mode={review ? "app" : "session"} eyebrow={review ? "Session complete" : "Session"}
+          label={review ? "Review session" : elapsed >= durationSec ? "Session time reached" : durationSec - elapsed <= 120 ? "A little time left" : durationSec - elapsed <= 300 ? "A few minutes left" : "Session in progress"}
+          onMenu={review ? undefined : () => setMenuOpen(true)} menuLabel="Article and session actions"
+          onLabel={review ? () => setRecapOpen(true) : undefined}
+          action={review ? { label: "Done", onClick: goHome, disabled: extending || ending } : { label: "Next", onClick: () => { perf.noteTrigger("button"); next(); }, icon: <ArrowDown size={18} aria-hidden /> }} />
+      )}
 
       {review && recapOpen && <SessionReview review={review} onClose={() => setRecapOpen(false)} saved={saved} onSave={save}
         onRead={(sel) => { if (isMedia(sel.item)) setReviewMedia(sel); else openContent(sel); }} />}
@@ -1022,6 +1035,7 @@ export default function SessionPage() {
         open={menuOpen}
         shortsMode={shortsMode}
         onShortsModeChange={setShortsMode}
+        status={immersive ? (elapsed >= durationSec ? "Session time reached" : durationSec - elapsed <= 120 ? "A little time left" : durationSec - elapsed <= 300 ? "A few minutes left" : "Session in progress") : undefined}
         immersive={shortsMode ? immersivePref : undefined}
         onImmersiveChange={(value) => { setMenuOpen(false); setImmersive(value); }}
         nativeControls={shortsBus.get().native}

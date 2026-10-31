@@ -30,6 +30,7 @@ export function ItemActions({
   onNativeControls,
   immersive,
   onImmersiveChange,
+  status,
 }: {
   selected: Selected | null;
   open: boolean;
@@ -47,6 +48,8 @@ export function ItemActions({
   onNativeControls?: () => void;
   immersive?: boolean;
   onImmersiveChange?: (value: boolean) => void;
+  // #186: the session's time phrase, when the pill that usually shows it is hidden.
+  status?: string;
 }) {
   const nav = useNavigate();
   const item = selected?.item ?? null;
@@ -88,6 +91,7 @@ export function ItemActions({
   return (
     <BottomSheet open={open} onClose={onClose} kicker={selected?.source_title ?? "Item"}>
       <div className="ia-title">{item.title}</div>
+      {status && <p className="ia-sub">{status}</p>}
 
       {clip && <VideoFileActions item={item} />}
 
@@ -129,7 +133,7 @@ export function ItemActions({
         </button>
         {onDetails && (
           <button className="sheet-row" onClick={onDetails}>
-            <span className="sheet-row-label"><Info size={18} aria-hidden /> Details and why it's here</span>
+            <span className="sheet-row-label"><Info size={18} aria-hidden /> Post details</span>
             <ChevronRight size={18} className="sheet-chev inline-icon" aria-hidden />
           </button>
         )}

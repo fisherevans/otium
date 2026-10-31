@@ -130,7 +130,7 @@ for (const [name, engine] of Object.entries({ chromium, webkit }).filter(([name]
             await page.goto(`${base}/session/surface-test`);
             // #180: filters live in Details (provenance), reached from the actions sheet.
             await page.getByRole('button', { name: 'Article and session actions', exact: true }).click();
-            await page.getByRole('dialog', { name: source.title, exact: true }).getByRole('button', { name: /Details and why/ }).click();
+            await page.getByRole('dialog', { name: source.title, exact: true }).getByRole('button', { name: /Post details/ }).click();
             const menu = page.getByRole('dialog', { name: 'Details', exact: true });
             const sheet = menu.locator('.sheet');
             await page.waitForTimeout(300);

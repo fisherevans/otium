@@ -499,7 +499,7 @@ for (const [name, engine] of Object.entries({ chromium, webkit }).filter(([name]
             await menu();
             await shot('actions');
             const sheet = page.locator('dialog[open]');
-            for (const name of ['Save or share video', 'Copy link', 'Open in YouTube', 'Details and why it\'s here', 'End session'])
+            for (const name of ['Save or share video', 'Copy link', 'Open in YouTube', 'Post details', 'End session'])
                 assert.equal(await sheet.getByRole('button', { name, exact: false }).count() > 0, true, `actions: ${name}`);
             assert.equal(await sheet.getByRole('link', { name: 'Download video' }).getAttribute('href'), '/api/v1/items/101/video?download=1');
             assert.equal(await sheet.getByRole('link', { name: 'Open channel on YouTube' }).getAttribute('href'), 'https://www.youtube.com/channel/UCsynthetic0000000000000');
@@ -514,7 +514,7 @@ for (const [name, engine] of Object.entries({ chromium, webkit }).filter(([name]
             assert.deepEqual(await page.evaluate(() => window.__shared), [['Synthetic clip 1.mp4', 'video/mp4', 2048]]);
             await sheet.getByRole('button', { name: 'Share video' }).click();
             assert.equal(state.videoFetches, 1, 'a second share reuses the fetched file');
-            await sheet.getByRole('button', { name: /Details and why/ }).click();
+            await sheet.getByRole('button', { name: /Post details/ }).click();
             await page.waitForFunction(() => document.querySelector('dialog[open]')?.textContent.includes('Explore score'));
             const details = page.locator('dialog[open]');
             await shot('details');
@@ -530,17 +530,22 @@ for (const [name, engine] of Object.entries({ chromium, webkit }).filter(([name]
         await scenario('full screen: clip fills the screen, chrome floats over it, aura instead of Play while loading', async ({ page, state, waitPlaying, advance, count }) => {
             await waitPlaying(true);
             const view = await page.evaluate(() => {
-                const frame = document.querySelector('.session-shorts-player[data-active="true"] .im-frame').getBoundingClientRect();
-                const footer = document.querySelector('.afterglow-card:not(.away) .shorts-card-footer').getBoundingClientRect();
-                const pill = document.querySelector('.context-instrument').getBoundingClientRect();
-                const header = document.querySelector('.topbar').getBoundingClientRect();
-                return { frame: [frame.top, frame.left, frame.width, frame.height], footerBottom: footer.bottom, pillTop: pill.top, header: [header.top, header.bottom],
+                const box = el => { const r = document.querySelector(el)?.getBoundingClientRect(); return r && { top: r.top, bottom: r.bottom, left: r.left, right: r.right, width: r.width, height: r.height }; };
+                return { frame: box('.session-shorts-player[data-active="true"] .im-frame'), footer: box('.afterglow-card:not(.away) .shorts-card-footer'),
+                    next: box('.immersive-next'), header: box('.topbar'), pill: document.querySelectorAll('.context-instrument').length,
+                    hidden: ['.topbar .chrome-btn', '.topbar .font-button'].map(s => getComputedStyle(document.querySelector(s)).display),
                     root: [document.documentElement.dataset.immersive, document.documentElement.dataset.overVideo], w: innerWidth, h: innerHeight };
             });
-            assert.deepEqual(view.frame, [0, 0, view.w, view.h], 'the clip fills the viewport');
-            assert.ok(view.footerBottom <= view.pillTop, 'creator line sits above the pill');
-            assert.equal(view.header[0], 0, 'header floats over the clip');
+            assert.equal(view.pill, 0, 'no bottom pill in full screen');
+            assert.deepEqual(view.hidden, ['none', 'none'], 'Library and Aa fold into the ··· menu');
+            assert.ok(view.frame.width >= view.w - 1 && view.frame.top >= view.header.bottom - 1 && view.frame.bottom <= view.footer.top + 1, 'the clip fills the space between header and creator strip');
+            assert.ok(view.footer.bottom >= view.h - 20, 'creator strip is the bottom element');
+            assert.ok(view.next.right >= view.w - 20 && view.next.bottom <= view.footer.top, 'Next floats bottom-right, above the strip');
             assert.deepEqual(view.root, ['on', 'on']);
+            await page.locator('.afterglow-card:not(.away) .shorts-details').click();
+            await page.locator('dialog[open]').getByRole('button', { name: 'Post details' }).waitFor();
+            await page.keyboard.press('Escape'); await page.waitForFunction(() => !document.querySelector('dialog[open]'));
+            await waitPlaying(true);
             assert.equal(await page.locator('.session-shorts-player .im-aura').getAttribute('data-on'), 'false', 'no aura while playing');
             // A held load is "about to play": aura on, no Play glyph to tap.
             await page.evaluate(() => { window.__yt.holdLoads = true; });
@@ -567,6 +572,7 @@ for (const [name, engine] of Object.entries({ chromium, webkit }).filter(([name]
             await page.waitForFunction(() => !document.documentElement.dataset.immersive);
             const card = await page.locator('.session-shorts-player[data-active="true"] .im-frame').boundingBox();
             assert.ok(card.height < 664 - 100, 'card view gives the chrome its space back');
+            assert.equal(await page.locator('.context-instrument').count(), 1, 'card view keeps the pill');
             assert.equal(await page.evaluate(() => localStorage.getItem('otium:shorts-immersive:1')), 'off');
             await page.getByRole('button', { name: 'Full screen', exact: true }).click();
             await page.waitForFunction(() => document.documentElement.dataset.immersive === 'on');

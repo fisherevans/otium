@@ -12,6 +12,7 @@ import { contentLabel, contentTypeLabel, contentTypes, defaultSetup, initialPres
 import "@/styles/launcher.css";
 import { useShortsMode } from "@/lib/shortsMode";
 import { ShortsModeToggle } from "@/components/ShortsModeToggle";
+import { SessionBuilding } from "@/components/SessionBuilding";
 
 export default function HomePage() {
     const nav = useNavigate();
@@ -34,6 +35,8 @@ export default function HomePage() {
     const [loadError, setLoadError] = useState("");
     const [loadAttempt, setLoadAttempt] = useState(0);
     const [busy, setBusy] = useState(false);
+    // #186: what is being built, shown full screen the moment you tap a start.
+    const [building, setBuilding] = useState<SessionSetup | null>(null);
     const [error, setError] = useState("");
     const [sheet, setSheet] = useState<"advanced" | "presets" | "recent" | null>(null);
     const [save, setSave] = useState<{ setup: SessionSetup; preset?: SessionPreset } | null>(null);
@@ -110,15 +113,15 @@ export default function HomePage() {
         if (busy || accountId == null) return;
         if (!value.contentTypes.length) { setError("Choose at least one content type."); return; }
         if (invalidSetup(value)) { setError("This setup has no available topics. Edit the session scope."); return; }
-        setBusy(true); setError("");
+        setBusy(true); setError(""); setBuilding(value);
         try {
             const themes = value.excluded.length ? topics.filter((topic) => (!value.sections.length || value.sections.includes(topic.section_slug ?? "")) && !value.excluded.includes(topic.slug)).map((topic) => topic.slug) : [];
             const response = await api.createSession(value.minutes, themes, value.excluded.length ? [] : value.sections, value.contentTypes);
-            if (!response?.session_id) { setError("No new items match this session. Change the scope or content types."); return; }
+            if (!response?.session_id) { setBuilding(null); setError("No new items match this session. Change the scope or content types."); return; }
             recordSessionSetup(accountId, response.session_id, value);
             try { localStorage.setItem("otium.last-scope", JSON.stringify(value.sections)); } catch { /* Storage is optional. */ }
-            nav(`/session/${response.session_id}`);
-        } catch (e: unknown) { setError(e instanceof Error ? e.message : String(e)); }
+            nav(`/session/${response.session_id}`, { state: { building: true } });
+        } catch (e: unknown) { setBuilding(null); setError(e instanceof Error ? e.message : String(e)); }
         finally { setBusy(false); }
     }
     function updateData(next: SessionPresets) {
@@ -152,7 +155,7 @@ export default function HomePage() {
     if (loadError) return <section className="launcher"><h1>Couldn't load your library</h1><p role="alert">{loadError}</p><button className="btn" onClick={() => setLoadAttempt((n) => n + 1)}>Retry</button></section>;
     if (!loaded) return <section className="launcher"><p role="status">Loading your library…</p></section>;
     if (!sources.length) return <section className="launcher"><h1>Add your first source</h1><p>Follow RSS feeds, YouTube channels or podcasts to build a session.</p><button className="btn" onClick={() => nav("/sections")}>Go to Library</button><HowItWorks defaultOpen/></section>;
-    return <section className={`launcher ${custom ? "launcher-custom" : ""}`} onPointerDown={pointerDown} onPointerMove={pointerMove} onPointerUp={pointerUp} onPointerCancel={() => { press.current = null; }}>
+    return <>{building && <SessionBuilding detail={`${building.minutes} min · ${contentLabel(building).toLowerCase()}`} />}<section className={`launcher ${custom ? "launcher-custom" : ""}`} onPointerDown={pointerDown} onPointerMove={pointerMove} onPointerUp={pointerUp} onPointerCancel={() => { press.current = null; }}>
         <header className="launcher-head"><h1>{custom ? "Custom session" : "New session"}</h1></header>
         {error && <p className="launcher-error" role="alert">{error}</p>}
         {!custom ? <>
@@ -188,5 +191,5 @@ export default function HomePage() {
             </> : sheet === "presets" ? <><p className="launcher-meta">Saved on this device for your account.</p>{data.presets.map((preset) => <div className="launcher-preset" key={preset.id}><button className="launcher-row" disabled={busy || !hasSupply(preset.setup) || invalidSetup(preset.setup)} onClick={() => begin(preset.setup)}><span><strong>{preset.name}{preset.id === data.defaultId ? " · Default" : ""}</strong><small>{setupLabel(preset.setup)}</small></span><ArrowRight size={18}/></button><div className="launcher-preset-actions"><button onClick={() => { setSheet(null); setSetup(preset.setup); setCustom(true); }}>Customize</button><button onClick={() => setSave({ setup: preset.setup, preset })}>Rename</button>{preset.id !== data.defaultId && <button onClick={() => updateData({ ...data, defaultId: preset.id })}>Make default</button>}<button onClick={() => updateData({ ...data, presets: data.presets.filter((p) => p.id !== preset.id), defaultId: data.defaultId === preset.id ? data.presets.find((p) => p.id !== preset.id)?.id ?? "" : data.defaultId })}>Remove</button></div></div>)}<button className="btn" onClick={() => { setSheet(null); setCustom(true); }}>Custom session</button></> : <>{suggestion && <div className="launcher-suggestion"><button onClick={() => setSave({ setup: suggestion })}>Used twice. Save as preset?</button><button className="icon-btn" aria-label="Dismiss preset suggestion" onClick={() => updateData({ ...data, dismissed: [...data.dismissed, setupKey(suggestion)] })}><X size={16}/></button></div>}{recent.length ? recent.map((value) => <div className="launcher-recent" key={setupKey(value)}><button className="launcher-row" onClick={() => { setSheet(null); setSetup(value); setCustom(true); }}><span><strong>{value.minutes} min {contentLabel(value).toLowerCase()}</strong><small>{setupLabel(value)}</small></span><ChevronRight size={18}/></button><button className="icon-btn" aria-label={`Save ${value.minutes} minute session as preset`} onClick={() => setSave({ setup: value })}><Bookmark size={18}/></button></div>) : <p>No unsaved sessions.</p>}</>}
         </div></BottomSheet>}
         {save && <SavePresetDialog setup={save.setup} name={save.preset?.name} editId={save.preset?.id} onClose={() => setSave(null)}/>}
-    </section>;
+    </section></>;
 }

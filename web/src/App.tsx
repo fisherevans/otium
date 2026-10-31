@@ -150,6 +150,8 @@ function AppShell() {
             const Icon = Glyph as typeof BookOpen;
             return <button key={String(path)} onClick={() => go(String(path))}><Icon size={21} /><span>{String(label)}</span><ChevronRight size={18} /></button>;
           })}
+          {/* #186: full-screen Shorts hide the header's Aa; it lives here too. */}
+          {focused && <button onClick={() => { setMenu(false); setTypeMenu(true); }}><span className="font-button">Aa</span><span>Type and appearance</span><ChevronRight size={18} /></button>}
           {focused && <button onClick={() => { setMenu(false); window.dispatchEvent(new CustomEvent("otium:request-end", { detail: { ack: () => {} } })); }}><ArrowLeft size={21} /><span>End session</span></button>}
         </div>
       </BottomSheet>
