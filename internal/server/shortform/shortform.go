@@ -27,12 +27,14 @@ import (
 	"golang.org/x/net/html/atom"
 )
 
-// MaxWords is the most body text a short post may have. Measured on 2026-11-03
-// over 1,084 items from 31 Substack and Medium feeds (changelog
-// 2026-11-03-social-cards.md): notes-style posts, photo-of-the-day posts and short
-// takes sit under ~200 words, the shortest real articles start well above 300,
-// and the 200-300 band is thin and mixed. 250 splits that band; anything inside
-// it fits a phone screen as a post.
+// MaxWords is the most body text a short post may have. Sampled on 2026-11-03
+// (changelog 2026-11-03-social-cards.md): 514 entries from 24 Substack and 6
+// Medium feeds, lengths from Substack's archive where it had them. The posts that
+// read as posts - a chart and two sentences, an open thread, a meetup notice, a
+// photo with a caption, a short poem - all came in under ~200 words; the shortest
+// essays start around 300, and the 200-300 band is thin (19 entries) and mixed.
+// 250 words is also about one phone screen of text at reading size, so a post
+// below it shows whole on the card instead of being trimmed like an article.
 const MaxWords = 250
 
 // Kinds are the source kinds this applies to.

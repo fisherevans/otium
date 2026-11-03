@@ -23,7 +23,7 @@ export function postText(item: Item): string {
  * Mirrors store.Item.Headline on the server.
  */
 export function headline(item: Item, max = 120): string {
-  if (!isPost(item)) return item.title;
+  if (!isPost(item) || item.post_body?.title) return item.title;
   const line = postText(item).split(/\s+/).filter(Boolean).join(" ");
   const chars = Array.from(line);
   if (chars.length <= max) return line;
@@ -66,4 +66,35 @@ export function postBody(item: Item, sourceTitle: string, sourceIcon?: string): 
 export function postCounts(item: Item, conv?: Conversation | null): { replies: number; reposts: number; likes: number } {
   if (conv) return { replies: conv.counts.replies, reposts: conv.counts.reposts + conv.counts.quotes, likes: conv.counts.likes };
   return { replies: item.replies ?? 0, reposts: item.reposts ?? 0, likes: item.likes ?? 0 };
+}
+
+/** The platform a post is drawn as (#209): bluesky, or a short Substack/Medium post. */
+export function postPlatform(item: Item): string {
+  return item.source_kind || "bluesky";
+}
+
+/** The line under a post's author when it has no handle: its publication, when
+ *  that says something the author's name does not (#209). */
+export function postContext(item: Item, body: PostBody, sourceTitle?: string): string | undefined {
+  if (postPlatform(item) === "bluesky" || !sourceTitle) return undefined;
+  return sourceTitle.trim() !== body.author.name.trim() ? sourceTitle : undefined;
+}
+
+/** Whether the item's platform reports counts at all. Medium does not, so its
+ *  posts and articles show no counts row rather than a row of zeros (#209). */
+export function hasPlatformCounts(item: Item): boolean {
+  return item.source_kind !== "medium";
+}
+
+/** Counts for a post's row, or null when the platform has none (#209). */
+export function postRowCounts(item: Item, conv?: Conversation | null) {
+  return hasPlatformCounts(item) ? postCounts(item, conv) : null;
+}
+
+/** The post with the post it quotes, from the conversation when the stored post
+ *  predates #207 and does not carry it. Reader only since #209. */
+export function withQuoted(body: PostBody, conv?: Conversation | null): PostBody {
+  const q = conv?.quoted;
+  if (body.quote || !q) return body;
+  return { ...body, quote: { author: { name: q.author, handle: q.handle, avatar: q.avatar_url }, segments: q.segments ?? [{ text: q.text }], url: q.url, published_at: q.published_at, media: q.media } };
 }

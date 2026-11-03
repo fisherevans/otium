@@ -181,8 +181,6 @@ export function solveCard(vars: HTMLElement, reel: HTMLElement, card: HTMLElemen
   vars.style.removeProperty("--card-center-pad");
   vars.removeAttribute("data-solved-blurb");
   vars.removeAttribute("data-solved-conv");
-  vars.removeAttribute("data-solved-linkdesc");
-  vars.removeAttribute("data-solved-quote");
   vars.style.removeProperty("--card-post-lines");
   if (frame) frame.style.removeProperty("height");
   if (!opts.solve) return [];
@@ -266,17 +264,19 @@ export function solveCard(vars: HTMLElement, reel: HTMLElement, card: HTMLElemen
   // before the last reply goes; then the link card's description and a quoted
   // post's text, and only then the post's own text, which is what it says.
   const postEl = card.querySelector<HTMLElement>(".card-post");
+  //
+  // #209: the card is the post's text, its picture, its counts and a reply or
+  // two (the link card and the quoted post moved to the reader). Fisher's order:
+  // the replies give way first - the second, then the first - then the picture
+  // steps down, and only then is the text trimmed.
   const knobs: [string, () => boolean][] = postEl && !frame
     ? [
-        ["hero cap 34%", () => setCap(0.34)],
         ["second reply dropped", () => trimConv("one")],
+        ["replies dropped", () => trimConv("off")],
+        ["hero cap 34%", () => setCap(0.34)],
         ["hero cap 26%", () => setCap(0.26)],
         ["hero cap 18%", () => setCap(0.18)],
-        ["replies dropped", () => trimConv("off")],
-        ["link description dropped", () => dropLinkDesc()],
-        ["quote to 2 lines", () => trimQuote("short")],
         ["post trimmed", () => trimPost()],
-        ["quote text dropped", () => trimQuote("off")],
       ]
     : frame
     ? [
@@ -323,17 +323,6 @@ export function solveCard(vars: HTMLElement, reel: HTMLElement, card: HTMLElemen
     const lh = parseFloat(getComputedStyle(postEl).lineHeight) || 26;
     const lines = Math.max(2, Math.floor((postEl.offsetHeight - over - 2) / lh));
     vars.style.setProperty("--card-post-lines", String(lines));
-    return true;
-  }
-  function dropLinkDesc() {
-    if (!card.querySelector(".bp-link-desc") || vars.getAttribute("data-solved-linkdesc") === "off") return false;
-    vars.setAttribute("data-solved-linkdesc", "off");
-    return true;
-  }
-  function trimQuote(to: "short" | "off") {
-    const now = vars.getAttribute("data-solved-quote");
-    if (!card.querySelector(".bp-quote-text") || now === to || now === "off") return false;
-    vars.setAttribute("data-solved-quote", to);
     return true;
   }
   function dropBlurb() {

@@ -80,6 +80,7 @@ const ALL_FIXTURES = [
   "bsky-quote", "bsky-image", "substack-comments", "video-wide-comments",
   "news-vtdigger", "bsky-text-short", "bsky-text-long", "bsky-link-avatar",
   "bsky-otm", "bsky-images", "bsky-quoted", "bsky-thread",
+  "bsky-link-only", "substack-short", "substack-long", "medium-short",
 ];
 const FIXTURES = (arg("fixtures") ? String(arg("fixtures")).split(",") : ALL_FIXTURES).map((s) => s.trim());
 
@@ -173,6 +174,10 @@ function readCard() {
     // #207: a post's links must be live, and a link card must stay compact.
     deadLinks: [...card.querySelectorAll(".card-post a")].filter((a) => !/^https?:/.test(a.getAttribute("href") || "")).length,
     linkCard: card.querySelector(".bp-linkcard") ? Math.round(R(card.querySelector(".bp-linkcard")).height) : "-",
+    // #209: the card is text, picture, counts and a reply or two. The link card
+    // and the quoted post are the reader's; Medium has no counts, so no row.
+    readerOnly: [...card.querySelectorAll(".bp-linkcard, .bp-quote")].length,
+    zeroRow: card.querySelector(".bp-medium .bp-engagement") ? 1 : 0,
     media: media ? `${Math.round(R(media).width)}x${Math.round(R(media).height)} (${Math.round((R(media).height / card.offsetHeight) * 100)}%)` : "-",
     overflow: Math.max(0, card.scrollHeight - card.clientHeight),
     horizontalOverflow: Math.max(0, card.scrollWidth - card.clientWidth),
@@ -210,6 +215,8 @@ function record(where, m) {
   if (m.avatarHero) problems.push(`${where}: a post shows its author's avatar as the hero`);
   if (m.deadLinks > 0) problems.push(`${where}: ${m.deadLinks} post link(s) without an http(s) target`);
   if (typeof m.linkCard === "number" && m.linkCard > 130) problems.push(`${where}: link card is ${m.linkCard}px tall, not compact`);
+  if (m.readerOnly > 0) problems.push(`${where}: the card shows a link card or quoted post (reader only since #209)`);
+  if (m.zeroRow > 0) problems.push(`${where}: a Medium post shows a counts row`);
   if (m.compact && m.horizontalOverflow > 0) problems.push(`${where}: content overflows horizontally by ${m.horizontalOverflow}px`);
   if (!m.actionsInView) problems.push(`${where}: action row is out of reach`);
 }

@@ -3,9 +3,9 @@
    thread line. Brand blue only on the platform mark and the links; everything
    else stays in the paper palette, and e-ink/dark get their own values. */
 
-:root { --bsky: #0a7aff; --bsky-link: #1764c8; }
-:root[data-theme="dark"] { --bsky: #4f9dff; --bsky-link: #7fb5ff; }
-:root[data-presentation="eink"] { --bsky: var(--ink); --bsky-link: var(--ink); }
+:root { --bsky: #0a7aff; --bsky-link: #1764c8; --substack: #ff6719; }
+:root[data-theme="dark"] { --bsky: #4f9dff; --bsky-link: #7fb5ff; --substack: #ff8a4c; }
+:root[data-presentation="eink"] { --bsky: var(--ink); --bsky-link: var(--ink); --substack: var(--ink); }
 
 .bsky-post {
     flex: 0 0 auto;
@@ -80,8 +80,6 @@
 .bp-link-domain { font-size: 12px; line-height: 1.3; color: var(--ink-mute); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .bp-full .bp-link-desc { -webkit-line-clamp: 3; }
 .bp-full .bp-link-thumb { width: 96px; }
-/* The solver gives the description up before it trims the post (lib/cardLayout). */
-[data-solved-linkdesc="off"] .bp-link-desc { display: none; }
 
 /* A quoted post, inset. */
 .bp-quote { display: flex; flex-direction: column; gap: 4px; min-width: 0; padding: 9px 12px; border: 1px solid var(--rule); border-radius: 12px; color: inherit; text-decoration: none; }
@@ -139,6 +137,48 @@
 .bp-reply .cv-head .cv-likes + .bp-reply-open { margin-left: 0; }
 .bp-reply .cv-head > .bp-reply-open:not(.cv-likes + .bp-reply-open) { margin-left: auto; }
 
-/* A quoted post shortens, then loses its text, after the link description. */
-[data-solved-quote="short"] .bp-quote-text { -webkit-line-clamp: 2; }
-[data-solved-quote="off"] .bp-quote-text { display: none; }
+/* #209: short Substack and Medium posts use the same card. Their mark takes
+   their own colour; their links read in the ink's link colour, not Bluesky's. */
+.bp-platform-substack, .bp-platform-substack .platform-mark { color: var(--substack); }
+.bp-platform-medium, .bp-platform-medium .platform-mark { color: var(--ink); }
+.bp-substack .bp-link, .bp-medium .bp-link { color: var(--ink); text-decoration: underline; text-decoration-color: var(--rule); text-underline-offset: 2px; }
+
+/* A short post's own title, a line above its text. */
+.bp-title {
+    margin: 0;
+    font-family: var(--heading, Fraunces, Georgia, serif);
+    font-size: 18px; font-weight: 600; line-height: 1.3; color: var(--ink);
+    display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden;
+}
+.bp-full .bp-title { font-size: 21px; -webkit-line-clamp: none; display: block; }
+
+/* On the card a post that is only a link: the link's title as one quiet line. */
+.bp-linkline {
+    display: flex; flex-direction: column; gap: 2px; min-width: 0; min-height: 44px; justify-content: center;
+    color: var(--ink-soft); text-decoration: none; font-family: var(--grot, system-ui, sans-serif);
+}
+.bp-linkline-title { font-size: 15px; line-height: 1.35; color: var(--bsky-link); overflow-wrap: anywhere; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; overflow: hidden; }
+.bp-linkline-domain { font-size: 12px; color: var(--ink-mute); }
+
+/* The reader's thread keeps going (#209). Below three levels replies follow
+   their parent at the same indent (PostView flattens them). */
+.bp-expand {
+    display: block; min-height: 36px; margin: 6px 0 0; padding: 0; border: 0; background: none;
+    font-family: var(--grot, system-ui, sans-serif); font-size: 13px; font-weight: 600; color: var(--ink-soft);
+    text-align: left; cursor: pointer;
+}
+.bp-expand:disabled { color: var(--ink-mute); cursor: default; }
+
+/* Who reposted: one quiet, wrapping line of small avatars and names. */
+.bp-people { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 6px 14px; }
+.bp-person { display: inline-flex; align-items: center; gap: 6px; min-height: 32px; color: var(--ink-mute); text-decoration: none; font-family: var(--grot, system-ui, sans-serif); font-size: 13px; }
+.bp-person span { max-width: 14em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bp-reposts .bp-avatar-sm { width: 20px; height: 20px; }
+
+/* Paging: a quiet line, never a spinner. */
+.cv-sentinel { height: 1px; }
+.cv-paging { margin: 14px 0 0; font-family: var(--grot, system-ui, sans-serif); font-size: 13px; color: var(--ink-mute); text-align: center; }
+.cv-retry { min-height: 36px; padding: 0 4px; border: 0; background: none; font: inherit; font-weight: 600; color: var(--ink-soft); text-decoration: underline; cursor: pointer; }
+
+/* A Substack article's counts row sits under its excerpt. */
+.cv-article .bp-engagement { min-height: 32px; }

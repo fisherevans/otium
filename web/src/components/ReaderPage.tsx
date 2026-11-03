@@ -11,7 +11,7 @@ import "./session-afterglow.css";
 import { Overlay, instantMotion, usePresence } from "./Overlay";
 import { ReaderConversation } from "./Conversation";
 import { PlatformMark } from "./PlatformMark";
-import { headline, isPost, postBody, postCounts } from "@/lib/posts";
+import { headline, isPost, postBody, postContext, postPlatform, postRowCounts, withQuoted } from "@/lib/posts";
 import { PostCard, ReaderThread } from "./PostView";
 import { useConversationState } from "@/lib/conversation";
 
@@ -87,6 +87,14 @@ export function ReaderPage({
   const readerActions = useRef({ onNext, onClose, onNextDrag });
   readerActions.current = { onNext, onClose, onNextDrag };
   const itemId = item?.id ?? 0;
+  // #209: the conversation under the post keeps loading as you scroll. While more
+  // of it is due, the bottom is not the end, so the pull to the next item waits.
+  const convPending = useRef(false);
+  const [moreComing, setMoreComing] = useState(false);
+  const onConvPending = useCallback((pending: boolean) => {
+    convPending.current = pending;
+    setMoreComing(pending);
+  }, []);
 
   // Load the reader body when the page opens (or the item changes). Prefer the
   // server's extracted content; fall back to the item's ingest body, then its
@@ -201,7 +209,7 @@ export function ReaderPage({
   // gesture STARTS at the bottom, so a normal upward scroll mid-article never pulls.
   function atBottom() {
     const el = scrollRef.current;
-    if (!el) return false;
+    if (!el || convPending.current) return false;
     return el.scrollTop + el.clientHeight >= el.scrollHeight - 4;
   }
   const pull = usePull(pageRef, () => readerActions.current.onNextDrag, () => {
@@ -434,9 +442,15 @@ export function ReaderPage({
       <div className={`readerpage-body ${post ? "rp-post" : ""}`} ref={scrollRef} onScroll={onScroll}>
         {post ? (
           <div className="rp-postview" onClick={onBodyClick}>
-            <PostCard body={postBody(item, sourceTitle ?? item.author)} publishedAt={item.published_at || item.fetched_at}
-              url={item.url} counts={postCounts(item, postConv.conv)} full />
-            <ReaderThread conv={postConv.conv} url={item.url} status={postConv.status} />
+            {(() => {
+              const pb = withQuoted(postBody(item, sourceTitle ?? item.author), postConv.conv);
+              return (
+                <PostCard body={pb} publishedAt={item.published_at || item.fetched_at} url={item.url}
+                  counts={postRowCounts(item, postConv.conv)} full platform={postPlatform(item)} context={postContext(item, pb, sourceTitle)} />
+              );
+            })()}
+            <ReaderThread conv={postConv.conv} item={item} url={item.url} status={postConv.status}
+              platform={postPlatform(item)} onPending={onConvPending} />
             <div className="rp-foot">
               {onSave && (
                 <button className="reader-open" onClick={onSave}>
@@ -445,7 +459,7 @@ export function ReaderPage({
                 </button>
               )}
             </div>
-            {onNext && <p className="reader-next-cue">Swipe up for the next item</p>}
+            {onNext && !moreComing && <p className="reader-next-cue">Swipe up for the next item</p>}
           </div>
         ) : (<>
         <h1 className="rp-title">{item.title}</h1>
@@ -485,7 +499,7 @@ export function ReaderPage({
           <>
             {articleBody}
             {/* #200: replies most-liked first, then quotes, then the platform. */}
-            <ReaderConversation item={item} />
+            <ReaderConversation item={item} onPending={onConvPending} />
             <div className="rp-foot">
               {onSave && (
                 <button className="reader-open" onClick={onSave}>
@@ -498,7 +512,7 @@ export function ReaderPage({
                 Open source
               </button>
             </div>
-            {onNext && <p className="reader-next-cue">Swipe up for the next item</p>}
+            {onNext && !moreComing && <p className="reader-next-cue">Swipe up for the next item</p>}
           </>
         )}
         </>)}

@@ -3,13 +3,13 @@ import { ShortsMeta, ShortsQuietControls } from "./ShortsQuietControls";
 import type { ShortsBus } from "@/lib/shortsBus";
 import { Bookmark, BookOpen, Play, ExternalLink, MoreHorizontal, ChevronRight } from "lucide-react";
 import type { Conversation, Item, ItemRender, Selected } from "@/api/client";
-import { CardConversation, ShortsCommentsButton } from "@/components/Conversation";
+import { ArticleConversation, CardConversation, ShortsCommentsButton } from "@/components/Conversation";
 import { inlineConversation, useConversation } from "@/lib/conversation";
 import { TopicPill, CardSource, SourceAvatar, Byline, Blurb, Media } from "@/components/CardParts";
 import { InlineMedia, type MediaPosition } from "@/components/InlineMedia";
 import { ShareActions } from "@/components/ReaderActions";
 import { isMedia, isVertical, videoAspect } from "@/lib/render";
-import { isPost, postBody, postCounts } from "@/lib/posts";
+import { isPost, postBody, postContext, postPlatform, postRowCounts } from "@/lib/posts";
 import { CardThread, PostCard } from "@/components/PostView";
 import { PlatformMark } from "@/components/PlatformMark";
 import "./session-afterglow.css";
@@ -357,14 +357,14 @@ export const SessionCard = forwardRef<HTMLDivElement, SessionCardProps>(function
   // size; the author's avatar stays small in the credit, and only a real attached
   // picture is media.
   const post = isPost(it.item) && !isMedia(it.item);
-  // #207: a Bluesky post is drawn as a post - its own card, author on top, links
-  // working, attachments, the engagement row, then its replies as a thread.
-  const bskyPost = post && it.item.source_kind === "bluesky";
+  // #207: a post is drawn as a post - its own card, author on top, links
+  // working, its picture, the engagement row, then its replies as a thread.
+  // #209: that includes a short Substack or Medium post (the server marks it), and
+  // the card keeps only the text, the picture, the counts and a reply or two: the
+  // link card and the quoted post are the reader's.
   const body = post ? postBody(it.item, it.source_title, it.source_icon_url) : null;
-  if (body && !body.quote && conv?.quoted) {
-    const q = conv.quoted;
-    body.quote = { author: { name: q.author, handle: q.handle, avatar: q.avatar_url }, segments: q.segments ?? [{ text: q.text }], url: q.url, published_at: q.published_at, media: q.media };
-  }
+  // A Substack article keeps its article card, with its counts and a top comment.
+  const substackArticle = !post && !isMedia(it.item) && it.item.source_kind === "substack";
   const age = compactShort ? relTime(it.item.published_at || it.item.fetched_at) : "";
 
   return (
@@ -424,7 +424,8 @@ export const SessionCard = forwardRef<HTMLDivElement, SessionCardProps>(function
       />
       {post && body ? (
         <PostCard body={body} publishedAt={it.item.published_at || it.item.fetched_at} url={it.item.url}
-          counts={postCounts(it.item, conv)} onAuthor={() => onSource(it)} />
+          counts={postRowCounts(it.item, conv)} onAuthor={() => onSource(it)}
+          platform={postPlatform(it.item)} context={postContext(it.item, body, it.source_title)} />
       ) : (
         <>
           <h3 className="card-title">{it.item.title}</h3>
@@ -492,8 +493,9 @@ export const SessionCard = forwardRef<HTMLDivElement, SessionCardProps>(function
 
       {/* #200: a post's top replies sit under it; a landscape long video's top
           comments sit under the player. Shorts use the overlay. */}
-      {conv && bskyPost && <CardThread conv={conv} onMore={onConversation ? () => onConversation(it) : undefined} />}
-      {conv && !bskyPost && !compactShort && inlineConversation(it.item) && (activeMedia || !isMedia(it.item)) && (
+      {conv && post && <CardThread conv={conv} onMore={onConversation ? () => onConversation(it) : undefined} />}
+      {substackArticle && <ArticleConversation item={it.item} conv={conv} onMore={onConversation ? () => onConversation(it) : undefined} />}
+      {conv && !post && !substackArticle && !compactShort && inlineConversation(it.item) && (activeMedia || !isMedia(it.item)) && (
         <CardConversation conv={conv} onMore={onConversation ? () => onConversation(it) : undefined} />
       )}
 
