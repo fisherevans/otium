@@ -723,6 +723,11 @@ export const api = {
     req<{ share_id: number; results: ShareResult[] }>("POST", `/items/${itemId}/share`, { target_ids: targetIds, note }),
   sentShares: (targetId?: number) => req<SentShare[]>("GET", `/shares${targetId ? `?target_id=${targetId}` : ""}`),
 
+  // Saved session presets and mixes (#203): the server is the source of truth.
+  presets: () => req<{ presets: { id: string; name: string; setup: unknown }[]; default_id: string; initialized: boolean }>("GET", "/presets"),
+  putPresets: (presets: { id: string; name: string; setup: unknown }[], defaultId: string) =>
+    req<{ presets: unknown[]; default_id: string; initialized: boolean }>("PUT", "/presets", { presets, default_id: defaultId }),
+
   // Follow recommendations (#202).
   suggestions: () => req<Suggestion[]>("GET", "/suggestions"),
   suggestionAction: (id: number, action: "try" | "keep" | "dismiss") => req<{ ok: boolean }>("POST", `/suggestions/${id}/${action}`),

@@ -419,3 +419,18 @@ CREATE TABLE IF NOT EXISTS suggestions (
     updated_at  TEXT NOT NULL DEFAULT (datetime('now')),
     UNIQUE (user_id, feed_url)
 );
+
+-- Saved session presets, mixes included (#203). Server-side so they follow the
+-- account across devices and agents can manage them through /api/v1/agent/presets.
+-- setup is the client's SessionSetup JSON (minutes, sections, excluded,
+-- contentTypes, optional mix); the handler validates it. The default preset id and
+-- an "initialized" marker live in kv.
+CREATE TABLE IF NOT EXISTS session_presets (
+    user_id    INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    id         TEXT NOT NULL,
+    name       TEXT NOT NULL,
+    setup      TEXT NOT NULL,
+    sort       INTEGER NOT NULL DEFAULT 0,
+    updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+    PRIMARY KEY (user_id, id)
+);

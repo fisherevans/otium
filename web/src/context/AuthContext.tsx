@@ -1,3 +1,4 @@
+import { syncSessionPresets } from "@/lib/presetSync";
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
 import { api, Unauthorized, type Me } from "@/api/client";
 
@@ -15,7 +16,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     api
       .me()
-      .then((user) => setState({ user, loading: false, unauthenticated: false }))
+      .then((user) => {
+        setState({ user, loading: false, unauthenticated: false });
+        // #203: pull saved presets and mixes from the server (agents may have changed them).
+        syncSessionPresets(user.id).catch(() => {});
+      })
       .catch((err) => {
         if (err instanceof Unauthorized) {
           setState({ user: null, loading: false, unauthenticated: true });

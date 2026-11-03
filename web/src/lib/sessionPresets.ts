@@ -176,10 +176,17 @@ export function loadSessionPresets(accountId: number, newsSectionSlug?: string):
         return normalized;
     } catch { return { ...initialPresets(newsSectionSlug), newsSectionPending: !sectionsLoaded }; }
 }
+// Server sync (#203) hooks in here; see lib/presetSync.ts. Kept as a hook so
+// this module stays free of the API client and testable on its own.
+let afterStore: ((accountId: number, data: SessionPresets) => void) | null = null;
+export function onSessionPresetsStored(fn: (accountId: number, data: SessionPresets) => void) { afterStore = fn; }
+export function normalizePresetSetup(value: unknown): SessionSetup | null { return normalizeSetup(value); }
+
 export function storeSessionPresets(accountId: number, data: SessionPresets): boolean {
     try {
         localStorage.setItem(prefix + accountId, JSON.stringify(data));
         window.dispatchEvent(new Event("otium-presets-change"));
+        afterStore?.(accountId, data);
         return true;
     } catch { return false; }
 }

@@ -101,6 +101,13 @@ npm run measure -- --app http://localhost:5173          # verify what ships
 trap that bites every time (several old `global.css` rules match the card's at
 equal specificity and win on source order).
 
+## Agent API
+
+Agents manage Otium through `/api/v1/agent/*` with a bearer token: engagement profile,
+follow suggestions, and saved presets/mixes. Contract: [docs/agent-api.md](docs/agent-api.md).
+New user-facing configuration belongs on the server and on this API, not only in
+localStorage (Fisher, 2026-11-03, #203).
+
 ## Conventions
 
 - Go: 4-space indent via gofmt, same-line braces, explicit errors, short names

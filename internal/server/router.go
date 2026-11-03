@@ -53,6 +53,10 @@ func NewRouter(h *handler.Handler, authMiddleware, agentMiddleware func(http.Han
 			r.Use(agentMiddleware)
 			r.Get("/agent/profile", h.AgentProfile)
 			r.Post("/agent/suggestions", h.AgentSuggest)
+			// Session presets and mixes (#203).
+			r.Get("/agent/presets", h.ListPresets)
+			r.Put("/agent/presets/{id}", h.PutPreset)
+			r.Delete("/agent/presets/{id}", h.DeletePreset)
 		})
 
 		r.Group(func(r chi.Router) {
@@ -147,6 +151,12 @@ func NewRouter(h *handler.Handler, authMiddleware, agentMiddleware func(http.Han
 			r.Post("/share/targets/{id}/connect-link", h.NewShareConnectLink)
 			r.Get("/share/discord-channels", h.DiscordChannels)
 			r.Get("/shares", h.ListShares)
+
+			// Saved session presets and mixes (#203): the browser syncs the whole list.
+			r.Get("/presets", h.ListPresets)
+			r.Put("/presets", h.ReplacePresets)
+			r.Put("/presets/{id}", h.PutPreset)
+			r.Delete("/presets/{id}", h.DeletePreset)
 
 			// Follow recommendations (#202).
 			r.Get("/suggestions", h.ListSuggestions)
