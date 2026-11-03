@@ -1,4 +1,4 @@
-import type { Item, Selected } from "@/api/client";
+import type { Conversation, ConversationComment, Item, Selected } from "@/api/client";
 
 // Fixtures for the layout lab (/lab). These are real `Selected` payloads - the
 // same shape the session endpoint returns - so SessionCard renders them exactly
@@ -68,6 +68,8 @@ export interface Fixture {
   /** What this case is here to stress. */
   note: string;
   sel: Selected;
+  /** #200: the conversation the card shows. Omitted = none (the lab never fetches). */
+  conversation?: Conversation;
 }
 
 export const FIXTURES: Fixture[] = [
@@ -323,6 +325,118 @@ export const FIXTURES: Fixture[] = [
       topic: { name: "調査報道", slug: "cjk", color: "#8f5f5f", icon: "" },
     }),
   },
+  // #200: conversation fixtures. Replies are long on purpose: the card clamps
+  // each to three lines and the solver gives them up before the excerpt.
+  {
+    key: "bsky-quote",
+    section: "Tech",
+    label: "Bluesky post · quote inset · two replies",
+    note: "A text post that quotes another, with counts, its top replies and the rest one tap away.",
+    sel: sel({
+      item: item({
+        id: 20,
+        url: "https://bsky.app/profile/someone.bsky.social/post/3abc",
+        title: "This is the most honest release note I have read all year.",
+        summary: "They reverted ten features rather than ship something reviewers could not keep up with. More projects should be willing to say that out loud.",
+        content: "<p>body</p>",
+        author: "Kelsey Ortiz",
+        published_at: ago(0.3),
+      }),
+      source_title: "Kelsey Ortiz",
+      topic: { name: "Databases", slug: "db", color: "#5f6f8f", icon: "" },
+    }),
+    conversation: conv("bluesky", { likes: 183, reposts: 11, replies: 14, quotes: 3 }, [
+      reply("Dana Whitfield", 41, "The bit about reviewers finding more than humans can fix is the real story here. That is a capacity problem, not a tooling one, and it will hit every big project soon."),
+      reply("mit1975eecs", 12, "It exposes the mindset of the developers. Move fast and break things versus write it once and keep it running for twenty years."),
+      reply("a bezoar", 2, "Link for anyone who missed it."),
+    ], reply("The Register", 0, "Postgres 19 delayed after AI reviewers find more bugs than humans can fix. Core devs revert up to 10 features and push the release to November.", "link")),
+  },
+  {
+    key: "bsky-image",
+    section: "Tech",
+    label: "Bluesky post · image · replies",
+    note: "A post whose image competes with its replies for height.",
+    sel: sel({
+      item: item({
+        id: 21,
+        url: "https://bsky.app/profile/someone.bsky.social/post/3abd",
+        title: "Found the original wiring diagram for the building, hand drawn in 1931.",
+        summary: "Every circuit labelled in the same careful hand. Somebody spent weeks on this.",
+        content: "<p>body</p>",
+        thumbnail_url: pic(1200, 900),
+        author: "Sam Reyes",
+        published_at: ago(1),
+      }),
+      source_title: "Sam Reyes",
+      topic: { name: "Old Things", slug: "old", color: "#7a6a4f", icon: "" },
+    }),
+    conversation: conv("bluesky", { likes: 2400, reposts: 310, replies: 96, quotes: 22 }, [
+      reply("Ruth Allen", 380, "The lettering on the panel schedule is gorgeous. Draftsmen used to train for years to letter like that and it shows in every label on the sheet."),
+      reply("Theo", 122, "Please scan it at high resolution before anything happens to it. Archives would love this."),
+    ]),
+  },
+  {
+    key: "substack-comments",
+    section: "Reading",
+    label: "Substack article · hero · comments",
+    note: "An article whose comments sit between the excerpt and the actions.",
+    sel: sel({
+      item: item({
+        id: 22,
+        url: "https://www.astralcodexten.com/p/your-book-review-the-history-and",
+        title: "Your Book Review: The History And Future Of Writing Systems",
+        summary: "A finalist in this year's review contest takes on the long arc of how scripts were invented, borrowed and simplified.",
+        content: "<p>body</p>",
+        thumbnail_url: pic(1280, 720),
+        author: "Anonymous",
+        published_at: ago(4),
+      }),
+      source_title: "Astral Codex Ten",
+      topic: { name: "Essays", slug: "essays", color: "#6a5f7a", icon: "" },
+    }),
+    conversation: conv("substack", { likes: 83, reposts: 3, replies: 61, quotes: 0 }, [
+      reply("drosophilist", 4, "It is a long trip from a Japanese loanword to an English one, but the word had a full millennium to make it, and the review traces every step."),
+      reply("SMK", 2, "I enjoyed this. I thought the first two sections were a good deal stronger than the third."),
+    ]),
+  },
+  {
+    key: "video-wide-comments",
+    section: "Music Production",
+    label: "Video · 16:9 · top comments",
+    note: "A landscape long video with its top comments under the player.",
+    sel: FIXTURES_VIDEO_WIDE(),
+    conversation: conv("youtube", { likes: 52000, reposts: 0, replies: 1840, quotes: 0 }, [
+      reply("modularmike", 2100, "The moment the tape loop locked to the clock I actually laughed out loud. Incredible patience on the rewire."),
+      reply("Ines", 640, "Please do a follow-up where you play a full track on it."),
+    ]),
+  },
 ];
+
+function FIXTURES_VIDEO_WIDE(): Selected {
+  return sel({
+    item: item({
+      id: 23,
+      title: "I built a drum machine out of a 1970s answering machine",
+      media_type: "long",
+      aspect_ratio: 16 / 9,
+      duration_sec: 862,
+      author: "Mattias Krantz",
+      summary: "A teardown, a rewire, and a surprisingly usable sixteen-step sequencer.",
+      thumbnail_url: pic(1280, 720, "dark"),
+      url: "https://www.youtube.com/watch?v=ccccccccccc",
+      published_at: ago(6),
+    }),
+    source_title: "Mattias Krantz",
+    topic: { name: "Finger Drumming", slug: "finger-drumming", color: "#7a6a4f", icon: "music" },
+  });
+}
+
+function reply(author: string, likes: number, text: string, media?: ConversationComment["media"]): ConversationComment {
+  return { author, likes, text, replies: 0, media, published_at: ago(0.2) };
+}
+
+function conv(platform: Conversation["platform"], counts: Conversation["counts"], replies: ConversationComment[], quoted?: ConversationComment): Conversation {
+  return { platform, counts, replies, quotes: [], quoted, url: "https://example.org/", fetched_at: NOW };
+}
 
 export const FIXTURE_BY_KEY: Record<string, Fixture> = Object.fromEntries(FIXTURES.map((f) => [f.key, f]));

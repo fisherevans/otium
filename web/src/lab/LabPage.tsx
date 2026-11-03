@@ -150,6 +150,8 @@ function Screen({
                 sectionName={fx.section}
                 menuPlacement={layout.menu}
                 shortsMode={layout.shortsMode}
+                conversation={fx.conversation ?? null}
+                onConversation={() => {}}
                 onOpenContent={() => {}}
                 onOpenExternal={() => {}}
                 onSave={() => {}}

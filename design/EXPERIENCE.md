@@ -38,6 +38,10 @@ Every article opens the same full-page reader, including from Saved, History and
 
 The active session is durable. Going to Library preserves the cursor and offers Return to session. End session opens Session complete. Review session lists only items actually shown, with individual collection bookmarks and stats for articles opened, video/audio plays, skips and time. Completed stats are frozen so review actions do not rewrite the session. Actual autoplay is counted as playback, separately from explicit opens: it never creates an open event or an engagement flag. A played autoplay card is not recorded as an unopened-headline skip or used to trigger that check-in. Video time accrues only while the player reports playing; paused, buffering, hidden and covered intervals stop it. Detailed per-kind and away-time measurements remain available. When the time budget is reached, the current item remains readable; the next advance reaches the ending. Continuing is an explicit choice.
 
+## Conversation
+
+Bluesky posts, Substack posts and YouTube videos carry their public conversation (#200). A post's card shows a counts line, the post it quotes as an inset, its two most-liked replies, and "N more replies and M quotes", which opens the reader; the reader lists every reply most-liked first, then quotes, then a link to the platform. A landscape long video shows its top comments under the player, with the rest in an overlay; Shorts open the same overlay from a comments control in the footer. The conversation is fetched when a card is focused and joins the card after it renders; it never delays the card. The layout solver drops the second reply, then both, before the excerpt, and never shrinks a video to make room for comments. Remote text is plain text.
+
 ## Interface copy
 
 Use factual state and action labels. Remove affirmations, permission-giving, emotional validation, meditative slogans and text that tells users how to feel. Focus is implemented through the workflow; the interface does not narrate that philosophy. "Session complete" states the outcome. "You made some room" and "The rest can wait" do not help the user operate the app.

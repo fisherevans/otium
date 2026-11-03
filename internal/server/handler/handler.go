@@ -9,6 +9,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"github.com/fisherevans/otium/internal/server/conversation"
 	"github.com/fisherevans/otium/internal/server/feeds"
 	"github.com/fisherevans/otium/internal/server/fulltext"
 	"github.com/fisherevans/otium/internal/server/middleware"
@@ -35,6 +36,9 @@ type Handler struct {
 	yt       *youtube.Client    // nil unless a Data API key is configured
 	video    *videofile.Fetcher // nil disables video file downloads (#180)
 	share    SharingConfig      // Discord sharing (#195); zero value = off
+
+	// #200: replies, quotes and comments on demand; nil = off.
+	conv *conversation.Service
 }
 
 func New(db *store.DB, ing *feeds.Ingester, log *slog.Logger) *Handler {

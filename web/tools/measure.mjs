@@ -69,6 +69,7 @@ const ALL_FIXTURES = [
   "news-portrait", "news-wide", "news-bare", "video-vertical", "video-wide",
   "audio", "link-only", "no-meta", "unbroken", "cjk",
   "short-square", "short-wide", "long-vertical",
+  "bsky-quote", "bsky-image", "substack-comments", "video-wide-comments",
 ];
 const FIXTURES = (arg("fixtures") ? String(arg("fixtures")).split(",") : ALL_FIXTURES).map((s) => s.trim());
 
@@ -114,6 +115,7 @@ function readCard() {
   const actions = card.querySelector(".shorts-card-footer, .im-actions, .card-callout");
   const media = card.querySelector(".card-media .im-frame, .media");
   const details = card.querySelector(".shorts-details");
+  const conv = card.querySelector(".card-conv"); // #200
 
   // Optical gap between two rows. The media container inherits a font but
   // renders no glyphs, so it contributes no half-leading - counting it there
@@ -124,7 +126,9 @@ function readCard() {
     compact,
     title: (title?.textContent || card.getAttribute("aria-label") || "").slice(0, 30),
     above: Math.round(R(first).top - R(card).top),
-    below: actions ? Math.round(R(card).bottom - R(actions).bottom) : null,
+    below: actions ? Math.round(R(card).bottom - Math.max(R(actions).bottom, conv ? R(conv).bottom : 0)) : null,
+    replies: card.querySelectorAll(".cv-card-replies > .cv-row").length
+      ? [...card.querySelectorAll(".cv-card-replies > .cv-row")].filter((r) => r.offsetParent !== null).length : "-",
     titlePx: title ? parseFloat(getComputedStyle(title).fontSize) : 0,
     // Header gaps, top to bottom. Expect the configured rhythm on every one; a
     // media card reads ~2 high on the last because the gap is measured to the

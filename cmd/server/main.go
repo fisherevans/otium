@@ -17,6 +17,7 @@ import (
 
 	"github.com/fisherevans/otium/internal/oidc"
 	"github.com/fisherevans/otium/internal/server"
+	"github.com/fisherevans/otium/internal/server/conversation"
 	"github.com/fisherevans/otium/internal/server/discord"
 	"github.com/fisherevans/otium/internal/server/enrich"
 	"github.com/fisherevans/otium/internal/server/feeds"
@@ -145,6 +146,8 @@ func main() {
 		ing.SetYouTube(ytClient)
 		h.SetYouTube(ytClient)
 	}
+	// #200: replies, quotes and comments, fetched per item on demand.
+	h.SetConversation(conversation.New(conversation.Config{YouTubeKey: cfg.YouTubeAPIKey}))
 	if cfg.FetchIntervalMin > 0 {
 		go ingestLoop(ctx, db, ing, cfg, log)
 	}

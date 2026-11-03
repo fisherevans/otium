@@ -154,6 +154,8 @@ func NewRouter(h *handler.Handler, authMiddleware, agentMiddleware func(http.Han
 
 			r.Post("/import/parse", h.ParseImport)
 			r.Post("/import/commit", h.CommitImport)
+
+			r.Get("/items/{id}/conversation", h.ItemConversation) // #200: replies, quotes, comments
 		})
 	})
 

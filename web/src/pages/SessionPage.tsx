@@ -26,6 +26,8 @@ import { createShortsBus } from "@/lib/shortsBus";
 import { cardRender, isMedia, isVideo } from "@/lib/render";
 import { usePreferences } from "@/context/PreferencesContext";
 import { SHIPPED_LAYOUT, SHIPPED_VARS, cardVars, solveWhenReady } from "@/lib/cardLayout";
+import { ConversationSheet } from "@/components/Conversation";
+import { loadConversation, useConversation } from "@/lib/conversation";
 
 // Which in-app content surface an item opens into (#51). Video/audio play in
 // the Player; everything else (article/rss/quote/text) reads in the ReaderPage.
@@ -90,6 +92,7 @@ export default function SessionPage() {
   const [saveItem, setSaveItem] = useState<Item | null>(null); // Save picker target (#57)
   const [menuOpen, setMenuOpen] = useState(false);
   const [detailsOpen, setDetailsOpen] = useState(false);
+  const [convSel, setConvSel] = useState<Selected | null>(null); // #200: comments overlay for video
   const [recapOpen, setRecapOpen] = useState(false);
   const [review, setReview] = useState<SessionReviewData | null>(null);
   const reviewRef = useRef<SessionReviewData | null>(null);
@@ -331,6 +334,11 @@ export default function SessionPage() {
     };
   }, [id, nav, cacheKey]);
 
+  // #200: the focused card's conversation joins after the card renders (re-solved
+  // below when it arrives); the next card's is fetched ahead.
+  const focusedConv = useConversation(items[current]?.item);
+  useEffect(() => { loadConversation(items[current + 1]?.item); }, [current, items]);
+
   // Solve the focused card's layout.
   //
   // A card is a fixed box with no inner scroll, so how its height is divided has
@@ -355,7 +363,7 @@ export default function SessionPage() {
       observer.disconnect();
       window.removeEventListener("resize", onResize);
     };
-  }, [current, items, renderMap, prefs, presentation, review, shortsMode]);
+  }, [current, items, renderMap, prefs, presentation, review, shortsMode, focusedConv]);
 
   // Once a card becomes the focus, finish its snap before painting. WebKit can
   // reset an in-flight smooth scroll when the previous card's iframe is removed.
@@ -912,7 +920,7 @@ export default function SessionPage() {
   const focusedShort = shortsMode && hosted?.item.media_type === "short" && playerIdx < visibleCount && !review ? hosted : null;
   if (focusedShort) lastShort.current = focusedShort;
   const short = lastShort.current;
-  const playbackActive = !content && !menuOpen && !detailsOpen && !breakdown && !saveItem && !sourceSel && !checkin && !review;
+  const playbackActive = !content && !menuOpen && !detailsOpen && !convSel && !breakdown && !saveItem && !sourceSel && !checkin && !review;
 
   const shownItems = overIdx !== null ? items.slice(0, visibleCount) : items;
 
@@ -957,7 +965,7 @@ export default function SessionPage() {
             onSoundHintDone={() => setSoundHint(null)}
             shortsBus={shortsBus}
             shortsPosition={shortsPosition}
-            playbackActive={i === current && !content && !menuOpen && !detailsOpen && !breakdown && !saveItem && !sourceSel && !checkin && !review}
+            playbackActive={i === current && !content && !menuOpen && !detailsOpen && !convSel && !breakdown && !saveItem && !sourceSel && !checkin && !review}
             muted={playback.muted}
             onMutedChange={playback.setMuted}
             onPlaybackChange={(playing) => {
@@ -977,6 +985,7 @@ export default function SessionPage() {
             onSource={(s) => setSourceSel(s)}
             onMenu={() => setMenuOpen(true)}
             onDetails={() => setDetailsOpen(true)}
+            onConversation={(s) => (isMedia(s.item) ? setConvSel(s) : openContent(s))}
             onFirstPlay={(s, explicit) => {
               played.current.add(s.item.id);
               if (explicit) recordOpen(s);
@@ -1078,6 +1087,7 @@ export default function SessionPage() {
         }}
       />
 
+      <ConversationSheet item={convSel?.item ?? null} open={!!convSel} onClose={() => setConvSel(null)} />
       <ItemDetails
         selected={atEnd ? null : cur}
         open={detailsOpen}
