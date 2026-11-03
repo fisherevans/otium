@@ -1,4 +1,4 @@
-import type { SessionContentType } from "@/api/client";
+import type { MixFormat, SessionContentType, SessionMix } from "@/api/client";
 
 export const contentTypes: SessionContentType[] = ["article", "long", "short"];
 export const contentTypeLabel: Record<SessionContentType, string> = { article: "Articles", long: "Long videos", short: "Short videos" };
@@ -7,6 +7,42 @@ export interface SessionSetup {
     sections: string[];
     excluded: string[];
     contentTypes: SessionContentType[];
+    // #201: a mix spans every section; format shares and section weights replace
+    // the content toggles and scope. contentTypes mirrors the shared formats.
+    mix?: SessionMix;
+}
+export const mixFormats: MixFormat[] = ["article", "post", "short", "long"];
+export const mixFormatLabel: Record<MixFormat, string> = { article: "Articles", post: "Posts", short: "Shorts", long: "Long videos" };
+// Section weight levels, in order. Off excludes the section.
+export const sectionWeights = [{ value: 0, label: "Off" }, { value: 0.5, label: "Less" }, { value: 1, label: "Even" }, { value: 2, label: "More" }];
+export const defaultMix = (): SessionMix => ({ formats: { article: 40, post: 10, short: 20, long: 30 }, sections: {} });
+export function mixPercents(mix: SessionMix): Record<MixFormat, number> {
+    const total = mixFormats.reduce((sum, f) => sum + (mix.formats[f] ?? 0), 0);
+    return Object.fromEntries(mixFormats.map((f) => [f, total ? Math.round(100 * (mix.formats[f] ?? 0) / total) : 0])) as Record<MixFormat, number>;
+}
+export function mixLabel(mix: SessionMix): string {
+    const pct = mixPercents(mix);
+    return mixFormats.filter((f) => pct[f] > 0).sort((a, b) => pct[b] - pct[a]).map((f) => `${mixFormatLabel[f]} ${pct[f]}%`).join(" · ");
+}
+export function mixContentTypes(mix: SessionMix): SessionContentType[] {
+    return contentTypes.filter((type) => mixFormats.some((f) => (mix.formats[f] ?? 0) > 0 && (f === type || f === "post" && type === "article")));
+}
+function normalizeMix(value: unknown): SessionMix | null {
+    if (!value || typeof value !== "object") return null;
+    const m = value as { formats?: unknown; sections?: unknown };
+    if (!m.formats || typeof m.formats !== "object" || !m.sections || typeof m.sections !== "object") return null;
+    const formats: SessionMix["formats"] = {};
+    for (const [key, share] of Object.entries(m.formats as Record<string, unknown>)) {
+        if (!mixFormats.includes(key as MixFormat) || typeof share !== "number" || !(share >= 0 && share <= 1000)) return null;
+        if (share > 0) formats[key as MixFormat] = share;
+    }
+    if (!Object.keys(formats).length) return null;
+    const sections: Record<string, number> = {};
+    for (const [slug, weight] of Object.entries(m.sections as Record<string, unknown>)) {
+        if (typeof weight !== "number" || !(weight >= 0 && weight <= 4)) return null;
+        if (weight !== 1) sections[slug] = weight;
+    }
+    return { formats, sections };
 }
 export interface SessionPreset { id: string; name: string; setup: SessionSetup }
 export interface SessionPresets {
@@ -25,17 +61,21 @@ const starterVersion = 2;
 export const starterPresetIds = ["news", "shorts", "long-videos"] as const;
 export const defaultSetup = (): SessionSetup => ({ minutes: 10, sections: [], excluded: [], contentTypes: [...contentTypes] });
 export function contentLabel(setup: SessionSetup): string {
+    if (setup.mix) return "Mix";
     const selected = contentTypes.filter((type) => setup.contentTypes.includes(type));
     if (selected.length === 3) return "All content";
     if (!selected.length) return "Choose content";
     return selected.map((type, index) => index ? contentTypeLabel[type].toLowerCase() : contentTypeLabel[type]).join(" + ");
 }
 export function setupKey(setup: SessionSetup): string {
-    return JSON.stringify([setup.minutes, [...setup.sections].sort(), [...setup.excluded].sort(), contentTypes.filter((type) => setup.contentTypes.includes(type))]);
+    const base: unknown[] = [setup.minutes, [...setup.sections].sort(), [...setup.excluded].sort(), contentTypes.filter((type) => setup.contentTypes.includes(type))];
+    // Setups without a mix keep their original key, so saved/dismissed keys survive.
+    if (setup.mix) base.push([mixFormats.map((f) => setup.mix!.formats[f] ?? 0), Object.entries(setup.mix.sections).sort(([a], [b]) => a.localeCompare(b))]);
+    return JSON.stringify(base);
 }
 function normalizeSetup(value: unknown): SessionSetup | null {
     if (!value || typeof value !== "object") return null;
-    const s = value as Omit<SessionSetup, "contentTypes"> & { contentTypes?: SessionContentType[]; media?: string; includeShorts?: boolean };
+    const s = value as Omit<SessionSetup, "contentTypes" | "mix"> & { contentTypes?: SessionContentType[]; media?: string; includeShorts?: boolean; mix?: unknown };
     if (!(Number.isInteger(s.minutes) && s.minutes >= 5 && s.minutes <= 120 &&
         Array.isArray(s.sections) && s.sections.every((v) => typeof v === "string") &&
         Array.isArray(s.excluded) && s.excluded.every((v) => typeof v === "string"))) return null;
@@ -49,12 +89,18 @@ function normalizeSetup(value: unknown): SessionSetup | null {
         selected = s.media === "read" || s.media === "audio" ? ["article"] :
             contentTypes.filter((type) => (s.media === "all" || type !== "article") && (s.includeShorts || type !== "short"));
     }
+    if (s.mix !== undefined) {
+        const mix = normalizeMix(s.mix);
+        if (!mix) return null;
+        return { minutes: s.minutes, sections: [], excluded: [], contentTypes: mixContentTypes(mix), mix };
+    }
     return { minutes: s.minutes, sections: s.sections, excluded: s.excluded, contentTypes: selected };
 }
 function normalizeKey(value: unknown): string {
     if (typeof value !== "string") return "";
     try {
         const [minutes, sections, excluded, media, includeShorts] = JSON.parse(value);
+        if (Array.isArray(includeShorts)) return value; // a mix key (#201): already current
         const setup = normalizeSetup({ minutes, sections, excluded, ...(Array.isArray(media) ? { contentTypes: media } : { media, includeShorts }) });
         return setup ? setupKey(setup) : "";
     } catch { return ""; }

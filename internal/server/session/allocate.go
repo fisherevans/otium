@@ -140,65 +140,121 @@ func representationOf(c store.Candidate) float64 {
 // rng makes it seedable/testable; a per-session seed keeps a rebuild stable.
 func Allocate(pool []store.Candidate, now time.Time, target int, rng *rand.Rand) []Selected {
 	seed := rng.Int63() // stable within this build; drives the random-by-age direction (#124)
-	bySource := map[int64][]store.Candidate{}
-	repr := map[int64]float64{}
+	ps := newSourcePool(now, seed)
 	for _, c := range pool {
-		if !eligible(c, now) {
-			continue
-		}
-		bySource[c.SourceID] = append(bySource[c.SourceID], c)
-		repr[c.SourceID] = representationOf(c)
+		ps.add(c, representationOf(c))
 	}
+	ps.order()
+
+	out := make([]Selected, 0, target) // never nil: an empty session serializes as []
+	for len(out) < target {
+		sel, ok := ps.next(rng)
+		if !ok {
+			break
+		}
+		out = append(out, sel)
+	}
+	return out
+}
+
+// sourcePool is the per-source queue the allocator draws from: each source's
+// eligible articles in its scoring order, plus the source's effective weight for
+// the weighted-random roll. Allocate uses one pool for the whole session; a mix
+// (mix.go) uses one per format.
+type sourcePool struct {
+	now      time.Time
+	seed     int64
+	bySource map[int64][]store.Candidate
+	repr     map[int64]float64
 	// facetScore holds the per-item scoring-facet product for sources that opted into
 	// a non-default scoring config (#124), so Selected.Score reflects the real order
 	// instead of freshness. Absent for default (newest, no facets) sources, which keep
 	// their byte-identical pure-recency ordering and freshness score.
-	facetScore := map[int64]float64{}
-	for sid, cs := range bySource {
+	facetScore map[int64]float64
+}
+
+func newSourcePool(now time.Time, seed int64) *sourcePool {
+	return &sourcePool{now: now, seed: seed, bySource: map[int64][]store.Candidate{}, repr: map[int64]float64{}, facetScore: map[int64]float64{}}
+}
+
+// add queues an eligible candidate under its source with the source's weight.
+// Ineligible candidates are dropped here.
+func (p *sourcePool) add(c store.Candidate, weight float64) {
+	if !eligible(c, p.now) {
+		return
+	}
+	p.bySource[c.SourceID] = append(p.bySource[c.SourceID], c)
+	p.repr[c.SourceID] = weight
+}
+
+// order sorts each source's queue: pure recency for default scoring, the facet
+// order otherwise.
+func (p *sourcePool) order() {
+	for sid, cs := range p.bySource {
 		cfg := parseScoring(cs[0].ScoringConfig) // source-level: all its items share it
 		if cfg.isDefault() {
 			sort.SliceStable(cs, func(i, j int) bool { return cs[i].PublishedAt.After(cs[j].PublishedAt) })
 		} else {
-			for id, s := range orderSource(cs, cfg, seed, now) {
-				facetScore[id] = s
+			for id, s := range orderSource(cs, cfg, p.seed, p.now) {
+				p.facetScore[id] = s
 			}
 		}
-		bySource[sid] = cs
+		p.bySource[sid] = cs
 	}
+}
 
-	out := make([]Selected, 0, target) // never nil: an empty session serializes as []
-	for len(out) < target {
-		var ids []int64
-		var totalW float64
-		for sid, cs := range bySource {
-			if len(cs) > 0 {
-				ids = append(ids, sid)
-				totalW += repr[sid]
-			}
+// live lists the sources that still have articles, in id order.
+func (p *sourcePool) live() ([]int64, float64) {
+	var ids []int64
+	var totalW float64
+	for sid, cs := range p.bySource {
+		if len(cs) > 0 {
+			ids = append(ids, sid)
+			totalW += p.repr[sid]
 		}
-		if len(ids) == 0 {
+	}
+	sort.Slice(ids, func(i, j int) bool { return ids[i] < ids[j] }) // stable order for the weighted roll
+	return ids, totalW
+}
+
+// next picks a source weighted-random by its weight and takes that source's next
+// article. ok is false when the pool is exhausted.
+func (p *sourcePool) next(rng *rand.Rand) (Selected, bool) {
+	sid, ok := p.roll(rng)
+	if !ok {
+		return Selected{}, false
+	}
+	return p.take(sid), true
+}
+
+// roll picks a source weighted-random by its weight without consuming anything.
+func (p *sourcePool) roll(rng *rand.Rand) (int64, bool) {
+	ids, totalW := p.live()
+	if len(ids) == 0 {
+		return 0, false
+	}
+	roll := rng.Float64() * totalW
+	pick := ids[len(ids)-1]
+	var acc float64
+	for _, sid := range ids {
+		acc += p.repr[sid]
+		if roll < acc {
+			pick = sid
 			break
 		}
-		sort.Slice(ids, func(i, j int) bool { return ids[i] < ids[j] }) // stable order for the weighted roll
-		roll := rng.Float64() * totalW
-		pick := ids[len(ids)-1]
-		var acc float64
-		for _, sid := range ids {
-			acc += repr[sid]
-			if roll < acc {
-				pick = sid
-				break
-			}
-		}
-		cs := bySource[pick]
-		sel := selectedFrom(cs[0], now)
-		if s, ok := facetScore[cs[0].ID]; ok {
-			sel.Score = round2(s) // non-default scoring: report the facet product, not freshness
-		}
-		out = append(out, sel)
-		bySource[pick] = cs[1:]
 	}
-	return out
+	return pick, true
+}
+
+// take consumes and returns the source's next article.
+func (p *sourcePool) take(sid int64) Selected {
+	cs := p.bySource[sid]
+	sel := selectedFrom(cs[0], p.now)
+	if s, ok := p.facetScore[cs[0].ID]; ok {
+		sel.Score = round2(s) // non-default scoring: report the facet product, not freshness
+	}
+	p.bySource[sid] = cs[1:]
+	return sel
 }
 
 // selectedFrom builds the Selected view for one allocated article. The article

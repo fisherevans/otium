@@ -705,9 +705,18 @@ func (h *Handler) CreateSession(w http.ResponseWriter, r *http.Request) {
 		IncludeShorts *bool    `json:"include_shorts"`
 		Media         string   `json:"media"`
 		ContentTypes  []string `json:"content_types"`
+		// #201: format shares + section weights; when set it replaces content_types.
+		Mix *session.Mix `json:"mix"`
 	}
 	if !decode(w, r, &body) {
 		return
+	}
+	if body.Mix != nil {
+		if msg := validateMix(*body.Mix); msg != "" {
+			http.Error(w, msg, http.StatusBadRequest)
+			return
+		}
+		body.ContentTypes = nil
 	}
 	if body.DurationMin <= 0 {
 		body.DurationMin = 15
@@ -717,12 +726,12 @@ func (h *Handler) CreateSession(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "select at least one valid content type: article, long, short", http.StatusBadRequest)
 		return
 	}
-	if body.ContentTypes == nil && !validSessionMedia(body.Media) {
+	if body.Mix == nil && body.ContentTypes == nil && !validSessionMedia(body.Media) {
 		http.Error(w, "invalid session media", http.StatusBadRequest)
 		return
 	}
 
-	items, err := h.buildSessionQueue(r.Context(), uid, body.DurationMin, body.Themes, body.Sections, includeShorts, body.Media, body.ContentTypes)
+	items, err := h.buildSessionQueue(r.Context(), uid, body.DurationMin, body.Themes, body.Sections, includeShorts, body.Media, body.ContentTypes, body.Mix)
 	if err != nil {
 		serverError(w, h.log, "build session", err)
 		return
@@ -818,7 +827,7 @@ func (h *Handler) UpdateSession(w http.ResponseWriter, r *http.Request) {
 // behavioral stats, runs the ranker for the single duration (fed as both bounds
 // so the existing predict/selectivity path is unchanged), and attaches each
 // item's topic. Returns an empty slice when the selection resolves to no sources.
-func (h *Handler) buildSessionQueue(ctx context.Context, uid int64, durationMin int, themes, sections []string, includeShorts bool, media string, contentTypes []string) ([]session.Selected, error) {
+func (h *Handler) buildSessionQueue(ctx context.Context, uid int64, durationMin int, themes, sections []string, includeShorts bool, media string, contentTypes []string, mix *session.Mix) ([]session.Selected, error) {
 	var sourceIDs []int64
 	if len(themes) > 0 || len(sections) > 0 {
 		set := map[int64]struct{}{}
@@ -858,6 +867,9 @@ func (h *Handler) buildSessionQueue(ctx context.Context, uid int64, durationMin 
 	pool, err := h.db.Candidates(ctx, uid, sourceIDs, 400, 20000)
 	if err != nil {
 		return nil, err
+	}
+	if mix != nil {
+		return h.buildMixQueue(ctx, uid, durationMin, pool, *mix)
 	}
 	if contentTypes != nil {
 		pool = filterContentTypes(pool, contentTypes)

@@ -1,0 +1,22 @@
+/* Session mix editor (#201). Format tones are steps of the accent, so the bar
+   reads in e-ink grayscale and dark mode without separate colors. */
+.mix-formats { gap: 2px; }
+.mix-bar { display: flex; height: 6px; border-radius: 3px; overflow: hidden; background: var(--rule); margin-bottom: 6px; gap: 2px; }
+.mix-bar > span { flex-basis: 0; min-width: 2px; }
+.mix-bar-article { background: var(--accent); }
+.mix-bar-post { background: color-mix(in srgb, var(--accent) 65%, var(--paper)); }
+.mix-bar-short { background: color-mix(in srgb, var(--accent) 40%, var(--paper)); }
+.mix-bar-long { background: var(--ink-soft); }
+.mix-row { display: grid; grid-template-columns: 10px 6.5em 1fr 3.2em; align-items: center; gap: 10px; min-height: 44px; font-size: 15px; color: var(--ink); }
+.mix-swatch { width: 10px; height: 10px; border-radius: 50%; }
+.mix-row input[type=range] { width: 100%; min-height: 44px; margin: 0; accent-color: var(--accent); background: transparent; }
+.mix-pct { text-align: right; font: 13px var(--grot, sans-serif); font-variant-numeric: tabular-nums; color: var(--ink-soft); }
+.mix-sections-row { gap: 9px; }
+.mix-sections-summary { margin-left: auto; color: var(--ink-mute); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.mix-sections-row svg:last-child { margin-left: 0; }
+.mix-sections { display: grid; gap: 14px; }
+.mix-section { display: grid; gap: 6px; }
+.mix-section-name { font-size: 15px; }
+.mix-section .rep-scale { display: flex; }
+.mix-section .rep-seg { flex: 1; }
+@media (max-width: 350px) { .mix-row { grid-template-columns: 10px 5.6em 1fr 2.8em; gap: 7px; font-size: 14px; } }
