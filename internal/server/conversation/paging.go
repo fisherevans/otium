@@ -88,19 +88,38 @@ func firstPage(full *Conversation) *Conversation {
 	return &c
 }
 
-// trimTree keeps the first n comments, each with at most kids replies (and
-// theirs, recursively), counting what it leaves out as MoreReplies.
+// trimTree keeps the first n comments, each with at most kids replies, and
+// theirs with at most DeeperShown, down to ThreadLevels levels in all, counting
+// what it leaves out as MoreReplies. Substack sends whole trees (an ACX open
+// thread's first twenty comments carry over a thousand replies), so a page is
+// cut to a readable shape and the rest loads per reply.
 func trimTree(cs []Comment, n, kids int) []Comment {
+	return trimLevels(cs, n, kids, ThreadLevels)
+}
+
+// ThreadLevels is how many levels of a thread one page carries, and
+// DeeperShown how many replies each reply below the first level keeps.
+const (
+	ThreadLevels = 3
+	DeeperShown  = 3
+)
+
+func trimLevels(cs []Comment, n, kids, levels int) []Comment {
 	if len(cs) > n {
 		cs = cs[:n]
 	}
 	out := make([]Comment, len(cs))
 	for i, c := range cs {
-		if hidden := len(c.Children) - kids; hidden > 0 {
-			c.MoreReplies = max(c.MoreReplies, hidden)
-		}
-		if len(c.Children) > 0 {
-			c.Children = trimTree(c.Children, kids, kids)
+		switch {
+		case len(c.Children) == 0:
+		case levels <= 1:
+			c.MoreReplies = max(c.MoreReplies, len(c.Children))
+			c.Children = nil
+		default:
+			if hidden := len(c.Children) - kids; hidden > 0 {
+				c.MoreReplies = max(c.MoreReplies, hidden)
+			}
+			c.Children = trimLevels(c.Children, kids, DeeperShown, levels-1)
 		}
 		out[i] = c
 	}

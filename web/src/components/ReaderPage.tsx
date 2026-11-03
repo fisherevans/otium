@@ -518,7 +518,7 @@ export function ReaderPage({
         </>)}
       </div>
 
-      <ContextInstrument mode="reader" eyebrow="Reading" label={progress >= .96 ? (post ? "End of post" : "End of article") : progress > .7 ? "Near the end" : sourceTitle || (post ? "Post" : "Article")}
+      <ContextInstrument mode="reader" eyebrow="Reading" label={progress >= .96 && !moreComing ? (post ? "End of post" : "End of article") : progress > .7 ? "Near the end" : sourceTitle || (post ? "Post" : "Article")}
         onMenu={() => setMenuOpen(true)} menuLabel="Article actions"
         action={{ label: "Back", onClick: onClose, icon: <ChevronLeft size={18} aria-hidden /> }} />
       <BottomSheet open={menuOpen} onClose={() => setMenuOpen(false)} kicker="Article actions">
