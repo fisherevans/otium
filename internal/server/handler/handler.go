@@ -976,6 +976,7 @@ func (h *Handler) attachContent(ctx context.Context, uid int64, items []session.
 	}
 	for i := range items {
 		items[i].Item.Content = contents[items[i].Item.ID]
+		items[i].Item.RefreshPostText() // #205: the body has the post's exact text
 	}
 	return nil
 }

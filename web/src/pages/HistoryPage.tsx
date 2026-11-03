@@ -1,3 +1,5 @@
+import { headline } from "@/lib/posts";
+import { PlatformMark } from "@/components/PlatformMark";
 import { ArrowLeft, ChevronRight } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
@@ -153,10 +155,10 @@ export default function HistoryPage({ embedded = false }: { embedded?: boolean }
               <div className="lib-row" key={`${it.id}-${it.state}`}>
                 <button className="lib-head list-item-button" onClick={() => setContent(it)}>
                   <div className="nm">
-                    <b>{it.title}</b>
+                    <b>{headline(it, 120)}</b>
                     <span>
                       <span className="hist-tag">{STATE_LABEL[it.state] ?? it.state}</span>
-                      {src ? ` · ${src}` : ""}
+                      {src ? <> · {src}<PlatformMark kind={it.source_kind} size={11} /></> : ""}
                       {it.interacted_at ? ` · ${relTime(it.interacted_at)}` : ""}
                     </span>
                   </div>

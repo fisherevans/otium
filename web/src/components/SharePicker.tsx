@@ -1,3 +1,4 @@
+import { headline } from "@/lib/posts";
 import { CheckCircle2, Circle, Hash, User, ChevronRight, AlertCircle } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
@@ -61,7 +62,7 @@ export function SharePicker({ item, open, onClose }: { item: Item | null; open: 
 
   return (
     <BottomSheet open={open} onClose={onClose} kicker="Send on Discord">
-      <div className="sheet-title share-title">{item?.title}</div>
+      <div className="sheet-title share-title">{item && headline(item, 140)}</div>
       {err && <p className="err" role="alert">{err}</p>}
 
       {results ? (

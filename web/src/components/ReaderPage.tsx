@@ -10,6 +10,8 @@ import { BottomSheet } from "./BottomSheet";
 import "./session-afterglow.css";
 import { Overlay, usePresence } from "./Overlay";
 import { ReaderConversation } from "./Conversation";
+import { PlatformMark } from "./PlatformMark";
+import { headline, isPost } from "@/lib/posts";
 
 // Shared full-page article reader. Overlay owns its history entry so each
 // origin keeps its own list, selection, and scroll position.
@@ -309,6 +311,7 @@ export function ReaderPage({
     };
   }, [open, mounted, itemId]);
 
+  const post = !!item && isPost(item);
   const readEst = useMemo(() => (body ? readTime(body.html.replace(/<[^>]+>/g, " ")) : ""), [body]);
 
   // #149: tapping an image in the article opens the full-screen zoomable viewer.
@@ -369,7 +372,7 @@ export function ReaderPage({
   if (!mounted || !item || advanced) return null;
 
   return (
-    <Overlay active={open} label={item.title} onClose={onClose}>
+    <Overlay active={open} label={headline(item, 90)} onClose={onClose}>
     <div
       ref={pageRef}
       className={`readerpage afterglow-reader ${inView ? "in" : ""} ${dragging ? "dragging" : ""}`}
@@ -381,8 +384,8 @@ export function ReaderPage({
     >
       <div className="rp-topbar">
         <div className="readerpage-head">
-        <span className="rp-section-label">Article</span>
-        {readEst && <span className="rp-readtime">{readEst}</span>}
+        <span className="rp-section-label">{post ? "Post" : "Article"}</span>
+        {readEst && !post && <span className="rp-readtime">{readEst}</span>}
         <div className="rp-actions">
           {onSave && (
             <button className="rp-act" onClick={onSave} aria-label="Save">
@@ -396,20 +399,21 @@ export function ReaderPage({
         </div>
         </div>
         <div className={`rp-revealbar ${revealed ? "in" : ""}`} aria-hidden={!revealed}>
-          <span className="rp-reveal-title">{item.title}</span>
+          <span className="rp-reveal-title">{headline(item, 90)}</span>
           {item.published_at && <span className="rp-reveal-date">{fmtDate(item.published_at)}</span>}
         </div>
       </div>
 
-      <div className="readerpage-body" ref={scrollRef} onScroll={onScroll}>
-        <h1 className="rp-title">{item.title}</h1>
+      <div className={`readerpage-body ${post ? "rp-post" : ""}`} ref={scrollRef} onScroll={onScroll}>
+        {/* #205: a post has no headline; it opens as its author, then its text. */}
+        {!post && <h1 className="rp-title">{item.title}</h1>}
         <div className="rp-meta">
           {(() => {
             // #2: omit the author when it just repeats the source.
             const showAuthor = !!item.author && !authorRedundant(item.author, sourceTitle);
             return (
               <>
-                {sourceTitle && <span>{sourceTitle}</span>}
+                {sourceTitle && <span className="rp-source">{sourceTitle}<PlatformMark kind={item.source_kind} size={12} /></span>}
                 {sourceTitle && showAuthor && <span aria-hidden>·</span>}
                 {showAuthor && <span>{item.author}</span>}
                 {(sourceTitle || showAuthor) && item.published_at && <span aria-hidden>·</span>}
@@ -457,7 +461,7 @@ export function ReaderPage({
         )}
       </div>
 
-      <ContextInstrument mode="reader" eyebrow="Reading" label={progress >= .96 ? "End of article" : progress > .7 ? "Near the end" : sourceTitle || "Article"}
+      <ContextInstrument mode="reader" eyebrow="Reading" label={progress >= .96 ? (post ? "End of post" : "End of article") : progress > .7 ? "Near the end" : sourceTitle || (post ? "Post" : "Article")}
         onMenu={() => setMenuOpen(true)} menuLabel="Article actions"
         action={{ label: "Back", onClick: onClose, icon: <ChevronLeft size={18} aria-hidden /> }} />
       <BottomSheet open={menuOpen} onClose={() => setMenuOpen(false)} kicker="Article actions">

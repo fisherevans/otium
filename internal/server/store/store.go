@@ -1405,7 +1405,8 @@ type ItemWithState struct {
 func (db *DB) ListSourceItemsWithState(ctx context.Context, userID, sourceID int64, limit int) ([]ItemWithState, error) {
 	rows, err := db.sql.QueryContext(ctx,
 		`SELECT i.id, i.source_id, i.url, i.title, i.summary, i.content, i.content_source, i.author, i.thumbnail_url,
-		        i.media_type, i.duration_sec, i.published_at, i.fetched_at, COALESCE(st.state,'')
+		        i.media_type, i.duration_sec, i.published_at, i.fetched_at, COALESCE(st.state,''),
+		        (SELECT kind FROM sources WHERE id = i.source_id)
 		 FROM items i
 		 LEFT JOIN item_state st ON st.item_id = i.id AND st.user_id = ?
 		 WHERE i.source_id = ? ORDER BY i.published_at DESC LIMIT ?`, userID, sourceID, limit)
@@ -1416,11 +1417,12 @@ func (db *DB) ListSourceItemsWithState(ctx context.Context, userID, sourceID int
 	var out []ItemWithState
 	for rows.Next() {
 		var it ItemWithState
-		var pub, fetched string
+		var pub, fetched, kind string
 		if err := rows.Scan(&it.ID, &it.SourceID, &it.URL, &it.Title, &it.Summary, &it.Content, &it.ContentSource,
-			&it.Author, &it.ThumbnailURL, &it.MediaType, &it.DurationSec, &pub, &fetched, &it.State); err != nil {
+			&it.Author, &it.ThumbnailURL, &it.MediaType, &it.DurationSec, &pub, &fetched, &it.State, &kind); err != nil {
 			return nil, err
 		}
+		it.SetSourceKind(kind)
 		it.PublishedAt = parseTime(pub)
 		it.FetchedAt = parseTime(fetched)
 		out = append(out, it)
@@ -1437,7 +1439,7 @@ func (db *DB) ListSourceItemsWithState(ctx context.Context, userID, sourceID int
 func (db *DB) ListRecentItemsByTopic(ctx context.Context, userID, topicID int64, limit int) ([]Item, error) {
 	rows, err := db.sql.QueryContext(ctx,
 		`SELECT i.id, i.source_id, i.url, i.title, i.summary, i.content, i.content_source, i.author, i.thumbnail_url,
-		        i.media_type, i.duration_sec, i.published_at, i.fetched_at
+		        i.media_type, i.duration_sec, i.published_at, i.fetched_at, s.kind
 		 FROM items i
 		 JOIN sources s ON s.id = i.source_id
 		 WHERE s.user_id = ? AND s.topic_id = ?
@@ -1469,7 +1471,7 @@ func candidateCols(content, rank string) string {
 	             COALESCE((SELECT f.half_life_days FROM topics f WHERE f.id = s.topic_id), 0) AS topic_half_life,
 	             COALESCE((SELECT f.archive_after_days FROM topics f WHERE f.id = s.topic_id), 0) AS topic_archive_after,
 	             s.archive_keep_count, s.archive_combine, s.scoring_config,
-	             ` + rank + ` AS recency_rank, i.likes, i.reposts, i.replies`
+	             ` + rank + ` AS recency_rank, i.likes, i.reposts, i.replies, s.kind`
 }
 
 // archiveWindowSQL resolves an item's Archive-After window in SQL, mirroring
@@ -1540,7 +1542,7 @@ func scanCandidates(rows *sql.Rows, windowDays int) ([]Candidate, error) {
 	var out []Candidate
 	for rows.Next() {
 		var c Candidate
-		var pub, fetched, cats string
+		var pub, fetched, cats, kind string
 		var winCount int
 		var winSpan, halfLife float64
 		if err := rows.Scan(&c.ID, &c.SourceID, &c.URL, &c.Title, &c.Summary, &c.Content, &c.ContentSource, &c.Author, &c.ThumbnailURL,
@@ -1548,9 +1550,10 @@ func scanCandidates(rows *sql.Rows, windowDays int) ([]Candidate, error) {
 			&c.SourceTitle, &c.SourceIconURL, &c.SourceWeight, &c.PerSessionCap, &c.SourceHalfLifeDays, &c.SourceArchiveAfterDays, &c.SourceArchiveKeywords, &c.SourceArchiveCategories,
 			&winCount, &winSpan, &halfLife, &c.TopicArchiveAfterDays,
 			&c.SourceArchiveKeepCount, &c.SourceArchiveCombine, &c.ScoringConfig, &c.RecencyRank,
-			&c.Likes, &c.Reposts, &c.Replies); err != nil {
+			&c.Likes, &c.Reposts, &c.Replies, &kind); err != nil {
 			return nil, err
 		}
+		c.SetSourceKind(kind)
 		c.Categories = splitCategories(cats)
 		c.PublishedAt = parseTime(pub)
 		c.FetchedAt = parseTime(fetched)
@@ -1701,13 +1704,13 @@ func (db *DB) SourceIDsForTopics(ctx context.Context, userID int64, slugs []stri
 func (db *DB) GetItem(ctx context.Context, userID, id int64) (*Item, error) {
 	row := db.sql.QueryRowContext(ctx,
 		`SELECT i.id, i.source_id, i.url, i.title, i.summary, i.content, i.content_source, i.author,
-		        i.thumbnail_url, i.media_type, i.duration_sec, i.published_at, i.fetched_at
+		        i.thumbnail_url, i.media_type, i.duration_sec, i.published_at, i.fetched_at, s.kind
 		 FROM items i JOIN sources s ON s.id = i.source_id
 		 WHERE i.id = ? AND s.user_id = ?`, id, userID)
 	var it Item
-	var pub, fetched string
+	var pub, fetched, kind string
 	err := row.Scan(&it.ID, &it.SourceID, &it.URL, &it.Title, &it.Summary, &it.Content, &it.ContentSource,
-		&it.Author, &it.ThumbnailURL, &it.MediaType, &it.DurationSec, &pub, &fetched)
+		&it.Author, &it.ThumbnailURL, &it.MediaType, &it.DurationSec, &pub, &fetched, &kind)
 	if err == sql.ErrNoRows {
 		return nil, nil
 	}
@@ -1716,6 +1719,7 @@ func (db *DB) GetItem(ctx context.Context, userID, id int64) (*Item, error) {
 	}
 	it.PublishedAt = parseTime(pub)
 	it.FetchedAt = parseTime(fetched)
+	it.SetSourceKind(kind)
 	return &it, nil
 }
 
@@ -1741,11 +1745,12 @@ func scanItems(rows *sql.Rows) ([]Item, error) {
 	var out []Item
 	for rows.Next() {
 		var it Item
-		var pub, fetched string
+		var pub, fetched, kind string
 		if err := rows.Scan(&it.ID, &it.SourceID, &it.URL, &it.Title, &it.Summary, &it.Content, &it.ContentSource, &it.Author,
-			&it.ThumbnailURL, &it.MediaType, &it.DurationSec, &pub, &fetched); err != nil {
+			&it.ThumbnailURL, &it.MediaType, &it.DurationSec, &pub, &fetched, &kind); err != nil {
 			return nil, err
 		}
+		it.SetSourceKind(kind)
 		it.PublishedAt = parseTime(pub)
 		it.FetchedAt = parseTime(fetched)
 		out = append(out, it)
@@ -2067,7 +2072,7 @@ func (db *DB) History(ctx context.Context, userID int64, filter string, limit, o
 	}
 	q := fmt.Sprintf(`SELECT i.id, i.source_id, i.url, i.title, i.summary, i.content, i.content_source, i.author, i.thumbnail_url,
 	        i.media_type, i.duration_sec, i.published_at, i.fetched_at,
-	        st.state, %[1]s AS interacted_at
+	        st.state, %[1]s AS interacted_at, COALESCE((SELECT kind FROM sources WHERE id = i.source_id), '')
 	    FROM item_state st JOIN items i ON i.id = st.item_id
 	    WHERE st.user_id = ? AND %[2]s
 	    ORDER BY interacted_at DESC, i.id DESC
@@ -2080,11 +2085,12 @@ func (db *DB) History(ctx context.Context, userID int64, filter string, limit, o
 	var out []HistoryItem
 	for rows.Next() {
 		var h HistoryItem
-		var pub, fetched, at string
+		var pub, fetched, at, kind string
 		if err := rows.Scan(&h.ID, &h.SourceID, &h.URL, &h.Title, &h.Summary, &h.Content, &h.ContentSource, &h.Author,
-			&h.ThumbnailURL, &h.MediaType, &h.DurationSec, &pub, &fetched, &h.State, &at); err != nil {
+			&h.ThumbnailURL, &h.MediaType, &h.DurationSec, &pub, &fetched, &h.State, &at, &kind); err != nil {
 			return nil, err
 		}
+		h.SetSourceKind(kind)
 		h.PublishedAt = parseTime(pub)
 		h.FetchedAt = parseTime(fetched)
 		h.InteractedAt = parseTime(at)

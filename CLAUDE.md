@@ -97,6 +97,12 @@ npm run measure -- --lab dist-lab/lab-standalone.html   # design against this
 npm run measure -- --app http://localhost:5173          # verify what ships
 ```
 
+Measure with full-screen Shorts too (`--shorts-mode --immersive` in the lab, the
+default in the app): it pads every ordinary card clear of floating chrome, and the
+solver must hold that padding back when it centres (#205). Social posts (`item.post`,
+from `store.PostKinds`) render as text posts, not headlines: `.card-post`, trimmed by
+the solver's last knob, never an avatar as hero (`lib/posts.ts`).
+
 `web/src/lab/README.md` has the full loop, the fixture list, and the specificity
 trap that bites every time (several old `global.css` rules match the card's at
 equal specificity and win on source order).

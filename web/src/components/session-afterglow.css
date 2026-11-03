@@ -110,7 +110,7 @@
 .shorts-credit-text { min-width: 0; display: flex; flex-direction: column; gap: 3px; }
 .shorts-creator-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
 .shorts-age { color: var(--ink-mute); font-size: 11px; line-height: 1.2; }
-.shorts-details { flex: 0 0 auto; padding: 0 8px; }
+.shorts-details { flex: 0 0 auto; padding: 0 8px; min-width: 44px; justify-content: center; } /* icon-only since #186: keep the 44px target */
 
 .focus-session.afterglow-session.shorts-viewing { padding-bottom: calc(76px + env(safe-area-inset-bottom, 0px)); }
 .shorts-viewing > .context-instrument-wrap > .context-instrument { min-height: 52px; padding: 3px 8px; border-radius: 18px; }
@@ -118,3 +118,34 @@
 .shorts-viewing > .context-instrument-wrap .instrument-eyebrow > span:not(.brand) { display: none; }
 .shorts-viewing > .context-instrument-wrap .instrument-meaning { display: flex; justify-content: center; }
 .shorts-viewing > .context-instrument-wrap .brand-compact .brand-mark { width: 22px; height: 22px; }
+
+/* #205: where an item comes from. A small monochrome platform mark beside the
+   source name, in the meta text's colour, so it identifies without competing. */
+.platform-mark { flex: 0 0 auto; display: inline-block; color: var(--ink-mute); vertical-align: -0.12em; }
+.card-credit .cc-text .platform-mark { align-self: center; margin-left: -3px; }
+.card-source .platform-mark, .ch-line .platform-mark { margin-left: 5px; }
+.shorts-creator-name .platform-mark { margin-left: 6px; color: inherit; opacity: .72; vertical-align: -0.08em; }
+
+/* #205: a post is its text. Reading face at the reader's size, not a headline;
+   whole when it fits, and trimmed by the solver (--card-post-lines) when it does
+   not, with the reader a tap away. */
+:is(.stage, .lab-reel, .appearance-card-frame) .snap.afterglow-card .card-post {
+    margin: 0 0 var(--card-rhythm, 13px);
+    flex: 0 0 auto;
+    font-family: var(--pref-reader-font-family, var(--reading, 'Newsreader', Georgia, serif));
+    font-size: calc(var(--pref-reader-font-size, 17px) + 1px);
+    line-height: 1.45;
+    color: var(--ink);
+    white-space: pre-line;
+    overflow-wrap: anywhere;
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: var(--card-post-lines, none);
+    overflow: hidden;
+}
+
+/* #205: a post in the reader opens on its author, then its text - no headline. */
+.rp-meta .rp-source { display: inline-flex; align-items: center; gap: 5px; }
+.readerpage-body.rp-post .rp-meta { font-size: 14px; margin-bottom: 14px; }
+.readerpage-body.rp-post .rp-meta .rp-source { color: var(--ink); font-weight: 600; }
+.lib-row .platform-mark { margin-left: 4px; }

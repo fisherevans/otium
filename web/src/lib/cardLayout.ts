@@ -112,7 +112,7 @@ export function applyRhythm(card: HTMLElement, rhythm: number) {
   const rows = q(".card-hier .ch-rows");
   const tax = q(".card-hier .ch-tax");
   const creator = rows && rows.children.length > 1 ? (rows.children[rows.children.length - 1] as HTMLElement) : null;
-  const title = q(".card-title");
+  const title = q(".card-title, .card-post");
   const credit = q(".card-credit");
   const media = q(".card-media, .media, .wave");
 
@@ -120,11 +120,15 @@ export function applyRhythm(card: HTMLElement, rhythm: number) {
   // block that is the block itself - and the block can be TALLER than its text,
   // because the ··· button is centred against it. That slack is why predicting
   // the margin arithmetically did not work.
+  //
+  // Rows go in DOM order: an article reads title then credit, a post (#205)
+  // reads credit then its text.
   const stack: { setter: HTMLElement | null; text: HTMLElement | null }[] = [];
   if (tax) stack.push({ setter: creator ? tax : hier, text: tax });
   if (creator) stack.push({ setter: hier, text: creator });
-  if (title) stack.push({ setter: title, text: title });
-  if (credit) stack.push({ setter: credit, text: credit });
+  const body = [title, credit].filter((el): el is HTMLElement => !!el);
+  body.sort((a, b) => (a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING ? -1 : 1));
+  for (const el of body) stack.push({ setter: el, text: el });
   if (media) stack.push({ setter: null, text: null });
   if (stack.length < 2) return;
 
@@ -175,6 +179,7 @@ export function solveCard(vars: HTMLElement, reel: HTMLElement, card: HTMLElemen
   vars.style.removeProperty("--card-center-pad");
   vars.removeAttribute("data-solved-blurb");
   vars.removeAttribute("data-solved-conv");
+  vars.style.removeProperty("--card-post-lines");
   if (frame) frame.style.removeProperty("height");
   if (!opts.solve) return [];
 
@@ -249,7 +254,21 @@ export function solveCard(vars: HTMLElement, reel: HTMLElement, card: HTMLElemen
   // #200: a card's replies are secondary to the post itself, so they go before
   // the excerpt (a post's own text) and after the first type steps. The "more"
   // link always stays. Both knobs are no-ops on a card without replies.
-  const knobs: [string, () => boolean][] = frame
+  //
+  // #205: a post's text is the card, so everything else gives way first - the
+  // picture steps down, the replies go - and only then is the text trimmed, to
+  // exactly what fits. Its size never steps: a post is read, not scanned.
+  const postEl = card.querySelector<HTMLElement>(".card-post");
+  const knobs: [string, () => boolean][] = postEl && !frame
+    ? [
+        ["hero cap 34%", () => setCap(0.34)],
+        ["second reply dropped", () => trimConv("one")],
+        ["hero cap 26%", () => setCap(0.26)],
+        ["replies dropped", () => trimConv("off")],
+        ["hero cap 18%", () => setCap(0.18)],
+        ["post trimmed", () => trimPost()],
+      ]
+    : frame
     ? [
         ["title 21px", () => step(1)],
         ["second reply dropped", () => trimConv("one")],
@@ -288,6 +307,14 @@ export function solveCard(vars: HTMLElement, reel: HTMLElement, card: HTMLElemen
     vars.setAttribute("data-solved-conv", to);
     return true;
   }
+  function trimPost() {
+    if (!postEl || vars.style.getPropertyValue("--card-post-lines")) return false;
+    const over = contentHeight(card) - budget;
+    const lh = parseFloat(getComputedStyle(postEl).lineHeight) || 26;
+    const lines = Math.max(2, Math.floor((postEl.offsetHeight - over - 2) / lh));
+    vars.style.setProperty("--card-post-lines", String(lines));
+    return true;
+  }
   function dropBlurb() {
     if (vars.getAttribute("data-solved-blurb") === "off") return false;
     vars.setAttribute("data-solved-blurb", "off");
@@ -322,6 +349,7 @@ export function solveCard(vars: HTMLElement, reel: HTMLElement, card: HTMLElemen
   // predicted pixels; this closes the loop on the measured result, so "grow the
   // media until the buttons are pushed down but not touching" is literally what
   // happens rather than something inferred from margins.
+  const clearance = Math.max(opts.bottomGap, parseFloat(getComputedStyle(card).paddingBottom) || 0);
   if (frame) {
     const ar2 = audioArt ? 1 : parseFloat(getComputedStyle(frame).getPropertyValue("--ar")) || 0.5625;
     const colW2 = columnWidth();
@@ -333,7 +361,7 @@ export function solveCard(vars: HTMLElement, reel: HTMLElement, card: HTMLElemen
       const k = frame.offsetHeight ? frame.getBoundingClientRect().height / frame.offsetHeight : 1;
       if (!k) break;
       const clear = (card.getBoundingClientRect().bottom - actions.getBoundingClientRect().bottom) / k;
-      const delta = clear - opts.bottomGap;
+      const delta = clear - clearance;
       if (Math.abs(delta) < 2) break;
       const next = Math.min(maxH, Math.max(budget * 0.3, frame.offsetHeight + delta));
       if (Math.abs(next - frame.offsetHeight) < 1) break;
@@ -355,6 +383,10 @@ export function solveCard(vars: HTMLElement, reel: HTMLElement, card: HTMLElemen
   // drove its clearance to `bottomGap` gets a pad of 0 and is left alone.
   if (opts.align === "center") {
     const actions = bottomRow(card);
+    // #205: full-screen Shorts pad every other card clear of the floating chrome
+    // (--imm-bottom). That padding is not slack: hold back whichever is larger, so
+    // the stack centres between the header and the bottom chrome, not the screen.
+    const reserve = Math.max(opts.bottomGap, parseFloat(getComputedStyle(card).paddingBottom) || 0);
     // NOT budget - contentHeight(card): `.snap` carries min-height:100%, so a card
     // that fits measures exactly the budget however little it holds, and the slack
     // reads as zero every time. Measure to the last thing on the card instead.
@@ -362,7 +394,7 @@ export function solveCard(vars: HTMLElement, reel: HTMLElement, card: HTMLElemen
     const last = actions ?? card.lastElementChild;
     if (last && k) {
       const slack = (card.getBoundingClientRect().bottom - last.getBoundingClientRect().bottom) / k;
-      const pad = Math.floor(Math.max(0, slack - opts.bottomGap) / 2);
+      const pad = Math.floor(Math.max(0, slack - reserve) / 2);
       if (pad > 0) vars.style.setProperty("--card-center-pad", `${pad}px`);
     }
   }
@@ -434,15 +466,23 @@ export function solveWhenReady(
   const schedule = () => {
     void document.fonts.ready.then(() => { if (!cancelled) raf = requestAnimationFrame(run); });
   };
-  const pending = Array.from(card.querySelectorAll("img")).filter((i) => !i.complete || i.naturalHeight === 0);
+  // #205: `complete` with no pixels is a BROKEN image (a hero that 404s or is
+  // refused by its host). Its load/error events have already fired, so waiting on
+  // it meant the card was never solved - never centred - for as long as it lived.
+  const pending = Array.from(card.querySelectorAll("img")).filter((i) => !i.complete);
   const cleanups: (() => void)[] = [];
   if (pending.length === 0) {
     schedule();
   } else {
     let left = pending.length;
+    let solved = false;
     const done = () => {
       if (--left <= 0 && !cancelled) schedule();
     };
+    // A slow image must not hold the layout hostage either: solve with what has
+    // arrived, and solve again when the rest lands.
+    const late = window.setTimeout(() => { if (!cancelled && !solved && left > 0) { solved = true; schedule(); } }, 1500);
+    cleanups.push(() => window.clearTimeout(late));
     pending.forEach((img) => {
       img.addEventListener("load", done, { once: true });
       img.addEventListener("error", done, { once: true });

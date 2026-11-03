@@ -1,3 +1,5 @@
+import { headline } from "@/lib/posts";
+import { PlatformMark, platformLabel } from "./PlatformMark";
 import { Check, ChevronRight } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
@@ -96,8 +98,11 @@ export function ItemDetails({
 
   return (
     <BottomSheet open={open} onClose={onClose} kicker="Details">
-      <div className="ia-title">{item.title}</div>
-      <p className="ia-sub">{[selected?.source_title, selected?.topic?.name, formatDate(item.published_at)].filter(Boolean).join(" · ")}</p>
+      <div className="ia-title">{headline(item, 140)}</div>
+      <p className="ia-sub">
+        {platformLabel(item.source_kind) && <><PlatformMark kind={item.source_kind} size={12} /> </>}
+        {[selected?.source_title, platformLabel(item.source_kind), selected?.topic?.name, formatDate(item.published_at)].filter(Boolean).join(" · ")}
+      </p>
       {item.media_type === "short" && <div className="shorts-details-copy" dangerouslySetInnerHTML={{ __html: renderSummary(item.content?.trim() ? item.content : item.summary).html }} />}
 
       {/* Score + chronological note, mirroring the source drill-down. */}

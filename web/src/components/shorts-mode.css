@@ -82,7 +82,13 @@
 :root[data-immersive=on] .content-session { padding: 0; }
 :root[data-immersive=on] .focus-session.afterglow-session { position: fixed; inset: 0; height: auto; padding: 0; z-index: 1; }
 :root[data-immersive=on] .focus-session .stage { height: 100%; }
-:root[data-immersive=on] .stage .snap.afterglow-card:not(.shorts-card) { padding-top: var(--imm-top); padding-bottom: var(--imm-bottom); }
+/* #205: the solver's centring pad rides on top of the chrome clearance. Without
+   it here this rule dropped --card-center-pad and every non-Short card in a
+   session with Shorts sat at the top of the screen. The lab selector lets the
+   layout lab and `measure --immersive` exercise the same rule. */
+.lab-screen[data-immersive=on] { --imm-top: 50px; --imm-bottom: 24px; }
+:is(:root[data-immersive=on] .stage, .lab-screen[data-immersive=on] .lab-reel) .snap.afterglow-card:not(.shorts-card) {
+  padding-top: calc(var(--imm-top) + var(--card-center-pad, 0px)); padding-bottom: var(--imm-bottom); }
 
 :root[data-immersive=on] .stage .snap.shorts-card { padding: 0; background: #000; overflow: hidden; }
 .snap.shorts-card .shorts-details-label { display: none; }

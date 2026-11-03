@@ -26,6 +26,12 @@ export type ReasonPolicy = "top" | "hidden";
 export interface LayoutOptions {
   /** Use the compact, video-first card for short videos only. */
   shortsMode: boolean;
+  /**
+   * Full-screen Shorts (#184): the reel fills the screen and the header floats
+   * over it, so every other card is padded clear of the chrome. The lab models
+   * that padding for ordinary cards (#205); a Short itself is not drawn edge to edge.
+   */
+  immersive: boolean;
   /** Run the budget solver after paint (sizes media from leftover space). */
   solve: boolean;
   title: TitlePolicy;
@@ -70,6 +76,7 @@ export interface LayoutOptions {
 
 export const DEFAULT_LAYOUT: LayoutOptions = {
   shortsMode: false,
+  immersive: false,
   solve: false,
   title: "clamp3",
   titleMin: 16,
@@ -253,6 +260,7 @@ export function layoutAttrs(o: LayoutOptions): Record<string, string> {
     "data-notes": o.notes,
     "data-byline": o.showByline ? "on" : "off",
     "data-theme-slot": o.themeToggle,
+    "data-immersive": o.immersive ? "on" : "off",
   };
 }
 
