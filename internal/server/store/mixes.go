@@ -230,3 +230,36 @@ func (db *DB) SourceIDsForSections(ctx context.Context, userID int64, slugs []st
 	}
 	return out, rows.Err()
 }
+
+// SourceFacts are the per-source facts a session mix needs that Candidate does
+// not carry.
+type SourceFacts struct {
+	Kind    string // sources.kind
+	Section string // the source's section slug via its topic, "" for none
+}
+
+// SourceMixFacts returns each of the user's sources' kind and section slug (via
+// its one topic; "" when topicless or unsectioned). Session mixes (#201) classify
+// Bluesky sources as posts and weight sources by section from these.
+func (db *DB) SourceMixFacts(ctx context.Context, userID int64) (map[int64]SourceFacts, error) {
+	rows, err := db.sql.QueryContext(ctx,
+		`SELECT s.id, s.kind, COALESCE(g.slug, '')
+		 FROM sources s
+		 LEFT JOIN topics t ON t.id = s.topic_id
+		 LEFT JOIN sections g ON g.id = t.section_id
+		 WHERE s.user_id = ?`, userID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	out := map[int64]SourceFacts{}
+	for rows.Next() {
+		var id int64
+		var kind, section string
+		if err := rows.Scan(&id, &kind, &section); err != nil {
+			return nil, err
+		}
+		out[id] = SourceFacts{Kind: kind, Section: section}
+	}
+	return out, rows.Err()
+}
