@@ -67,9 +67,10 @@
 .im-buffer[data-on=true] { opacity: .4; transition: opacity .6s ease-in .3s; }
 @media (prefers-reduced-motion: reduce) { .im-veil[data-on=true] { animation: none; opacity: .4; } }
 
-/* #184: full-screen Shorts. For the whole session the reel fills the viewport and
-   the header and pill float over it, so every card has the same geometry and a
-   swipe between a Short and an article never resizes the reel. Shorts cards go
+/* #184/#206: the session's one view. For the whole session the reel fills the
+   viewport and the header floats over it (there is no bottom pill), so every card
+   has the same geometry and a swipe between a Short and an article never resizes
+   the reel. The data-immersive name predates #206, when this was a choice. Shorts cards go
    edge to edge: the clip is cropped to fill (like TikTok/Reels), with scrims and
    the creator line on top. Articles keep their card, padded clear of the chrome. */
 :root[data-immersive=on] { --imm-top: calc(50px + env(safe-area-inset-top, 0px)); --imm-bottom: calc(env(safe-area-inset-bottom, 0px) + 24px); }
@@ -78,6 +79,9 @@
 :root[data-immersive=on] .topbar.session .brand-name { font-size: 22px; }
 :root[data-immersive=on] .topbar.session .brand-mark { width: 20px; height: 20px; }
 :root[data-immersive=on] .topbar.session :is(.chrome-btn, .font-button) { display: none; }
+/* #206: the session's time phrase, beside the wordmark; Library and ··· on the right. */
+.topbar-status { flex: 1 1 auto; min-width: 0; margin-left: 6px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; color: var(--ink-mute); font: 13px/1.2 var(--grot, sans-serif); }
+:root[data-immersive=on] .topbar.session .topbar-right { gap: 0; }
 :root[data-immersive=on] .topbar.session { position: fixed; z-index: 15; top: 0; left: 0; right: 0; background: transparent; transition: color .2s; }
 :root[data-immersive=on] .content-session { padding: 0; }
 :root[data-immersive=on] .focus-session.afterglow-session { position: fixed; inset: 0; height: auto; padding: 0; z-index: 1; }
@@ -91,7 +95,6 @@
   padding-top: calc(var(--imm-top) + var(--card-center-pad, 0px)); padding-bottom: var(--imm-bottom); }
 
 :root[data-immersive=on] .stage .snap.shorts-card { padding: 0; background: #000; overflow: hidden; }
-.snap.shorts-card .shorts-details-label { display: none; }
 /* #189: Shorts in full screen. One bar on top - creator, time, sound, CC, full
    screen, ··· - and the clip directly below it, fitted to the width and never
    cropped top or bottom, so YouTube's captions and bottom rows stay whole. A clip
@@ -118,8 +121,10 @@
   inset: auto; left: 50%; top: 0; transform: translateX(-50%);
   width: min(100cqw, calc(100cqh * 9 / 16)); height: calc(min(100cqw, calc(100cqh * 9 / 16)) * 16 / 9); }
 :root[data-immersive=on] .session-shorts-player .im-progress { top: 0; bottom: auto; left: 0; right: 0; border-radius: 0; }
-:root[data-over-video=on] .topbar.session { opacity: 0; pointer-events: none; }
+/* #206: visibility (after the fade) takes the hidden bar out of the accessibility
+   tree too, so its ··· never doubles the Short's own. */
 :root[data-immersive=on] .topbar.session { transition: opacity .2s; }
+:root[data-over-video=on] .topbar.session { opacity: 0; pointer-events: none; visibility: hidden; transition: opacity .2s, visibility 0s linear .2s; }
 
 /* #191: the one-time sound hint. A small dark bubble pointing at the sound icon:
    below it when the controls are the top bar (full screen), above it when they

@@ -8,7 +8,7 @@ import { ImageViewer } from "./ImageViewer";
 import { ContextInstrument } from "./ContextInstrument";
 import { BottomSheet } from "./BottomSheet";
 import "./session-afterglow.css";
-import { Overlay, usePresence } from "./Overlay";
+import { Overlay, instantMotion, usePresence } from "./Overlay";
 import { ReaderConversation } from "./Conversation";
 import { PlatformMark } from "./PlatformMark";
 import { headline, isPost } from "@/lib/posts";
@@ -41,6 +41,7 @@ export function ReaderPage({
   onOpen,
   onSave,
   onNext,
+  onNextDrag,
 }: {
   item: Item | null;
   sourceTitle?: string;
@@ -50,6 +51,9 @@ export function ReaderPage({
   onOpen: () => void; // open the original externally
   onSave?: () => void;
   onNext?: () => void; // #149: swipe up at the bottom -> advance the feed, close the reader
+  // #206: the end-of-article pull, in px of upward travel, so the feed behind can
+  // move with it (the next card follows the page up); null when it springs back.
+  onNextDrag?: (offset: number | null) => void;
 }) {
   const previousItem = useRef(currentItem);
   if (currentItem) previousItem.current = currentItem;
@@ -78,8 +82,8 @@ export function ReaderPage({
   const lastY = useRef(0);
   const scrollRef = useRef<HTMLDivElement>(null);
   const pageRef = useRef<HTMLDivElement>(null);
-  const readerActions = useRef({ onNext, onClose });
-  readerActions.current = { onNext, onClose };
+  const readerActions = useRef({ onNext, onClose, onNextDrag });
+  readerActions.current = { onNext, onClose, onNextDrag };
   const itemId = item?.id ?? 0;
 
   // Load the reader body when the page opens (or the item changes). Prefer the
@@ -185,18 +189,23 @@ export function ReaderPage({
   // (CSS) still lets vertical panning through.
   const start = useRef<{ id: number; x: number; y: number; atBottom: boolean } | null>(null);
   const pointers = useRef(new Set<number>());
-  const mode = useRef<"undecided" | "swipe" | "scroll">("undecided");
+  const mode = useRef<"undecided" | "swipe" | "scroll" | "pull">("undecided");
   const SLOP = 8; // px of travel before we commit to an axis
-  const NEXT_SWIPE = 70; // px of upward travel at the bottom that advances the feed (#149)
-  // #149: at the very bottom there's nothing left to scroll, so an upward flick is
-  // the natural "next" gesture - it advances the feed and closes the reader, saving
-  // the back-then-swipe two-step. Only armed when the gesture STARTS at the bottom,
-  // so a normal upward scroll mid-article never triggers it.
+  // #149/#206: at the very bottom there is nothing left to scroll, so pushing the
+  // page up is "next". The page follows the finger from the first pixel (no dead
+  // zone) and the next card follows it up from below (onNextDrag moves the feed
+  // behind by the same amount). Released past a quarter of the screen, or flicked,
+  // it settles onto the next item; otherwise it springs back. Only armed when the
+  // gesture STARTS at the bottom, so a normal upward scroll mid-article never pulls.
   function atBottom() {
     const el = scrollRef.current;
     if (!el) return false;
     return el.scrollTop + el.clientHeight >= el.scrollHeight - 4;
   }
+  const pull = usePull(pageRef, () => readerActions.current.onNextDrag, () => {
+    setAdvanced(true);
+    readerActions.current.onNext?.();
+  });
   function cancelGesture() {
     start.current = null;
     mode.current = "undecided";
@@ -207,6 +216,7 @@ export function ReaderPage({
     if (e.pointerType === "touch") return;
     pointers.current.add(e.pointerId);
     if (pointers.current.size !== 1 || !e.isPrimary || (window.visualViewport?.scale ?? 1) > 1.05) {
+      if (mode.current === "pull") pull.release(true);
       cancelGesture();
       return;
     }
@@ -220,60 +230,65 @@ export function ReaderPage({
     const dx = e.clientX - s.x;
     const dy = e.clientY - s.y;
     if (mode.current === "undecided") {
-      if (Math.max(Math.abs(dx), Math.abs(dy)) < SLOP) return; // not enough travel yet
-      // Commit to the dominant axis. Rightward + horizontal-dominant is a back
-      // swipe; anything else is a scroll we leave alone.
-      if (dx > 0 && Math.abs(dx) >= Math.abs(dy)) {
-        mode.current = "swipe";
-        setDragging(true);
-        try {
-          e.currentTarget.setPointerCapture(e.pointerId); // don't lose the release
-        } catch {
-          /* capture is best-effort */
-        }
+      if (s.atBottom && onNext && dy < 0 && -dy >= Math.abs(dx)) {
+        // Upward at the bottom: the page moves with the pointer from here on.
+        mode.current = "pull";
+        try { e.currentTarget.setPointerCapture(e.pointerId); } catch { /* best-effort */ }
       } else {
-        mode.current = "scroll";
-        return;
+        if (Math.max(Math.abs(dx), Math.abs(dy)) < SLOP) return; // not enough travel yet
+        // Commit to the dominant axis. Rightward + horizontal-dominant is a back
+        // swipe; anything else is a scroll we leave alone.
+        if (dx > 0 && Math.abs(dx) >= Math.abs(dy)) {
+          mode.current = "swipe";
+          setDragging(true);
+          try {
+            e.currentTarget.setPointerCapture(e.pointerId); // don't lose the release
+          } catch {
+            /* capture is best-effort */
+          }
+        } else {
+          mode.current = "scroll";
+          return;
+        }
       }
     }
-    if (mode.current === "swipe") setDrag(Math.max(0, dx));
+    if (mode.current === "pull") pull.move(-dy);
+    else if (mode.current === "swipe") setDrag(Math.max(0, dx));
   }
   function onPointerUp(e: ReactPointerEvent) {
     pointers.current.delete(e.pointerId);
     const s = start.current;
     if (!s || s.id !== e.pointerId) return;
-    const wasSwiping = mode.current === "swipe";
+    const was = mode.current;
     const dx = e.clientX - s.x;
-    const dy = e.clientY - s.y;
     cancelGesture();
-    if (wasSwiping) {
-      if (dx > 90) onClose();
-      return;
-    }
-    if (s.atBottom && onNext && atBottom() && dy <= -NEXT_SWIPE && Math.abs(dy) > Math.abs(dx)) {
-      // Only the feed moves when advancing; avoid a competing reader exit.
-      setAdvanced(true);
-      onNext();
-    }
+    if (was === "pull") pull.release(false);
+    else if (was === "swipe" && dx > 90) onClose();
   }
   function onPointerCancel(e: ReactPointerEvent) {
     pointers.current.delete(e.pointerId);
+    if (mode.current === "pull") pull.release(true);
     cancelGesture();
   }
 
-  // Native touch listeners retain the bottom-start gesture when the browser
-  // takes over vertical panning and cancels its pointer stream.
+  // Native touch listeners own the bottom pull and the back swipe. The pull
+  // cancels the first upward touchmove at the bottom, which keeps WebKit's
+  // rubber band (and Chromium's overscroll) out of it: the only thing that moves
+  // is the page, under the finger.
   useEffect(() => {
     const page = pageRef.current;
     if (!open || !mounted || !page) return;
-    let touch: { id: number; x: number; y: number; time: number; bottom: boolean; axis: string | null } | null = null;
+    let touch: { id: number; x: number; y: number; bottom: boolean; axis: string | null } | null = null;
     const blocked = () => (window.visualViewport?.scale ?? 1) > 1.02 || !!window.getSelection()?.toString();
-    const cancel = () => { touch = null; setDrag(null); setDragging(false); };
+    const cancel = () => {
+      if (touch?.axis === "pull") pull.release(true);
+      touch = null; setDrag(null); setDragging(false);
+    };
     const down = (event: TouchEvent) => {
       cancel();
       if (event.touches.length !== 1 || blocked() || (event.target as Element).closest("button,a,input,textarea,select,iframe,video,audio,img,[contenteditable]")) return;
       const point = event.touches[0];
-      touch = { id: point.identifier, x: point.clientX, y: point.clientY, time: performance.now(), bottom: atBottom(), axis: null };
+      touch = { id: point.identifier, x: point.clientX, y: point.clientY, bottom: atBottom(), axis: null };
     };
     const move = (event: TouchEvent) => {
       if (!touch) return;
@@ -281,23 +296,29 @@ export function ReaderPage({
       const point = event.touches[0];
       if (point.identifier !== touch.id) { cancel(); return; }
       const dx = point.clientX - touch.x, dy = point.clientY - touch.y;
-      if (!touch.axis && Math.hypot(dx, dy) > 12) touch.axis = Math.abs(dy) > Math.abs(dx) * 1.2 ? dy < 0 ? "up" : "down" : Math.abs(dx) > Math.abs(dy) * 1.2 ? dx > 0 ? "right" : "left" : "scroll";
-      const next = touch.axis === "up" && touch.bottom && readerActions.current.onNext && dy < -12 && -dy > Math.abs(dx) * 1.5;
+      if (!touch.axis && touch.bottom && readerActions.current.onNext && dy < 0 && -dy >= Math.abs(dx)) touch.axis = "pull";
+      else if (!touch.axis && Math.hypot(dx, dy) > 12) touch.axis = Math.abs(dx) > Math.abs(dy) * 1.2 && dx > 0 ? "right" : "scroll";
+      if (touch.axis === "pull") {
+        if (event.cancelable) event.preventDefault();
+        pull.move(-dy);
+        return;
+      }
       const back = touch.axis === "right" && touch.x > 24 && dx > 14 && dx > Math.abs(dy) * 1.5;
-      if ((next || back) && event.cancelable) event.preventDefault();
+      if (back && event.cancelable) event.preventDefault();
       if (back) { setDragging(true); setDrag(Math.max(0, dx)); }
     };
     const up = (event: TouchEvent) => {
       const gesture = touch;
-      cancel();
-      if (!gesture || event.touches.length || blocked() || performance.now() - gesture.time > 900) return;
+      touch = null;
+      setDrag(null);
+      setDragging(false);
+      if (!gesture) return;
+      if (gesture.axis === "pull") { pull.release(event.touches.length > 0 || blocked()); return; }
+      if (event.touches.length || blocked()) return;
       const point = Array.from(event.changedTouches).find((point) => point.identifier === gesture.id);
       if (!point) return;
       const dx = point.clientX - gesture.x, dy = point.clientY - gesture.y;
-      if (gesture.axis === "up" && gesture.bottom && atBottom() && dy <= -90 && -dy > Math.abs(dx) * 1.5 && readerActions.current.onNext) {
-        setAdvanced(true);
-        readerActions.current.onNext();
-      } else if (gesture.axis === "right" && gesture.x > 24 && dx >= 90 && dx > Math.abs(dy) * 1.5) readerActions.current.onClose();
+      if (gesture.axis === "right" && gesture.x > 24 && dx >= 90 && dx > Math.abs(dy) * 1.5) readerActions.current.onClose();
     };
     page.addEventListener("touchstart", down, { passive: true });
     page.addEventListener("touchmove", move, { passive: false });
@@ -309,6 +330,7 @@ export function ReaderPage({
       page.removeEventListener("touchend", up); page.removeEventListener("touchcancel", cancel);
       document.removeEventListener("visibilitychange", cancel);
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, mounted, itemId]);
 
   const post = !!item && isPost(item);
@@ -477,4 +499,70 @@ export function ReaderPage({
     </div>
     </Overlay>
   );
+}
+
+// #206: the end-of-article pull. Moves the page with the finger (direct DOM
+// writes, no React render per frame), reports the same offset to the feed behind,
+// and on release settles to a full screen (commit) or back to zero. The settle is
+// one rAF loop driving both, so the page and the next card cannot drift apart;
+// reduced motion and e-ink settle at once.
+function usePull(pageRef: React.RefObject<HTMLDivElement | null>, follower: () => ((offset: number | null) => void) | undefined, commit: () => void) {
+  const state = useRef({ offset: 0, active: false, frame: 0, samples: [] as { t: number; d: number }[] });
+  const latest = useRef(commit);
+  latest.current = commit;
+  useEffect(() => () => cancelAnimationFrame(state.current.frame), []);
+  function paint(offset: number) {
+    const page = pageRef.current;
+    state.current.offset = offset;
+    if (page) {
+      page.style.transition = "none";
+      page.style.transform = offset > 0 ? `translate3d(0, ${-offset}px, 0)` : "";
+      // The page reads as a sheet lifting off the next card, not more article.
+      page.style.boxShadow = offset > 0 ? "0 12px 28px rgb(0 0 0 / .16)" : "";
+    }
+    follower()?.(offset);
+  }
+  function move(raw: number) {
+    const s = state.current;
+    if (!s.active) { cancelAnimationFrame(s.frame); s.active = true; s.samples = []; }
+    const height = window.innerHeight;
+    const offset = Math.max(0, Math.min(raw, height));
+    const now = performance.now();
+    s.samples.push({ t: now, d: offset });
+    while (s.samples.length > 2 && now - s.samples[0].t > 100) s.samples.shift();
+    paint(offset);
+  }
+  function release(cancelled: boolean) {
+    const s = state.current;
+    if (!s.active) return;
+    s.active = false;
+    const height = window.innerHeight;
+    // Upward speed over the last ~100ms of movement, in px/ms. A finger that
+    // stopped before lifting is not a flick, and a burst of events with no real
+    // time between them is no evidence of one.
+    const first = s.samples[0], last = s.samples[s.samples.length - 1];
+    const span = first && last ? last.t - first.t : 0;
+    const velocity = span >= 16 && performance.now() - last.t < 80 ? (last.d - first.d) / span : 0;
+    const go = !cancelled && (s.offset >= height * 0.25 || (s.offset > 48 && velocity > 0.3));
+    const from = s.offset, to = go ? height : 0;
+    const done = () => {
+      if (go) { latest.current(); return; }
+      const page = pageRef.current;
+      if (page) { page.style.transform = ""; page.style.transition = ""; page.style.boxShadow = ""; }
+      follower()?.(null);
+    };
+    if (instantMotion() || from === to) { if (go) paint(to); done(); return; }
+    // Duration scales with the distance left, so a near-complete pull is quick.
+    const ms = Math.max(140, Math.min(320, Math.abs(to - from) * 0.55));
+    const t0 = performance.now();
+    const step = (now: number) => {
+      const p = Math.min(1, (now - t0) / ms);
+      const eased = 1 - Math.pow(1 - p, 3);
+      paint(from + (to - from) * eased);
+      if (p < 1) s.frame = requestAnimationFrame(step);
+      else done();
+    };
+    s.frame = requestAnimationFrame(step);
+  }
+  return { move, release };
 }

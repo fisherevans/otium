@@ -8,11 +8,14 @@ export function useShortsMode() {
     return useViewingChoice("shorts-mode");
 }
 
-// #184: Shorts fill the whole portrait screen, with the app chrome floating over
-// them. On by default; independent of Shorts mode itself.
-export function useImmersiveShorts() {
-    return useViewingChoice("shorts-immersive");
-}
+// #206: the full-screen session view is no longer a choice, so the old
+// "shorts-immersive" preference (#184) is dropped from storage once.
+try {
+    for (let i = localStorage.length - 1; i >= 0; i--) {
+        const key = localStorage.key(i);
+        if (key?.startsWith("otium:shorts-immersive:")) localStorage.removeItem(key);
+    }
+} catch { /* Storage may be unavailable; nothing reads the key any more. */ }
 
 function useViewingChoice(name: string) {
     const { user } = useAuth();

@@ -141,8 +141,8 @@ for (const [name, engine] of Object.entries({ chromium, webkit }).filter(([name]
             const state = { accountId: 1, sessionId: 'shorts-test', cursor: 0, events: [], reads: [], dwells: [], ended: false };
             const items = options.items || Array.from({ length: 10 }, (_, i) => make(i + 1));
             await page.addInitScript(installFakeYT, { mode: options.mode, held: !!options.held, blocked: !!options.blocked });
-            // #184: full-screen Shorts default on; the card-view scenarios opt out.
-            await page.addInitScript(on => { for (const id of [1, 2]) localStorage.setItem(`otium:shorts-immersive:${id}`, on ? 'on' : 'off'); }, !!options.immersive);
+            // #206: the stored full-screen choice is gone; a leftover key is cleared.
+            await page.addInitScript(() => localStorage.setItem('otium:shorts-immersive:1', 'off'));
             page.on('pageerror', error => errors.push(error.message));
             await context.route('**/*', route => {
                 const request = route.request(), url = new URL(request.url());
@@ -191,15 +191,20 @@ for (const [name, engine] of Object.entries({ chromium, webkit }).filter(([name]
                 return !!player && (player.state === 1) === expected;
             }, playing);
             const advance = async (index, loaded = true) => {
-                // Full screen has no Next (#191): swipe, i.e. scroll the reel a card.
-                if (await page.getByRole('button', { name: 'Next', exact: true }).count()) await page.getByRole('button', { name: 'Next', exact: true }).click();
-                else await page.evaluate(i => { const s = document.querySelector('.stage'); s.scrollTo({ top: i * s.clientHeight, behavior: 'instant' }); }, index);
+                // Sessions have no Next button (#191/#206): swipe, i.e. scroll the reel a card.
+                await page.evaluate(i => { const s = document.querySelector('.stage'); s.scrollTo({ top: i * s.clientHeight, behavior: 'instant' }); }, index);
                 await page.waitForFunction(i => document.querySelector('.afterglow-card:not(.away)')?.dataset.idx === String(i), index);
                 // #182: the shared player moves to a Shorts card once the scroll settles.
                 await page.waitForFunction(i => !document.querySelector('.session-shorts-player[data-active="true"]') || document.querySelector('[data-player]')?.dataset.idx === String(i), index);
                 if (loaded) await page.waitForFunction(videoId => window.__yt.current()?.videoId === videoId, new URL(items[index].item.url).pathname.split('/').at(-1));
             };
-            const menu = () => page.getByRole('button', { name: 'Article and session actions', exact: true }).click();
+            // #206: the top bar's ··· (or a Short's own, where the bar steps aside) opens
+            // the item and session actions; there is no pill.
+            const menu = async () => {
+                const own = page.locator('.afterglow-card:not(.away) .shorts-details');
+                if (await own.count()) await own.click();
+                else await page.locator('.topbar').getByRole('button', { name: 'Item and session actions', exact: true }).click();
+            };
             const native = async name => { await menu(); await page.locator('dialog[open]').getByRole('button', { name, exact: true }).click(); await page.waitForFunction(() => !document.querySelector('dialog[open]')); };
             const close = async () => { await page.keyboard.press('Escape'); await page.waitForFunction(() => !document.querySelector('dialog[open]')); };
             const setMode = async enabled => {
@@ -410,12 +415,13 @@ for (const [name, engine] of Object.entries({ chromium, webkit }).filter(([name]
                     const frame = document.querySelector('.session-shorts-player[data-active="true"] .im-frame').getBoundingClientRect();
                     return [...document.querySelectorAll('.afterglow-card:not(.away) .shorts-quiet .shorts-quiet-btn')].map(button => {
                         const rect = button.getBoundingClientRect();
-                        return { name: button.getAttribute('aria-label'), below: rect.top >= frame.bottom - 1, left: rect.left, right: rect.right, height: rect.height };
+                        // #206: always full screen, so the controls sit in the bar above the clip.
+                        return { name: button.getAttribute('aria-label'), outside: rect.bottom <= frame.top + 1 || rect.top >= frame.bottom - 1, left: rect.left, right: rect.right, height: rect.height };
                     });
                 });
                 assert.equal(geometry.length, 2, 'sound and captions only; player controls live in Actions');
                 for (const control of geometry) {
-                    assert.ok(control.below, `${width}px ${control.name} does not cover video pixels`);
+                    assert.ok(control.outside, `${width}px ${control.name} does not cover video pixels`);
                     assert.ok(control.left >= -1 && control.right <= width + 1, `${width}px ${control.name} fits the viewport`);
                     assert.ok(control.height >= 44, `${width}px ${control.name} keeps a 44px target`);
                 }
@@ -528,8 +534,9 @@ for (const [name, engine] of Object.entries({ chromium, webkit }).filter(([name]
             assert.equal(await details.getByText('Filter out of future sessions').count(), 1);
             assert.equal(await details.getByRole('button', { name: 'Save or share video' }).count(), 0, 'no actions in details');
             await close();
+            // #206: the Short's own ··· is the same actions sheet as the session's top bar.
             await page.locator('.afterglow-card:not(.away) .shorts-details').click();
-            await page.waitForFunction(() => document.querySelector('dialog[open]')?.textContent.includes('Explore score'));
+            await page.waitForFunction(() => document.querySelector('dialog[open]')?.textContent.includes('Post details'));
             await close();
             await waitPlaying(true);
             assert.equal(count('open'), 0, 'sheets and sharing are not opens');
@@ -595,17 +602,15 @@ for (const [name, engine] of Object.entries({ chromium, webkit }).filter(([name]
             assert.equal(await page.locator('.session-shorts-player .im-gesture .im-play').count(), 1, 'Play shows after a deliberate pause');
             await page.getByRole('button', { name: 'Play', exact: true }).click();
             await waitPlaying(true);
-            // Toggle back to the card view and again; the choice persists.
-            await page.getByRole('button', { name: 'Exit full screen', exact: true }).click();
-            await page.waitForFunction(() => !document.documentElement.dataset.immersive);
-            const card = await page.locator('.session-shorts-player[data-active="true"] .im-frame').boundingBox();
-            assert.ok(card.height < 664 - 100, 'card view gives the chrome its space back');
-            assert.equal(await page.locator('.context-instrument').count(), 1, 'card view keeps the pill');
-            assert.equal(await page.evaluate(() => localStorage.getItem('otium:shorts-immersive:1')), 'off');
-            await page.getByRole('button', { name: 'Full screen', exact: true }).click();
-            await page.waitForFunction(() => document.documentElement.dataset.immersive === 'on');
-            await waitPlaying(true);
+            // #206: full screen is the only view; there is no toggle, and the old preference is cleared.
+            assert.equal(await page.getByRole('button', { name: /full screen/i }).count(), 0, 'no full-screen toggle');
+            assert.equal(await page.evaluate(() => localStorage.getItem('otium:shorts-immersive:1')), null, 'the retired preference is removed');
+            await page.locator('.afterglow-card:not(.away) .shorts-details').click();
+            const actions = page.locator('dialog[open]');
+            assert.equal(await actions.getByRole('switch', { name: /full-screen/i }).count(), 0, 'no full-screen switch in Actions');
+            await actions.getByRole('button', { name: 'Next item', exact: true }).click();
+            await page.waitForFunction(() => document.querySelector('.afterglow-card:not(.away)')?.dataset.idx === '2');
             assert.equal(count('open'), 2, 'only the deliberate sound-on and Play count as opens; full screen, the veil and the hint add none');
-        }, { immersive: true });
+        });
     } finally { await browser.close(); }
 }

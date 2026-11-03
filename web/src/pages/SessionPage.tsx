@@ -6,8 +6,8 @@ import { ItemDetails } from "@/components/ItemDetails";
 import { ReaderPage } from "@/components/ReaderPage";
 import { SavePicker } from "@/components/SavePicker";
 import { ScoreBreakdownSheet } from "@/components/ScoreBreakdown";
-import { ArrowDown, BookOpen, ChevronRight } from "lucide-react";
-import { ContextInstrument } from "@/components/ContextInstrument";
+import { BookOpen, ChevronRight } from "lucide-react";
+import { useInstrument } from "@/components/ContextInstrument";
 import { Brand } from "@/components/Brand";
 import { BottomSheet } from "@/components/BottomSheet";
 import { Player } from "@/components/Player";
@@ -20,7 +20,7 @@ import type { MediaPosition } from "@/components/InlineMedia";
 import { SessionShortsPlayer } from "@/components/SessionShortsPlayer";
 import { SessionBuilding } from "@/components/SessionBuilding";
 import { useSessionPlayback } from "@/lib/sessionPlayback";
-import { useImmersiveShorts, useShortsMode } from "@/lib/shortsMode";
+import { useShortsMode } from "@/lib/shortsMode";
 import * as perf from "@/lib/perf";
 import { createShortsBus } from "@/lib/shortsBus";
 import { cardRender, isMedia, isVideo } from "@/lib/render";
@@ -59,7 +59,6 @@ export default function SessionPage() {
   const fromBuild = !!(useLocation().state as { building?: boolean } | null)?.building;
   const { user } = useAuth();
   const [shortsMode, setShortsMode] = useShortsMode();
-  const [immersivePref, setImmersive] = useImmersiveShorts();
   const playback = useSessionPlayback(user?.id, id);
   const lastShort = useRef<Selected | null>(null);
   const shortsPosition = useRef<MediaPosition | null>(null);
@@ -85,6 +84,9 @@ export default function SessionPage() {
   const shortsBus = useRef(createShortsBus()).current;
   // Where an in-flight smooth Next/Prev is heading; cleared when the reel settles.
   const scrollTarget = useRef<number | null>(null);
+  // #206: while the reader's end-of-article pull is in progress, the reel behind
+  // it follows the finger from this card; snapping is off until it settles.
+  const readerPull = useRef<{ from: number; base: number } | null>(null);
   const [duration, setDuration] = useState(15); // minutes; the single chosen length (#69)
   const [themes, setThemes] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
@@ -377,6 +379,8 @@ export default function SessionPage() {
       // A smooth Next/Prev already heading here finishes on its own; setting
       // scrollTop mid-animation made Chromium land 48px off (#184).
       if (scrollTarget.current === top) return;
+      // #206: the reader's swipe-to-next is carrying the reel with the finger.
+      if (readerPull.current) return;
       if (Math.abs(stage.scrollTop - top) > 1) stage.scrollTop = top;
     };
     anchor();
@@ -662,19 +666,25 @@ export default function SessionPage() {
   const cur = items[current];
   const atEnd = current >= visibleCount;
 
-  // #184: full-screen Shorts. The reel takes the whole viewport for the session
-  // (so card geometry never changes between Shorts and articles), and the app
-  // header and pill float over it, restyled while a Short is under them.
-  // Only sessions that contain Shorts: a News session keeps the normal layout.
+  // #184/#206: the session's one view is full screen. The reel takes the whole
+  // viewport (so card geometry never changes between Shorts and articles), the
+  // header floats over it, and there is no bottom pill and no Next: you swipe.
+  // Over a Short (in Shorts mode) the header steps aside for the clip's own bar.
   const hasShorts = useMemo(() => items.some((sel) => sel.item.media_type === "short"), [items]);
-  const immersive = shortsMode && immersivePref && hasShorts && !review;
-  const overVideo = immersive && !atEnd && cur?.item.media_type === "short";
+  const immersive = !review;
+  const overVideo = immersive && shortsMode && !atEnd && cur?.item.media_type === "short";
   useEffect(() => {
     const root = document.documentElement;
     if (immersive) root.dataset.immersive = "on"; else delete root.dataset.immersive;
     if (overVideo) root.dataset.overVideo = "on"; else delete root.dataset.overVideo;
   }, [immersive, overVideo]);
   useEffect(() => () => { delete document.documentElement.dataset.immersive; delete document.documentElement.dataset.overVideo; }, []);
+
+  // #206: the time phrase rides in the session's top bar (App reads it from the
+  // instrument context) and in the actions sheet; there is no pill to carry it.
+  const status = review ? "Session complete" : elapsed >= durationSec ? "Session time reached" : durationSec - elapsed <= 120 ? "A little time left" : durationSec - elapsed <= 300 ? "A few minutes left" : "Session in progress";
+  useInstrument({ mode: "session", eyebrow: "Session", label: loading ? "" : status,
+    onMenu: review || loading || err ? undefined : () => setMenuOpen(true), menuLabel: "Item and session actions" });
 
   // #191: once per session (in this tab), the first muted Short points at the
   // sound control. It leaves after a few seconds, on a tap, on sound on, or when
@@ -810,8 +820,35 @@ export default function SessionPage() {
   // scrolled to the next card - close the surface and move the reel forward one, so
   // finishing an article flows straight into the next item without a back-then-swipe.
   function readerNext() {
+    const stage = stageRef.current;
+    const pulled = readerPull.current;
+    readerPull.current = null;
     closeContent();
-    next();
+    if (!stage || !pulled) { next(); return; }
+    // #206: the pull already carried the reel to the next card; land it exactly.
+    const target = pulled.from < visibleCount - 1 ? pulled.from + 1 : visibleCount;
+    stage.scrollTop = target * stage.clientHeight;
+    stage.style.scrollSnapType = "";
+  }
+  // #206: the reader's end-of-article pull, in px of upward travel. The reader
+  // moves up by `offset` and the reel behind it scrolls by the same amount, so
+  // the next card's top edge stays glued to the reader's bottom edge. null ends
+  // a pull that did not commit: the reel returns to the card it left.
+  function readerDrag(offset: number | null) {
+    const stage = stageRef.current;
+    if (!stage) return;
+    if (offset === null) {
+      const pulled = readerPull.current;
+      readerPull.current = null;
+      if (pulled) stage.scrollTop = pulled.base;
+      stage.style.scrollSnapType = "";
+      return;
+    }
+    if (!readerPull.current) {
+      readerPull.current = { from: current, base: current * stage.clientHeight };
+      stage.style.scrollSnapType = "none";
+    }
+    stage.scrollTop = readerPull.current.base + Math.max(0, Math.min(offset, stage.clientHeight));
   }
   function openExternal(sel: Selected) {
     recordOpen(sel);
@@ -902,16 +939,15 @@ export default function SessionPage() {
     return () => window.removeEventListener("keydown", onKey);
   });
 
-  if (err) return <div className={`focus-session afterglow-session ${!review && shortsMode && cur?.item.media_type === "short" ? "shorts-viewing" : ""}`}><div className="center"><p className="err">Couldn't resume your session: {err}</p><button className="btn" onClick={() => window.location.reload()}>Retry</button></div><ContextInstrument mode="app" eyebrow="Session" label="Could not load" action={{ label: "Back", onClick: () => nav("/") }} /></div>;
+  if (err) return <div className={`focus-session afterglow-session ${!review && shortsMode && cur?.item.media_type === "short" ? "shorts-viewing" : ""}`}><div className="center"><p className="err">Couldn't resume your session: {err}</p><button className="btn" onClick={() => window.location.reload()}>Retry</button><button className="btn ghost" onClick={() => nav("/")}>Back</button></div></div>;
   // #186: the same building screen Home showed while the server made the session.
-  if (loading) return <div className="focus-session afterglow-session"><SessionBuilding label={fromBuild ? "Building your session" : "Opening your session"} continued={fromBuild} /><ContextInstrument mode="session" eyebrow="Session" label="Loading" action={{ label: "Back", onClick: () => nav("/") }} /></div>;
+  if (loading) return <div className="focus-session afterglow-session"><SessionBuilding label={fromBuild ? "Building your session" : "Opening your session"} continued={fromBuild} /></div>;
   if (items.length === 0) {
     return (
       <div className="center">
         <p className="display">No items available.</p>
         <p>No eligible items in {themes.length ? themes.join(", ") : "your sources"}.</p>
         <button className="btn ghost" onClick={goHome}>New session</button>
-        <ContextInstrument mode="app" eyebrow="Session" label="No items available" action={{ label: "Back", onClick: goHome }} />
       </div>
     );
   }
@@ -959,8 +995,6 @@ export default function SessionPage() {
             shortsMode={shortsMode}
             persistentShorts
             hostsPlayer={!!focusedShort && i === playerIdx}
-            immersive={immersive}
-            onImmersiveChange={setImmersive}
             soundHint={soundHint === i}
             onSoundHintDone={() => setSoundHint(null)}
             shortsBus={shortsBus}
@@ -984,7 +1018,6 @@ export default function SessionPage() {
             onSave={save}
             onSource={(s) => setSourceSel(s)}
             onMenu={() => setMenuOpen(true)}
-            onDetails={() => setDetailsOpen(true)}
             onConversation={(s) => (isMedia(s.item) ? setConvSel(s) : openContent(s))}
             onFirstPlay={(s, explicit) => {
               played.current.add(s.item.id);
@@ -1044,16 +1077,6 @@ export default function SessionPage() {
         <SessionPresetPrompt sessionId={id} />
       </div>}
 
-      {/* #186/#191: full screen has no pill and no Next - you swipe; the session
-          menu is the ··· on each card, with the time phrase in its header. */}
-      {immersive && !atEnd ? null : (
-        <ContextInstrument mode={review ? "app" : "session"} eyebrow={review ? "Session complete" : "Session"}
-          label={review ? "Review session" : elapsed >= durationSec ? "Session time reached" : durationSec - elapsed <= 120 ? "A little time left" : durationSec - elapsed <= 300 ? "A few minutes left" : "Session in progress"}
-          onMenu={review ? undefined : () => setMenuOpen(true)} menuLabel="Article and session actions"
-          onLabel={review ? () => setRecapOpen(true) : undefined}
-          action={review ? { label: "Done", onClick: goHome, disabled: extending || ending } : { label: "Next", onClick: () => { perf.noteTrigger("button"); next(); }, icon: <ArrowDown size={18} aria-hidden /> }} />
-      )}
-
       {review && recapOpen && <SessionReview review={review} onClose={() => setRecapOpen(false)} saved={saved} onSave={save}
         onRead={(sel) => { if (isMedia(sel.item)) setReviewMedia(sel); else openContent(sel); }} />}
       <Player item={reviewMedia?.item ?? null} sourceTitle={reviewMedia?.source_title} open={reviewMedia !== null}
@@ -1064,10 +1087,9 @@ export default function SessionPage() {
         selected={atEnd ? null : cur}
         open={menuOpen}
         shortsMode={shortsMode}
-        onShortsModeChange={setShortsMode}
-        status={immersive ? (elapsed >= durationSec ? "Session time reached" : durationSec - elapsed <= 120 ? "A little time left" : durationSec - elapsed <= 300 ? "A few minutes left" : "Session in progress") : undefined}
-        immersive={shortsMode ? immersivePref : undefined}
-        onImmersiveChange={(value) => { setMenuOpen(false); setImmersive(value); }}
+        onShortsModeChange={hasShorts ? setShortsMode : undefined}
+        status={status}
+        onNext={() => { setMenuOpen(false); perf.noteTrigger("button"); next(); }}
         nativeControls={shortsBus.get().native}
         onNativeControls={focusedShort && focusedShort === cur ? () => { setMenuOpen(false); shortsBus.controls.toggleNative(); } : undefined}
         onClose={() => setMenuOpen(false)}
@@ -1115,6 +1137,7 @@ export default function SessionPage() {
         onOpen={() => shown && openExternal(shown)}
         onSave={() => shown && setSaveItem(shown.item)}
         onNext={review ? undefined : readerNext}
+        onNextDrag={review ? undefined : readerDrag}
       />
 
       {/* Source context menu (#75): tapping the source name on a card opens this -
