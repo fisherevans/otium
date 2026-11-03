@@ -1,7 +1,8 @@
-import { useCallback, useEffect, useLayoutEffect, useRef, useState, type PointerEvent as ReactPointerEvent, useMemo } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import { useNavigate, useParams, useLocation } from "react-router-dom";
 import { api, type Item, type ItemContent, type ItemRender, type Selected } from "@/api/client";
 import { ItemActions } from "@/components/ItemActions";
+import { SessionControls } from "@/components/SessionControls";
 import { ItemDetails } from "@/components/ItemDetails";
 import { ReaderPage } from "@/components/ReaderPage";
 import { SavePicker } from "@/components/SavePicker";
@@ -93,6 +94,8 @@ export default function SessionPage() {
   const [err, setErr] = useState("");
   const [saveItem, setSaveItem] = useState<Item | null>(null); // Save picker target (#57)
   const [menuOpen, setMenuOpen] = useState(false);
+  // #208: session controls, opened from the time phrase; ··· (menuOpen) is the item.
+  const [controlsOpen, setControlsOpen] = useState(false);
   const [detailsOpen, setDetailsOpen] = useState(false);
   const [convSel, setConvSel] = useState<Selected | null>(null); // #200: comments overlay for video
   const [recapOpen, setRecapOpen] = useState(false);
@@ -199,6 +202,7 @@ export default function SessionPage() {
     setReview(snapshot);
     setCheckin(null);
     setMenuOpen(false);
+    setControlsOpen(false);
     setDetailsOpen(false);
     endServer();
     persistActivity.current();
@@ -670,7 +674,6 @@ export default function SessionPage() {
   // viewport (so card geometry never changes between Shorts and articles), the
   // header floats over it, and there is no bottom pill and no Next: you swipe.
   // Over a Short (in Shorts mode) the header steps aside for the clip's own bar.
-  const hasShorts = useMemo(() => items.some((sel) => sel.item.media_type === "short"), [items]);
   const immersive = !review;
   const overVideo = immersive && shortsMode && !atEnd && cur?.item.media_type === "short";
   useEffect(() => {
@@ -680,11 +683,14 @@ export default function SessionPage() {
   }, [immersive, overVideo]);
   useEffect(() => () => { delete document.documentElement.dataset.immersive; delete document.documentElement.dataset.overVideo; }, []);
 
-  // #206: the time phrase rides in the session's top bar (App reads it from the
-  // instrument context) and in the actions sheet; there is no pill to carry it.
+  // #206/#208: the time phrase rides in the session's top bar (App reads it from
+  // the instrument context). Tapping it opens the session controls; the ··· beside
+  // it opens actions for the item on screen, and nothing else.
   const status = review ? "Session complete" : elapsed >= durationSec ? "Session time reached" : durationSec - elapsed <= 120 ? "A little time left" : durationSec - elapsed <= 300 ? "A few minutes left" : "Session in progress";
+  const live = !(review || loading || err);
   useInstrument({ mode: "session", eyebrow: "Session", label: loading ? "" : status,
-    onMenu: review || loading || err ? undefined : () => setMenuOpen(true), menuLabel: "Item and session actions" });
+    onMenu: live && !atEnd ? () => setMenuOpen(true) : undefined, menuLabel: "Actions for this item",
+    onLabel: live ? () => setControlsOpen(true) : undefined });
 
   // #191: once per session (in this tab), the first muted Short points at the
   // sound control. It leaves after a few seconds, on a tap, on sound on, or when
@@ -905,7 +911,7 @@ export default function SessionPage() {
   // reader is open (they own their own keys) or while typing.
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
-      if (content || menuOpen || detailsOpen || breakdown || saveItem || sourceSel || checkin || review) return;
+      if (content || menuOpen || controlsOpen || detailsOpen || breakdown || saveItem || sourceSel || checkin || review) return;
       const t = e.target as HTMLElement | null;
       if (t?.closest("input,textarea,select,button,a,[contenteditable]")) return;
       if (e.key.startsWith("Arrow") || e.key === "j" || e.key === "k") perf.noteTrigger("key");
@@ -956,7 +962,7 @@ export default function SessionPage() {
   const focusedShort = shortsMode && hosted?.item.media_type === "short" && playerIdx < visibleCount && !review ? hosted : null;
   if (focusedShort) lastShort.current = focusedShort;
   const short = lastShort.current;
-  const playbackActive = !content && !menuOpen && !detailsOpen && !convSel && !breakdown && !saveItem && !sourceSel && !checkin && !review;
+  const playbackActive = !content && !menuOpen && !controlsOpen && !detailsOpen && !convSel && !breakdown && !saveItem && !sourceSel && !checkin && !review;
 
   const shownItems = overIdx !== null ? items.slice(0, visibleCount) : items;
 
@@ -999,7 +1005,7 @@ export default function SessionPage() {
             onSoundHintDone={() => setSoundHint(null)}
             shortsBus={shortsBus}
             shortsPosition={shortsPosition}
-            playbackActive={i === current && !content && !menuOpen && !detailsOpen && !convSel && !breakdown && !saveItem && !sourceSel && !checkin && !review}
+            playbackActive={i === current && !content && !menuOpen && !controlsOpen && !detailsOpen && !convSel && !breakdown && !saveItem && !sourceSel && !checkin && !review}
             muted={playback.muted}
             onMutedChange={playback.setMuted}
             onPlaybackChange={(playing) => {
@@ -1018,6 +1024,8 @@ export default function SessionPage() {
             onSave={save}
             onSource={(s) => setSourceSel(s)}
             onMenu={() => setMenuOpen(true)}
+            onSessionControls={() => setControlsOpen(true)}
+            sessionStatus={status}
             onConversation={(s) => (isMedia(s.item) ? setConvSel(s) : openContent(s))}
             onFirstPlay={(s, explicit) => {
               played.current.add(s.item.id);
@@ -1087,9 +1095,7 @@ export default function SessionPage() {
         selected={atEnd ? null : cur}
         open={menuOpen}
         shortsMode={shortsMode}
-        onShortsModeChange={hasShorts ? setShortsMode : undefined}
-        status={status}
-        onNext={() => { setMenuOpen(false); perf.noteTrigger("button"); next(); }}
+        onShortsModeChange={setShortsMode}
         nativeControls={shortsBus.get().native}
         onNativeControls={focusedShort && focusedShort === cur ? () => { setMenuOpen(false); shortsBus.controls.toggleNative(); } : undefined}
         onClose={() => setMenuOpen(false)}
@@ -1102,11 +1108,18 @@ export default function SessionPage() {
           setSaveItem(it);
         }}
         onOpenOriginal={() => { setMenuOpen(false); if (cur) openExternal(cur); }}
-        onEnd={finishSession}
         onDetails={() => {
           setMenuOpen(false);
           setDetailsOpen(true);
         }}
+      />
+
+      <SessionControls
+        open={controlsOpen && !review}
+        status={status}
+        onClose={() => setControlsOpen(false)}
+        onNext={atEnd ? undefined : () => { setControlsOpen(false); perf.noteTrigger("button"); next(); }}
+        onEnd={finishSession}
       />
 
       <ConversationSheet item={convSel?.item ?? null} open={!!convSel} onClose={() => setConvSel(null)} />

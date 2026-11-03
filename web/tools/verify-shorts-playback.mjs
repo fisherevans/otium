@@ -198,12 +198,18 @@ for (const [name, engine] of Object.entries({ chromium, webkit }).filter(([name]
                 await page.waitForFunction(i => !document.querySelector('.session-shorts-player[data-active="true"]') || document.querySelector('[data-player]')?.dataset.idx === String(i), index);
                 if (loaded) await page.waitForFunction(videoId => window.__yt.current()?.videoId === videoId, new URL(items[index].item.url).pathname.split('/').at(-1));
             };
-            // #206: the top bar's ··· (or a Short's own, where the bar steps aside) opens
-            // the item and session actions; there is no pill.
+            // #206/#208: the top bar's ··· (or a Short's own, where the bar steps aside)
+            // opens actions for this item; the time phrase (or the Short bar's session
+            // button) opens the session controls. There is no pill.
             const menu = async () => {
                 const own = page.locator('.afterglow-card:not(.away) .shorts-details');
                 if (await own.count()) await own.click();
-                else await page.locator('.topbar').getByRole('button', { name: 'Item and session actions', exact: true }).click();
+                else await page.locator('.topbar').getByRole('button', { name: 'Actions for this item', exact: true }).click();
+            };
+            const controls = async () => {
+                const own = page.locator('.afterglow-card:not(.away) .shorts-session');
+                if (await own.count()) await own.click();
+                else await page.locator('.topbar').getByRole('button', { name: /^Session: .*, open session controls$/ }).click();
             };
             const native = async name => { await menu(); await page.locator('dialog[open]').getByRole('button', { name, exact: true }).click(); await page.waitForFunction(() => !document.querySelector('dialog[open]')); };
             const close = async () => { await page.keyboard.press('Escape'); await page.waitForFunction(() => !document.querySelector('dialog[open]')); };
@@ -219,7 +225,7 @@ for (const [name, engine] of Object.entries({ chromium, webkit }).filter(([name]
                 await page.locator('.afterglow-card:not(.away)').waitFor();
                 await page.waitForFunction(() => window.__yt.players.some(p => !p.destroyed));
                 await page.waitForTimeout(350);
-                await run({ page, state, waitPlaying, advance, menu, close, setMode, count, native });
+                await run({ page, state, waitPlaying, advance, menu, controls, close, setMode, count, native });
                 assert.ok(await page.evaluate(() => window.__yt.players.filter(p => !p.destroyed && p.state === 1).length <= 1), 'no hidden standby playback');
                 assert.deepEqual(errors, [], `${name}: ${label}: no page errors`);
                 assert.deepEqual(unexpected, [], `${name}: ${label}: only mocked APIs`);
@@ -283,7 +289,7 @@ for (const [name, engine] of Object.entries({ chromium, webkit }).filter(([name]
             assert.equal(await page.locator('.shorts-card').count(), 0, 'mode choice survives reload');
         });
 
-        await scenario('passive watches never manufacture opens, skips or fast-scroll nudges', async ({ page, state, waitPlaying, advance, menu, count, native }) => {
+        await scenario('passive watches never manufacture opens, skips or fast-scroll nudges', async ({ page, state, waitPlaying, advance, menu, controls, count, native }) => {
             await waitPlaying(true);
             await page.evaluate(() => { window.__originalFrame = window.__yt.current().iframe; });
             for (let index = 1; index <= 8; index++) {
@@ -297,7 +303,7 @@ for (const [name, engine] of Object.entries({ chromium, webkit }).filter(([name]
             assert.equal(count('skip'), 0);
             assert.ok(state.dwells.length >= 8);
             assert.ok(state.dwells.every(d => d.engaged === false), 'dwell keeps passive playback separate from engagement');
-            await menu(); await page.getByRole('button', { name: 'End session', exact: true }).click();
+            await controls(); await page.getByRole('button', { name: 'End session', exact: true }).click();
             await page.getByRole('heading', { name: 'Session complete', exact: true }).waitFor();
             assert.equal(await page.evaluate(() => window.__yt.players.filter(p => !p.destroyed && p.state === 1).length), 0, 'ending leaves no player running');
             await page.getByRole('button', { name: 'Review session', exact: true }).first().click();
@@ -321,9 +327,9 @@ for (const [name, engine] of Object.entries({ chromium, webkit }).filter(([name]
             assert.equal(count('open'), 1, 'error feedback does not open the original');
         }, { blocked: true });
 
-        await scenario('review player can play above its own dialog and pauses for a nested picker', async ({ page, waitPlaying, menu, count, native }) => {
+        await scenario('review player can play above its own dialog and pauses for a nested picker', async ({ page, waitPlaying, menu, controls, count, native }) => {
             await waitPlaying(true);
-            await menu(); await page.getByRole('button', { name: 'End session', exact: true }).click();
+            await controls(); await page.getByRole('button', { name: 'End session', exact: true }).click();
             await page.getByRole('heading', { name: 'Session complete', exact: true }).waitFor();
             await page.getByRole('button', { name: 'Review session', exact: true }).first().click();
             const before = await page.locator('.session-review-stats').innerText();
@@ -512,11 +518,15 @@ for (const [name, engine] of Object.entries({ chromium, webkit }).filter(([name]
             await menu();
             await shot('actions');
             const sheet = page.locator('dialog[open]');
-            for (const name of ['Save or share video', 'Copy link', 'Open in YouTube', 'Post details', 'End session'])
+            for (const name of ['Save or share video', 'Copy link', 'Open in YouTube', 'Post details'])
                 await sheet.getByRole('button', { name, exact: false }).first().waitFor({ timeout: 3000 }).catch(() => assert.fail(`actions: ${name}`));
             assert.equal(await sheet.getByRole('link', { name: 'Download video' }).getAttribute('href'), '/api/v1/items/101/video?download=1');
             assert.equal(await sheet.getByRole('link', { name: 'Open channel on YouTube' }).getAttribute('href'), 'https://www.youtube.com/channel/UCsynthetic0000000000000');
-            assert.equal(await sheet.getByRole('switch', { name: 'Shorts viewing mode' }).count(), 1, 'session controls live in actions');
+            // #208: a Short's own menu carries Shorts mode (it applies to what is on
+            // screen); session controls never appear in it.
+            assert.equal(await sheet.getByRole('switch', { name: 'Shorts viewing mode' }).count(), 1, 'Shorts mode in a Short\'s actions');
+            for (const name of ['Next item', 'End session', 'Library, Saved and settings'])
+                assert.equal(await sheet.getByRole('button', { name, exact: true }).count(), 0, `no session control in actions: ${name}`);
             assert.equal(await sheet.getByText('Explore score').count(), 0, 'no provenance in actions');
             await page.evaluate(() => {
                 Object.defineProperty(navigator, 'canShare', { configurable: true, value: data => Array.isArray(data?.files) });
@@ -541,7 +551,7 @@ for (const [name, engine] of Object.entries({ chromium, webkit }).filter(([name]
             await waitPlaying(true);
             assert.equal(count('open'), 0, 'sheets and sharing are not opens');
         });
-        await scenario('full screen: controls on top, captions never cropped, timed veil instead of Play while loading', async ({ page, state, waitPlaying, advance, count }) => {
+        await scenario('full screen: controls on top, captions never cropped, timed veil instead of Play while loading', async ({ page, state, waitPlaying, advance, count, close }) => {
             await waitPlaying(true);
             const view = await page.evaluate(() => {
                 const box = el => { const r = document.querySelector(el)?.getBoundingClientRect(); return r && { top: r.top, bottom: r.bottom, left: r.left, right: r.right, width: r.width, height: r.height }; };
@@ -608,7 +618,13 @@ for (const [name, engine] of Object.entries({ chromium, webkit }).filter(([name]
             await page.locator('.afterglow-card:not(.away) .shorts-details').click();
             const actions = page.locator('dialog[open]');
             assert.equal(await actions.getByRole('switch', { name: /full-screen/i }).count(), 0, 'no full-screen switch in Actions');
-            await actions.getByRole('button', { name: 'Next item', exact: true }).click();
+            await close();
+            // #208: Next item is a session control, opened from the Short bar's session button.
+            await page.locator('.afterglow-card:not(.away) .shorts-session').click();
+            const session = page.locator('dialog[open]');
+            assert.match(await page.locator('.afterglow-card:not(.away) .shorts-session').getAttribute('aria-label'), /^Session: .+, open session controls$/);
+            assert.equal(await session.getByRole('switch').count(), 0, 'no Shorts mode in session controls');
+            await session.getByRole('button', { name: 'Next item', exact: true }).click();
             await page.waitForFunction(() => document.querySelector('.afterglow-card:not(.away)')?.dataset.idx === '2');
             assert.equal(count('open'), 2, 'only the deliberate sound-on and Play count as opens; full screen, the veil and the hint add none');
         });

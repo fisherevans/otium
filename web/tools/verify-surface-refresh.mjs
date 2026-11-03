@@ -111,8 +111,9 @@ for (const [name, engine] of Object.entries({ chromium, webkit }).filter(([name]
             async function advanceUntilCheckin() {
                 let advanced = 0;
                 while (advanced < 10 && !await checkin.count()) {
-                    // #206: no Next button; Next item in the actions sheet is the non-gesture path.
-                    await page.getByRole('button', { name: 'Item and session actions', exact: true }).click();
+                    // #206/#208: no Next button; Next item in the session controls (the time
+                    // phrase) is the non-gesture path.
+                    await page.getByRole('button', { name: /^Session: .*, open session controls$/ }).click();
                     await page.getByRole('button', { name: 'Next item', exact: true }).click();
                     await page.waitForTimeout(400);
                     advanced++;
@@ -135,7 +136,7 @@ for (const [name, engine] of Object.entries({ chromium, webkit }).filter(([name]
         await scenario('long article details sheet scrolls to working final controls', async (page, state) => {
             await page.goto(`${base}/session/surface-test`);
             // #180: filters live in Details (provenance), reached from the actions sheet.
-            await page.getByRole('button', { name: 'Item and session actions', exact: true }).click();
+            await page.getByRole('button', { name: 'Actions for this item', exact: true }).click();
             await page.getByRole('dialog', { name: source.title, exact: true }).getByRole('button', { name: /Post details/ }).click();
             const menu = page.getByRole('dialog', { name: 'Details', exact: true });
             const sheet = menu.locator('.sheet');

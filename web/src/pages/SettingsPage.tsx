@@ -4,16 +4,19 @@ import { useNavigate } from "react-router-dom";
 import { useBack } from "@/lib/navigation";
 import { api, type Settings } from "@/api/client";
 import { useShareAvailable } from "@/lib/sharing";
+import { useShortsMode } from "@/lib/shortsMode";
 
 // Settings (#68). A lightweight preferences surface, reachable from the library's
-// Manage sheet. One toggle today: the fast-scroll check-in. The copy is
-// deliberately transparent about what the measurement is and isn't - it powers a
-// nudge, never a re-rank, and the data stays local. That transparency is the
+// Manage sheet: Shorts mode (browser-local, #208), the fast-scroll check-in and
+// YouTube history. The check-in copy is deliberately transparent about what the
+// measurement is and isn't - it powers a nudge, never a re-rank, and the data
+// stays local. That transparency is the
 // point (docs/decisions.md, "Intentionality & transparency").
 export default function SettingsPage() {
   const nav = useNavigate();
   const back = useBack("/you");
   const shareOn = useShareAvailable();
+  const [shortsMode, setShortsMode] = useShortsMode();
   const [saved, setSaved] = useState(false);
   const [settings, setSettings] = useState<Settings | null>(null);
   const [err, setErr] = useState("");
@@ -121,6 +124,29 @@ export default function SettingsPage() {
         </button>
       )}
 
+      {/* #208: Shorts mode is a viewing preference, kept in this browser for this
+          account (useShortsMode), so it shows whether or not the server
+          settings have loaded. It used to appear only in Custom session and in
+          sessions that happened to contain a Short. */}
+      <div className="settings-list">
+        <div className="settings-row">
+          <div className="settings-copy">
+            <b>Shorts mode</b>
+            <span>
+              Short videos play large, under a slim creator bar, and start on their own when you reach them. Off, they are ordinary cards you press Play on. Other cards are unchanged. Applies in this browser.
+            </span>
+          </div>
+          <button
+            role="switch"
+            aria-checked={shortsMode}
+            aria-label="Shorts mode"
+            className={`switch ${shortsMode ? "on" : ""}`}
+            onClick={() => setShortsMode(!shortsMode)}
+          >
+            <span className="switch-knob" />
+          </button>
+        </div>
+      </div>
       {settings && (
         <div className="settings-list">
           <div className="settings-row">

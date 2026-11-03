@@ -11,12 +11,14 @@ import { canWebShare, copyText, shareOrCopy } from "@/lib/share";
 import { isMedia } from "@/lib/render";
 import { parseYouTubeId } from "@/lib/youtube";
 
-// What to do with the current session item, and where to go from it (#180): each
-// card's ··· opens this (#206: there is no pill). Share the clip itself or its link, download it, open it
-// or its channel on YouTube, jump to the source in Otium, save it; then session
-// controls (Next item, Shorts mode, End session). Where the item came from and why it
-// surfaced is ItemDetails, a separate sheet. Nothing here emits an engagement
-// event.
+// What to do with the item on screen (#180, #208). The ··· in the session's top
+// bar (or in a Short's own bar) opens this, and its contents depend only on that
+// item: send or share it, copy or open its link, its channel, read it in the app,
+// save it, go to its source, its details; a Short adds its video file, YouTube's
+// player controls and the Shorts mode switch. Session controls (Next item, End
+// session, the app menu) are SessionControls, opened from the session time phrase,
+// never this sheet. Where the item came from and why it surfaced is ItemDetails,
+// a separate sheet. Nothing here emits an engagement event.
 export function ItemActions({
   selected,
   open,
@@ -25,13 +27,10 @@ export function ItemActions({
   onSave,
   onDetails,
   onOpenOriginal,
-  onEnd,
   shortsMode,
   onShortsModeChange,
   nativeControls,
   onNativeControls,
-  onNext,
-  status,
 }: {
   selected: Selected | null;
   open: boolean;
@@ -40,17 +39,14 @@ export function ItemActions({
   onSave?: (item: Item) => void;
   onDetails?: () => void;
   onOpenOriginal?: () => void;
-  onEnd?: () => void;
+  // #208: shown only while a Short is the item on screen, where it obviously
+  // applies. Its home is Settings.
   shortsMode?: boolean;
   onShortsModeChange?: (enabled: boolean) => void;
   // #182: YouTube's own controls (quality, caption tracks, scrubbing), moved
   // here from the row under the video.
   nativeControls?: boolean;
   onNativeControls?: () => void;
-  // #206: the non-gesture way to advance; swipe is the primary one.
-  onNext?: () => void;
-  // #186: the session's time phrase (the pill that used to carry it is gone).
-  status?: string;
 }) {
   const nav = useNavigate();
   const item = selected?.item ?? null;
@@ -73,6 +69,7 @@ export function ItemActions({
   if (!item) return null;
   const youTube = parseYouTubeId(item.url) !== null;
   const channel = youTube ? channelURL(source) : "";
+  const short = item.media_type === "short";
   const clip = youTube && (item.media_type === "short" || (item.duration_sec > 0 && item.duration_sec <= 180));
 
   function flash(msg: string) {
@@ -95,7 +92,6 @@ export function ItemActions({
     <>
     <BottomSheet open={open} onClose={onClose} kicker={selected?.source_title ?? "Item"}>
       <div className="ia-title">{item.title}</div>
-      {status && <p className="ia-sub">{status}</p>}
 
       {clip && <VideoFileActions item={item} />}
 
@@ -148,16 +144,9 @@ export function ItemActions({
         )}
       </div>
 
-      {(onShortsModeChange || onEnd || onNativeControls || onNext) && (
+      {((short && onShortsModeChange) || onNativeControls) && (
         <div className="sheet-rows">
-          {onNext && <button className="sheet-row" onClick={onNext}><span>Next item</span><ChevronRight size={18} className="sheet-chev inline-icon" aria-hidden /></button>}
-          {onShortsModeChange && <ShortsModeToggle enabled={shortsMode ?? false} onChange={onShortsModeChange} />}
-          {status && (
-            <button className="sheet-row" onClick={() => { onClose(); window.dispatchEvent(new Event("otium:app-menu")); }}>
-              <span>Library, Saved and settings</span>
-              <ChevronRight size={18} className="sheet-chev inline-icon" aria-hidden />
-            </button>
-          )}
+          {short && onShortsModeChange && <ShortsModeToggle enabled={shortsMode ?? false} onChange={onShortsModeChange} />}
           {onNativeControls && (
             <button className="sheet-row" onClick={onNativeControls} aria-pressed={!!nativeControls}
               aria-label={nativeControls ? "Use simple controls" : "Use YouTube controls"}>
@@ -165,7 +154,6 @@ export function ItemActions({
               <ChevronRight size={18} className="sheet-chev inline-icon" aria-hidden />
             </button>
           )}
-          {onEnd && <button className="sheet-row" onClick={onEnd}><span>End session</span><ChevronRight size={18} className="sheet-chev inline-icon" aria-hidden /></button>}
         </div>
       )}
 
