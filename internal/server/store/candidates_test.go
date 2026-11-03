@@ -36,6 +36,12 @@ func TestCandidatesPoolShape(t *testing.T) {
 	mkItem(a, "a-3", 4*day) // seen below: out of the pool, still in the cadence window
 	mkItem(a, "a-4", 30*day)
 	mkItem(a, "a-old", 100*day) // outside the 45-day window
+	// Evergreen, so the archive-window prefilter (#204) keeps all of a's unseen
+	// items and this test still pins the pool cut and the recency ranks.
+	evergreen := -1
+	if err := db.UpdateSource(ctx, uid, a, SourcePatch{ArchiveAfterDays: &evergreen}); err != nil {
+		t.Fatal(err)
+	}
 	b := mkSource("b")
 	mkItem(b, "b-1", 3*day)
 
@@ -85,5 +91,60 @@ func TestCandidatesPoolShape(t *testing.T) {
 	}
 	if contents[pool[0].ID] != "<p>a-1</p>" || contents[pool[2].ID] != "<p>b-1</p>" || len(contents) != 2 {
 		t.Fatalf("contents = %v", contents)
+	}
+}
+
+// TestCandidatesArchivePrefilter: an item past its source's resolved Archive-After
+// window (plus a day) never reaches the pool, unless the source keeps a latest-N
+// count, whose ranks need every unseen item (#204).
+func TestCandidatesArchivePrefilter(t *testing.T) {
+	db, uid := newTestDB(t)
+	ctx := context.Background()
+	now := time.Now().UTC()
+	day := 24 * time.Hour
+	mk := func(title string, patch SourcePatch, ages map[string]time.Duration) {
+		s, err := db.CreateSource(ctx, &Source{UserID: uid, Title: title, FeedURL: "http://" + title, State: "followed", Weight: 1})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := db.UpdateSource(ctx, uid, s.ID, patch); err != nil {
+			t.Fatal(err)
+		}
+		for ext, age := range ages {
+			if _, err := db.UpsertItem(ctx, &Item{SourceID: s.ID, ExternalID: ext, URL: "u/" + ext, Title: ext, PublishedAt: now.Add(-age)}); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+	seven, keep := 7, 2
+	mk("windowed", SourcePatch{ArchiveAfterDays: &seven}, map[string]time.Duration{"w-new": 2 * day, "w-edge": 7*day + 12*time.Hour, "w-old": 20 * day})
+	mk("global", SourcePatch{}, map[string]time.Duration{"g-new": 10 * day, "g-old": 40 * day})
+	mk("counted", SourcePatch{ArchiveAfterDays: &seven, ArchiveKeepCount: &keep}, map[string]time.Duration{"c-old": 60 * day})
+
+	pool, err := db.Candidates(ctx, uid, nil, 400, 100)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := map[string]bool{}
+	for _, c := range pool {
+		got[c.Title] = true
+	}
+	tests := []struct {
+		title string
+		want  bool
+	}{
+		{"w-new", true},
+		{"w-edge", true}, // inside the one-day margin
+		{"w-old", false},
+		{"g-new", true}, // global default window
+		{"g-old", false},
+		{"c-old", true}, // keep-latest-N sources keep everything
+	}
+	for _, tt := range tests {
+		t.Run(tt.title, func(t *testing.T) {
+			if got[tt.title] != tt.want {
+				t.Fatalf("%s in pool = %v, want %v", tt.title, got[tt.title], tt.want)
+			}
+		})
 	}
 }
