@@ -202,6 +202,10 @@ type Item struct {
 	// again. PostJSON is its stored form, set by ingest for UpsertItem.
 	PostBody *richtext.Post `json:"post_body,omitempty"`
 	PostJSON string         `json:"-"`
+	// Form is how ingest classified a Substack or Medium item (#209): "post" (its
+	// PostJSON holds it as a post) or "article". Empty for other kinds; set only
+	// for UpsertItem.
+	Form string `json:"-"`
 }
 
 // PostKinds are the source kinds whose items are social posts rather than
@@ -209,11 +213,16 @@ type Item struct {
 // it becomes a source kind (#198).
 var PostKinds = map[string]bool{"bluesky": true}
 
+// ShortFormKinds are the source kinds whose items are posts only when ingest
+// classified them as short (#209): such an item has a stored post_json, an
+// article has none.
+var ShortFormKinds = map[string]bool{"substack": true, "medium": true}
+
 // SetSourceKind records the item's source kind and stored post (post_json), and
 // derives Post, PostBody and Text from them.
 func (it *Item) SetSourceKind(kind, postJSON string) {
 	it.SourceKind = kind
-	it.Post = PostKinds[kind]
+	it.Post = PostKinds[kind] || (ShortFormKinds[kind] && strings.TrimSpace(postJSON) != "")
 	if it.Post {
 		it.PostBody = richtext.Unmarshal(postJSON)
 	}
@@ -263,7 +272,7 @@ func postTextFromBody(body string) string {
 // Headline is the one line that names an item in a list or a message: its title,
 // or for a post its text on one line, clipped at a word boundary near max runes.
 func (it Item) Headline(max int) string {
-	if !it.Post || it.Text == "" {
+	if !it.Post || it.Text == "" || (it.PostBody != nil && it.PostBody.Title != "") {
 		return it.Title
 	}
 	line := strings.Join(strings.Fields(it.Text), " ")

@@ -227,6 +227,12 @@ func migrate(sdb *sql.DB) error {
 	if err := ensureColumn(sdb, "items", "post_json", `ALTER TABLE items ADD COLUMN post_json TEXT NOT NULL DEFAULT ''`); err != nil {
 		return err
 	}
+	// Substack / Medium form (#209): 'post' when the item is short enough to be
+	// drawn as a post (its post_json then holds it), 'article' when not, '' when
+	// not yet classified (BackfillForms classifies those at boot).
+	if err := ensureColumn(sdb, "items", "form", `ALTER TABLE items ADD COLUMN form TEXT NOT NULL DEFAULT ''`); err != nil {
+		return err
+	}
 	// Backlog-import count cursor (#124): videos walked so far, for the keep-latest-N
 	// import bound. Additive for DBs whose source_import predates the column.
 	if err := ensureColumn(sdb, "source_import", "seen", `ALTER TABLE source_import ADD COLUMN seen INTEGER NOT NULL DEFAULT 0`); err != nil {
@@ -1262,11 +1268,11 @@ func splitCategories(s string) []string {
 
 func (db *DB) UpsertItem(ctx context.Context, it *Item) (bool, error) {
 	res, err := db.sql.ExecContext(ctx,
-		`INSERT INTO items (source_id, external_id, url, title, summary, content, content_source, author, thumbnail_url, media_type, duration_sec, categories, published_at, post_json)
-		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+		`INSERT INTO items (source_id, external_id, url, title, summary, content, content_source, author, thumbnail_url, media_type, duration_sec, categories, published_at, post_json, form)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 		 ON CONFLICT(source_id, external_id) DO NOTHING`,
 		it.SourceID, it.ExternalID, it.URL, it.Title, it.Summary, it.Content, it.ContentSource, it.Author, it.ThumbnailURL,
-		def(it.MediaType, "unknown"), it.DurationSec, joinCategories(it.Categories), it.PublishedAt.UTC().Format(time.RFC3339), it.PostJSON)
+		def(it.MediaType, "unknown"), it.DurationSec, joinCategories(it.Categories), it.PublishedAt.UTC().Format(time.RFC3339), it.PostJSON, it.Form)
 	if err != nil {
 		return false, err
 	}
@@ -1284,11 +1290,21 @@ func (db *DB) UpsertItem(ctx context.Context, it *Item) (bool, error) {
 	if created {
 		return true, nil
 	}
+	// #209: a Substack or Medium item is re-classified on every fetch (its counts
+	// and real length come from the platform and can change); only the post shape
+	// follows - the article columns stay as they are.
+	if it.Form != "" {
+		if _, err := db.sql.ExecContext(ctx,
+			`UPDATE items SET post_json = ?, form = ? WHERE source_id = ? AND external_id = ? AND (post_json != ? OR form != ?)`,
+			it.PostJSON, it.Form, it.SourceID, it.ExternalID, it.PostJSON, it.Form); err != nil {
+			return false, err
+		}
+	}
 	// #207: a social post is re-shaped on every fetch. Its record does not change,
 	// but how otium renders it does (facets, link cards, quotes), and a post stored
 	// before that would otherwise keep its old body for as long as it lives. The
 	// platform is authoritative for every derived column, so all of them follow.
-	if it.PostJSON != "" {
+	if it.PostJSON != "" && it.Form == "" {
 		if _, err := db.sql.ExecContext(ctx,
 			`UPDATE items SET post_json = ?, title = ?, summary = ?, content = ?, content_source = 'rss', author = ?, thumbnail_url = ?
 			 WHERE source_id = ? AND external_id = ? AND post_json != ?`,
@@ -2339,4 +2355,38 @@ func (db *DB) SetItemEngagementByURL(ctx context.Context, sourceID int64, counts
 		}
 	}
 	return len(hits), nil
+}
+
+// FormRow is a Substack or Medium item that has not been classified yet (#209).
+type FormRow struct {
+	ID                     int64
+	Title, Author, Content string
+}
+
+// UnclassifiedForms returns up to limit Substack and Medium items with no form,
+// oldest first: items stored before #209 that their source's feed no longer
+// carries, so no fetch will classify them.
+func (db *DB) UnclassifiedForms(ctx context.Context, limit int) ([]FormRow, error) {
+	rows, err := db.sql.QueryContext(ctx,
+		`SELECT i.id, i.title, i.author, i.content FROM items i JOIN sources s ON s.id = i.source_id
+		 WHERE i.form = '' AND s.kind IN ('substack', 'medium') ORDER BY i.id LIMIT ?`, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []FormRow
+	for rows.Next() {
+		var r FormRow
+		if err := rows.Scan(&r.ID, &r.Title, &r.Author, &r.Content); err != nil {
+			return nil, err
+		}
+		out = append(out, r)
+	}
+	return out, rows.Err()
+}
+
+// SetItemForm records an item's form and post (post_json; "" for an article).
+func (db *DB) SetItemForm(ctx context.Context, id int64, form, postJSON string) error {
+	_, err := db.sql.ExecContext(ctx, `UPDATE items SET form = ?, post_json = ? WHERE id = ?`, form, postJSON, id)
+	return err
 }

@@ -263,11 +263,22 @@ type substackPost struct {
 	ReactionCount int    `json:"reaction_count"`
 	CommentCount  int    `json:"comment_count"`
 	Restacks      int    `json:"restacks"`
+	Wordcount     int    `json:"wordcount"`
+	Type          string `json:"type"`
 }
 
-// SubstackEngagement returns the counts for a publication's recent posts, keyed
-// by canonical URL (which is what its RSS links to).
-func (c *Client) SubstackEngagement(ctx context.Context, feedURL string) (map[string]Engagement, error) {
+// SubstackArchived is what a publication's archive says about one post: its
+// counts, and its real length and type (#209), which its RSS entry cannot say
+// when the entry is a paid post's preview.
+type SubstackArchived struct {
+	Engagement
+	Words int
+	Type  string // newsletter | thread | podcast | video
+}
+
+// SubstackArchive returns a publication's recent posts, keyed by canonical URL
+// (which is what its RSS links to).
+func (c *Client) SubstackArchive(ctx context.Context, feedURL string) (map[string]SubstackArchived, error) {
 	u, err := url.Parse(feedURL)
 	if err != nil || u.Host == "" {
 		return nil, fmt.Errorf("bad substack feed url")
@@ -276,9 +287,12 @@ func (c *Client) SubstackEngagement(ctx context.Context, feedURL string) (map[st
 	if err := c.getJSON(ctx, "https://"+u.Host+"/api/v1/archive?sort=new&limit=50", &posts); err != nil {
 		return nil, err
 	}
-	out := make(map[string]Engagement, len(posts))
+	out := make(map[string]SubstackArchived, len(posts))
 	for _, p := range posts {
-		out[NormalizeURL(p.CanonicalURL)] = Engagement{Likes: p.ReactionCount, Reposts: p.Restacks, Replies: p.CommentCount}
+		out[NormalizeURL(p.CanonicalURL)] = SubstackArchived{
+			Engagement: Engagement{Likes: p.ReactionCount, Reposts: p.Restacks, Replies: p.CommentCount},
+			Words:      p.Wordcount, Type: p.Type,
+		}
 	}
 	return out, nil
 }

@@ -147,7 +147,10 @@ func HTML(segs []Segment) string {
 // segments, and what is attached. Stored as JSON in items.post_json and sent to
 // the client as an item's post_body.
 type Post struct {
-	Author   Author    `json:"author"`
+	Author Author `json:"author"`
+	// Title is a short Substack or Medium post's own title (#209), shown as a
+	// line above its text. Bluesky posts have none.
+	Title    string    `json:"title,omitempty"`
 	Segments []Segment `json:"segments"`
 	Images   []Image   `json:"images,omitempty"`
 	Link     *Link     `json:"link,omitempty"`
