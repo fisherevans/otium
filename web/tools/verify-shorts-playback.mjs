@@ -162,6 +162,10 @@ for (const [name, engine] of Object.entries({ chromium, webkit }).filter(([name]
                     if (path === '/sessions/current') return json({ session_id: state.sessionId, cursor: state.cursor, duration_min: 40, themes: ['Shorts'], items });
                     if (/^\/items\/\d+\/video$/.test(path)) { state.videoFetches = (state.videoFetches || 0) + 1; return route.fulfill({ contentType: 'video/mp4', body: Buffer.alloc(2048) }); }
                     if (/^\/items\/\d+\/content$/.test(path)) return json({ render: 'external', content: '', content_source: 'rss' });
+                    // Endpoints added since these fixtures: server presets (#203), sharing (#195), conversations (#200).
+                    if (path === '/presets') return json({ presets: [], default_id: '', initialized: true });
+                    if (path === '/share/status') return json({ available: false });
+                    if (/^\/items\/\d+\/conversation$/.test(path)) return route.fulfill({ status: 204, body: '' });
                 }
                 if (method === 'PATCH' && path === `/sessions/${state.sessionId}`) {
                     const patch = request.postDataJSON();
@@ -404,7 +408,7 @@ for (const [name, engine] of Object.entries({ chromium, webkit }).filter(([name]
                 await page.waitForTimeout(100);
                 const geometry = await page.evaluate(() => {
                     const frame = document.querySelector('.session-shorts-player[data-active="true"] .im-frame').getBoundingClientRect();
-                    return [...document.querySelectorAll('.afterglow-card:not(.away) .shorts-quiet button')].map(button => {
+                    return [...document.querySelectorAll('.afterglow-card:not(.away) .shorts-quiet .shorts-quiet-btn')].map(button => {
                         const rect = button.getBoundingClientRect();
                         return { name: button.getAttribute('aria-label'), below: rect.top >= frame.bottom - 1, left: rect.left, right: rect.right, height: rect.height };
                     });

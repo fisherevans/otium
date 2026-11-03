@@ -783,3 +783,9 @@
     color: var(--ink-mute);
     letter-spacing: 0.03em;
 }
+
+/* #205: full-screen Shorts, for ordinary cards. The header floats over the reel
+   and the session bar is gone, as in the app; shorts-mode.css pads the card. */
+.lab-screen[data-immersive="on"] { position: relative; }
+.lab-screen[data-immersive="on"] .lab-topbar { position: absolute; z-index: 2; top: 0; left: 0; right: 0; height: 50px; box-sizing: border-box; background: transparent; }
+.lab-screen[data-immersive="on"] .lab-foot { display: none; }

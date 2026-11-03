@@ -1,3 +1,4 @@
+import { headline } from "@/lib/posts";
 import { ArrowLeft, Bookmark, ExternalLink } from "lucide-react";
 import type { Selected } from "@/api/client";
 import { ContextInstrument } from "./ContextInstrument";
@@ -68,7 +69,7 @@ export function SessionReview({ review, onClose, onRead, onSave, saved }: {
                         return <article className="session-review-item" key={item.id}>
                             <button className="session-review-open" onClick={() => onRead(sel)}>
                                 {item.thumbnail_url ? <img src={item.thumbnail_url} alt="" loading="lazy" referrerPolicy="no-referrer" /> : <span className="session-review-placeholder"><ExternalLink size={18} aria-hidden /></span>}
-                                <span><small>{sel.source_title} · {status}</small><strong>{item.title}</strong></span>
+                                <span><small>{sel.source_title} · {status}</small><strong>{headline(item, 120)}</strong></span>
                             </button>
                             <button className="session-review-bookmark" onClick={() => onSave(sel)} aria-pressed={!!saved[item.id]} aria-label={`Save to collection: ${item.title}`}>
                                 <Bookmark size={21} fill={saved[item.id] ? "currentColor" : "none"} strokeWidth={1.7} aria-hidden />

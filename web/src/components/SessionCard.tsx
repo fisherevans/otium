@@ -9,6 +9,8 @@ import { TopicPill, CardSource, SourceAvatar, Byline, Blurb, Media } from "@/com
 import { InlineMedia, type MediaPosition } from "@/components/InlineMedia";
 import { ShareActions } from "@/components/ReaderActions";
 import { isMedia, isVertical, videoAspect } from "@/lib/render";
+import { isPost, postMediaURL, postText } from "@/lib/posts";
+import { PlatformMark } from "@/components/PlatformMark";
 import "./session-afterglow.css";
 import { relTime } from "@/lib/format";
 
@@ -156,6 +158,7 @@ function CardHierarchy({
       {sel.source_title}
     </button>
   );
+  const mark = <PlatformMark kind={sel.item.source_kind} />;
   const avatar = <SourceAvatar url={sel.source_icon_url} title={sel.source_title} color={topic?.color} />;
   const chev = <ChevronRight size={12} className="ch-sep inline-icon" aria-hidden />;
 
@@ -177,6 +180,7 @@ function CardHierarchy({
             </>
           )}
           {source}
+          {mark}
         </span>
         {menu}
       </div>
@@ -230,6 +234,7 @@ function CardHierarchy({
           <span className="ch-line">
             {avatar}
             {source}
+            {mark}
           </span>
         </div>
         {menu}
@@ -252,6 +257,7 @@ function CardHierarchy({
             </>
           )}
           {source}
+          {mark}
         </span>
       </div>
       {menu}
@@ -279,6 +285,7 @@ function CardCredit({ sel, onSource }: { sel: Selected; onSource: () => void }) 
         >
           {sel.source_title}
         </button>
+        <PlatformMark kind={sel.item.source_kind} />
         {age && <span className="cc-age">{age}</span>}
       </span>
     </div>
@@ -353,11 +360,16 @@ export const SessionCard = forwardRef<HTMLDivElement, SessionCardProps>(function
   const vert = activeMedia && isVertical(it.item);
   const audioCard = activeMedia && it.item.media_type === "audio";
   const compactShort = shortsMode && it.item.media_type === "short";
+  // #205: a social post has no headline. Its text is the content, at reading
+  // size; the author's avatar stays small in the credit, and only a real attached
+  // picture is media.
+  const post = isPost(it.item) && !isMedia(it.item);
+  const mediaItem = post ? { ...it.item, thumbnail_url: postMediaURL(it.item, it.source_icon_url) } : it.item;
   const age = compactShort ? relTime(it.item.published_at || it.item.fetched_at) : "";
 
   return (
     <div
-      className={`snap afterglow-card ${focused ? "" : "away"} ${activeMedia ? "media-card" : ""} ${vert ? "vertical" : ""} ${audioCard ? "audio-card" : ""} ${compactShort ? "shorts-card" : ""}`}
+      className={`snap afterglow-card ${post ? "post-card" : ""} ${focused ? "" : "away"} ${activeMedia ? "media-card" : ""} ${vert ? "vertical" : ""} ${audioCard ? "audio-card" : ""} ${compactShort ? "shorts-card" : ""}`}
       data-idx={index}
       data-player={hostsPlayer || undefined}
       ref={ref}
@@ -368,7 +380,7 @@ export const SessionCard = forwardRef<HTMLDivElement, SessionCardProps>(function
       onPointerCancel={onPointerCancel}
       onClick={onClick}
       role="article"
-      aria-label={compactShort ? it.item.title : undefined}
+      aria-label={compactShort ? it.item.title : post ? `Post by ${it.source_title}` : undefined}
     >
       {!compactShort && <>
       {/* Quiet reason line (de-noised, no box) + the ··· overflow. */}
@@ -410,11 +422,21 @@ export const SessionCard = forwardRef<HTMLDivElement, SessionCardProps>(function
           ) : null
         }
       />
-      <h3 className="card-title">{it.item.title}</h3>
-      {hierarchy === "taxonomy-credit" ? (
-        <CardCredit sel={it} onSource={() => onSource(it)} />
+      {post ? (
+        <>
+          {/* A post reads author first, like every social app; then the text. */}
+          {hierarchy === "taxonomy-credit" && <CardCredit sel={it} onSource={() => onSource(it)} />}
+          <p className="card-post">{postText(it.item)}</p>
+        </>
       ) : (
-        <Byline item={it.item} sourceTitle={it.source_title} />
+        <>
+          <h3 className="card-title">{it.item.title}</h3>
+          {hierarchy === "taxonomy-credit" ? (
+            <CardCredit sel={it} onSource={() => onSource(it)} />
+          ) : (
+            <Byline item={it.item} sourceTitle={it.source_title} />
+          )}
+        </>
       )}
       </>}
 
@@ -464,8 +486,8 @@ export const SessionCard = forwardRef<HTMLDivElement, SessionCardProps>(function
         </div>
       ) : (
         <>
-          <Media item={it.item} />
-          {!compactShort && <Blurb item={it.item} />}
+          <Media item={mediaItem} />
+          {!compactShort && !post && <Blurb item={it.item} />}
         </>
       )}
 
@@ -486,7 +508,7 @@ export const SessionCard = forwardRef<HTMLDivElement, SessionCardProps>(function
           <button className="shorts-creator" type="button" onClick={() => onSource(it)}>
             <SourceAvatar url={it.source_icon_url} title={it.source_title} color={it.topic?.color} />
             <span className="shorts-credit-text">
-              <span className="shorts-creator-name">{it.source_title}</span>
+              <span className="shorts-creator-name">{it.source_title}<PlatformMark kind={it.item.source_kind} size={12} /></span>
               <ShortsMeta bus={hostsPlayer ? shortsBus : undefined} age={age} duration={it.item.duration_sec} />
             </span>
           </button>

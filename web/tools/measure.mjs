@@ -38,6 +38,11 @@ const APP = arg("app");
 const SHOTS = arg("shots");
 const SESSION = arg("session");
 const SHORTS_MODE = argv.includes("--shorts-mode");
+// #205: full-screen Shorts pads every other card clear of floating chrome. In the
+// lab this is a knob; in the app it is the stored viewing choice, on by default.
+const IMMERSIVE = argv.includes("--immersive");
+// --app only: force Shorts mode on or off for the pass ("on" is the default).
+const VIEWING = arg("viewing");
 const sessionSnapshot = SESSION ? JSON.parse(readFileSync(resolve(SESSION), "utf8")) : null;
 if (!LAB && !APP) {
   console.error("need --lab <file|url> or --app <url>. See the header of this file.");
@@ -58,6 +63,7 @@ const DEVICES = [
 // nobody has.
 const SHIPPED = {
   shortsMode: SHORTS_MODE,
+  immersive: IMMERSIVE,
   solve: true, title: "ramp", titleMin: 16, hero: "cap", heroCap: 0.46,
   video: "budget", videoTarget: 0.6, mediaWidth: 0.95, density: "tight",
   align: "center", hierarchy: "taxonomy-credit", menu: "actions", actions: "current",
@@ -70,6 +76,7 @@ const ALL_FIXTURES = [
   "audio", "link-only", "no-meta", "unbroken", "cjk",
   "short-square", "short-wide", "long-vertical",
   "bsky-quote", "bsky-image", "substack-comments", "video-wide-comments",
+  "news-vtdigger", "bsky-text-short", "bsky-text-long", "bsky-link-avatar",
 ];
 const FIXTURES = (arg("fixtures") ? String(arg("fixtures")).split(",") : ALL_FIXTURES).map((s) => s.trim());
 
@@ -88,7 +95,7 @@ function readCard() {
   const card = cards[idx];
   if (!card) return { error: "no card" };
   const compact = card.classList.contains("shorts-card");
-  if (!card.querySelector(".card-title") && !compact) return { endCard: true };
+  if (!card.querySelector(".card-title, .card-post") && !compact) return { endCard: true };
 
   // Rects are transform-scaled in the lab's device frame and unscaled in the
   // app. offsetHeight never is, so derive the factor and divide rather than
@@ -109,7 +116,8 @@ function readCard() {
   };
 
   const first = compact ? card.querySelector(".im-frame") : card.querySelector(".card-hier, .card-title");
-  const title = card.querySelector(".card-title");
+  const title = card.querySelector(".card-title, .card-post");
+  const post = card.querySelector(".card-post");
   const credit = card.querySelector(".card-credit");
   const tax = card.querySelector(".ch-tax");
   const actions = card.querySelector(".shorts-card-footer, .im-actions, .card-callout");
@@ -122,18 +130,40 @@ function readCard() {
   // over-reported every gap ending at the media by ~4px.
   const gap = (a, b) => (!a || !b ? null : Math.round(R(b).top - R(a).bottom + half(a) + (b === media ? 0 : half(b))));
 
+  // #205: centring, net of the chrome the card is padded clear of. The top
+  // reserve is the card's padding without the solver's pad; the bottom one is
+  // what the solver holds back (bottomGap, or full screen's larger padding).
+  const cs = getComputedStyle(card);
+  const centerPad = parseFloat(cs.getPropertyValue("--card-center-pad")) || 0;
+  const above = Math.round(R(first).top - R(card).top);
+  const below = actions ? Math.round(R(card).bottom - Math.max(R(actions).bottom, conv ? R(conv).bottom : 0)) : null;
+  const topReserve = parseFloat(cs.paddingTop) - centerPad;
+  const bottomReserve = Math.max(16, parseFloat(cs.paddingBottom));
+  // Rows in DOM order: an article is title then credit, a post credit then text.
+  const order = [tax, title, credit].filter(Boolean).sort((a, b) => (a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING ? -1 : 1));
+  const rows = [...order, media].filter(Boolean);
+
   return {
     compact,
+    // Full-screen Shorts draw the clip edge to edge under a top bar whose ···
+    // replaces Details; verify-shorts-playback covers that geometry, not this.
+    fullScreenShort: compact && document.documentElement.dataset.immersive === "on",
+    kind: post ? "post" : compact ? "short" : "card",
     title: (title?.textContent || card.getAttribute("aria-label") || "").slice(0, 30),
-    above: Math.round(R(first).top - R(card).top),
-    below: actions ? Math.round(R(card).bottom - Math.max(R(actions).bottom, conv ? R(conv).bottom : 0)) : null,
+    above,
+    below,
+    // A full card (no pad, nothing spare at the bottom) has nothing to centre.
+    offCentre: compact || below === null || (centerPad === 0 && below - bottomReserve <= 4) ? 0 : Math.round(above - topReserve - (below - bottomReserve)),
     replies: card.querySelectorAll(".cv-card-replies > .cv-row").length
       ? [...card.querySelectorAll(".cv-card-replies > .cv-row")].filter((r) => r.offsetParent !== null).length : "-",
     titlePx: title ? parseFloat(getComputedStyle(title).fontSize) : 0,
     // Header gaps, top to bottom. Expect the configured rhythm on every one; a
     // media card reads ~2 high on the last because the gap is measured to the
     // player's border box, and the frame has a 1px border.
-    rhythm: [gap(tax, title), gap(title, credit), gap(credit, media)].filter((v) => v !== null).join("/"),
+    rhythm: rows.slice(1).map((b, i) => gap(rows[i], b)).filter((v) => v !== null).join("/"),
+    postLines: post ? Math.round(R(post).height / parseFloat(getComputedStyle(post).lineHeight)) : "-",
+    postClamped: post ? post.scrollHeight > post.clientHeight + 1 : "-",
+    avatarHero: !!post && !!card.querySelector(".media img") && card.querySelector(".media img").getAttribute("src") === (card.querySelector(".card-credit img.src-avatar")?.getAttribute("src") ?? "-"),
     media: media ? `${Math.round(R(media).width)}x${Math.round(R(media).height)} (${Math.round((R(media).height / card.offsetHeight) * 100)}%)` : "-",
     overflow: Math.max(0, card.scrollHeight - card.clientHeight),
     horizontalOverflow: Math.max(0, card.scrollWidth - card.clientWidth),
@@ -156,13 +186,15 @@ function record(where, m) {
   if (m.error || m.endCard) return;
   const { actions, ...cols } = m; // the action row is checked, not tabulated
   rows.push({ where, ...cols });
-  if (m.compact) {
+  if (m.compact && !m.fullScreenShort) {
     if (!actions.includes("Details")) problems.push(`${where}: compact card is missing Details`);
     if (m.mediaAspectError > 0.01) problems.push(`${where}: compact video aspect was distorted`);
     if (!m.compactChromeHidden) problems.push(`${where}: ordinary card chrome remains in compact mode`);
     if (!m.detailsReachable) problems.push(`${where}: Details is smaller than its touch target`);
   } else if (actions && !actions.includes("Save")) problems.push(`${where}: action row is missing Save - ${actions}`);
   if (m.overflow > 0) problems.push(`${where}: content overflows by ${m.overflow}px`);
+  if (Math.abs(m.offCentre) > 4) problems.push(`${where}: card is ${m.offCentre}px off centre (above ${m.above}, below ${m.below})`);
+  if (m.avatarHero) problems.push(`${where}: a post shows its author's avatar as the hero`);
   if (m.compact && m.horizontalOverflow > 0) problems.push(`${where}: content overflows horizontally by ${m.horizontalOverflow}px`);
   if (!m.actionsInView) problems.push(`${where}: action row is out of reach`);
 }
@@ -210,6 +242,13 @@ if (APP) {
     const firstRow = rows.length;
     const page = await browser.newPage({ viewport: { width: device.w, height: device.h }, deviceScaleFactor: SHOTS ? 2 : 1 });
     page.on("pageerror", (e) => errors.push(e.message));
+    if (VIEWING) {
+      // Viewing choices are per account in this browser; set them for every id.
+      await page.addInitScript((v) => {
+        for (let id = 0; id < 10; id++) localStorage.setItem(`otium:shorts-mode:${id}`, v);
+        localStorage.setItem("otium:shorts-mode:unknown", v);
+      }, VIEWING);
+    }
     if (sessionSnapshot) {
       // Real API payload captured from an isolated dev server. Keep concurrent
       // browser passes from replacing each other's queue or advancing its cursor.

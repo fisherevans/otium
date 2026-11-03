@@ -22,6 +22,10 @@ function pic(w: number, h: number, tone: "light" | "dark" = "light"): string {
   return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
 }
 
+// A profile picture: what a Bluesky author has instead of a hero (#205). Square,
+// so a card that wrongly promoted it to the hero would show it unmistakably.
+const AVATAR = pic(400, 400, "dark");
+
 const NOW = "2026-08-16T12:00:00Z";
 function ago(days: number): string {
   return new Date(Date.parse(NOW) - days * 86400_000).toISOString();
@@ -30,6 +34,7 @@ function ago(days: number): string {
 function item(over: Partial<Item>): Item {
   return {
     id: 1,
+    source_kind: "rss",
     source_id: 1,
     url: "https://example.org/a",
     title: "",
@@ -81,6 +86,7 @@ export const FIXTURES: Fixture[] = [
     sel: sel({
       item: item({
         id: 1,
+        source_kind: "rss",
         title:
           "Wall Street's Nonprofits Use Selective, Opaque Logic to Decide Which Charities Get Defunded, and They Won't Say Why",
         author: "Ellis Simani",
@@ -99,6 +105,7 @@ export const FIXTURES: Fixture[] = [
     sel: sel({
       item: item({
         id: 2,
+        source_kind: "rss",
         title: "State Regulators Knew About the Culvert Backlog for Six Years",
         author: "Anne Wallace Allen",
         summary:
@@ -118,6 +125,7 @@ export const FIXTURES: Fixture[] = [
     sel: sel({
       item: item({
         id: 3,
+        source_kind: "rss",
         title: "A Short One",
         author: "Ash Ngu",
         summary: "Brief item, small summary, to see how the card handles a light payload.",
@@ -135,6 +143,7 @@ export const FIXTURES: Fixture[] = [
     sel: sel({
       item: item({
         id: 4,
+        source_kind: "youtube",
         title: "Ukulele that transforms into a guitar mid-song",
         media_type: "short",
         aspect_ratio: 9 / 16,
@@ -158,6 +167,7 @@ export const FIXTURES: Fixture[] = [
     sel: sel({
       item: item({
         id: 5,
+        source_kind: "youtube",
         title:
           "I built a drum machine out of a 1970s answering machine and it has a genuinely usable sixteen step sequencer",
         media_type: "long",
@@ -182,6 +192,7 @@ export const FIXTURES: Fixture[] = [
     sel: sel({
       item: item({
         id: 11,
+        source_kind: "youtube",
         title: "How one shape changes the whole composition",
         media_type: "short",
         aspect_ratio: 1,
@@ -201,6 +212,7 @@ export const FIXTURES: Fixture[] = [
     sel: sel({
       item: item({
         id: 12,
+        source_kind: "youtube",
         title: "One melody, three instruments",
         media_type: "short",
         aspect_ratio: 16 / 9,
@@ -220,6 +232,7 @@ export const FIXTURES: Fixture[] = [
     sel: sel({
       item: item({
         id: 13,
+        source_kind: "youtube",
         title: "Building the complete sculpture from a single sheet of paper",
         media_type: "long",
         aspect_ratio: 9 / 16,
@@ -239,6 +252,7 @@ export const FIXTURES: Fixture[] = [
     sel: sel({
       item: item({
         id: 6,
+        source_kind: "podcast",
         title: "Episode 214: The people who maintain the machines nobody remembers buying",
         media_type: "audio",
         duration_sec: 3120,
@@ -259,6 +273,7 @@ export const FIXTURES: Fixture[] = [
     sel: sel({
       item: item({
         id: 7,
+        source_kind: "rss",
         title: "Notes from a week of watching the river gauge",
         summary: "Short field notes, no byline, no topic assigned.",
         content: "<p>body</p>",
@@ -277,6 +292,7 @@ export const FIXTURES: Fixture[] = [
     sel: sel({
       item: item({
         id: 10,
+        source_kind: "medium",
         // resolved external: there is a teaser but no body to open in-app
         content_source: "external",
         title: "Council votes to fund the culvert survey after all",
@@ -297,6 +313,7 @@ export const FIXTURES: Fixture[] = [
     sel: sel({
       item: item({
         id: 8,
+        source_kind: "rss",
         title: "Supercalifragilisticexpialidocious infrastructure maintenance considerations",
         author: "A Verylongsurnamewithoutspaces",
         summary: "Testing wrap behaviour with unbreakable tokens in every metadata slot.",
@@ -315,6 +332,7 @@ export const FIXTURES: Fixture[] = [
     sel: sel({
       item: item({
         id: 9,
+        source_kind: "rss",
         title: "国土交通省は老朽化した橋梁の点検記録を六年間にわたり公表していなかったことが明らかになった",
         author: "編集部",
         summary: "点検記録の非公表について、担当者は「様式が統一されていなかった」と説明している。",
@@ -335,6 +353,9 @@ export const FIXTURES: Fixture[] = [
     sel: sel({
       item: item({
         id: 20,
+        source_kind: "bluesky",
+        post: true,
+        text: "This is the most honest release note I have read all year.\nThey reverted ten features rather than ship something reviewers could not keep up with. More projects should be willing to say that out loud.",
         url: "https://bsky.app/profile/someone.bsky.social/post/3abc",
         title: "This is the most honest release note I have read all year.",
         summary: "They reverted ten features rather than ship something reviewers could not keep up with. More projects should be willing to say that out loud.",
@@ -343,6 +364,7 @@ export const FIXTURES: Fixture[] = [
         published_at: ago(0.3),
       }),
       source_title: "Kelsey Ortiz",
+      source_icon_url: AVATAR,
       topic: { name: "Databases", slug: "db", color: "#5f6f8f", icon: "" },
     }),
     conversation: conv("bluesky", { likes: 183, reposts: 11, replies: 14, quotes: 3 }, [
@@ -359,6 +381,9 @@ export const FIXTURES: Fixture[] = [
     sel: sel({
       item: item({
         id: 21,
+        source_kind: "bluesky",
+        post: true,
+        text: "Found the original wiring diagram for the building, hand drawn in 1931.\nEvery circuit labelled in the same careful hand. Somebody spent weeks on this.",
         url: "https://bsky.app/profile/someone.bsky.social/post/3abd",
         title: "Found the original wiring diagram for the building, hand drawn in 1931.",
         summary: "Every circuit labelled in the same careful hand. Somebody spent weeks on this.",
@@ -368,12 +393,101 @@ export const FIXTURES: Fixture[] = [
         published_at: ago(1),
       }),
       source_title: "Sam Reyes",
+      source_icon_url: AVATAR,
       topic: { name: "Old Things", slug: "old", color: "#7a6a4f", icon: "" },
     }),
     conversation: conv("bluesky", { likes: 2400, reposts: 310, replies: 96, quotes: 22 }, [
       reply("Ruth Allen", 380, "The lettering on the panel schedule is gorgeous. Draftsmen used to train for years to letter like that and it shows in every label on the sheet."),
       reply("Theo", 122, "Please scan it at high resolution before anything happens to it. Archives would love this."),
     ]),
+  },
+  {
+    key: "news-vtdigger",
+    section: "News",
+    label: "Article · 3:2 hero · centred in full screen",
+    note: "Fisher's #205 case: a short local-news card in a session with Shorts. It must centre whether full-screen Shorts is on or off.",
+    sel: sel({
+      item: item({
+        id: 30,
+        source_kind: "rss",
+        url: "https://vtdigger.org/2026/11/02/gifford-health-care-daycare/",
+        title: "Gifford Health Care raises rates and reduces hours on its employee daycare center",
+        summary: "\u201cWe're entering a period of hard trade-offs in healthcare, and this is one of them,\u201d the hospital said.",
+        content: "<p>body</p>",
+        thumbnail_url: pic(1200, 800),
+        published_at: ago(0.6),
+      }),
+      source_title: "VTDigger",
+      topic: { name: "Local News", slug: "local-news", color: "#5f6f8f", icon: "" },
+    }),
+  },
+  {
+    key: "bsky-text-short",
+    section: "Tech",
+    label: "Bluesky post · one line, no media",
+    note: "#205: a text post with nothing but its author's avatar. The text is the card, at reading size; the avatar stays in the credit.",
+    sel: sel({
+      item: item({
+        id: 31,
+        source_kind: "bluesky",
+        post: true,
+        url: "https://bsky.app/profile/someone.bsky.social/post/3abe",
+        title: "have reached the point where >50% of my email inbox is ai spam",
+        text: "have reached the point where >50% of my email inbox is ai spam",
+        content: "<p>have reached the point where &gt;50% of my email inbox is ai spam</p>",
+        published_at: ago(0.1),
+      }),
+      source_title: "Jason Koebler",
+      source_icon_url: AVATAR,
+      topic: { name: "Tech Press", slug: "tech-press", color: "#5f6f8f", icon: "" },
+    }),
+  },
+  {
+    key: "bsky-text-long",
+    section: "Tech",
+    label: "Bluesky post · 300 characters, line breaks, replies",
+    note: "#205: a full-length post. It shows whole where it fits; the replies give way before the text is trimmed.",
+    sel: sel({
+      item: item({
+        id: 32,
+        source_kind: "bluesky",
+        post: true,
+        url: "https://bsky.app/profile/someone.bsky.social/post/3abf",
+        title: "the idea of some random guy making his chatbot write a press release about how his chatbot is a bad employee then emailing it to a bunch of journalists is still cracking me up, it\u2019s so good. I really\u2026",
+        text: "the idea of some random guy making his chatbot write a press release about how his chatbot is a bad employee then emailing it to a bunch of journalists is still cracking me up, it\u2019s so good. I really hope this becomes a genre.\n\nAnyway: if your chatbot has a complaint, the newsroom inbox is open.",
+        content: "<p>body</p>",
+        published_at: ago(0.4),
+      }),
+      source_title: "Jason Koebler",
+      source_icon_url: AVATAR,
+      topic: { name: "Tech Press", slug: "tech-press", color: "#5f6f8f", icon: "" },
+    }),
+    conversation: conv("bluesky", { likes: 110, reposts: 20, replies: 3, quotes: 0 }, [
+      reply("Jason Koebler", 27, "and that it did this to an army veteran smgdh"),
+      reply("Reader", 4, "Genuinely the best thing in my inbox this week, and I say that as someone who reads a lot of press releases."),
+    ], reply("Jason Koebler", 0, "The wildest one of these I got was a three PDF \"press release\" rollout from someone who said his ChatGPT sometimes got something wrong and that this was a scandal.", "image")),
+  },
+  {
+    key: "bsky-link-avatar",
+    section: "Tech",
+    label: "Bluesky post · link card whose picture is an avatar",
+    note: "#205: a link card can carry the linked profile's avatar. That is identity, never a hero: the card shows the text alone.",
+    sel: sel({
+      item: item({
+        id: 33,
+        source_kind: "bluesky",
+        post: true,
+        url: "https://bsky.app/profile/someone.bsky.social/post/3abg",
+        title: "Go follow my colleague, she has been on this story for a year.",
+        text: "Go follow my colleague, she has been on this story for a year.",
+        content: "<p>body</p>",
+        thumbnail_url: "https://cdn.bsky.app/img/avatar/plain/did:plc:example/bafkexample",
+        published_at: ago(0.8),
+      }),
+      source_title: "Maggie Harrison Dupr\u00e9",
+      source_icon_url: AVATAR,
+      topic: { name: "Tech Press", slug: "tech-press", color: "#5f6f8f", icon: "" },
+    }),
   },
   {
     key: "substack-comments",
@@ -383,6 +497,7 @@ export const FIXTURES: Fixture[] = [
     sel: sel({
       item: item({
         id: 22,
+        source_kind: "substack",
         url: "https://www.astralcodexten.com/p/your-book-review-the-history-and",
         title: "Your Book Review: The History And Future Of Writing Systems",
         summary: "A finalist in this year's review contest takes on the long arc of how scripts were invented, borrowed and simplified.",
@@ -416,6 +531,7 @@ function FIXTURES_VIDEO_WIDE(): Selected {
   return sel({
     item: item({
       id: 23,
+      source_kind: "youtube",
       title: "I built a drum machine out of a 1970s answering machine",
       media_type: "long",
       aspect_ratio: 16 / 9,

@@ -172,6 +172,13 @@ export interface Item {
   categories?: string[];
   published_at: string;
   fetched_at: string;
+  // #205: the source's kind (rss | youtube | podcast | bluesky | substack | medium),
+  // for the platform mark beside the source name.
+  source_kind?: string;
+  // #205: a social post (Bluesky; X later). It has no headline: `text` is the
+  // whole post, and `title` is only its first line for lists and messages.
+  post?: boolean;
+  text?: string;
 }
 
 // SourceItem is an item plus the user's current engagement state on it (#120):

@@ -307,6 +307,12 @@ export function LabPage() {
               </button>
             </div>
             <div className="lab-row">
+              <span>full screen</span>
+              <button type="button" className={`lab-btn ${st.layout.immersive ? "on" : ""}`} aria-pressed={st.layout.immersive} onClick={() => setL({ immersive: !st.layout.immersive })}>
+                {st.layout.immersive ? "on" : "off"}
+              </button>
+            </div>
+            <div className="lab-row">
               <span>solve</span>
               <button type="button" className={`lab-btn ${st.layout.solve ? "on" : ""}`} onClick={() => setL({ solve: !st.layout.solve })}>
                 {st.layout.solve ? "on" : "off"}

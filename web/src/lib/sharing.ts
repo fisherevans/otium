@@ -15,7 +15,7 @@ export function useShareAvailable(): boolean {
   const [on, setOn] = useState(false);
   useEffect(() => {
     let live = true;
-    shareStatus().then((s) => { if (live) setOn(s.available); });
+    shareStatus().then((s) => { if (live) setOn(!!s?.available); });
     return () => { live = false; };
   }, []);
   return on;

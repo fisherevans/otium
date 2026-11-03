@@ -1,6 +1,10 @@
 package store
 
-import "time"
+import (
+	"html"
+	"strings"
+	"time"
+)
 
 // User is an authenticated account. Single-tenant in practice, but everything
 // hangs off a user so multi-tenant is a config flip later.
@@ -179,6 +183,92 @@ type Item struct {
 	Categories  []string  `json:"categories,omitempty"`
 	PublishedAt time.Time `json:"published_at"`
 	FetchedAt   time.Time `json:"fetched_at"`
+	// SourceKind is the item's source kind (rss | youtube | podcast | bluesky |
+	// substack | medium), so a card can show the platform's mark (#205). Read-only:
+	// joined from sources, never stored on the item.
+	SourceKind string `json:"source_kind,omitempty"`
+	// Post marks a social post (#205): text with no headline, maybe media. Set from
+	// SourceKind via PostKinds, so the client never guesses from the payload's shape.
+	Post bool `json:"post,omitempty"`
+	// Text is a post's whole text, rebuilt from the stored title (its first line)
+	// and summary (the rest). Empty for anything that is not a post.
+	Text string `json:"text,omitempty"`
+}
+
+// PostKinds are the source kinds whose items are social posts rather than
+// articles: no headline, the text is the content (#201, #205). X joins this when
+// it becomes a source kind (#198).
+var PostKinds = map[string]bool{"bluesky": true}
+
+// SetSourceKind records the item's source kind and derives Post and Text from it.
+func (it *Item) SetSourceKind(kind string) {
+	it.SourceKind = kind
+	it.Post = PostKinds[kind]
+	it.RefreshPostText()
+}
+
+// RefreshPostText sets a post's Text: from the body when it is loaded (exact,
+// paragraph breaks kept), else from the stored title and summary.
+func (it *Item) RefreshPostText() {
+	if !it.Post {
+		return
+	}
+	if t := postTextFromBody(it.Content); t != "" {
+		it.Text = t
+		return
+	}
+	it.Text = PostText(it.Title, it.Summary)
+}
+
+// postTextFromBody reads a post's text back out of the body ingest wrote: the
+// first paragraph, escaped, with <br> for line breaks. A post with no text starts
+// with its image or link instead, and yields "".
+func postTextFromBody(body string) string {
+	if !strings.HasPrefix(body, "<p>") {
+		return ""
+	}
+	end := strings.Index(body, "</p>")
+	if end < 0 {
+		return ""
+	}
+	first := body[len("<p>"):end]
+	if strings.HasPrefix(first, "<") {
+		return ""
+	}
+	return strings.TrimSpace(html.UnescapeString(strings.ReplaceAll(first, "<br>", "\n")))
+}
+
+// Headline is the one line that names an item in a list or a message: its title,
+// or for a post its text on one line, clipped at a word boundary near max runes.
+func (it Item) Headline(max int) string {
+	if !it.Post || it.Text == "" {
+		return it.Title
+	}
+	line := strings.Join(strings.Fields(it.Text), " ")
+	r := []rune(line)
+	if len(r) <= max {
+		return line
+	}
+	cut := string(r[:max])
+	if i := strings.LastIndex(cut, " "); i > max/2 {
+		cut = cut[:i]
+	}
+	return strings.TrimRight(cut, " ,.;:") + "…"
+}
+
+// PostText rebuilds a post's text from how ingest stores it: the title is the
+// first line (clipped with an ellipsis when long) and the summary the rest, or the
+// whole text again when the title was clipped. See social.bskyToPost.
+func PostText(title, summary string) string {
+	t, s := strings.TrimSpace(title), strings.TrimSpace(summary)
+	switch {
+	case s == "":
+		return t
+	case strings.HasSuffix(t, "…"):
+		return s
+	default:
+		return t + "\n" + s
+	}
 }
 
 // CollectionItem is an item paired with the timestamp it was added to a

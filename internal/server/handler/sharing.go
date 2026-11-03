@@ -335,7 +335,7 @@ func (h *Handler) ShareItem(w http.ResponseWriter, r *http.Request) {
 
 	link := ShareURL(it.URL)
 	sh := &store.Share{
-		ItemID: it.ID, URL: link, Title: it.Title, SourceName: h.db.ShareSourceName(r.Context(), it.SourceID),
+		ItemID: it.ID, URL: link, Title: it.Headline(140), SourceName: h.db.ShareSourceName(r.Context(), it.SourceID),
 		ThumbnailURL: it.ThumbnailURL, MediaType: it.MediaType, Note: note, StreamKey: store.StreamKey(friendIDs),
 	}
 	shareID, err := h.db.CreateShare(r.Context(), uid, sh)

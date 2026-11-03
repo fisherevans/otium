@@ -58,6 +58,10 @@ for (const [name, engine] of Object.entries({ chromium, webkit }).filter(([name]
                         ? json({ session_id: 'surface-test', duration_min: 40, cursor: state.cursor, themes: [], items: queue })
                         : route.fulfill({ status: 204 });
                     if (/^\/items\/\d+\/content$/.test(path)) return json({ content: item.content, content_source: 'rss', has_full_text: true, render: 'full_text' });
+                    // Endpoints added since these fixtures: server presets (#203), sharing (#195), conversations (#200).
+                    if (path === '/presets') return json({ presets: [], default_id: '', initialized: true });
+                    if (path === '/share/status') return json({ available: false });
+                    if (/^\/items\/\d+\/conversation$/.test(path)) return route.fulfill({ status: 204, body: '' });
                 }
                 if (method === 'PATCH' && path === '/sessions/surface-test') {
                     const patch = request.postDataJSON();

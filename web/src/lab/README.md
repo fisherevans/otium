@@ -49,6 +49,12 @@ deterministic and needs no network.
 Add a fixture whenever you find a new way to break it. That is how the list earns
 its keep.
 
+#205 added the shapes from Fisher's Everything-mix review: `news-vtdigger` (a
+short local-news card that must centre with full-screen Shorts on and off),
+`bsky-text-short` and `bsky-text-long` (text posts with nothing but an avatar),
+and `bsky-link-avatar` (a link card whose picture is a profile avatar, which must
+never become the hero). `bsky-image` and `bsky-quote` are posts now too.
+
 The Shorts mode switch uses the real compact card and solver. Portrait, square
 and landscape short videos exercise its contained frame, compact creator/date
 and Details control. A long portrait video verifies that geometry alone does
@@ -69,15 +75,26 @@ sandboxes that ship a preinstalled binary, not a normal-machine requirement).
 ```sh
 npm run measure -- --lab dist-lab/lab-standalone.html      # design against this
 npm run measure -- --lab dist-lab/lab-standalone.html --shorts-mode
+npm run measure -- --lab dist-lab/lab-standalone.html --shorts-mode --immersive
 npm run measure -- --app http://localhost:5173             # verify what ships
 npm run measure -- --lab dist-lab/lab-standalone.html --shots /tmp/cards
 ```
 
 It reports, per card: the space above the first line and below the action row
-(these should match within a pixel or two when the card has slack), the header
+(these should match within a pixel or two when the card has slack; `offCentre`
+is their difference net of the chrome the card is padded clear of, and anything
+over 4px fails the run), the header
 rhythm, the resolved title size, the media's size and share of the card, any
 overflow, and whether the actions are reachable. It exits non-zero if anything
 clipped, so it can gate a change.
+
+`--immersive` is the lab's "full screen" knob: the header floats over the reel and
+ordinary cards are padded clear of it by the same rule the app uses (#205 - this
+rule once dropped the centring pad, and every article in a session with Shorts
+sat at the top). Shorts themselves are not drawn edge to edge in the lab. In the
+app, full screen is the stored default for sessions with Shorts; `--viewing
+on|off` sets Shorts mode for an `--app` pass, and full-screen Shorts skip the
+compact-card checks (verify-shorts-playback covers that geometry).
 
 `--app` needs the Go server and a seeded database (see the repo `CLAUDE.md`), and
 walks a real session rather than fixtures. Both modes cover 412, 390, 375 and

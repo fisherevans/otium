@@ -48,9 +48,6 @@ const (
 // Formats lists every mix format in display order.
 var Formats = []Format{FormatArticle, FormatPost, FormatShort, FormatLong}
 
-// postSourceKinds are the source kinds whose items count as social posts.
-var postSourceKinds = map[string]bool{"bluesky": true}
-
 // Expected time per item when the item carries no duration. Text is a session
 // card read (headline, summary, sometimes opened), not the article's full length;
 // time-based media (video, audio) uses its real duration when known.
@@ -77,7 +74,7 @@ func FormatOf(c store.Candidate, kind string) Format {
 	case "long", "live", "video":
 		return FormatLong
 	}
-	if postSourceKinds[kind] {
+	if store.PostKinds[kind] {
 		return FormatPost
 	}
 	return FormatArticle

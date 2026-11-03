@@ -3,6 +3,7 @@ import { Expand } from "lucide-react";
 import { ImageViewer } from "./ImageViewer";
 import type { Item, Selected } from "@/api/client";
 import { feedIcon } from "@/lib/feedIcons";
+import { PlatformMark } from "./PlatformMark";
 import { clock, relTime, authorRedundant } from "@/lib/format";
 
 // CardParts holds the session card's building blocks, extracted from SessionPage
@@ -23,6 +24,8 @@ import { clock, relTime, authorRedundant } from "@/lib/format";
 export function Media({ item }: { item: Item }) {
   const t = item.media_type;
   const [expanded, setExpanded] = useState(false);
+  // #205: a hero its host refuses is dropped, not left as an empty frame.
+  const [broken, setBroken] = useState("");
   const hold = useRef<ReturnType<typeof setTimeout> | null>(null);
   const held = useRef(false);
   const origin = useRef<{ id: number; x: number; y: number } | null>(null);
@@ -66,7 +69,7 @@ export function Media({ item }: { item: Item }) {
       </div>
     );
   }
-  if (t === "article" && item.thumbnail_url) {
+  if (t === "article" && item.thumbnail_url && broken !== item.thumbnail_url) {
     return (
       <>
       <div className="media h"
@@ -86,7 +89,7 @@ export function Media({ item }: { item: Item }) {
         onClickCapture={(e) => { if (held.current) { e.preventDefault(); e.stopPropagation(); held.current = false; } }}
         onContextMenu={(e) => e.preventDefault()}
       >
-        <img src={item.thumbnail_url} alt="" loading="lazy" draggable={false} referrerPolicy="no-referrer" />
+        <img src={item.thumbnail_url} alt="" loading="lazy" draggable={false} referrerPolicy="no-referrer" onError={() => setBroken(item.thumbnail_url)} />
         <div className="dither" />
         <button className="image-expand" aria-label="View full image" onPointerDown={(e) => e.stopPropagation()} onClick={(e) => { e.stopPropagation(); setExpanded(true); }}><Expand size={15} aria-hidden /></button>
       </div>
@@ -129,6 +132,7 @@ export function CardSource({ sel, onSource }: { sel: Selected; onSource: () => v
     >
       <SourceAvatar url={sel.source_icon_url} title={sel.source_title} color={sel.topic?.color} />
       {sel.source_title}
+      <PlatformMark kind={sel.item.source_kind} />
     </button>
   );
 }

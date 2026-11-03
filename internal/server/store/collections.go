@@ -170,7 +170,8 @@ func (db *DB) CollectionItems(ctx context.Context, userID, collectionID int64, s
 	}
 	rows, err := db.sql.QueryContext(ctx,
 		`SELECT i.id, i.source_id, i.url, i.title, i.summary, i.content, i.content_source, i.author, i.thumbnail_url,
-		        i.media_type, i.duration_sec, i.published_at, i.fetched_at, ci.added_at
+		        i.media_type, i.duration_sec, i.published_at, i.fetched_at, ci.added_at,
+		        COALESCE((SELECT kind FROM sources WHERE id = i.source_id), '')
 		 FROM collection_items ci
 		 JOIN items i ON i.id = ci.item_id
 		 JOIN collections c ON c.id = ci.collection_id
@@ -183,11 +184,12 @@ func (db *DB) CollectionItems(ctx context.Context, userID, collectionID int64, s
 	var out []CollectionItem
 	for rows.Next() {
 		var ci CollectionItem
-		var pub, fetched, added string
+		var pub, fetched, added, kind string
 		if err := rows.Scan(&ci.ID, &ci.SourceID, &ci.URL, &ci.Title, &ci.Summary, &ci.Content, &ci.ContentSource, &ci.Author,
-			&ci.ThumbnailURL, &ci.MediaType, &ci.DurationSec, &pub, &fetched, &added); err != nil {
+			&ci.ThumbnailURL, &ci.MediaType, &ci.DurationSec, &pub, &fetched, &added, &kind); err != nil {
 			return nil, err
 		}
+		ci.SetSourceKind(kind)
 		ci.PublishedAt = parseTime(pub)
 		ci.FetchedAt = parseTime(fetched)
 		ci.AddedAt = parseTime(added)
