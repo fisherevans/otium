@@ -46,6 +46,9 @@ type Counts struct {
 
 // Comment is one reply, quote or comment. Text is plain text, never HTML.
 type Comment struct {
+	// ID names the comment for More(kind "thread"): a Bluesky at:// URI, a
+	// Substack comment id. Empty for YouTube.
+	ID        string `json:"id,omitempty"`
 	Author    string `json:"author"`
 	Handle    string `json:"handle,omitempty"`
 	AvatarURL string `json:"avatar_url,omitempty"`
@@ -61,6 +64,10 @@ type Comment struct {
 	// Children are the replies to this reply (#207), most-liked first, as deep as
 	// the platform gave them. Bluesky only.
 	Children []Comment `json:"children,omitempty"`
+	// MoreReplies counts replies to this one that are not in Children (#209):
+	// beyond the fetched depth, or past the few shown per level. More(kind
+	// "thread", ID) loads them.
+	MoreReplies int `json:"more_replies,omitempty"`
 }
 
 // Conversation is what GET /items/{id}/conversation returns.
@@ -73,6 +80,13 @@ type Conversation struct {
 	// Quoted is the post this item itself quotes (Bluesky), shown as an inset.
 	Quoted    *Comment  `json:"quoted,omitempty"`
 	FetchedAt time.Time `json:"fetched_at"`
+	// Cursors says what more there is to load (#209): a key is present when that
+	// kind has another page, and its value is the cursor to pass to More - which
+	// may be "" for "from the start" (reposts, which the first answer never
+	// carries). Kinds: replies, quotes, reposts.
+	Cursors map[string]string `json:"cursors,omitempty"`
+
+	quotesCursor string // Bluesky's cursor after the first page of quotes
 }
 
 // Target identifies an item and the source it came from.
@@ -114,6 +128,7 @@ type Service struct {
 	http  *http.Client
 	mu    sync.Mutex
 	cache map[string]entry
+	pages map[string]pageEntry
 	now   func() time.Time
 }
 
@@ -143,7 +158,7 @@ func New(cfg Config) *Service {
 	if hc == nil {
 		hc = &http.Client{Timeout: 15 * time.Second}
 	}
-	return &Service{cfg: cfg, http: hc, cache: map[string]entry{}, now: time.Now}
+	return &Service{cfg: cfg, http: hc, cache: map[string]entry{}, pages: map[string]pageEntry{}, now: time.Now}
 }
 
 // Supported reports whether Get can answer for this item at all (YouTube needs
@@ -153,8 +168,19 @@ func (s *Service) Supported(t Target) bool {
 	return p != "" && (p != YouTube || s.cfg.YouTubeKey != "")
 }
 
-// Get returns the item's conversation, from cache when fresh.
+// Get returns the first page of the item's conversation (#209): the first
+// RepliesPage top-level replies with a few replies under each, the first page of
+// quotes, and Cursors for the rest. From cache when fresh.
 func (s *Service) Get(ctx context.Context, t Target) (*Conversation, error) {
+	conv, err := s.full(ctx, t)
+	if err != nil {
+		return nil, err
+	}
+	return firstPage(conv), nil
+}
+
+// full returns the whole conversation as fetched, from cache when fresh.
+func (s *Service) full(ctx context.Context, t Target) (*Conversation, error) {
 	if !s.Supported(t) {
 		return nil, ErrUnsupported
 	}
