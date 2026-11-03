@@ -115,6 +115,10 @@ func bskyComment(p bskyPostView) Comment {
 		Likes:       p.LikeCount,
 		Replies:     p.ReplyCount,
 		Media:       bskyMedia(body),
+		Images:      body.Images,
+		Link:        body.Link,
+		Video:       body.Video,
+		Quote:       body.Quote,
 		PublishedAt: parseTime(p.Record.CreatedAt),
 	}
 }
@@ -132,10 +136,15 @@ func bskyQuoted(e *richtext.BskyEmbedView) *Comment {
 		return nil // not found, blocked, a feed generator or a list
 	}
 	media := ""
+	var att richtext.Post
 	if len(r.Embeds) > 0 {
-		media = bskyMedia(richtext.BskyPost(r.Author, richtext.BskyRecord{}, &r.Embeds[0]))
+		b := richtext.BskyPost(r.Author, richtext.BskyRecord{}, &r.Embeds[0])
+		media, att = bskyMedia(b), *b
 	}
 	return &Comment{
+		Images:      att.Images,
+		Link:        att.Link,
+		Video:       att.Video,
 		Author:      firstNonEmpty(r.Author.DisplayName, r.Author.Handle),
 		Handle:      r.Author.Handle,
 		AvatarURL:   r.Author.Avatar,

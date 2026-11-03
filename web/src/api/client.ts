@@ -211,17 +211,39 @@ export interface PostBody {
   // its text. Bluesky posts have none.
   title?: string;
   segments: PostSegment[];
-  images?: { thumb: string; full?: string; alt?: string; aspect?: number }[];
-  link?: { uri: string; title?: string; description?: string; thumb?: string; domain?: string };
-  video?: { thumb?: string; aspect?: number };
-  quote?: {
-    author: PostAuthor;
-    segments: PostSegment[];
-    url?: string;
-    published_at?: string;
-    media?: "image" | "video" | "link";
-    thumb?: string;
-  };
+  images?: PostImage[];
+  link?: PostLink;
+  video?: PostVideo;
+  quote?: PostQuote;
+}
+
+export interface PostImage { thumb: string; full?: string; alt?: string; aspect?: number }
+export interface PostLink { uri: string; title?: string; description?: string; thumb?: string; domain?: string }
+/** #210: `playlist` is the video's HLS playlist, played in place where the browser can. */
+export interface PostVideo { thumb?: string; aspect?: number; playlist?: string }
+
+/**
+ * #210: what a post quotes, drawn inset the way an embedded or screenshotted post
+ * shows it. `kind` "" (or absent) is a post with its own pictures, link card and
+ * video; "unavailable" is a post that cannot be shown (`notice` says why); "feed",
+ * "list" and "starter pack" are shared Bluesky things with a `title`.
+ */
+export interface PostQuote {
+  kind?: "" | "unavailable" | "feed" | "list" | "starter pack";
+  author: PostAuthor;
+  segments: PostSegment[];
+  url?: string;
+  published_at?: string;
+  images?: PostImage[];
+  link?: PostLink;
+  video?: PostVideo;
+  /** What the quoted post quotes in turn, by name; named, not drawn. */
+  quoting?: string;
+  notice?: string;
+  title?: string;
+  description?: string;
+  media?: "image" | "video" | "link";
+  thumb?: string;
 }
 
 // SourceItem is an item plus the user's current engagement state on it (#120):
@@ -834,6 +856,11 @@ export interface ConversationComment {
   likes: number;
   replies: number;
   media?: "image" | "video" | "link";
+  // #210: what a Bluesky reply or quote carries, drawn small under its text.
+  images?: PostImage[];
+  link?: PostLink;
+  video?: PostVideo;
+  quote?: PostQuote;
   published_at: string;
   // #207: replies to this reply, most-liked first (Bluesky).
   children?: ConversationComment[];

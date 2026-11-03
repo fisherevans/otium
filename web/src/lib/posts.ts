@@ -92,9 +92,23 @@ export function postRowCounts(item: Item, conv?: Conversation | null) {
 }
 
 /** The post with the post it quotes, from the conversation when the stored post
- *  predates #207 and does not carry it. Reader only since #209. */
+ *  does not carry it, or carries it without its pictures (stored before #210). */
 export function withQuoted(body: PostBody, conv?: Conversation | null): PostBody {
   const q = conv?.quoted;
-  if (body.quote || !q) return body;
-  return { ...body, quote: { author: { name: q.author, handle: q.handle, avatar: q.avatar_url }, segments: q.segments ?? [{ text: q.text }], url: q.url, published_at: q.published_at, media: q.media } };
+  if (!q) return body;
+  const have = body.quote;
+  if (have && (have.kind || have.images || have.link || have.video || !have.media)) return body;
+  return {
+    ...body,
+    quote: {
+      author: { name: q.author, handle: q.handle, avatar: q.avatar_url },
+      segments: q.segments ?? [{ text: q.text }],
+      url: q.url,
+      published_at: q.published_at,
+      media: q.media,
+      images: q.images,
+      link: q.link,
+      video: q.video,
+    },
+  };
 }

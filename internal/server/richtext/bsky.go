@@ -71,6 +71,13 @@ type BskyRecordView struct {
 	Likes  int             `json:"likeCount"`
 	Reply  int             `json:"replyCount"`
 	Embeds []BskyEmbedView `json:"embeds"`
+	// A shared feed (generatorView), list (listView) or starter pack
+	// (starterpackViewBasic, whose name is in its record) instead of a post.
+	DisplayName string      `json:"displayName"`
+	Name        string      `json:"name"`
+	Description string      `json:"description"`
+	Avatar      string      `json:"avatar"`
+	Creator     *BskyAuthor `json:"creator"`
 }
 
 // BskyPostURL is a post's web address: https://bsky.app/profile/<handle>/post/<rkey>.
@@ -131,13 +138,17 @@ func attachMedia(p *Post, e *BskyEmbedView) {
 		}
 	}
 	if strings.HasPrefix(e.Type, "app.bsky.embed.video") || e.Playlist != "" {
-		p.Video = &Video{Thumb: e.Thumbnail, Aspect: e.AspectRatio.ratio()}
+		p.Video = &Video{Thumb: e.Thumbnail, Aspect: e.AspectRatio.ratio(), Playlist: SafeURL(e.Playlist)}
 	}
 }
 
-// bskyQuote extracts the post an embed quotes, if any: record#view, or the
-// record half of recordWithMedia#view. Not-found, blocked, feed and list
-// records are not posts and give nil.
+// bskyQuote extracts what an embed quotes, if anything: record#view, or the
+// record half of recordWithMedia#view. A quoted post carries its own media the
+// way Bluesky and X draw a quote: its pictures, its video poster, its link card,
+// and a line naming the post it quotes in turn. A quoted post that cannot be
+// shown (deleted, blocked, detached by its author) is still a Quote, so the
+// reader sees that something was quoted rather than a post that seems to say
+// nothing. A shared feed, list or starter pack is a Quote of that kind.
 func bskyQuote(e *BskyEmbedView) *Quote {
 	if e == nil || e.Record == nil {
 		return nil
@@ -146,7 +157,25 @@ func bskyQuote(e *BskyEmbedView) *Quote {
 	if strings.HasPrefix(e.Type, "app.bsky.embed.recordWithMedia") && r.Record != nil {
 		r = r.Record
 	}
-	if !strings.HasSuffix(r.Type, "#viewRecord") {
+	t := r.Type
+	switch {
+	case strings.HasSuffix(t, "#viewNotFound"):
+		return &Quote{Kind: "unavailable", Segments: []Segment{}, Notice: "The quoted post was deleted"}
+	case strings.HasSuffix(t, "#viewBlocked"):
+		return &Quote{Kind: "unavailable", Segments: []Segment{}, Notice: "The quoted post is from a blocked account"}
+	case strings.HasSuffix(t, "#viewDetached"):
+		return &Quote{Kind: "unavailable", Segments: []Segment{}, Notice: "Removed by its author"}
+	case strings.HasSuffix(t, "#generatorView"):
+		return bskyShared(r, "feed", r.DisplayName)
+	case strings.HasSuffix(t, "#listView"):
+		return bskyShared(r, "list", r.Name)
+	case strings.Contains(t, "starterpackView"):
+		name := r.Name
+		if r.Record != nil {
+			name = firstNonEmpty(name, r.Record.Name)
+		}
+		return bskyShared(r, "starter pack", name)
+	case !strings.HasSuffix(t, "#viewRecord"):
 		return nil
 	}
 	q := &Quote{
@@ -156,12 +185,14 @@ func bskyQuote(e *BskyEmbedView) *Quote {
 		PublishedAt: r.Value.CreatedAt,
 	}
 	if len(r.Embeds) > 0 {
-		var m Post
 		em := &r.Embeds[0]
+		var m Post
 		if strings.HasPrefix(em.Type, "app.bsky.embed.recordWithMedia") && em.Media != nil {
-			em = em.Media
+			attachMedia(&m, em.Media)
+		} else {
+			attachMedia(&m, em)
 		}
-		attachMedia(&m, em)
+		q.Images, q.Link, q.Video = m.Images, m.Link, m.Video
 		switch {
 		case len(m.Images) > 0:
 			q.Media, q.Thumb = "image", m.Images[0].Thumb
@@ -170,8 +201,46 @@ func bskyQuote(e *BskyEmbedView) *Quote {
 		case m.Link != nil:
 			q.Media, q.Thumb = "link", m.Link.Thumb
 		}
+		// One level, like Bluesky: a quote inside a quote is named, not drawn.
+		if inner := bskyQuote(em); inner != nil {
+			if inner.Kind == "" {
+				q.Quoting = inner.Author.Name
+			} else if inner.Kind != "unavailable" {
+				q.Quoting = inner.Title
+			}
+		}
 	}
 	return q
+}
+
+// bskyShared is a shared feed, list or starter pack, drawn as a small card.
+func bskyShared(r *BskyRecordView, kind, title string) *Quote {
+	q := &Quote{Kind: kind, Segments: []Segment{}, Title: strings.TrimSpace(title), Description: strings.TrimSpace(r.Description)}
+	if r.Creator != nil {
+		q.Author = BskyAuthorOf(*r.Creator)
+		q.URL = bskySharedURL(r.Creator.Handle, kind, r.URI)
+	}
+	if r.Avatar != "" {
+		q.Thumb = r.Avatar
+	}
+	return q
+}
+
+// bskySharedURL is the web address of a shared feed, list or starter pack.
+func bskySharedURL(handle, kind, uri string) string {
+	rkey := uri[strings.LastIndex(uri, "/")+1:]
+	if handle == "" || rkey == "" {
+		return ""
+	}
+	switch kind {
+	case "feed":
+		return "https://bsky.app/profile/" + handle + "/feed/" + rkey
+	case "list":
+		return "https://bsky.app/profile/" + handle + "/lists/" + rkey
+	case "starter pack":
+		return "https://bsky.app/starter-pack/" + handle + "/" + rkey
+	}
+	return ""
 }
 
 func firstNonEmpty(vals ...string) string {

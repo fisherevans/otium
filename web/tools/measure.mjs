@@ -174,9 +174,18 @@ function readCard() {
     // #207: a post's links must be live, and a link card must stay compact.
     deadLinks: [...card.querySelectorAll(".card-post a")].filter((a) => !/^https?:/.test(a.getAttribute("href") || "")).length,
     linkCard: card.querySelector(".bp-linkcard") ? Math.round(R(card.querySelector(".bp-linkcard")).height) : "-",
-    // #209: the card is text, picture, counts and a reply or two. The link card
-    // and the quoted post are the reader's; Medium has no counts, so no row.
-    readerOnly: [...card.querySelectorAll(".bp-linkcard, .bp-quote")].length,
+    // #210: a compact link card (beside pictures, in a quote, or solved down from
+    // large) stays compact; a large one is the post's only attachment.
+    compactLink: Math.max(0, ...[...card.querySelectorAll(".bp-linkcard-compact, [data-solved-link] .bp-linkcard-large")].map((l) => Math.round(R(l).height))),
+    // #210: the link card and the quoted post are on the card and must be whole.
+    // Medium has no counts, so no row.
+    solved: (() => {
+      const v = card.closest("[data-solved-conv],[data-solved-link],[data-solved-quote]") || card.closest("[style*='--card-hero-cap']");
+      if (!v) return "-";
+      return ["conv", "link", "quote"].map((k) => v.getAttribute(`data-solved-${k}`) && `${k}:${v.getAttribute(`data-solved-${k}`)}`).filter(Boolean).join(" ") + " cap:" + (v.style.getPropertyValue("--card-hero-cap") || "?");
+    })(),
+    attachments: card.querySelectorAll(".bsky-post > .bp-linkcard, .bsky-post > .bp-quote").length,
+    attachClipped: [...card.querySelectorAll(".bsky-post > .bp-linkcard, .bsky-post > .bp-quote")].filter((a) => R(a).bottom > R(card).bottom + 1 || a.offsetParent === null).length,
     zeroRow: card.querySelector(".bp-medium .bp-engagement") ? 1 : 0,
     media: media ? `${Math.round(R(media).width)}x${Math.round(R(media).height)} (${Math.round((R(media).height / card.offsetHeight) * 100)}%)` : "-",
     overflow: Math.max(0, card.scrollHeight - card.clientHeight),
@@ -214,8 +223,8 @@ function record(where, m) {
   if (Math.abs(m.offCentre) > 4) problems.push(`${where}: card is ${m.offCentre}px off centre (above ${m.above}, below ${m.below})`);
   if (m.avatarHero) problems.push(`${where}: a post shows its author's avatar as the hero`);
   if (m.deadLinks > 0) problems.push(`${where}: ${m.deadLinks} post link(s) without an http(s) target`);
-  if (typeof m.linkCard === "number" && m.linkCard > 130) problems.push(`${where}: link card is ${m.linkCard}px tall, not compact`);
-  if (m.readerOnly > 0) problems.push(`${where}: the card shows a link card or quoted post (reader only since #209)`);
+  if (m.compactLink > 130) problems.push(`${where}: compact link card is ${m.compactLink}px tall`);
+  if (m.attachClipped > 0) problems.push(`${where}: a quoted post or link card is cut off or hidden`);
   if (m.zeroRow > 0) problems.push(`${where}: a Medium post shows a counts row`);
   if (m.compact && m.horizontalOverflow > 0) problems.push(`${where}: content overflows horizontally by ${m.horizontalOverflow}px`);
   if (!m.actionsInView) problems.push(`${where}: action row is out of reach`);

@@ -9,7 +9,7 @@ import { TopicPill, CardSource, SourceAvatar, Byline, Blurb, Media } from "@/com
 import { InlineMedia, type MediaPosition } from "@/components/InlineMedia";
 import { ShareActions } from "@/components/ReaderActions";
 import { isMedia, isVertical, videoAspect } from "@/lib/render";
-import { isPost, postBody, postContext, postPlatform, postRowCounts } from "@/lib/posts";
+import { isPost, postBody, postContext, postPlatform, postRowCounts, withQuoted } from "@/lib/posts";
 import { CardThread, PostCard } from "@/components/PostView";
 import { PlatformMark } from "@/components/PlatformMark";
 import "./session-afterglow.css";
@@ -365,10 +365,10 @@ export const SessionCard = forwardRef<HTMLDivElement, SessionCardProps>(function
   const post = isPost(it.item) && !isMedia(it.item);
   // #207: a post is drawn as a post - its own card, author on top, links
   // working, its picture, the engagement row, then its replies as a thread.
-  // #209: that includes a short Substack or Medium post (the server marks it), and
-  // the card keeps only the text, the picture, the counts and a reply or two: the
-  // link card and the quoted post are the reader's.
-  const body = post ? postBody(it.item, it.source_title, it.source_icon_url) : null;
+  // #209: that includes a short Substack or Medium post (the server marks it): the
+  // card keeps the text, the picture, the counts and a reply or two. #210: and the
+  // link card and the quoted post, without which a post often says nothing.
+  const body = post ? withQuoted(postBody(it.item, it.source_title, it.source_icon_url), conv) : null;
   // A Substack article keeps its article card, with its counts and a top comment.
   const substackArticle = !post && !isMedia(it.item) && it.item.source_kind === "substack";
   const age = compactShort ? relTime(it.item.published_at || it.item.fetched_at) : "";

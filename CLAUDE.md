@@ -106,7 +106,12 @@ the solver's last knob, never an avatar as hero (`lib/posts.ts`). A Bluesky post
 from its structured `post_body` (#207, `components/PostView.tsx`, server
 `internal/server/richtext`): facets are applied on the server by UTF-8 byte offset into
 link segments, so the client never computes offsets. #209: the card is text, picture,
-counts and a reply or two (link card and quote are reader-only); short Substack/Medium
+counts and a reply or two. #210 put the link card (large when it is the post's only
+attachment) and the quoted post (author, handle, time, text and its own pictures, video or
+link card; a deleted/blocked quote says so; a shared feed or list is a small card) back on
+the card, with solver knobs between the picture and the post's own text; a Bluesky video
+plays in place from its HLS `playlist` where the browser plays HLS (iOS Safari), else links
+out; short Substack/Medium
 posts are classified on the server (`internal/server/shortform`, `items.form`) and arrive
 as `post` + `post_body` like Bluesky; the reader's conversation pages via
 `/items/{id}/conversation/more` (`lib/conversation.ts useConversationPages`) and holds the

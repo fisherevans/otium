@@ -65,30 +65,84 @@
 .bp-video { position: relative; display: block; border-radius: 12px; overflow: hidden; background: var(--paper-3); }
 .bp-video img { display: block; width: 100%; max-height: var(--card-hero-cap, 360px); object-fit: cover; }
 .bp-video-blank { display: block; aspect-ratio: 16 / 9; }
+button.bp-video { width: 100%; padding: 0; border: 0; cursor: pointer; font: inherit; color: inherit; }
+/* Playing in place (#210): the same box as the poster, letterboxed, never cropped. */
+.bp-video-playing { background: #000; max-height: var(--card-hero-cap, 360px); }
+.bp-video-playing video { display: block; width: 100%; height: 100%; max-height: var(--card-hero-cap, 360px); object-fit: contain; background: #000; }
+.bp-full .bp-video-playing, .bp-full .bp-video-playing video { max-height: 75vh; }
 .bp-play { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); width: 48px; height: 48px; border-radius: 50%; display: grid; place-items: center; background: color-mix(in srgb, #000 55%, transparent); color: #fff; }
 
-/* The external link card: compact, the whole card is the link. */
+/* The external link card, the whole card is the link (#210). Compact: thumbnail
+   beside domain and title. Large (the post's only attachment): the page's picture
+   across the top, held to the card's hero cap so the solver can step it down. */
 .bp-linkcard {
+    position: relative; z-index: 1;
     display: flex; align-items: stretch; min-width: 0; min-height: 64px;
     border: 1px solid var(--rule); border-radius: 12px; overflow: hidden;
     color: inherit; text-decoration: none; background: var(--paper);
 }
-.bp-link-thumb { flex: 0 0 auto; width: 76px; align-self: stretch; min-height: 64px; object-fit: cover; background: var(--paper-3); border-right: 1px solid var(--hair); }
+.bp-link-thumb, .bp-shared-thumb { flex: 0 0 auto; width: 76px; align-self: stretch; min-height: 64px; object-fit: cover; background: var(--paper-3); border-right: 1px solid var(--hair); }
+.bp-shared-thumb { width: 64px; }
 .bp-link-text { flex: 1; min-width: 0; display: flex; flex-direction: column; justify-content: center; gap: 2px; padding: 8px 12px; font-family: var(--grot, system-ui, sans-serif); }
 .bp-link-title { font-size: 14px; font-weight: 600; line-height: 1.3; color: var(--ink); display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
 .bp-link-desc { font-size: 13px; line-height: 1.35; color: var(--ink-soft); display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
 .bp-link-domain { font-size: 12px; line-height: 1.3; color: var(--ink-mute); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .bp-full .bp-link-desc { -webkit-line-clamp: 3; }
-.bp-full .bp-link-thumb { width: 96px; }
+.bp-full .bp-linkcard-compact .bp-link-thumb { width: 96px; }
+.bp-linkcard-large { flex-direction: column; }
+.bp-linkcard-large .bp-link-thumb { width: 100%; min-height: 0; aspect-ratio: 1.91 / 1; max-height: var(--card-hero-cap, 260px); border-right: 0; border-bottom: 1px solid var(--hair); }
+.bp-linkcard-large .bp-link-text { padding: 10px 12px 11px; }
+.bp-linkcard-large .bp-link-title { font-size: 15px; }
+.bp-full .bp-linkcard-large .bp-link-thumb { max-height: 340px; }
+/* The solver can turn a large card compact before it trims the post's text. */
+[data-solved-link="compact"] .bp-linkcard-large { flex-direction: row; }
+[data-solved-link="compact"] .bp-linkcard-large .bp-link-thumb { width: 76px; aspect-ratio: auto; min-height: 64px; max-height: none; border-bottom: 0; border-right: 1px solid var(--hair); }
+[data-solved-link="compact"] .bp-linkcard-large .bp-link-desc { display: none; }
 
-/* A quoted post, inset. */
-.bp-quote { display: flex; flex-direction: column; gap: 4px; min-width: 0; padding: 9px 12px; border: 1px solid var(--rule); border-radius: 12px; color: inherit; text-decoration: none; }
-.bp-quote-head { display: flex; align-items: center; gap: 6px; min-width: 0; font-family: var(--grot, system-ui, sans-serif); }
-.bp-quote-head .bp-name { font-size: 13px; }
-.bp-quote-head .bp-when { font-size: 12px; color: var(--ink-mute); white-space: nowrap; }
-.bp-quote-text { font-family: var(--reading, 'Newsreader', Georgia, serif); font-size: 15px; line-height: 1.38; white-space: pre-line; overflow-wrap: anywhere; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 4; overflow: hidden; }
+/* A quoted post, inset (#210): a smaller post inside the post. */
+.bp-quote { position: relative; display: flex; flex-direction: column; gap: 6px; min-width: 0; padding: 10px 12px; border: 1px solid var(--rule); border-radius: 12px; color: inherit; }
+.bp-quote-head { display: flex; align-items: center; gap: 6px; min-width: 0; color: inherit; text-decoration: none; font-family: var(--grot, system-ui, sans-serif); white-space: nowrap; }
+.bp-quote-head .bp-name { flex: 0 0 auto; max-width: 62%; font-size: 13px; overflow: hidden; text-overflow: ellipsis; }
+.bp-quote-head .bp-handle { flex: 0 1 auto; min-width: 0; font-size: 12px; color: var(--ink-mute); overflow: hidden; text-overflow: ellipsis; }
+.bp-quote-head .bp-when { flex: 0 0 auto; font-size: 12px; color: var(--ink-mute); }
+/* In the reader the header is the quote's link and covers the whole quote; the
+   links inside it (text links, its link card) sit above that. */
+.bp-quote-open::after { content: ""; position: absolute; inset: 0; border-radius: 12px; }
+.bp-quote .bp-link, .bp-quote .bp-video { position: relative; z-index: 1; }
+.bp-quote-text { font-family: var(--reading, 'Newsreader', Georgia, serif); font-size: 15px; line-height: 1.38; white-space: pre-line; overflow-wrap: anywhere; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: var(--card-quote-lines, 6); overflow: hidden; }
 .bp-full .bp-quote-text { -webkit-line-clamp: none; display: block; }
 .bp-quote-media { font-family: var(--grot, system-ui, sans-serif); font-size: 12px; color: var(--ink-mute); }
+.bp-quote-quoting, .bp-reply-note { display: inline-flex; align-items: center; gap: 5px; min-width: 0; font-family: var(--grot, system-ui, sans-serif); font-size: 12px; color: var(--ink-mute); }
+.bp-quote .bp-linkcard { min-height: 56px; }
+.bp-quote .bp-link-thumb { width: 64px; min-height: 56px; }
+.bp-quote .bp-video img { max-height: min(var(--card-hero-cap, 240px), 240px); }
+.bp-quote-gone { flex-direction: row; align-items: center; gap: 8px; font-family: var(--grot, system-ui, sans-serif); font-size: 13px; color: var(--ink-mute); background: var(--paper-2, transparent); }
+.bp-avatar-xs { width: 18px; height: 18px; flex: 0 0 auto; }
+.bp-avatar-xs.bp-mono { font-size: 10px; }
+
+/* A quoted post's pictures: smaller than the post's, never cropped to nothing. */
+.bp-images-quote { border-radius: 9px; }
+.bp-images-quote.bp-images-1 img { max-height: min(var(--card-hero-cap, 280px), 280px); }
+.bp-images-quote.bp-images-2 { height: min(var(--card-hero-cap, 180px), 180px, 40vw); }
+.bp-images-quote.bp-images-3, .bp-images-quote.bp-images-4 { height: min(var(--card-hero-cap, 220px), 220px, 48vw); }
+.bp-full .bp-images-quote.bp-images-1 img { max-height: 420px; object-fit: contain; }
+.bp-full .bp-images-quote.bp-images-2 { height: 40vw; max-height: 240px; }
+.bp-full .bp-images-quote.bp-images-3, .bp-full .bp-images-quote.bp-images-4 { height: 48vw; max-height: 300px; }
+/* The solver's steps for a quote: its pictures to a strip, then its text to two lines. */
+[data-solved-quote] .bp-quote .bp-images { height: 72px; grid-template-rows: 1fr; grid-template-columns: repeat(4, 72px); background: none; }
+[data-solved-quote] .bp-quote .bp-images img { height: 72px; width: 72px; max-height: none; aspect-ratio: auto !important; border-radius: 6px; grid-row: auto !important; }
+[data-solved-quote] .bp-quote .bp-video img { max-height: 72px; }
+[data-solved-quote="tight"] .bp-quote-text { -webkit-line-clamp: 2; }
+
+/* What a reply carries (#210). */
+.bp-reply-att { display: flex; flex-direction: column; gap: 6px; margin-top: 6px; }
+.bp-images-reply { border-radius: 8px; }
+.bp-images-reply.bp-images-1 img { max-height: 240px; width: auto; max-width: 100%; border-radius: 8px; }
+.bp-images-reply.bp-images-2, .bp-images-reply.bp-images-3, .bp-images-reply.bp-images-4 { height: 140px; }
+.cv-card-replies .bp-images-reply { display: flex; gap: 4px; height: 52px; border-radius: 0; }
+.cv-card-replies .bp-images-reply img { width: 52px; height: 52px; max-height: none; border-radius: 6px; aspect-ratio: auto !important; }
+.bp-reply-att .bp-video img { max-height: 220px; }
+.bp-reply-note { display: flex; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 
 /* Replies, reposts, likes: Bluesky's row, quiet and not interactive. */
 .bp-engagement { display: flex; align-items: center; gap: 28px; min-height: 36px; font-family: var(--grot, system-ui, sans-serif); font-size: 13px; color: var(--ink-mute); font-variant-numeric: tabular-nums; }
@@ -151,14 +205,6 @@
     display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden;
 }
 .bp-full .bp-title { font-size: 21px; -webkit-line-clamp: none; display: block; }
-
-/* On the card a post that is only a link: the link's title as one quiet line. */
-.bp-linkline {
-    display: flex; flex-direction: column; gap: 2px; min-width: 0; min-height: 44px; justify-content: center;
-    color: var(--ink-soft); text-decoration: none; font-family: var(--grot, system-ui, sans-serif);
-}
-.bp-linkline-title { font-size: 15px; line-height: 1.35; color: var(--bsky-link); overflow-wrap: anywhere; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; overflow: hidden; }
-.bp-linkline-domain { font-size: 12px; color: var(--ink-mute); }
 
 /* The reader's thread keeps going (#209). Below three levels replies follow
    their parent at the same indent (PostView flattens them). */

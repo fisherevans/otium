@@ -181,6 +181,8 @@ export function solveCard(vars: HTMLElement, reel: HTMLElement, card: HTMLElemen
   vars.style.removeProperty("--card-center-pad");
   vars.removeAttribute("data-solved-blurb");
   vars.removeAttribute("data-solved-conv");
+  vars.removeAttribute("data-solved-link");
+  vars.removeAttribute("data-solved-quote");
   vars.style.removeProperty("--card-post-lines");
   if (frame) frame.style.removeProperty("height");
   if (!opts.solve) return [];
@@ -269,13 +271,20 @@ export function solveCard(vars: HTMLElement, reel: HTMLElement, card: HTMLElemen
   // two (the link card and the quoted post moved to the reader). Fisher's order:
   // the replies give way first - the second, then the first - then the picture
   // steps down, and only then is the text trimmed.
+  // #210: the link card and the quoted post are back on the card, because a post
+  // often means nothing without them. They give way after the replies and the
+  // picture, and before the post's own text: a large link card turns compact,
+  // the quoted post's pictures become a strip, then its text drops to two lines.
   const knobs: [string, () => boolean][] = postEl && !frame
     ? [
         ["second reply dropped", () => trimConv("one")],
         ["replies dropped", () => trimConv("off")],
         ["hero cap 34%", () => setCap(0.34)],
         ["hero cap 26%", () => setCap(0.26)],
+        ["link card compact", () => solveAttr("data-solved-link", "compact", ".bp-linkcard-large")],
+        ["quote pictures small", () => solveAttr("data-solved-quote", "small", ".bp-quote .bp-images, .bp-quote .bp-video")],
         ["hero cap 18%", () => setCap(0.18)],
+        ["quote text 2 lines", () => solveAttr("data-solved-quote", "tight", ".bp-quote-text")],
         ["post trimmed", () => trimPost()],
       ]
     : frame
@@ -317,6 +326,11 @@ export function solveCard(vars: HTMLElement, reel: HTMLElement, card: HTMLElemen
     vars.setAttribute("data-solved-conv", to);
     return true;
   }
+  function solveAttr(attr: string, to: string, needs: string) {
+    if (vars.getAttribute(attr) === to || !card.querySelector(needs)) return false;
+    vars.setAttribute(attr, to);
+    return true;
+  }
   function trimPost() {
     if (!postEl || vars.style.getPropertyValue("--card-post-lines")) return false;
     const over = contentHeight(card) - budget;
@@ -353,6 +367,25 @@ export function solveCard(vars: HTMLElement, reel: HTMLElement, card: HTMLElemen
     const next = knobs.find(([, fn]) => fn());
     if (!next) break;
     gaveUp.push(next[0]);
+  }
+
+  // #210: the knobs only move forward, so a late step that frees a lot of room
+  // (a large link card turning compact) can leave space the replies gave up
+  // earlier would fit in. Give them back one at a time while they still fit.
+  if (postEl && !frame && !vars.style.getPropertyValue("--card-post-lines")) {
+    for (const back of ["one", ""] as const) {
+      const now = vars.getAttribute("data-solved-conv");
+      if (!now || (back === "one" && now !== "off") || (back === "" && now !== "one")) continue;
+      if (back) vars.setAttribute("data-solved-conv", back);
+      else vars.removeAttribute("data-solved-conv");
+      apply();
+      if (contentHeight(card) > budget) {
+        vars.setAttribute("data-solved-conv", now);
+        apply();
+        break;
+      }
+      gaveUp.push(back ? "one reply back" : "replies back");
+    }
   }
 
   // Drive the media to the requested clearance. Everything above works in

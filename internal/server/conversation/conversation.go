@@ -55,12 +55,18 @@ type Comment struct {
 	Text      string `json:"text"`
 	// Segments is Text with its links (#207), when it has any: concatenated, the
 	// segments' text is Text. Bluesky only.
-	Segments    []richtext.Segment `json:"segments,omitempty"`
-	URL         string             `json:"url,omitempty"`
-	Likes       int                `json:"likes"`
-	Replies     int                `json:"replies"`
-	Media       string             `json:"media,omitempty"` // image | video | link: something the text does not show
-	PublishedAt time.Time          `json:"published_at"`
+	Segments []richtext.Segment `json:"segments,omitempty"`
+	URL      string             `json:"url,omitempty"`
+	Likes    int                `json:"likes"`
+	Replies  int                `json:"replies"`
+	Media    string             `json:"media,omitempty"` // image | video | link: something the text does not show
+	// What a Bluesky reply or quote carries (#210), drawn small under its text:
+	// its pictures, link card, video poster and the post it quotes.
+	Images      []richtext.Image `json:"images,omitempty"`
+	Link        *richtext.Link   `json:"link,omitempty"`
+	Video       *richtext.Video  `json:"video,omitempty"`
+	Quote       *richtext.Quote  `json:"quote,omitempty"`
+	PublishedAt time.Time        `json:"published_at"`
 	// Children are the replies to this reply (#207), most-liked first, as deep as
 	// the platform gave them. Bluesky only.
 	Children []Comment `json:"children,omitempty"`

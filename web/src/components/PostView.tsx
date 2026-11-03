@@ -1,6 +1,6 @@
 import { Fragment, useEffect, useRef, useState, type ReactNode, type SyntheticEvent } from "react";
-import { ChevronRight, ExternalLink, Heart, MessageCircle, Play, Repeat2 } from "lucide-react";
-import type { Conversation, ConversationComment, ConversationPerson, Item, PostAuthor, PostBody, PostSegment } from "@/api/client";
+import { ChevronRight, ExternalLink, Heart, MessageCircle, Play, Quote as QuoteIcon, Repeat2 } from "lucide-react";
+import type { Conversation, ConversationComment, ConversationPerson, Item, PostAuthor, PostBody, PostImage, PostLink, PostQuote, PostSegment, PostVideo } from "@/api/client";
 import { compactCount, moreLabel, platformName, useConversationPages } from "@/lib/conversation";
 import { fmtDate, relTime } from "@/lib/format";
 import { PlatformMark } from "./PlatformMark";
@@ -18,8 +18,11 @@ import "./post.css";
 // `.card-post` is the text it trims last.
 //
 // #209: the card is the post's text, its picture, its counts and a reply or two.
-// The link card and the quoted post are the reader's; on the card a post that is
-// only a link shows the link's title as one quiet line. Short Substack and Medium
+// #210 put the link card and the quoted post back on the card: a post that says
+// "see these are amazing" means nothing without what it quotes, and most news
+// accounts post a line over a link. A quoted post is drawn the way embeds and
+// screenshots draw one - inset, with its author, handle, time, text and its own
+// pictures, link card or video - and one that cannot be shown says so. Short Substack and Medium
 // posts (classified on the server) are drawn by the same component, with their
 // platform's mark, their publication under the author, and their title above the
 // text. Medium has no counts, so no counts row.
@@ -49,7 +52,7 @@ export function RichText({ segments, text }: { segments?: PostSegment[]; text?: 
   );
 }
 
-function Avatar({ author, size }: { author: PostAuthor; size: "lg" | "sm" }) {
+function Avatar({ author, size }: { author: PostAuthor; size: "lg" | "sm" | "xs" }) {
   const [broken, setBroken] = useState(false);
   if (author.avatar && !broken) {
     return <img className={`bp-avatar bp-avatar-${size}`} src={author.avatar} alt="" loading="lazy" referrerPolicy="no-referrer" onError={() => setBroken(true)} />;
@@ -102,42 +105,95 @@ function PostHeader({ author, publishedAt, full, onAuthor, platform, context }: 
   );
 }
 
-function Images({ images }: { images: NonNullable<PostBody["images"]> }) {
+/** Pictures: the post's own (`post`), a quoted post's (`quote`, smaller), or a
+ *  reply's (`reply`: a strip of thumbnails on the card, a small grid in the reader). */
+function Images({ images, variant = "post" }: { images: PostImage[]; variant?: "post" | "quote" | "reply" }) {
   const shown = images.slice(0, 4);
   return (
-    <div className={`bp-images bp-images-${shown.length}`}>
+    <div className={`bp-images bp-images-${shown.length} bp-images-${variant}`}>
       {shown.map((im, i) => (
-        <img key={i} src={im.full || im.thumb} alt={im.alt ?? ""} loading="lazy" referrerPolicy="no-referrer"
+        <img key={i} src={variant === "post" ? im.full || im.thumb : im.thumb || im.full} alt={im.alt ?? ""} loading="lazy" referrerPolicy="no-referrer"
           style={shown.length === 1 && im.aspect ? { aspectRatio: String(im.aspect) } : undefined} />
       ))}
     </div>
   );
 }
 
-/** The external link card, compact like Bluesky's: picture, title, description, domain. */
-function LinkCard({ link }: { link: NonNullable<PostBody["link"]> }) {
+/**
+ * The external link card. `large` (the post's only attachment) is Bluesky's and
+ * X's big card: the page's picture across the top, then title, description and
+ * domain. `compact` (beside pictures, inside a quote, under a reply) is a thumbnail
+ * beside the title and domain. The session solver can turn a large card compact.
+ */
+function LinkCard({ link, size, full }: { link: PostLink; size: "large" | "compact"; full: boolean }) {
   const [broken, setBroken] = useState(false);
+  const thumb = link.thumb && !broken;
   return (
-    <a className="bp-linkcard" href={link.uri} {...linkProps}>
-      {link.thumb && !broken && (
+    <a className={`bp-linkcard bp-linkcard-${size} ${thumb ? "" : "bp-linkcard-nothumb"}`} href={link.uri} {...linkProps}>
+      {thumb && (
         <img className="bp-link-thumb" src={link.thumb} alt="" loading="lazy" referrerPolicy="no-referrer" onError={() => setBroken(true)} />
       )}
       <span className="bp-link-text">
-        {link.title && <span className="bp-link-title">{link.title}</span>}
-        {link.description && <span className="bp-link-desc">{link.description}</span>}
         <span className="bp-link-domain">{link.domain || link.uri}</span>
+        {link.title && <span className="bp-link-title">{link.title}</span>}
+        {link.description && (full || size === "large") && <span className="bp-link-desc">{link.description}</span>}
       </span>
     </a>
   );
 }
 
-function VideoPoster({ video, url }: { video: NonNullable<PostBody["video"]>; url?: string }) {
+/** Whether this browser plays an HLS playlist in a <video> (Safari, iOS). */
+function playsHLS(): boolean {
+  if (typeof document === "undefined") return false;
+  return document.createElement("video").canPlayType("application/vnd.apple.mpegurl") !== "";
+}
+
+/**
+ * A post's video (#210). The poster with a play button; a tap plays it right
+ * there, with the platform's own controls, where the browser plays HLS (Safari
+ * on iPhone does). Elsewhere, or with no playlist, the tap opens the post. It
+ * pauses when it scrolls out of view, and never starts on its own.
+ */
+function VideoPoster({ video, url }: { video: PostVideo; url?: string }) {
+  const [playing, setPlaying] = useState(false);
+  // The poster's height when tapped: the player takes the same box, so the card
+  // the solver laid out does not move.
+  const [height, setHeight] = useState<number | undefined>();
+  const ref = useRef<HTMLVideoElement | null>(null);
+  const inline = !!video.playlist && playsHLS();
+  const box = video.aspect ? { aspectRatio: String(video.aspect) } : undefined;
+
+  useEffect(() => {
+    const el = ref.current;
+    if (!playing || !el || typeof IntersectionObserver === "undefined") return;
+    const io = new IntersectionObserver((es) => {
+      if (es.some((e) => !e.isIntersecting)) el.pause();
+    }, { threshold: 0.25 });
+    io.observe(el);
+    return () => io.disconnect();
+  }, [playing]);
+
+  if (playing && video.playlist) {
+    return (
+      <div className="bp-video bp-video-playing" style={height ? { height } : box} onClick={stop} onPointerDown={stop} onPointerUp={stop}>
+        <video ref={ref} src={video.playlist} poster={video.thumb} controls playsInline autoPlay preload="auto" />
+      </div>
+    );
+  }
   const body = (
     <>
       {video.thumb ? <img src={video.thumb} alt="Video" loading="lazy" referrerPolicy="no-referrer" /> : <span className="bp-video-blank" />}
       <span className="bp-play" aria-hidden><Play size={20} strokeWidth={2} /></span>
     </>
   );
+  if (inline) {
+    return (
+      <button type="button" className="bp-video" aria-label="Play video" onPointerDown={stop} onPointerUp={stop}
+        onClick={(e) => { e.stopPropagation(); setHeight(e.currentTarget.offsetHeight || undefined); setPlaying(true); }}>
+        {body}
+      </button>
+    );
+  }
   return url ? (
     <a className="bp-video" href={url} aria-label="Watch on Bluesky" {...linkProps}>{body}</a>
   ) : (
@@ -149,25 +205,82 @@ function mediaWord(m?: string) {
   return m === "image" ? "Image" : m === "video" ? "Video" : m === "link" ? "Link" : "";
 }
 
-function QuoteCard({ quote }: { quote: NonNullable<PostBody["quote"]> }) {
-  const inner = (
+/** A quoted post's pictures; one stored before #210 has only its first thumbnail. */
+function quoteImages(q: PostQuote): PostImage[] | undefined {
+  if (q.images?.length) return q.images;
+  return q.media === "image" && q.thumb ? [{ thumb: q.thumb }] : undefined;
+}
+
+const sharedWord: Record<string, string> = { feed: "Feed", list: "List", "starter pack": "Starter pack" };
+
+/**
+ * What a post quotes, inset (#210). A quoted post shows its author (name, handle,
+ * time), its text, and its own pictures, video or link card, smaller than the
+ * post's; a quote inside it is named on one line, as Bluesky does. A post that
+ * cannot be shown says why. A shared feed, list or starter pack is a small card.
+ *
+ * In the reader the whole quote opens the quoted post: its header is the link and
+ * stretches over the quote (links inside it sit above). On the session card a tap
+ * on the quote is a tap on the card, which opens the reader.
+ */
+function QuoteCard({ quote, full }: { quote: PostQuote; full: boolean }) {
+  if (quote.kind === "unavailable") {
+    return (
+      <div className="bp-quote bp-quote-gone">
+        <QuoteIcon size={14} strokeWidth={1.8} aria-hidden />
+        <span>{quote.notice || "The quoted post isn't available"}</span>
+      </div>
+    );
+  }
+  if (quote.kind) {
+    const by = quote.author.name ? `${sharedWord[quote.kind] ?? "Shared"} by ${quote.author.name}` : sharedWord[quote.kind] ?? "";
+    const inner = (
+      <>
+        {quote.thumb && <img className="bp-shared-thumb" src={quote.thumb} alt="" loading="lazy" referrerPolicy="no-referrer" />}
+        <span className="bp-link-text">
+          <span className="bp-link-domain">{by}</span>
+          <span className="bp-link-title">{quote.title || sharedWord[quote.kind]}</span>
+          {quote.description && full && <span className="bp-link-desc">{quote.description}</span>}
+        </span>
+      </>
+    );
+    return quote.url ? (
+      <a className="bp-linkcard bp-linkcard-compact bp-shared" href={quote.url} {...linkProps}>{inner}</a>
+    ) : (
+      <div className="bp-linkcard bp-linkcard-compact bp-shared">{inner}</div>
+    );
+  }
+  const name = quote.author.name || quote.author.handle || "";
+  const head = (
     <>
-      <span className="bp-quote-head">
-        <Avatar author={quote.author} size="sm" />
-        <span className="bp-name">{quote.author.name}</span>
-        {quote.published_at && <span className="bp-when">{relTime(quote.published_at)}</span>}
-      </span>
-      <span className="bp-quote-text"><RichText segments={quote.segments} /></span>
-      {quote.media && <span className="bp-quote-media">{mediaWord(quote.media)}</span>}
+      <Avatar author={quote.author} size="xs" />
+      <span className="bp-name">{name}</span>
+      {quote.author.handle && quote.author.handle !== name && <span className="bp-handle">@{quote.author.handle}</span>}
+      {quote.published_at && <span className="bp-when"><span aria-hidden>· </span>{relTime(quote.published_at)}</span>}
     </>
   );
-  // A link inside a link is invalid markup, so a quote with links in its text is
-  // not itself a link; "Open" covers it in the reader.
-  const nested = quote.segments.some((s) => s.href);
-  return quote.url && !nested ? (
-    <a className="bp-quote" href={quote.url} {...linkProps}>{inner}</a>
-  ) : (
-    <div className="bp-quote">{inner}</div>
+  const images = quoteImages(quote);
+  const text = quote.segments.map((s) => s.text).join("").trim();
+  const legacy = !images && !quote.video && !quote.link ? mediaWord(quote.media) : "";
+  return (
+    <div className="bp-quote" aria-label={`Quoting ${name}`}>
+      {full && quote.url ? (
+        <a className="bp-quote-head bp-quote-open" href={quote.url} aria-label={`${name}'s post, on Bluesky`} {...linkProps}>{head}</a>
+      ) : (
+        <span className="bp-quote-head">{head}</span>
+      )}
+      {text && <span className="bp-quote-text"><RichText segments={trimSegments(quote.segments)} /></span>}
+      {images && <Images images={images} variant="quote" />}
+      {quote.video && <VideoPoster video={quote.video} url={full ? quote.url : undefined} />}
+      {quote.link && <LinkCard link={quote.link} size="compact" full={full} />}
+      {legacy && <span className="bp-quote-media">{legacy}</span>}
+      {quote.quoting && (
+        <span className="bp-quote-quoting">
+          <QuoteIcon size={12} strokeWidth={2} aria-hidden />
+          Quoting {quote.quoting}
+        </span>
+      )}
+    </div>
   );
 }
 
@@ -189,10 +302,11 @@ export function EngagementRow({ replies, reposts, likes }: { replies: number; re
 }
 
 /**
- * The post itself, in its card. `full` is the reader: the whole text, full date,
- * the link card and the quoted post. On the session card (#209) a post is its
- * text, its picture and its counts; a post that is only a link shows the link's
- * title as a quiet line. `counts` null means the platform has none (Medium).
+ * The post itself, in its card. `full` is the reader: the whole text, the full
+ * date and the link card's description. Both draw what is attached, in Bluesky's
+ * order: pictures or video, the link card, then the quoted post (#210). The link
+ * card is large when it is all the post carries. `counts` null means the platform
+ * has none (Medium).
  */
 export function PostCard({
   body,
@@ -216,22 +330,16 @@ export function PostCard({
   context?: string;
 }) {
   const text = body.segments.map((s) => s.text).join("").trim();
-  const linkLine = !full && !text && !body.images?.length && !body.video && body.link;
+  const linkSize = !body.images?.length && !body.video && !body.quote ? "large" : "compact";
   return (
     <article className={`bsky-post bp-${platform} ${full ? "bp-full" : ""}`} aria-label={`Post by ${body.author.name}`}>
       <PostHeader author={body.author} publishedAt={publishedAt} full={full} onAuthor={onAuthor} platform={platform} context={context} />
       {body.title && <h3 className="bp-title">{body.title}</h3>}
       {text && <p className="card-post bp-text"><RichText segments={trimSegments(body.segments)} /></p>}
-      {linkLine && body.link && (
-        <a className="bp-linkline" href={body.link.uri} {...linkProps}>
-          <span className="bp-linkline-title">{body.link.title || body.link.domain || body.link.uri}</span>
-          {body.link.title && body.link.domain && <span className="bp-linkline-domain">{body.link.domain}</span>}
-        </a>
-      )}
       {body.images?.length ? <Images images={body.images} /> : null}
       {body.video && <VideoPoster video={body.video} url={url} />}
-      {full && body.link && <LinkCard link={body.link} />}
-      {full && body.quote && <QuoteCard quote={body.quote} />}
+      {body.link && <LinkCard link={body.link} size={linkSize} full={full} />}
+      {body.quote && <QuoteCard quote={body.quote} full={full} />}
       {counts && <EngagementRow {...counts} />}
     </article>
   );
@@ -250,6 +358,35 @@ function ReplyText({ c }: { c: ConversationComment }) {
   return <RichText segments={c.segments} text={c.text} />;
 }
 
+/**
+ * What a reply carries (#210), under its text. In the reader: its pictures as a
+ * small grid, its video poster, a compact link card and the post it quotes. On the
+ * card, where a reply is a line or two: a strip of thumbnails, and the link or the
+ * quoted post named on one line.
+ */
+function ReplyAttachments({ c, full }: { c: ConversationComment; full: boolean }) {
+  if (full) {
+    return (
+      <div className="bp-reply-att">
+        {c.images?.length ? <Images images={c.images} variant="reply" /> : null}
+        {c.video && <VideoPoster video={c.video} url={c.url} />}
+        {c.link && <LinkCard link={c.link} size="compact" full={false} />}
+        {c.quote && <QuoteCard quote={c.quote} full />}
+      </div>
+    );
+  }
+  const pics = c.images?.length ? c.images : c.video?.thumb ? [{ thumb: c.video.thumb }] : [];
+  const note = c.quote
+    ? c.quote.kind === "unavailable" ? "Quoting a post that isn't available" : `Quoting ${c.quote.kind ? c.quote.title || c.quote.kind : c.quote.author.name}`
+    : c.link ? c.link.title || c.link.domain || "" : "";
+  return (
+    <div className="bp-reply-att">
+      {pics.length > 0 && <Images images={pics} variant="reply" />}
+      {note && <span className="bp-reply-note">{c.quote ? <QuoteIcon size={12} strokeWidth={2} aria-hidden /> : null}{note}</span>}
+    </div>
+  );
+}
+
 /** What the reader's thread needs to load the replies under a reply (#209). */
 interface Expander {
   expand: (id: string) => void;
@@ -260,7 +397,8 @@ interface Expander {
 /** One reply in the thread; `depth` > 0 nests the replies to it (reader). */
 function ThreadReply({ c, depth, full, more, level = 0 }: { c: ConversationComment; depth: number; full: boolean; more?: Expander; level?: number }) {
   const author: PostAuthor = { name: c.author, avatar: c.avatar_url, handle: c.handle };
-  const media = mediaWord(c.media);
+  const attached = !!(c.images?.length || c.video || c.link || c.quote);
+  const media = attached ? "" : mediaWord(c.media);
   const where = more ? platformName(more.platform) : "Bluesky";
   const hidden = c.more_replies ?? 0;
   const canExpand = !!(more && c.id && hidden > 0);
@@ -291,6 +429,7 @@ function ThreadReply({ c, depth, full, more, level = 0 }: { c: ConversationComme
           )}
         </div>
         {c.text && <p className="cv-text"><ReplyText c={c} /></p>}
+        {attached && <ReplyAttachments c={c} full={full} />}
         {(media || (full && c.replies > 0 && !kids.length && !canExpand)) && (
           <div className="cv-foot">
             {media && <span>{media}</span>}

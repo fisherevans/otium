@@ -184,15 +184,35 @@ type Link struct {
 type Video struct {
 	Thumb  string  `json:"thumb,omitempty"`
 	Aspect float64 `json:"aspect,omitempty"`
+	// Playlist is the video's HLS playlist (#210), played in place where the
+	// browser plays HLS (Safari on iPhone does natively).
+	Playlist string `json:"playlist,omitempty"`
 }
 
-// Quote is a post this post quotes, shown inset.
+// Quote is what a post quotes, shown inset (#210): usually another post, with
+// its author, text and its own pictures, video poster or link card, the way an
+// embedded or screenshotted post shows what it quotes. Kind says otherwise:
+//
+//   - ""            a post
+//   - "unavailable" a post that cannot be shown; Notice says why
+//   - "feed", "list", "starter pack": a shared Bluesky feed, list or starter
+//     pack, with its Title, Description and creator as Author
 type Quote struct {
+	Kind        string    `json:"kind,omitempty"`
 	Author      Author    `json:"author"`
 	Segments    []Segment `json:"segments"`
 	URL         string    `json:"url,omitempty"`
 	PublishedAt string    `json:"published_at,omitempty"`
-	// Media names what the quoted post carries that its text does not show.
+	Images      []Image   `json:"images,omitempty"`
+	Link        *Link     `json:"link,omitempty"`
+	Video       *Video    `json:"video,omitempty"`
+	// Quoting names what the quoted post quotes in turn; it is not drawn.
+	Quoting     string `json:"quoting,omitempty"`
+	Notice      string `json:"notice,omitempty"`
+	Title       string `json:"title,omitempty"`
+	Description string `json:"description,omitempty"`
+	// Media names the quoted post's first attachment, and Thumb its picture, for
+	// surfaces that show one line (and posts stored before #210).
 	Media string `json:"media,omitempty"` // image | video | link
 	Thumb string `json:"thumb,omitempty"`
 }

@@ -170,15 +170,42 @@ func TestBskyPost(t *testing.T) {
 					t.Fatalf("quote segments = %+v", q.Segments)
 				}
 			}},
-		{"blocked quote is not a quote", `{"$type":"app.bsky.embed.record#view","record":{"$type":"app.bsky.embed.record#viewBlocked","uri":"at://x"}}`,
+		{"blocked quote says so", `{"$type":"app.bsky.embed.record#view","record":{"$type":"app.bsky.embed.record#viewBlocked","uri":"at://x"}}`,
 			func(t *testing.T, p *Post) {
-				if p.Quote != nil {
+				if p.Quote == nil || p.Quote.Kind != "unavailable" || p.Quote.Notice == "" {
 					t.Fatalf("quote = %+v", p.Quote)
+				}
+			}},
+		{"quoted post keeps its pictures", `{"$type":"app.bsky.embed.record#view","record":{"$type":"app.bsky.embed.record#viewRecord","uri":"at://did:plc:l/app.bsky.feed.post/3m",
+			  "author":{"did":"did:plc:l","handle":"lucas.test","displayName":"Lucas"},
+			  "value":{"text":"Shout-out to Michigan","createdAt":"2026-11-03T20:09:17Z"},
+			  "embeds":[{"$type":"app.bsky.embed.images#view","images":[{"thumb":"https://t/s","fullsize":"https://f/s","alt":"stickers","aspectRatio":{"width":3000,"height":4000}}]}]}}`,
+			func(t *testing.T, p *Post) {
+				q := p.Quote
+				if q == nil || q.Kind != "" || q.Author.Handle != "lucas.test" || len(q.Images) != 1 || q.Images[0].Alt != "stickers" || q.Images[0].Aspect != 0.75 || q.Media != "image" {
+					t.Fatalf("quote = %+v", q)
+				}
+			}},
+		{"a quote inside a quote is named", `{"$type":"app.bsky.embed.record#view","record":{"$type":"app.bsky.embed.record#viewRecord","uri":"at://did:plc:q/app.bsky.feed.post/3q",
+			  "author":{"did":"did:plc:q","handle":"q.test","displayName":"Quinn"},"value":{"text":"this"},
+			  "embeds":[{"$type":"app.bsky.embed.record#view","record":{"$type":"app.bsky.embed.record#viewRecord","uri":"at://did:plc:r/app.bsky.feed.post/3r",
+			    "author":{"did":"did:plc:r","handle":"r.test","displayName":"Rae"},"value":{"text":"original"}}}]}}`,
+			func(t *testing.T, p *Post) {
+				if p.Quote == nil || p.Quote.Quoting != "Rae" {
+					t.Fatalf("quote = %+v", p.Quote)
+				}
+			}},
+		{"shared list", `{"$type":"app.bsky.embed.record#view","record":{"$type":"app.bsky.graph.defs#listView","uri":"at://did:plc:c/app.bsky.graph.list/3l",
+			  "name":"Reporters","description":"People who report","creator":{"did":"did:plc:c","handle":"c.test","displayName":"Cat"}}}`,
+			func(t *testing.T, p *Post) {
+				q := p.Quote
+				if q == nil || q.Kind != "list" || q.Title != "Reporters" || q.Author.Name != "Cat" || q.URL != "https://bsky.app/profile/c.test/lists/3l" {
+					t.Fatalf("quote = %+v", q)
 				}
 			}},
 		{"video", `{"$type":"app.bsky.embed.video#view","playlist":"https://v/p.m3u8","thumbnail":"https://v/t.jpg","aspectRatio":{"width":9,"height":16}}`,
 			func(t *testing.T, p *Post) {
-				if p.Video == nil || p.Video.Thumb != "https://v/t.jpg" || p.Picture() != "https://v/t.jpg" {
+				if p.Video == nil || p.Video.Thumb != "https://v/t.jpg" || p.Video.Playlist != "https://v/p.m3u8" || p.Picture() != "https://v/t.jpg" {
 					t.Fatalf("video = %+v", p.Video)
 				}
 			}},
