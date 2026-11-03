@@ -38,7 +38,8 @@ by side, three or four in a grid, read from the top when capped); a compact link
 post inset; then replies, reposts and likes. Its top replies hang off it on a thread
 line, with "N more replies" into the reader. The solver's give order for a post is now:
 picture steps, second reply, picture to 18%, both replies, the link card's description,
-and only then the text. The primary action reads "View post".
+a quoted post down to two lines, and only then the text (a quoted post's text goes
+entirely as the very last resort, which a 320px quote post needed). The primary action reads "View post".
 
 **The reader.** The same post card at the top, with its engagement row directly under it,
 then every reply threaded (replies to replies indented on a line), then quotes, then

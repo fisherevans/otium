@@ -182,6 +182,7 @@ export function solveCard(vars: HTMLElement, reel: HTMLElement, card: HTMLElemen
   vars.removeAttribute("data-solved-blurb");
   vars.removeAttribute("data-solved-conv");
   vars.removeAttribute("data-solved-linkdesc");
+  vars.removeAttribute("data-solved-quote");
   vars.style.removeProperty("--card-post-lines");
   if (frame) frame.style.removeProperty("height");
   if (!opts.solve) return [];
@@ -262,8 +263,8 @@ export function solveCard(vars: HTMLElement, reel: HTMLElement, card: HTMLElemen
   // picture steps down, the replies go - and only then is the text trimmed, to
   // exactly what fits. Its size never steps: a post is read, not scanned.
   // #207: a post is drawn with its thread, so its picture steps all the way down
-  // before the last reply goes; then the link card's description, and only then
-  // the text, which is what the post actually says.
+  // before the last reply goes; then the link card's description and a quoted
+  // post's text, and only then the post's own text, which is what it says.
   const postEl = card.querySelector<HTMLElement>(".card-post");
   const knobs: [string, () => boolean][] = postEl && !frame
     ? [
@@ -273,7 +274,9 @@ export function solveCard(vars: HTMLElement, reel: HTMLElement, card: HTMLElemen
         ["hero cap 18%", () => setCap(0.18)],
         ["replies dropped", () => trimConv("off")],
         ["link description dropped", () => dropLinkDesc()],
+        ["quote to 2 lines", () => trimQuote("short")],
         ["post trimmed", () => trimPost()],
+        ["quote text dropped", () => trimQuote("off")],
       ]
     : frame
     ? [
@@ -325,6 +328,12 @@ export function solveCard(vars: HTMLElement, reel: HTMLElement, card: HTMLElemen
   function dropLinkDesc() {
     if (!card.querySelector(".bp-link-desc") || vars.getAttribute("data-solved-linkdesc") === "off") return false;
     vars.setAttribute("data-solved-linkdesc", "off");
+    return true;
+  }
+  function trimQuote(to: "short" | "off") {
+    const now = vars.getAttribute("data-solved-quote");
+    if (!card.querySelector(".bp-quote-text") || now === to || now === "off") return false;
+    vars.setAttribute("data-solved-quote", to);
     return true;
   }
   function dropBlurb() {

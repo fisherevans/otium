@@ -138,3 +138,7 @@
 .bp-reply-open { min-width: 44px; min-height: 36px; margin: -10px -12px -10px 0; flex: 0 0 auto; }
 .bp-reply .cv-head .cv-likes + .bp-reply-open { margin-left: 0; }
 .bp-reply .cv-head > .bp-reply-open:not(.cv-likes + .bp-reply-open) { margin-left: auto; }
+
+/* A quoted post shortens, then loses its text, after the link description. */
+[data-solved-quote="short"] .bp-quote-text { -webkit-line-clamp: 2; }
+[data-solved-quote="off"] .bp-quote-text { display: none; }
