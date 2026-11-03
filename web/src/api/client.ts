@@ -542,6 +542,8 @@ export interface Suggestion {
   opened?: number;
 }
 
+let inflightCurrent: Promise<SessionResponse | undefined> | null = null;
+
 export const api = {
   me: () => req<Me>("GET", "/users/me"),
 
@@ -644,7 +646,12 @@ export const api = {
   // updateSession advances the cursor or ends it.
   createSession: (durationMin: number, themes: string[], sections: string[] = [], contentTypes?: SessionContentType[], mix?: SessionMix) =>
     req<SessionResponse>("POST", "/sessions", { duration_min: durationMin, themes, sections, ...(mix ? { mix } : contentTypes ? { content_types: contentTypes } : {}) }),
-  currentSession: () => req<SessionResponse | undefined>("GET", "/sessions/current"),
+  // App and Home both ask on load; callers made at the same moment share one
+  // request (#204). Nothing is cached once it settles.
+  currentSession: () => {
+    if (!inflightCurrent) inflightCurrent = req<SessionResponse | undefined>("GET", "/sessions/current").finally(() => { inflightCurrent = null; });
+    return inflightCurrent;
+  },
   updateSession: (id: string, patch: { cursor?: number; status?: "ended"; extend_min?: number }) =>
     req<{ ok: boolean }>("PATCH", `/sessions/${id}`, patch),
   // On-demand full-text (#98): the best reader body for an item, fetched +

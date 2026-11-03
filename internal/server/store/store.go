@@ -27,7 +27,14 @@ type DB struct {
 // Open opens (creating if needed) the SQLite database at path and applies the
 // schema. path may be a file path or ":memory:" for tests.
 func Open(path string) (*DB, error) {
-	dsn := path + "?_pragma=busy_timeout(5000)&_pragma=foreign_keys(1)&_pragma=journal_mode(WAL)"
+	// cache_size(-131072) is a 128 MiB page cache (negative = KiB). The default is
+	// 2 MiB; with the database on NFS in production every cache miss is a network
+	// read, and the whole file is ~80 MB, so this keeps it in memory after the first
+	// session build (#204). One connection (below), so one cache.
+	// synchronous(NORMAL) is SQLite's recommended setting under WAL: commits no
+	// longer wait for an fsync (NFS in production), and the database cannot be
+	// corrupted - a power loss can drop only the last commits.
+	dsn := path + "?_pragma=busy_timeout(5000)&_pragma=foreign_keys(1)&_pragma=journal_mode(WAL)&_pragma=synchronous(NORMAL)&_pragma=cache_size(-131072)"
 	sdb, err := sql.Open("sqlite", dsn)
 	if err != nil {
 		return nil, fmt.Errorf("open sqlite: %w", err)
@@ -521,6 +528,13 @@ func (db *DB) Close() error { return db.sql.Close() }
 // --- users ---
 
 func (db *DB) UpsertUserByUsername(ctx context.Context, username, email string) (*User, error) {
+	// Every authenticated request lands here. Read first and write only when the
+	// user is new or their email changed: an unconditional upsert was a write
+	// transaction (and a WAL sync) on every request, serialized on the one
+	// connection, which made every API call wait on the disk (#204).
+	if u, err := db.userByUsername(ctx, username); err == nil && (email == "" || u.Email == email) {
+		return u, nil
+	}
 	_, err := db.sql.ExecContext(ctx,
 		`INSERT INTO users (username, email) VALUES (?, ?)
 		 ON CONFLICT(username) DO UPDATE SET email=excluded.email WHERE excluded.email <> ''`,
@@ -528,9 +542,13 @@ func (db *DB) UpsertUserByUsername(ctx context.Context, username, email string) 
 	if err != nil {
 		return nil, err
 	}
+	return db.userByUsername(ctx, username)
+}
+
+func (db *DB) userByUsername(ctx context.Context, username string) (*User, error) {
 	var u User
 	var created string
-	err = db.sql.QueryRowContext(ctx,
+	err := db.sql.QueryRowContext(ctx,
 		`SELECT id, username, email, name, created_at FROM users WHERE username = ?`, username).
 		Scan(&u.ID, &u.Username, &u.Email, &u.Name, &created)
 	if err != nil {
@@ -949,21 +967,26 @@ func (db *DB) SetTopicSources(ctx context.Context, userID, topicID int64, source
 
 func (db *DB) ListSources(ctx context.Context, userID int64) ([]Source, error) {
 	rows, err := db.sql.QueryContext(ctx,
-		`SELECT s.id, s.kind, s.title, s.feed_url, s.homepage_url, s.icon_url, s.weight,
+		// The per-source stats are aggregated once and joined, not computed per source:
+		// the skip-rate subquery alone re-walked the user's item_state for every source,
+		// ~0.7s of a 1.2s request on a 310-source library (#204).
+		`WITH st AS (
+		   SELECT i.source_id AS sid, COUNT(*) AS seen,
+		          SUM(CASE WHEN x.state = 'skipped' THEN 1 ELSE 0 END) AS skipped
+		   FROM item_state x JOIN items i ON i.id = x.item_id
+		   WHERE x.user_id = ? GROUP BY i.source_id)
+		 SELECT s.id, s.kind, s.title, s.feed_url, s.homepage_url, s.icon_url, s.weight,
 		        s.state, s.trial_until, s.per_session_cap, s.half_life_days, s.archive_after_days, s.archive_keywords, s.archive_categories,
 		        s.archive_keep_count, s.archive_combine, s.scoring_config, s.added_at, s.last_fetch_at, s.fetch_error,
 		        s.topic_id, f.slug,
 		        (SELECT COUNT(*) FROM items i WHERE i.source_id = s.id) AS item_count,
-		        (SELECT COUNT(*) FROM items i WHERE i.source_id = s.id
-		           AND NOT EXISTS (SELECT 1 FROM item_state st WHERE st.item_id = i.id AND st.user_id = ?)) AS unseen_count,
-		        (SELECT COALESCE(CAST(SUM(CASE WHEN st.state='skipped' THEN 1 ELSE 0 END) AS REAL)
-		           / NULLIF(COUNT(*), 0), 0)
-		         FROM item_state st JOIN items i2 ON i2.id = st.item_id
-		         WHERE i2.source_id = s.id AND st.user_id = ?) AS skip_pct,
+		        (SELECT COUNT(*) FROM items i WHERE i.source_id = s.id) - COALESCE(st.seen, 0) AS unseen_count,
+		        COALESCE(CAST(st.skipped AS REAL) / NULLIF(st.seen, 0), 0) AS skip_pct,
 		        (SELECT COUNT(*) / 30.0 FROM items i3
 		         WHERE i3.source_id = s.id AND i3.published_at >= datetime('now', '-30 days')) AS posts_per_day
 		 FROM sources s LEFT JOIN topics f ON f.id = s.topic_id
-		 WHERE s.user_id = ? ORDER BY s.title`, userID, userID, userID)
+		 LEFT JOIN st ON st.sid = s.id
+		 WHERE s.user_id = ? ORDER BY s.title`, userID, userID)
 	if err != nil {
 		return nil, err
 	}
@@ -1449,6 +1472,12 @@ func candidateCols(content, rank string) string {
 	             ` + rank + ` AS recency_rank, i.likes, i.reposts, i.replies`
 }
 
+// archiveWindowSQL resolves an item's Archive-After window in SQL, mirroring
+// session.resolveArchiveAfter; it needs s (source) and pt (its topic) in scope.
+var archiveWindowSQL = `(CASE WHEN s.archive_after_days != 0 THEN s.archive_after_days
+	       WHEN COALESCE(pt.archive_after_days, 0) != 0 THEN pt.archive_after_days
+	       ELSE ` + strconv.Itoa(GlobalArchiveAfterDays) + ` END)`
+
 const (
 	contentCol     = `i.content`
 	noContentCol   = `'' AS content`
@@ -1542,11 +1571,22 @@ func scanCandidates(rows *sql.Rows, windowDays int) ([]Candidate, error) {
 // recency_rank are resolved on narrow rows first, then only the kept rows are
 // joined back to their wide columns, so the sort never carries summaries/URLs.
 func (db *DB) Candidates(ctx context.Context, userID int64, sourceIDs []int64, sinceDays, limit int) ([]Candidate, error) {
+	// The age prefilter drops items that can never be eligible: past their source's
+	// resolved Archive-After window (source > topic > global, same as
+	// session.resolveArchiveAfter) plus a day of margin. Sources with a keep-latest-N
+	// rule or no age limit keep every unseen item, so their recency ranks are
+	// unchanged; ranks of the filtered sources are never read. The allocator still
+	// applies the exact rule - this only stops the server reading and scanning
+	// thousands of long-expired rows on every session build.
 	q := `WITH pool AS (
 	        SELECT i.id, i.published_at, ` + recencyRankCol + ` AS recency_rank
 	        FROM ` + itemsWithSource + `
+	        LEFT JOIN topics pt ON pt.id = s.topic_id
 	        WHERE s.user_id = ? AND s.state IN ('followed','trial')
-	          AND NOT EXISTS (SELECT 1 FROM item_state st WHERE st.item_id = i.id AND st.user_id = ?)`
+	          AND NOT EXISTS (SELECT 1 FROM item_state st WHERE st.item_id = i.id AND st.user_id = ?)
+	          AND (s.archive_keep_count > 0
+	               OR ` + archiveWindowSQL + ` <= 0
+	               OR i.published_at >= datetime('now', '-' || (` + archiveWindowSQL + ` + 1) || ' days'))`
 	args := []any{userID, userID}
 	if len(sourceIDs) > 0 {
 		q += ` AND s.id IN (` + placeholders(len(sourceIDs)) + `)`

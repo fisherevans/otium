@@ -37,14 +37,20 @@ export async function syncSessionPresets(accountId: number): Promise<void> {
         // agent already added on the server.
         const merged = { ...local, presets: [...local.presets, ...fromServer.filter((p) => !local.presets.some((l) => l.id === p.id))] };
         await api.putPresets(merged.presets, merged.defaultId);
-        pushed.set(accountId, presetsKey(merged));
-        synced.add(accountId);
-        storeSessionPresets(accountId, merged);
+        settle(accountId, merged);
         return;
     }
     const presets = fromServer;
     const next: SessionPresets = { ...local, presets, defaultId: presets.some((p) => p.id === server.default_id) ? server.default_id : presets[0]?.id ?? "" };
-    pushed.set(accountId, presetsKey(next));
+    settle(accountId, next);
+}
+
+// settle writes the synced list to the cache and records it as pushed in the
+// normalized form later loads produce, so an unrelated store (a session record)
+// doesn't see a different key and push the same list again.
+function settle(accountId: number, data: SessionPresets) {
+    pushed.set(accountId, presetsKey(data));
+    storeSessionPresets(accountId, data);
+    pushed.set(accountId, presetsKey(loadSessionPresets(accountId)));
     synced.add(accountId);
-    storeSessionPresets(accountId, next);
 }
