@@ -93,7 +93,7 @@
     min-height: 44px;
     flex: 0 0 auto;
 }
-.shorts-creator, .shorts-details {
+.shorts-creator, .shorts-details, .shorts-session {
     display: flex;
     align-items: center;
     gap: 8px;
@@ -110,7 +110,8 @@
 .shorts-credit-text { min-width: 0; display: flex; flex-direction: column; gap: 3px; }
 .shorts-creator-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 600; }
 .shorts-age { color: var(--ink-mute); font-size: 11px; line-height: 1.2; }
-.shorts-details { flex: 0 0 auto; padding: 0 8px; min-width: 44px; justify-content: center; } /* icon-only since #186: keep the 44px target */
+.shorts-details, .shorts-session { flex: 0 0 auto; padding: 0 8px; min-width: 44px; justify-content: center; } /* icon-only since #186: keep the 44px target */
+.shorts-session { margin-left: -8px; } /* #208: the session button leads the bar, its glyph on the bar's edge */
 
 .focus-session.afterglow-session.shorts-viewing { padding-bottom: calc(76px + env(safe-area-inset-bottom, 0px)); }
 .shorts-viewing > .context-instrument-wrap > .context-instrument { min-height: 52px; padding: 3px 8px; border-radius: 18px; }

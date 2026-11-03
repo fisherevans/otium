@@ -81,6 +81,11 @@
 :root[data-immersive=on] .topbar.session :is(.chrome-btn, .font-button) { display: none; }
 /* #206: the session's time phrase, beside the wordmark; Library and ··· on the right. */
 .topbar-status { flex: 1 1 auto; min-width: 0; margin-left: 6px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; color: var(--ink-mute); font: 13px/1.2 var(--grot, sans-serif); }
+/* #208: the phrase is the session's button (its controls open from it). Calm: the
+   same muted text, a small chevron, the 44px target, no fill. */
+button.topbar-status { flex: 0 1 auto; margin-right: auto; display: inline-flex; align-items: center; gap: 3px; min-height: 44px; padding: 0 6px; margin-left: 0; border: 0; border-radius: 8px; background: transparent; color: var(--ink-mute); cursor: pointer; }
+button.topbar-status .topbar-status-text { min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+button.topbar-status svg { flex: 0 0 auto; opacity: .8; }
 :root[data-immersive=on] .topbar.session .topbar-right { gap: 0; }
 :root[data-immersive=on] .topbar.session { position: fixed; z-index: 15; top: 0; left: 0; right: 0; background: transparent; transition: color .2s; }
 :root[data-immersive=on] .content-session { padding: 0; }
@@ -109,7 +114,7 @@
    box, so the inline height must not win here. */
 :root[data-immersive=on] :is(.stage) .snap.afterglow-card.shorts-card .shorts-player-slot .inline-media .im-frame { position: absolute; inset: var(--imm-bar) 0 0; width: auto !important; height: auto !important; max-width: none; aspect-ratio: auto; border-radius: 0; container-type: size; }
 :root[data-immersive=on] .snap.shorts-card .shorts-card-footer { position: absolute; z-index: 5; left: 0; right: 0; top: env(safe-area-inset-top, 0px); bottom: auto; height: 52px; padding: 0 6px 0 14px; color: #fff; }
-:root[data-immersive=on] .snap.shorts-card :is(.shorts-creator, .shorts-details) { color: #fff; }
+:root[data-immersive=on] .snap.shorts-card :is(.shorts-creator, .shorts-details, .shorts-session) { color: #fff; }
 :root[data-immersive=on] .snap.shorts-card .shorts-age { color: rgb(255 255 255 / .72); }
 :root[data-immersive=on] .snap.shorts-card .shorts-quiet-btn { color: rgb(255 255 255 / .6); }
 :root[data-immersive=on] .snap.shorts-card .shorts-quiet-btn[data-on=true] { color: #fff; }

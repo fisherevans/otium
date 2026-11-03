@@ -6,7 +6,7 @@
 // Shorts). Every Otium API call is mocked; only YouTube is real. Chromium runs
 // on a 390x664 touch viewport with 4x CPU throttling as a rough phone stand-in,
 // and moves between cards three ways: a touch swipe that starts on the video, a
-// touch swipe that starts below it, and Next item in the actions sheet. The app's own perf
+// touch swipe that starts below it, and Next item in the session controls. The app's own perf
 // records (window.__otiumPerf, web/src/lib/perf.ts) are the measurements; the
 // run also writes a video so the transitions can be inspected frame by frame.
 import fs from 'node:fs';
@@ -115,11 +115,11 @@ for (let r = 0; r < rounds; r++) {
     const y = footer ? footer.y + footer.height / 2 : box.y + box.height + 30;
     results.push(await transition('swipe-below', () => swipe(40, y)));
     await page.waitForTimeout(1200);
-    // #206: no Next button; Next item in the actions sheet is the button path now.
+    // #206/#208: no Next button; Next item in the session controls is the button path.
     results.push(await transition('next-item', async () => {
-        const own = page.locator('.afterglow-card:not(.away) .shorts-details');
+        const own = page.locator('.afterglow-card:not(.away) .shorts-session');
         if (await own.count()) await own.click();
-        else await page.locator('.topbar').getByRole('button', { name: 'Item and session actions', exact: true }).click();
+        else await page.locator('.topbar').getByRole('button', { name: /^Session: .*, open session controls$/ }).click();
         await page.getByRole('button', { name: 'Next item', exact: true }).click();
     }));
     await page.waitForTimeout(1200);

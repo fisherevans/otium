@@ -199,8 +199,8 @@ function record(where, m) {
   // compact footer checked here nor an ordinary action row.
   if (m.compact && m.fullScreenShort) { /* skip */ }
   else if (m.compact) {
-    // #206: the compact card's ··· opens item and session actions (which link to Details).
-    if (!actions.includes("Item and session actions")) problems.push(`${where}: compact card is missing its actions ···`);
+    // #206/#208: the compact card's ··· opens actions for this item (which link to Details).
+    if (!actions.includes("Actions for this item")) problems.push(`${where}: compact card is missing its actions ···`);
     if (m.mediaAspectError > 0.01) problems.push(`${where}: compact video aspect was distorted`);
     if (!m.compactChromeHidden) problems.push(`${where}: ordinary card chrome remains in compact mode`);
     if (!m.detailsReachable) problems.push(`${where}: the actions ··· is smaller than its touch target`);

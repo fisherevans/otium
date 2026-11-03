@@ -1,7 +1,7 @@
 import { forwardRef, type PointerEvent as ReactPointerEvent } from "react";
 import { ShortsMeta, ShortsQuietControls } from "./ShortsQuietControls";
 import type { ShortsBus } from "@/lib/shortsBus";
-import { Bookmark, BookOpen, Play, ExternalLink, MoreHorizontal, ChevronRight } from "lucide-react";
+import { Bookmark, BookOpen, Play, ExternalLink, MoreHorizontal, ChevronRight, Timer } from "lucide-react";
 import type { Conversation, Item, ItemRender, Selected } from "@/api/client";
 import { CardConversation, ShortsCommentsButton } from "@/components/Conversation";
 import { inlineConversation, useConversation } from "@/lib/conversation";
@@ -72,6 +72,10 @@ export interface SessionCardProps {
   onSave: (sel: Selected) => void;
   onSource: (sel: Selected) => void;
   onMenu: () => void;
+  /** #208: over a Short the top bar steps aside, so the clip's bar carries the
+   *  session button (the time phrase's job) beside the item's ···. */
+  onSessionControls?: () => void;
+  sessionStatus?: string;
   onFirstPlay?: (sel: Selected, explicit: boolean) => void;
   /** Video-first presentation applies only to short videos. */
   shortsMode?: boolean;
@@ -312,6 +316,8 @@ export const SessionCard = forwardRef<HTMLDivElement, SessionCardProps>(function
     onSave,
     onSource,
     onMenu,
+    onSessionControls,
+    sessionStatus,
     onFirstPlay,
     shortsMode = false,
     persistentShorts = false,
@@ -505,6 +511,12 @@ export const SessionCard = forwardRef<HTMLDivElement, SessionCardProps>(function
           onPointerUp={(e) => e.stopPropagation()}
           onClick={(e) => e.stopPropagation()}
         >
+          {onSessionControls && (
+            <button className="shorts-session" type="button" onClick={onSessionControls} disabled={!focused}
+              aria-label={`Session: ${sessionStatus || "in progress"}, open session controls`}>
+              <Timer size={18} aria-hidden />
+            </button>
+          )}
           <button className="shorts-creator" type="button" onClick={() => onSource(it)}>
             <SourceAvatar url={it.source_icon_url} title={it.source_title} color={it.topic?.color} />
             <span className="shorts-credit-text">
@@ -514,10 +526,10 @@ export const SessionCard = forwardRef<HTMLDivElement, SessionCardProps>(function
           </button>
           {hostsPlayer && shortsBus && <ShortsQuietControls bus={shortsBus} hint={soundHint} onHintDone={onSoundHintDone} />}
           {focused && onConversation && <ShortsCommentsButton conv={conv} onOpen={() => onConversation(it)} />}
-          {/* #206: the same ··· as the session's top bar, which steps aside over
-              a Short: item and session actions, linking to Details. */}
+          {/* #206/#208: the same ··· as the session's top bar, which steps aside
+              over a Short: actions for this Short only. */}
           <button className="shorts-details" type="button" onClick={onMenu} disabled={!focused}
-            aria-label="Item and session actions">
+            aria-label="Actions for this item">
             <MoreHorizontal size={18} aria-hidden />
           </button>
         </div>
@@ -543,7 +555,7 @@ export const SessionCard = forwardRef<HTMLDivElement, SessionCardProps>(function
             <ExternalLink size={18} strokeWidth={1.75} aria-hidden />
           </button>
           {menuPlacement === "actions" && (
-            <button className="callout-act" onClick={onMenu} aria-label="More actions">
+            <button className="callout-act" onClick={onMenu} aria-label="Actions for this item">
               <MoreHorizontal size={18} strokeWidth={1.75} aria-hidden />
             </button>
           )}

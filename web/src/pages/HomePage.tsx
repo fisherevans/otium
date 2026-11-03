@@ -11,8 +11,6 @@ import { SavePresetDialog } from "@/components/SessionPresetPrompt";
 import { contentLabel, contentTypeLabel, contentTypes, defaultMix, defaultSetup, initialPresets, isSavedSetup, loadSessionPresets, mixContentTypes, mixLabel, recordSessionSetup, repeatSuggestion, setupKey, starterPresetIds, storeSessionPresets, type SessionPreset, type SessionPresets, type SessionSetup } from "@/lib/sessionPresets";
 import { MixFormats, MixSections, MixSectionsRow } from "@/components/MixEditor";
 import "@/styles/launcher.css";
-import { useShortsMode } from "@/lib/shortsMode";
-import { ShortsModeToggle } from "@/components/ShortsModeToggle";
 import { SessionBuilding } from "@/components/SessionBuilding";
 
 export default function HomePage() {
@@ -24,7 +22,6 @@ export default function HomePage() {
     }, [search]);
     const { prefs } = usePreferences();
     const { user } = useAuth();
-    const [shortsMode, setShortsMode] = useShortsMode();
     const [custom, setCustom] = useState(false);
     const [setup, setSetup] = useState<SessionSetup>(defaultSetup);
     const [data, setData] = useState<SessionPresets>(initialPresets);
@@ -188,12 +185,10 @@ export default function HomePage() {
             <MixFormats mix={setup.mix} onChange={(mix) => setSetup({ ...setup, mix, contentTypes: mixContentTypes(mix) })}/>
             <div className="launcher-custom-actions"><MixSectionsRow mix={setup.mix} sections={sections} onOpen={() => setSheet("mix-sections")}/>
             <button className="launcher-save-link" disabled={!setup.contentTypes.length} onClick={() => setSave({ setup })}><Bookmark size={16}/>Save mix</button></div>
-            {setup.contentTypes.includes("short") && <ShortsModeToggle enabled={shortsMode} onChange={setShortsMode} />}
         </> : <>
             {durationControl}
             <label className="launcher-field">Scope<select value={setup.sections.length === 0 ? "" : setup.sections.length === 1 ? setup.sections[0] : "__multiple"} onChange={(event) => setSetup({ ...setup, sections: event.target.value ? [event.target.value] : [], excluded: [] })}><option value="">Everything</option>{sections.map((section) => <option key={section.slug} value={section.slug}>{section.name}</option>)}{setup.sections.length > 1 && <option value="__multiple">{setup.sections.length} sections</option>}</select></label>
             <fieldset className="launcher-group" aria-describedby="content-types-help"><legend>Content</legend><div className="launcher-options launcher-content-options">{contentTypes.map((type) => <button key={type} aria-pressed={setup.contentTypes.includes(type)} onClick={() => setSetup({ ...setup, contentTypes: contentTypes.filter((candidate) => candidate === type ? !setup.contentTypes.includes(type) : setup.contentTypes.includes(candidate)) })}>{contentTypeLabel[type]}</button>)}</div><p id="content-types-help" className="launcher-meta">{setup.contentTypes.length ? "Articles includes audio. Choose any combination." : "Choose at least one content type."}</p></fieldset>
-            {setup.contentTypes.includes("short") && <ShortsModeToggle enabled={shortsMode} onChange={setShortsMode} />}
             <div className="launcher-custom-actions"><button className="launcher-advanced" onClick={() => setSheet("advanced")}><SlidersHorizontal size={17}/>Topics and sections<ChevronRight size={17}/></button>
             <button className="launcher-save-link" disabled={!setup.contentTypes.length} onClick={() => setSave({ setup })}><Bookmark size={16}/>Save preset</button></div>
             <button className="launcher-advanced" onClick={startMix}><Shuffle size={17}/>Mix every format by share<ChevronRight size={17}/></button>

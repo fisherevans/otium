@@ -47,11 +47,19 @@ for (const [engine,browserType] of [['chromium',chromium],['webkit',webkit]].fil
   await page.locator('.reader-body').waitFor();await page.waitForTimeout(1100);
   await page.screenshot({path:`${shotDir}/${engine}-reader.png`});
   await page.getByRole('button',{name:'Back',exact:true}).click();await page.waitForTimeout(350);
-  await page.getByRole('button',{name:'Item and session actions',exact:true}).click();await page.getByRole('button',{name:'Next item',exact:true}).click();await page.waitForTimeout(700);
+  // #208: the ··· is this item's actions only - its rows depend on the item, never
+  // on the session - and the time phrase opens the session controls.
+  const rows=async()=>{await page.getByRole('button',{name:'Actions for this item',exact:true}).click();const sheet=page.locator('dialog[open]');await sheet.locator('.sheet-row').first().waitFor();const r=await sheet.locator('.sheet-row').allInnerTexts();await page.keyboard.press('Escape');await page.waitForFunction(()=>!document.querySelector('dialog[open]'));return r.map(t=>t.trim()).filter(t=>!t.startsWith('Go to '));};
+  const first=await rows();
+  for(const name of ['Next item','End session','Library, Saved and settings','Shorts mode'])assert.ok(!first.some(t=>t.includes(name)),`no ${name} in item actions`);
+  assert.ok(first.includes('Copy link')&&first.includes('Read in app'),'article actions');
+  assert.match(await page.getByRole('button',{name:/^Session: .*, open session controls$/}).getAttribute('aria-label'),/^Session: Session in progress, open session controls$/);
+  await page.getByRole('button',{name:/^Session: .*, open session controls$/}).click();await page.getByRole('button',{name:'Next item',exact:true}).click();await page.waitForTimeout(700);
   assert.equal(await page.locator('.afterglow-card:not(.away)').getAttribute('data-idx'),'1');
-  await page.getByRole('button',{name:'Item and session actions',exact:true}).click();await page.getByRole('button',{name:'Next item',exact:true}).click();await page.waitForTimeout(700);
+  assert.deepEqual(await rows(),first,'the same kind of item gets the same actions');
+  await page.getByRole('button',{name:/^Session: .*, open session controls$/}).click();await page.getByRole('button',{name:'Next item',exact:true}).click();await page.waitForTimeout(700);
   await page.waitForFunction(()=>document.querySelector('.afterglow-card:not(.away)')?.dataset.idx==='2');
-  await page.getByRole('button',{name:'Item and session actions',exact:true}).click();
+  await page.getByRole('button',{name:/^Session: .*, open session controls$/}).click();
   await page.getByRole('button',{name:'End session',exact:true}).click();
   await page.getByRole('heading',{name:'Session complete'}).waitFor();
   assert.equal(ended,true);
@@ -143,7 +151,7 @@ for (const [engine,browserType] of [['chromium',chromium],['webkit',webkit]].fil
   items[3].item.media_type='audio';items[3].item.url='data:audio/wav;base64,'+Buffer.concat([wav,pcm]).toString('base64');
   await page.reload();await page.locator('audio').waitFor();await page.locator('audio').evaluate(audio=>audio.play());await page.waitForTimeout(400);
   assert.ok(await page.locator('audio').evaluate(audio=>audio.currentTime>0),'real native audio playback');
-  await page.getByRole('button',{name:'Item and session actions',exact:true}).click();await page.getByRole('button',{name:'End session',exact:true}).click();
+  await page.getByRole('button',{name:/^Session: .*, open session controls$/}).click();await page.getByRole('button',{name:'End session',exact:true}).click();
   await page.getByRole('button',{name:'Review session',exact:true}).first().click();await page.getByRole('heading',{name:'Review session'}).waitFor();
   assert.match(await page.locator('.session-review-stats').innerText(),/Audio played\s+1/);
   items[3].item.media_type='article';items[3].item.url='https://example.com/article-104';

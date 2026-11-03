@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link, Route, Routes, useLocation, useNavigate } from "react-router-dom";
-import { BookOpen, Library, Bookmark, User, MoreHorizontal, ArrowLeft, ChevronRight, Play } from "lucide-react";
+import { BookOpen, Library, Bookmark, User, MoreHorizontal, ArrowLeft, ChevronRight, ChevronDown, Play } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { api } from "@/api/client";
 import { Brand } from "@/components/Brand";
@@ -50,7 +50,8 @@ function AppShell() {
   const nav = useNavigate();
   const override = useInstrumentConfig();
   const [menu, setMenu] = useState(false);
-  // #189: full-screen Shorts hide this header; their ··· menu opens this one.
+  // #189/#208: full-screen Shorts hide this header; the session controls (and
+  // through them, this menu) open from the session button in the clip bar.
   useEffect(() => {
     const open = () => setMenu(true);
     window.addEventListener("otium:app-menu", open);
@@ -71,11 +72,12 @@ function AppShell() {
   const go = (path: string) => { setMenu(false); setTypeMenu(false); nav(path, { state: { returnTo: pathname + location.search + location.hash } }); };
   const focused = pathname.startsWith("/session"); // #67: session is /session/:id, full-screen focused mode
   // #206: a session has no bottom pill. What it carried moves into this bar,
-  // published by SessionPage through the instrument context: the time phrase,
-  // and the ··· that opens the item and session actions (which link back to
-  // this app menu).
+  // published by SessionPage through the instrument context. #208: the time
+  // phrase opens the session controls (onLabel), and the ··· opens actions for
+  // the item on screen (onMenu) - two menus, each about one thing.
   const sessionStatus = focused ? override?.label || "" : "";
   const sessionMenu = focused ? override?.onMenu : undefined;
+  const sessionControls = focused ? override?.onLabel : undefined;
 
   // #152: a 401 makes the API client auto-redirect to /auth/login (which bounces
   // through Google and usually returns signed-in). So "unauthenticated" almost always
@@ -113,12 +115,19 @@ function AppShell() {
     <div className={`app ${focused ? "focused" : ""}`}>
       <header className={`topbar ${focused ? "session" : ""}`}>
         <Link to="/" aria-label="Otium home"><Brand /></Link>
-        {sessionStatus && <span className="topbar-status">{sessionStatus}</span>}
+        {sessionStatus && (sessionControls
+          ? <button className="topbar-status" onClick={sessionControls} aria-label={`Session: ${sessionStatus}, open session controls`}>
+              <span className="topbar-status-text">{sessionStatus}</span><ChevronDown size={14} aria-hidden />
+            </button>
+          : <span className="topbar-status">{sessionStatus}</span>)}
         <span className="topbar-right">
           {focused && <button className="shell-icon" onClick={() => go("/sections")} aria-label="Library"><Library size={21} /></button>}
+          {/* A live session's ··· is the item's; with no item on screen (the end of
+              the queue) it is absent, not repurposed. Loading, error and review
+              screens keep the app menu. */}
           {sessionMenu
-            ? <button className="shell-icon" onClick={sessionMenu} aria-label={override?.menuLabel || "Item and session actions"}><MoreHorizontal size={23} /></button>
-            : <button className="shell-icon" onClick={() => setMenu(true)} aria-label="App menu"><MoreHorizontal size={23} /></button>}
+            ? <button className="shell-icon" onClick={sessionMenu} aria-label={override?.menuLabel || "Actions for this item"}><MoreHorizontal size={23} /></button>
+            : !sessionControls && <button className="shell-icon" onClick={() => setMenu(true)} aria-label="App menu"><MoreHorizontal size={23} /></button>}
           <button className="font-button" onClick={() => setTypeMenu(true)} aria-label="Type and appearance">Aa</button>
         </span>
       </header>
