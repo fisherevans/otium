@@ -32,9 +32,6 @@ type bskyThreadNode struct {
 // pulling a whole pile-on.
 const threadDepth = 3
 
-// maxChildren caps the replies kept under any one reply; the rest are on Bluesky.
-const maxChildren = 6
-
 // BskyPostURL is the post's web address: https://bsky.app/profile/<handle>/post/<rkey>.
 func BskyPostURL(handle, uri string) string { return richtext.BskyPostURL(handle, uri) }
 
@@ -43,14 +40,15 @@ func (s *Service) bluesky(ctx context.Context, uri string) (*Conversation, error
 		Thread bskyThreadNode `json:"thread"`
 	}
 	var quotes struct {
-		Posts []bskyPostView `json:"posts"`
+		Posts  []bskyPostView `json:"posts"`
+		Cursor string         `json:"cursor"`
 	}
 	var qErr error
 	var wg sync.WaitGroup
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		q := url.Values{"uri": {uri}, "limit": {"25"}}
+		q := url.Values{"uri": {uri}, "limit": {strconv.Itoa(QuotesPage)}}
 		qErr = s.getJSON(ctx, s.cfg.BskyBase+"/app.bsky.feed.getQuotes?"+q.Encode(), &quotes)
 	}()
 	q := url.Values{"uri": {uri}, "depth": {strconv.Itoa(threadDepth)}, "parentHeight": {"0"}}
@@ -74,6 +72,9 @@ func (s *Service) bluesky(ctx context.Context, uri string) (*Conversation, error
 			conv.Quotes = append(conv.Quotes, bskyComment(qp))
 		}
 		mostLiked(conv.Quotes)
+		if len(quotes.Posts) >= QuotesPage {
+			conv.quotesCursor = quotes.Cursor
+		}
 	}
 	conv.Quoted = bskyQuoted(p.Embed)
 	return conv, nil
@@ -90,9 +91,10 @@ func bskyReplies(nodes []bskyThreadNode, depth int) []Comment {
 		c := bskyComment(*n.Post)
 		if depth > 1 && len(n.Replies) > 0 {
 			c.Children = bskyReplies(n.Replies, depth-1)
-			if len(c.Children) > maxChildren {
-				c.Children = c.Children[:maxChildren]
-			}
+		} else if len(n.Replies) == 0 && n.Post.ReplyCount > 0 {
+			// The thread was cut here (the depth limit sends no replies at all);
+			// More("thread", c.ID) fetches what is below.
+			c.MoreReplies = n.Post.ReplyCount
 		}
 		out = append(out, c)
 	}
@@ -103,6 +105,7 @@ func bskyReplies(nodes []bskyThreadNode, depth int) []Comment {
 func bskyComment(p bskyPostView) Comment {
 	body := richtext.BskyPost(p.Author, p.Record, p.Embed)
 	return Comment{
+		ID:          p.URI,
 		Author:      firstNonEmpty(p.Author.DisplayName, p.Author.Handle),
 		Handle:      p.Author.Handle,
 		AvatarURL:   p.Author.Avatar,

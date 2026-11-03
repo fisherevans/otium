@@ -207,6 +207,9 @@ export interface PostAuthor {
 
 export interface PostBody {
   author: PostAuthor;
+  // #209: a short Substack or Medium post keeps its own title as a line above
+  // its text. Bluesky posts have none.
+  title?: string;
   segments: PostSegment[];
   images?: { thumb: string; full?: string; alt?: string; aspect?: number }[];
   link?: { uri: string; title?: string; description?: string; thumb?: string; domain?: string };
@@ -806,12 +809,21 @@ export const api = {
 
   // #200: replies, quotes and comments around an item. undefined = none to fetch.
   itemConversation: (id: number) => req<Conversation | undefined>("GET", `/items/${id}/conversation`),
+  // #209: the next page of a conversation. kind=thread loads the replies under
+  // the reply named by `ref` (its id).
+  itemConversationMore: (id: number, kind: ConversationPageKind, cursor: string, ref = "") =>
+    req<ConversationPage | undefined>(
+      "GET",
+      `/items/${id}/conversation/more?${new URLSearchParams({ kind, cursor, ...(ref ? { id: ref } : {}) })}`,
+    ),
 };
 
 // --- conversation (#200) ---
 // The public conversation around an item, fetched on demand. All text is plain
 // text from another site: render it as React text, never as HTML.
 export interface ConversationComment {
+  // #209: names the reply for a "thread" page (Bluesky at:// URI, Substack id).
+  id?: string;
   author: string;
   handle?: string;
   avatar_url?: string;
@@ -825,6 +837,27 @@ export interface ConversationComment {
   published_at: string;
   // #207: replies to this reply, most-liked first (Bluesky).
   children?: ConversationComment[];
+  // #209: replies to this one that are not in children (cut at the fetched
+  // depth, or past the few shown); a "thread" page loads them.
+  more_replies?: number;
+}
+
+export type ConversationPageKind = "replies" | "quotes" | "reposts" | "thread";
+
+/** #209: someone who reposted, for the reader's quiet list. */
+export interface ConversationPerson {
+  name: string;
+  handle?: string;
+  avatar_url?: string;
+  url?: string;
+}
+
+/** #209: another page of a conversation; no cursor means that kind has ended. */
+export interface ConversationPage {
+  kind: ConversationPageKind;
+  items: ConversationComment[];
+  people?: ConversationPerson[];
+  cursor?: string;
 }
 
 export interface Conversation {
@@ -835,4 +868,7 @@ export interface Conversation {
   quotes: ConversationComment[];
   quoted?: ConversationComment;
   fetched_at: string;
+  // #209: what more there is: a key present means another page of that kind,
+  // its value the cursor to pass ("" = from the start).
+  cursors?: Partial<Record<"replies" | "quotes" | "reposts", string>>;
 }

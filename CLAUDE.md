@@ -105,7 +105,12 @@ from `store.PostKinds`) render as text posts, not headlines: `.card-post`, trimm
 the solver's last knob, never an avatar as hero (`lib/posts.ts`). A Bluesky post renders
 from its structured `post_body` (#207, `components/PostView.tsx`, server
 `internal/server/richtext`): facets are applied on the server by UTF-8 byte offset into
-link segments, so the client never computes offsets; `.bp-link-desc` is a solver knob.
+link segments, so the client never computes offsets. #209: the card is text, picture,
+counts and a reply or two (link card and quote are reader-only); short Substack/Medium
+posts are classified on the server (`internal/server/shortform`, `items.form`) and arrive
+as `post` + `post_body` like Bluesky; the reader's conversation pages via
+`/items/{id}/conversation/more` (`lib/conversation.ts useConversationPages`) and holds the
+end-of-reader pull while a page is due.
 
 `web/src/lab/README.md` has the full loop, the fixture list, and the specificity
 trap that bites every time (several old `global.css` rules match the card's at

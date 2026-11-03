@@ -42,9 +42,31 @@ The active session is durable. Going to Library preserves the cursor and offers 
 
 ## Conversation
 
-Bluesky posts, Substack posts and YouTube videos carry their public conversation (#200). A Substack post's card shows a counts line and its two most-liked replies (a Bluesky post's card is described below), and "N more replies and M quotes", which opens the reader; the reader lists every reply most-liked first, then quotes, then a link to the platform. A landscape long video shows its top comments under the player, with the rest in an overlay; Shorts open the same overlay from a comments control in the footer. The conversation is fetched when a card is focused and joins the card after it renders; it never delays the card. The layout solver drops the second reply, then both, before the excerpt, and never shrinks a video to make room for comments. Remote text is plain text; its only links are the http(s) targets the server derived from the platform's own annotations.
+Bluesky posts, Substack posts and YouTube videos carry their public conversation (#200). A Substack article's card shows a counts row and its most-liked comment (posts are described below), and "N more replies and M quotes", which opens the reader; the reader lists every reply most-liked first, then quotes, then a link to the platform. A landscape long video shows its top comments under the player, with the rest in an overlay; Shorts open the same overlay from a comments control in the footer. The conversation is fetched when a card is focused and joins the card after it renders; it never delays the card. The layout solver drops the second reply, then both, before an article's excerpt, and never shrinks a video to make room for comments. Remote text is plain text; its only links are the http(s) targets the server derived from the platform's own annotations.
 
-A Bluesky post looks like a Bluesky post (#207): on the card and at the top of the reader it is a card of its own with the author's avatar, name, time and handle, the Bluesky butterfly in Bluesky blue, the text with its links working (shortened URLs open their real target, mentions and hashtags open on Bluesky), its pictures, a compact link card (thumbnail, title, two lines of description, domain; the whole card opens the link), the post it quotes inset, and the replies/reposts/likes row directly under the post. Its top replies hang off it on a thread line; the reader lists every reply most-liked first with replies to replies nested, then quotes, then Open on Bluesky. A link card's page description is never shown as if it were the post. On the card the replies give way first, then the link card's description, then the text is trimmed.
+### The card per type (#209)
+
+| type | session card | reader |
+|---|---|---|
+| Bluesky post | author (avatar, name, time, @handle, butterfly), the text with live links, an attached picture or video poster, the replies/reposts/likes row, one or two top replies when there is room. A post that is only a link shows the link's title as one quiet line. Never a link card or a quoted post. | the post with its link card and quoted post, the row under it, then the conversation |
+| Short Substack or Medium post (server-classified: under 250 words, at most one picture, nothing embedded) | the same post card with the platform's mark (Substack orange, Medium ink), the author with the publication under it, the post's title, its text, its picture, the counts row (none on Medium), one or two top comments | the post, then its comments |
+| Substack article | headline, hero, excerpt, the counts row, its most-liked comment when there is room | the article, then its comments |
+| Medium article | headline, hero, excerpt; no counts row (Medium reports none, so no row of zeros) | the article |
+
+On a post card the solver gives way in this order: the second reply, then the first,
+then the picture steps down, and only then is the text trimmed. On an article card the
+comment goes before the excerpt. The server marks posts (`post`, `post_body`); the client
+never decides an item's form from its shape.
+
+The reader's conversation keeps going as you scroll (#209): replies most-liked first
+with replies to replies threaded (the indent stops after three levels; "Show N more
+replies" loads the rest of a reply's thread), then quotes, then "Reposted by" as a quiet
+list of names, then the platform link. The next page loads as the end comes near, with a
+"Loading more…" line; a failure says "Couldn't load more · Retry" and never spins; the
+end says "End of the conversation". The pull to the next item, its cue and the
+instrument's "End of post" wait until the conversation has ended (or a page has failed).
+
+A Bluesky post looks like a Bluesky post (#207): on the card and at the top of the reader it is a card of its own with the author's avatar, name, time and handle, the Bluesky butterfly in Bluesky blue, the text with its links working (shortened URLs open their real target, mentions and hashtags open on Bluesky), its pictures, a compact link card (thumbnail, title, two lines of description, domain; the whole card opens the link) and the post it quotes inset (both in the reader only since #209), and the replies/reposts/likes row directly under the post. Its top replies hang off it on a thread line; the reader lists every reply most-liked first with replies to replies nested, then quotes, then Open on Bluesky. A link card's page description is never shown as if it were the post.
 
 Every card says where it came from (#205): a small monochrome platform mark (RSS, Bluesky, Substack, Medium, YouTube, podcast) sits beside the source name on the card, the Shorts bar, the reader, Details and History, in the meta text's colour. A social post (Bluesky; X later) is not an article: it has no headline. Its card reads author first, then the post text at the reader's size, whole when it fits and trimmed only after the picture steps down and the replies give way; a real attached image or link-card picture is its media, and the author's avatar is never a hero. The reader opens a post on its author and text, with no headline; history, Details and the Discord sheet name it by its text, clipped at a word. Every other card stays vertically centred between the floating header and the bottom of the screen, whether or not the session contains Shorts.
 

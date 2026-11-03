@@ -1,7 +1,10 @@
+import { useCallback, useEffect } from "react";
 import { ChevronRight, ExternalLink, Heart, MessageCircle } from "lucide-react";
 import type { Conversation as Conv, ConversationComment, Item } from "@/api/client";
 import { BottomSheet } from "./BottomSheet";
-import { compactCount, hasConversation, moreLabel, platformName, useConversation, useConversationState } from "@/lib/conversation";
+import { compactCount, hasConversation, moreLabel, platformName, useConversationState } from "@/lib/conversation";
+import { postRowCounts } from "@/lib/posts";
+import { EngagementRow, ReaderThread } from "./PostView";
 import { relTime } from "@/lib/format";
 import "./conversation.css";
 
@@ -147,9 +150,58 @@ function FullConversation({ conv, titled = true }: { conv: Conv; titled?: boolea
   );
 }
 
-/** The reader's conversation section, under the post. */
-export function ReaderConversation({ item }: { item: Item }) {
-  const conv = useConversation(item);
+/**
+ * A Substack article's card (#209): its counts row (stored with the item, so it
+ * shows before the conversation arrives) and its most-liked comment, which the
+ * solver drops before the excerpt. The "more" link always stays.
+ */
+export function ArticleConversation({ item, conv, onMore }: { item: Item; conv: Conv | null; onMore?: () => void }) {
+  const counts = postRowCounts(item, conv);
+  const any = !!counts && counts.likes + counts.reposts + counts.replies > 0;
+  const top = conv ? conv.replies.slice(0, 1) : [];
+  const more = conv ? moreLabel(conv, top.length) : "";
+  if (!any && !top.length && !more) return null;
+  return (
+    <div className="card-conv cv-article">
+      {any && counts && <EngagementRow {...counts} />}
+      {top.length > 0 && (
+        <ol className="cv-list cv-card-replies" aria-label="Top comment">
+          {top.map((c, i) => <CommentRow key={i} c={c} />)}
+        </ol>
+      )}
+      {more && onMore && (
+        <button type="button" className="cv-more" onPointerDown={(e) => e.stopPropagation()}
+          onClick={(e) => { e.stopPropagation(); onMore(); }}>
+          <span>{more}</span>
+          <ChevronRight size={14} aria-hidden />
+        </button>
+      )}
+    </div>
+  );
+}
+
+/**
+ * The reader's conversation section, under an article. Bluesky and Substack get
+ * the threaded, paged thread (#209); YouTube keeps its list.
+ */
+export function ReaderConversation({ item, onPending }: { item: Item; onPending?: (pending: boolean) => void }) {
+  const { conv, status } = useConversationState(item);
+  const pending = useCallback((p: boolean) => onPending?.(p), [onPending]);
+  const threaded = !!conv && (conv.platform === "bluesky" || conv.platform === "substack");
+  // Until the conversation is here (or for one that does not page), the reader's
+  // pull waits only while it is loading.
+  useEffect(() => {
+    if (!threaded) onPending?.(status === "loading");
+  }, [threaded, status, onPending]);
+  if (conv && threaded) {
+    return (
+      <>
+        {conv.quoted && <QuotedPost c={conv.quoted} />}
+        <CountsLine conv={conv} />
+        <ReaderThread conv={conv} item={item} status={status} platform={conv.platform} onPending={pending} />
+      </>
+    );
+  }
   if (!conv) return null;
   return (
     <div className="rp-conv" id="conversation">

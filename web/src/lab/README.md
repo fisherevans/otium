@@ -61,6 +61,12 @@ over), `bsky-images` (two pictures and a hashtag), `bsky-quoted` (a quote that a
 the post, not the conversation) and `bsky-thread` (212 replies, nested in the reader).
 `measure` fails a post link without an http(s) target and a link card over 130px tall.
 
+#209 added the card per type: `bsky-link-only` (a post that is only a link: its title
+as a quiet line), `substack-short` (a short Substack post drawn as a post),
+`substack-long` (an article card with its counts row and one comment) and
+`medium-short` (a post with no counts row). `measure` fails a card that shows a link
+card or quoted post (reader only now) and a Medium card with a counts row.
+
 The Shorts mode switch uses the real compact card and solver. Portrait, square
 and landscape short videos exercise its contained frame, compact creator/date
 and the ··· that opens item and session actions (#206). A long portrait video verifies that geometry alone does

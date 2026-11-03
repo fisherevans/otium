@@ -74,7 +74,8 @@ func FormatOf(c store.Candidate, kind string) Format {
 	case "long", "live", "video":
 		return FormatLong
 	}
-	if store.PostKinds[kind] {
+	// #209: a short Substack or Medium post is a post too (c.Post).
+	if store.PostKinds[kind] || c.Post {
 		return FormatPost
 	}
 	return FormatArticle

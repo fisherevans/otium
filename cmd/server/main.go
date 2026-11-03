@@ -52,6 +52,14 @@ func main() {
 	defer db.Close()
 
 	ing := feeds.NewIngester(db, log)
+	// #209: classify Substack/Medium items stored before short-form posts existed.
+	go func() {
+		if n, err := ing.BackfillForms(context.Background()); err != nil {
+			log.Warn("form backfill failed", "err", err)
+		} else if n > 0 {
+			log.Info("form backfill", "items", n)
+		}
+	}()
 	h := handler.New(db, ing, log)
 	// #180: Shorts as shareable MP4s, cached beside the database. Missing yt-dlp
 	// (e.g. local dev) just makes the endpoint answer 503.

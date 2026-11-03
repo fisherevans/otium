@@ -1,7 +1,7 @@
-import { Fragment, useState, type ReactNode, type SyntheticEvent } from "react";
+import { Fragment, useEffect, useRef, useState, type ReactNode, type SyntheticEvent } from "react";
 import { ChevronRight, ExternalLink, Heart, MessageCircle, Play, Repeat2 } from "lucide-react";
-import type { Conversation, ConversationComment, PostAuthor, PostBody, PostSegment } from "@/api/client";
-import { compactCount, moreLabel } from "@/lib/conversation";
+import type { Conversation, ConversationComment, ConversationPerson, Item, PostAuthor, PostBody, PostSegment } from "@/api/client";
+import { compactCount, moreLabel, platformName, useConversationPages } from "@/lib/conversation";
 import { fmtDate, relTime } from "@/lib/format";
 import { PlatformMark } from "./PlatformMark";
 import "./post.css";
@@ -13,9 +13,16 @@ import "./post.css";
 // it, and the replies hanging off it as a thread.
 //
 // One component serves the session card and the reader, so the two cannot drift.
-// The card is laid out by the runtime solver (lib/cardLayout): `.card-post` is the
-// text it trims last, `.bp-link-desc` the link card's description it drops before
-// that, and `.cv-card-replies > .cv-row` the replies it gives up first.
+// The card is laid out by the runtime solver (lib/cardLayout): `.cv-card-replies >
+// .cv-row` are the replies it gives up first, then the picture steps down, and
+// `.card-post` is the text it trims last.
+//
+// #209: the card is the post's text, its picture, its counts and a reply or two.
+// The link card and the quoted post are the reader's; on the card a post that is
+// only a link shows the link's title as one quiet line. Short Substack and Medium
+// posts (classified on the server) are drawn by the same component, with their
+// platform's mark, their publication under the author, and their title above the
+// text. Medium has no counts, so no counts row.
 //
 // Every string comes from another site. Text renders as React text; the only
 // links are the server's segment hrefs (always http(s)) and the post's own URLs.
@@ -50,16 +57,22 @@ function Avatar({ author, size }: { author: PostAuthor; size: "lg" | "sm" }) {
   return <span className={`bp-avatar bp-avatar-${size} bp-mono`} aria-hidden>{(author.name.trim()[0] || "?").toUpperCase()}</span>;
 }
 
-/** The Bluesky butterfly in its own blue, so the platform reads at a glance. */
-export function BlueskyMark() {
+/** The platform's mark in its own colour (the Bluesky butterfly in Bluesky blue,
+ *  Substack orange, Medium ink), so the platform reads at a glance. */
+export function PostPlatformMark({ platform = "bluesky" }: { platform?: string }) {
   return (
-    <span className="bp-platform" title="Bluesky">
-      <PlatformMark kind="bluesky" size={16} />
+    <span className={`bp-platform bp-platform-${platform}`} title={platformName(platform) || platform}>
+      <PlatformMark kind={platform} size={16} />
     </span>
   );
 }
 
-function PostHeader({ author, publishedAt, full, onAuthor }: { author: PostAuthor; publishedAt?: string; full: boolean; onAuthor?: () => void }) {
+/** @deprecated kept for callers that predate #209. */
+export function BlueskyMark() {
+  return <PostPlatformMark platform="bluesky" />;
+}
+
+function PostHeader({ author, publishedAt, full, onAuthor, platform, context }: { author: PostAuthor; publishedAt?: string; full: boolean; onAuthor?: () => void; platform: string; context?: string }) {
   const when = publishedAt ? (full ? fmtDate(publishedAt) : relTime(publishedAt)) : "";
   const who = (
     <>
@@ -69,8 +82,8 @@ function PostHeader({ author, publishedAt, full, onAuthor }: { author: PostAutho
         <span className="bp-sub">
           {/* The time first: a long handle truncates, the time never does. */}
           {when && <span className="bp-when">{when}</span>}
-          {author.handle && when && <span aria-hidden> · </span>}
-          {author.handle && <span className="bp-handle">@{author.handle}</span>}
+          {(author.handle || context) && when && <span aria-hidden> · </span>}
+          {author.handle ? <span className="bp-handle">@{author.handle}</span> : context ? <span className="bp-handle">{context}</span> : null}
         </span>
       </span>
     </>
@@ -84,7 +97,7 @@ function PostHeader({ author, publishedAt, full, onAuthor }: { author: PostAutho
       ) : (
         <span className="bp-author">{who}</span>
       )}
-      <BlueskyMark />
+      <PostPlatformMark platform={platform} />
     </div>
   );
 }
@@ -177,7 +190,9 @@ export function EngagementRow({ replies, reposts, likes }: { replies: number; re
 
 /**
  * The post itself, in its card. `full` is the reader: the whole text, full date,
- * the link card's description unclamped.
+ * the link card and the quoted post. On the session card (#209) a post is its
+ * text, its picture and its counts; a post that is only a link shows the link's
+ * title as a quiet line. `counts` null means the platform has none (Medium).
  */
 export function PostCard({
   body,
@@ -186,24 +201,38 @@ export function PostCard({
   counts,
   full = false,
   onAuthor,
+  platform = "bluesky",
+  context,
 }: {
   body: PostBody;
   publishedAt?: string;
   url?: string;
-  counts: { replies: number; reposts: number; likes: number };
+  counts: { replies: number; reposts: number; likes: number } | null;
   full?: boolean;
   onAuthor?: () => void;
+  /** The source kind: bluesky | substack | medium. */
+  platform?: string;
+  /** A line under the author instead of a handle: the publication. */
+  context?: string;
 }) {
   const text = body.segments.map((s) => s.text).join("").trim();
+  const linkLine = !full && !text && !body.images?.length && !body.video && body.link;
   return (
-    <article className={`bsky-post ${full ? "bp-full" : ""}`} aria-label={`Post by ${body.author.name}`}>
-      <PostHeader author={body.author} publishedAt={publishedAt} full={full} onAuthor={onAuthor} />
+    <article className={`bsky-post bp-${platform} ${full ? "bp-full" : ""}`} aria-label={`Post by ${body.author.name}`}>
+      <PostHeader author={body.author} publishedAt={publishedAt} full={full} onAuthor={onAuthor} platform={platform} context={context} />
+      {body.title && <h3 className="bp-title">{body.title}</h3>}
       {text && <p className="card-post bp-text"><RichText segments={trimSegments(body.segments)} /></p>}
+      {linkLine && body.link && (
+        <a className="bp-linkline" href={body.link.uri} {...linkProps}>
+          <span className="bp-linkline-title">{body.link.title || body.link.domain || body.link.uri}</span>
+          {body.link.title && body.link.domain && <span className="bp-linkline-domain">{body.link.domain}</span>}
+        </a>
+      )}
       {body.images?.length ? <Images images={body.images} /> : null}
       {body.video && <VideoPoster video={body.video} url={url} />}
-      {body.link && <LinkCard link={body.link} />}
-      {body.quote && <QuoteCard quote={body.quote} />}
-      <EngagementRow {...counts} />
+      {full && body.link && <LinkCard link={body.link} />}
+      {full && body.quote && <QuoteCard quote={body.quote} />}
+      {counts && <EngagementRow {...counts} />}
     </article>
   );
 }
@@ -221,11 +250,28 @@ function ReplyText({ c }: { c: ConversationComment }) {
   return <RichText segments={c.segments} text={c.text} />;
 }
 
+/** What the reader's thread needs to load the replies under a reply (#209). */
+interface Expander {
+  expand: (id: string) => void;
+  expanding: Record<string, "loading" | "error">;
+  platform: string;
+}
+
 /** One reply in the thread; `depth` > 0 nests the replies to it (reader). */
-function ThreadReply({ c, depth, full }: { c: ConversationComment; depth: number; full: boolean }) {
+function ThreadReply({ c, depth, full, more, level = 0 }: { c: ConversationComment; depth: number; full: boolean; more?: Expander; level?: number }) {
   const author: PostAuthor = { name: c.author, avatar: c.avatar_url, handle: c.handle };
   const media = mediaWord(c.media);
+  const where = more ? platformName(more.platform) : "Bluesky";
+  const hidden = c.more_replies ?? 0;
+  const canExpand = !!(more && c.id && hidden > 0);
+  const state = c.id ? more?.expanding[c.id] : undefined;
+  const kids = c.children ?? [];
+  // Below three levels the indent stops growing - a phone has no room for more -
+  // so deeper replies follow their parent at the same indent.
+  const flat = level >= 2;
+  const nested = depth > 0 && kids.length > 0 && !flat;
   return (
+    <>
     <li className="cv-row bp-reply">
       <Avatar author={author} size="sm" />
       <div className="bp-reply-main">
@@ -239,25 +285,36 @@ function ThreadReply({ c, depth, full }: { c: ConversationComment; depth: number
             </span>
           )}
           {full && c.url && (
-            <a className="cv-link bp-reply-open" href={c.url} aria-label={`Open ${c.author}'s reply on Bluesky`} {...linkProps}>
+            <a className="cv-link bp-reply-open" href={c.url} aria-label={`Open ${c.author}'s reply on ${where}`} {...linkProps}>
               <ExternalLink size={13} strokeWidth={1.8} aria-hidden />
             </a>
           )}
         </div>
         {c.text && <p className="cv-text"><ReplyText c={c} /></p>}
-        {(media || (full && c.replies > 0 && !c.children?.length)) && (
+        {(media || (full && c.replies > 0 && !kids.length && !canExpand)) && (
           <div className="cv-foot">
             {media && <span>{media}</span>}
-            {full && c.replies > 0 && !c.children?.length && <span>{compactCount(c.replies)} {c.replies === 1 ? "reply" : "replies"}</span>}
+            {full && c.replies > 0 && !kids.length && !canExpand && <span>{compactCount(c.replies)} {c.replies === 1 ? "reply" : "replies"}</span>}
           </div>
         )}
-        {depth > 0 && c.children && c.children.length > 0 && (
+        {nested && (
           <ol className="cv-list bp-children">
-            {c.children.map((k, i) => <ThreadReply key={i} c={k} depth={depth - 1} full={full} />)}
+            {kids.map((k, i) => <ThreadReply key={k.id || i} c={k} depth={depth - 1} full={full} more={more} level={level + 1} />)}
           </ol>
+        )}
+        {full && canExpand && (
+          <button type="button" className="bp-expand" disabled={state === "loading"} onClick={() => c.id && more!.expand(c.id)}>
+            {state === "loading"
+              ? "Loading replies…"
+              : state === "error"
+              ? "Couldn't load replies · Retry"
+              : `${kids.length ? "Show " + compactCount(hidden) + " more" : "Show " + compactCount(hidden)} ${hidden === 1 ? "reply" : "replies"}`}
+          </button>
         )}
       </div>
     </li>
+    {flat && depth > 0 && kids.map((k, i) => <ThreadReply key={k.id || i} c={k} depth={depth - 1} full={full} more={more} level={level + 1} />)}
+    </>
   );
 }
 
@@ -293,30 +350,112 @@ export function CardThread({ conv, onMore }: { conv: Conversation; onMore?: () =
   );
 }
 
-/** The reader's conversation under a post: replies threaded, then quotes, then Bluesky. */
-export function ReaderThread({ conv, url, status }: { conv: Conversation | null; url?: string; status: string }) {
+/** The people who reposted, as one quiet, wrapping line of names. */
+function Reposters({ people }: { people: ConversationPerson[] }) {
+  return (
+    <ul className="bp-people" aria-label="Reposted by">
+      {people.map((p, i) => (
+        <li key={p.handle || p.url || i}>
+          <a className="bp-person" href={p.url} {...linkProps}>
+            <Avatar author={{ name: p.name, avatar: p.avatar_url }} size="sm" />
+            <span>{p.name}</span>
+          </a>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+/**
+ * The reader's conversation under a post or an article (#200, #207, #209):
+ * replies threaded, then quotes, then who reposted, then the platform - and it
+ * keeps going as you scroll. The next page loads as its end comes near; while a
+ * page is due the reader's pull-to-next stays off (`onPending`), so the pull only
+ * engages once there is nothing more to load.
+ */
+export function ReaderThread({
+  conv,
+  item,
+  url,
+  status,
+  platform = "bluesky",
+  onPending,
+}: {
+  conv: Conversation | null;
+  item?: Item | null;
+  url?: string;
+  /** The first page's state: none | loading | ready | error. */
+  status: string;
+  platform?: string;
+  /** True while more of the conversation is on its way or still to load. */
+  onPending?: (pending: boolean) => void;
+}) {
+  const pages = useConversationPages(item, conv);
   const open = conv?.url || url;
+  const where = platformName(conv?.platform ?? platform) || "the original";
+  const bsky = (conv?.platform ?? platform) === "bluesky";
+  const sentinel = useRef<HTMLDivElement | null>(null);
+  const more: Expander = { expand: pages.expand, expanding: pages.expanding, platform: conv?.platform ?? platform };
+  const pending = status === "loading" || (pages.hasMore && pages.status !== "error");
+  const anything = pages.replies.length > 0 || pages.quotes.length > 0 || pages.reposts.length > 0;
+
+  useEffect(() => {
+    onPending?.(pending);
+  }, [pending, onPending]);
+  useEffect(() => () => onPending?.(false), [onPending]);
+
+  // Load the next page as the end of what is shown comes within a screen.
+  // Re-observed after every page, so a short page that leaves the end in view
+  // asks for the next one too.
+  const { hasMore, status: pageStatus, loadMore } = pages;
+  const shown = pages.replies.length + pages.quotes.length + pages.reposts.length;
+  useEffect(() => {
+    const el = sentinel.current;
+    if (!el || !hasMore || pageStatus !== "idle" || typeof IntersectionObserver === "undefined") return;
+    const root = el.closest<HTMLElement>(".readerpage-body");
+    const io = new IntersectionObserver((entries) => {
+      if (entries.some((e) => e.isIntersecting)) loadMore();
+    }, { root, rootMargin: "0px 0px 900px 0px" });
+    io.observe(el);
+    return () => io.disconnect();
+  }, [hasMore, pageStatus, loadMore, shown]);
+
   return (
     <div className="rp-conv bp-reader-thread" id="conversation">
-      {conv && conv.replies.length > 0 && (
+      {pages.replies.length > 0 && (
         <section className="cv-section">
-          <h2 className="cv-heading">Replies</h2>
-          <ol className="cv-list bp-thread-list">{conv.replies.map((c, i) => <ThreadReply key={i} c={c} depth={3} full />)}</ol>
+          <h2 className="cv-heading">{bsky ? "Replies" : "Comments"}</h2>
+          <ol className="cv-list bp-thread-list">{pages.replies.map((c, i) => <ThreadReply key={c.id || i} c={c} depth={8} full more={more} />)}</ol>
         </section>
       )}
-      {conv && conv.quotes.length > 0 && (
+      {pages.quotes.length > 0 && (
         <section className="cv-section">
           <h2 className="cv-heading">Quotes</h2>
-          <ol className="cv-list bp-thread-list">{conv.quotes.map((c, i) => <ThreadReply key={i} c={c} depth={0} full />)}</ol>
+          <ol className="cv-list bp-thread-list">{pages.quotes.map((c, i) => <ThreadReply key={c.id || i} c={c} depth={0} full />)}</ol>
         </section>
       )}
-      {conv && conv.replies.length === 0 && conv.quotes.length === 0 && <p className="cv-empty">No replies yet.</p>}
-      {!conv && status === "loading" && <p className="cv-empty">Loading replies…</p>}
-      {!conv && status === "error" && <p className="cv-empty">Replies couldn't load.</p>}
+      {pages.reposts.length > 0 && (
+        <section className="cv-section bp-reposts">
+          <h2 className="cv-heading">Reposted by</h2>
+          <Reposters people={pages.reposts} />
+        </section>
+      )}
+      {conv && !anything && !pages.hasMore && <p className="cv-empty">No {bsky ? "replies" : "comments"} yet.</p>}
+      {!conv && status === "loading" && <p className="cv-empty">Loading {bsky ? "replies" : "comments"}…</p>}
+      {!conv && status === "error" && <p className="cv-empty">{bsky ? "Replies" : "Comments"} couldn't load.</p>}
+      <div ref={sentinel} className="cv-sentinel" aria-hidden />
+      {conv && pages.status === "loading" && <p className="cv-paging" role="status">Loading more…</p>}
+      {conv && pages.status === "error" && (
+        <p className="cv-paging" role="status">
+          Couldn't load more ·{" "}
+          <button type="button" className="cv-retry" onClick={pages.loadMore}>Retry</button>
+        </p>
+      )}
+      {conv && anything && !pages.hasMore && pages.status !== "error" && <p className="cv-paging cv-end">End of the conversation</p>}
       {open && (
         <a className="reader-open cv-open" href={open} target="_blank" rel="noopener noreferrer">
           <ExternalLink size={15} strokeWidth={1.75} aria-hidden />
-          Open on Bluesky
+          Open on {where}
         </a>
       )}
     </div>

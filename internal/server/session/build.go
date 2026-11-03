@@ -58,10 +58,10 @@ type Selected struct {
 	SourceTitle   string          `json:"source_title"`
 	SourceIconURL string          `json:"source_icon_url,omitempty"`
 	Topic         *store.TopicRef `json:"topic,omitempty"`
-	Score       float64         `json:"score"`
-	EstDuration int             `json:"est_duration_sec"`
-	Reason      string          `json:"reason"`
-	Breakdown   ScoreBreakdown  `json:"breakdown"`
+	Score         float64         `json:"score"`
+	EstDuration   int             `json:"est_duration_sec"`
+	Reason        string          `json:"reason"`
+	Breakdown     ScoreBreakdown  `json:"breakdown"`
 }
 
 // ScoreBreakdown is the per-factor decomposition shown as "why this item" (#18).

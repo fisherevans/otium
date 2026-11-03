@@ -7,6 +7,7 @@ package feeds
 import (
 	"context"
 	"errors"
+	"github.com/fisherevans/otium/internal/server/shortform"
 	"html"
 	"log/slog"
 	"strconv"
@@ -78,11 +79,24 @@ func (ing *Ingester) FetchSource(ctx context.Context, s store.Source) (int, erro
 		}
 	}
 
+	// #209: Substack's archive carries each post's counts and its real length and
+	// type; read it first so a short post is classified with them.
+	var archive map[string]social.SubstackArchived
+	if s.Kind == "substack" {
+		archive = ing.substackArchive(ctx, s)
+	}
 	fresh := 0
 	for _, e := range feed.Items {
 		it := normalize(s, e)
 		if it == nil {
 			continue
+		}
+		if shortform.Kinds[s.Kind] {
+			var known *shortform.Known
+			if a, ok := archive[social.NormalizeURL(it.URL)]; ok {
+				known = &shortform.Known{Words: a.Words, Type: a.Type}
+			}
+			ClassifyForm(it, known)
 		}
 		created, err := ing.db.UpsertItem(ctx, it)
 		if err != nil {
@@ -93,8 +107,8 @@ func (ing *Ingester) FetchSource(ctx context.Context, s store.Source) (int, erro
 			fresh++
 		}
 	}
-	if s.Kind == "substack" {
-		ing.refreshSubstackEngagement(ctx, s)
+	if archive != nil {
+		ing.storeSubstackEngagement(ctx, s, archive)
 	}
 	_ = ing.db.MarkFetched(ctx, s.ID, "")
 	return fresh, nil
@@ -139,23 +153,64 @@ func (ing *Ingester) fetchBluesky(ctx context.Context, s store.Source) (int, err
 	return fresh, nil
 }
 
-// refreshSubstackEngagement layers Substack's reaction/restack/comment counts
-// onto the publication's items (#197). Best effort: the RSS content is what
-// matters, so a failure here is logged, not recorded as a fetch error.
-func (ing *Ingester) refreshSubstackEngagement(ctx context.Context, s store.Source) {
+// substackArchive reads the publication's recent posts (#197, #209). Best
+// effort: the RSS content is what matters, so a failure here is logged, not
+// recorded as a fetch error, and nil means "unknown".
+func (ing *Ingester) substackArchive(ctx context.Context, s store.Source) map[string]social.SubstackArchived {
 	fctx, cancel := context.WithTimeout(ctx, 20*time.Second)
 	defer cancel()
-	eng, err := ing.soc.SubstackEngagement(fctx, s.FeedURL)
+	archive, err := ing.soc.SubstackArchive(fctx, s.FeedURL)
 	if err != nil {
-		ing.log.Warn("substack engagement failed", "source", s.Title, "err", err)
-		return
+		ing.log.Warn("substack archive failed", "source", s.Title, "err", err)
+		return nil
 	}
-	counts := make(map[string][3]int, len(eng))
-	for u, e := range eng {
+	return archive
+}
+
+// storeSubstackEngagement layers Substack's reaction/restack/comment counts onto
+// the publication's items (#197).
+func (ing *Ingester) storeSubstackEngagement(ctx context.Context, s store.Source, archive map[string]social.SubstackArchived) {
+	counts := make(map[string][3]int, len(archive))
+	for u, e := range archive {
 		counts[u] = [3]int{e.Likes, e.Reposts, e.Replies}
 	}
 	if _, err := ing.db.SetItemEngagementByURL(ctx, s.ID, counts, social.NormalizeURL); err != nil {
 		ing.log.Warn("substack engagement store failed", "source", s.Title, "err", err)
+	}
+}
+
+// ClassifyForm decides whether a Substack or Medium item is a short post or an
+// article (#209) and records it on the item for UpsertItem: a post carries its
+// structured body in PostJSON, so the client draws it the way it draws a Bluesky
+// post.
+func ClassifyForm(it *store.Item, known *shortform.Known) {
+	post, _ := shortform.Classify(shortform.Input{Title: it.Title, Author: it.Author, Body: it.Content, Known: known})
+	if post == nil {
+		it.Form, it.PostJSON = "article", ""
+		return
+	}
+	it.Form, it.PostJSON = "post", richtext.Marshal(post)
+}
+
+// BackfillForms classifies Substack and Medium items stored before #209 that no
+// fetch will reach again (their feed has moved on). Without the archive's word
+// count a paid post's preview reads as unknown length, so it stays an article -
+// the safe side. Runs once at boot; a no-op after the first.
+func (ing *Ingester) BackfillForms(ctx context.Context) (int, error) {
+	n := 0
+	for {
+		rows, err := ing.db.UnclassifiedForms(ctx, 200)
+		if err != nil || len(rows) == 0 {
+			return n, err
+		}
+		for _, r := range rows {
+			it := &store.Item{Title: r.Title, Author: r.Author, Content: r.Content}
+			ClassifyForm(it, nil)
+			if err := ing.db.SetItemForm(ctx, r.ID, it.Form, it.PostJSON); err != nil {
+				return n, err
+			}
+			n++
+		}
 	}
 }
 
