@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
-import { ArrowLeft, ArrowRight, Bookmark, ChevronRight, MoreHorizontal, Plus, SlidersHorizontal, X } from "lucide-react";
+import { ArrowLeft, ArrowRight, Bookmark, ChevronRight, MoreHorizontal, Plus, Shuffle, SlidersHorizontal, X } from "lucide-react";
 import { api, type Topic, type Section, type Source } from "@/api/client";
 import { usePreferences } from "@/context/PreferencesContext";
 import { useAuth } from "@/context/AuthContext";
@@ -8,7 +8,8 @@ import { useInstrument } from "@/components/ContextInstrument";
 import { BottomSheet } from "@/components/BottomSheet";
 import { HowItWorks } from "@/components/HowItWorks";
 import { SavePresetDialog } from "@/components/SessionPresetPrompt";
-import { contentLabel, contentTypeLabel, contentTypes, defaultSetup, initialPresets, isSavedSetup, loadSessionPresets, recordSessionSetup, repeatSuggestion, setupKey, starterPresetIds, storeSessionPresets, type SessionPreset, type SessionPresets, type SessionSetup } from "@/lib/sessionPresets";
+import { contentLabel, contentTypeLabel, contentTypes, defaultMix, defaultSetup, initialPresets, isSavedSetup, loadSessionPresets, mixContentTypes, mixLabel, recordSessionSetup, repeatSuggestion, setupKey, starterPresetIds, storeSessionPresets, type SessionPreset, type SessionPresets, type SessionSetup } from "@/lib/sessionPresets";
+import { MixFormats, MixSections, MixSectionsRow } from "@/components/MixEditor";
 import "@/styles/launcher.css";
 import { useShortsMode } from "@/lib/shortsMode";
 import { ShortsModeToggle } from "@/components/ShortsModeToggle";
@@ -38,7 +39,7 @@ export default function HomePage() {
     // #186: what is being built, shown full screen the moment you tap a start.
     const [building, setBuilding] = useState<SessionSetup | null>(null);
     const [error, setError] = useState("");
-    const [sheet, setSheet] = useState<"advanced" | "presets" | "recent" | null>(null);
+    const [sheet, setSheet] = useState<"advanced" | "presets" | "recent" | "mix-sections" | null>(null);
     const [save, setSave] = useState<{ setup: SessionSetup; preset?: SessionPreset } | null>(null);
     const accountId = user?.id;
     useEffect(() => {
@@ -88,7 +89,7 @@ export default function HomePage() {
     }, [prefs.presets, sessionLink]);
     const scopedTopics = useMemo(() => topics.filter((topic) => !setup.sections.length || setup.sections.includes(topic.section_slug ?? "")), [topics, setup.sections]);
     const defaultPreset = data.presets.find((preset) => preset.id === data.defaultId) ?? data.presets[0];
-    const homePresets = [defaultPreset, ...starterPresetIds.map((id) => data.presets.find((preset) => preset.id === id))]
+    const homePresets = [defaultPreset, ...starterPresetIds.map((id) => data.presets.find((preset) => preset.id === id)), ...data.presets.filter((preset) => preset.setup.mix)]
         .filter((preset, index, all): preset is SessionPreset => !!preset && all.findIndex((entry) => entry?.id === preset.id) === index);
     const recent = data.recent.filter((value) => !isSavedSetup(data, value));
     const suggestion = repeatSuggestion(data);
@@ -96,6 +97,7 @@ export default function HomePage() {
         return value.sections.length ? value.sections.map((slug) => sections.find((section) => section.slug === slug)?.name ?? "Unavailable section").join(" + ") : "Everything";
     }
     function setupLabel(value: SessionSetup) {
+        if (value.mix) return `${value.minutes} min · ${mixLabel(value.mix)}`;
         return `${value.minutes} min · ${contentLabel(value)} · ${scopeLabel(value)}${value.excluded.length ? ` · ${value.excluded.length} topics excluded` : ""}`;
     }
     function hasSupply(value: SessionSetup) {
@@ -111,12 +113,13 @@ export default function HomePage() {
     }
     async function begin(value: SessionSetup) {
         if (busy || accountId == null) return;
+        if (value.mix && !mixContentTypes(value.mix).length) { setError("Give at least one format a share."); return; }
         if (!value.contentTypes.length) { setError("Choose at least one content type."); return; }
         if (invalidSetup(value)) { setError("This setup has no available topics. Edit the session scope."); return; }
         setBusy(true); setError(""); setBuilding(value);
         try {
             const themes = value.excluded.length ? topics.filter((topic) => (!value.sections.length || value.sections.includes(topic.section_slug ?? "")) && !value.excluded.includes(topic.slug)).map((topic) => topic.slug) : [];
-            const response = await api.createSession(value.minutes, themes, value.excluded.length ? [] : value.sections, value.contentTypes);
+            const response = await api.createSession(value.minutes, themes, value.excluded.length ? [] : value.sections, value.contentTypes, value.mix);
             if (!response?.session_id) { setBuilding(null); setError("No new items match this session. Change the scope or content types."); return; }
             recordSessionSetup(accountId, response.session_id, value);
             try { localStorage.setItem("otium.last-scope", JSON.stringify(value.sections)); } catch { /* Storage is optional. */ }
@@ -124,11 +127,17 @@ export default function HomePage() {
         } catch (e: unknown) { setBuilding(null); setError(e instanceof Error ? e.message : String(e)); }
         finally { setBusy(false); }
     }
+    function startMix() {
+        const mix = defaultMix();
+        setError(""); setSheet(null);
+        setSetup((value) => ({ ...defaultSetup(), minutes: value.minutes, contentTypes: mixContentTypes(mix), mix }));
+        setCustom(true);
+    }
     function updateData(next: SessionPresets) {
         if (accountId != null && !storeSessionPresets(accountId, next)) setError("Couldn't save this change. Check browser storage and retry.");
     }
     useInstrument(custom && loaded && sources.length > 0 ? {
-        eyebrow: "Custom session", label: `${setup.minutes} min · ${contentLabel(setup)}`,
+        eyebrow: setup.mix ? "Mix" : "Custom session", label: `${setup.minutes} min · ${contentLabel(setup)}`,
         onMenu: () => setCustom(false), menuLabel: "Back to sessions", leadingIcon: <ArrowLeft size={20}/>,
         action: { label: busy ? "Gathering…" : "Start", onClick: () => { void begin(setup); }, icon: <ArrowRight size={18}/>, disabled: busy || !setup.contentTypes.length || !hasSupply(setup) || invalidSetup(setup) },
     } : activeSession && loaded ? {
@@ -137,6 +146,7 @@ export default function HomePage() {
         onLabel: () => nav(`/session/${activeSession}`),
         action: { label: "Resume", onClick: () => nav(`/session/${activeSession}`), icon: <ArrowRight size={18}/> },
     } : null);
+    const durationControl = <fieldset className="launcher-group"><legend>Duration</legend><div className="launcher-options">{prefs.presets.slice(0, 4).map((minutes) => <button key={minutes} aria-pressed={setup.minutes === minutes} onClick={() => setSetup({ ...setup, minutes })}>{minutes} min</button>)}</div><label className="launcher-duration">Minutes<input type="number" min={5} max={120} value={setup.minutes} onChange={(event) => setSetup({ ...setup, minutes: Math.round(Math.max(5, Math.min(120, Number(event.target.value) || 5))) })}/></label></fieldset>;
     const press = useRef<{ id: number; x: number; y: number; axis: string } | null>(null);
     function pointerDown(event: ReactPointerEvent) {
         press.current = null;
@@ -156,39 +166,49 @@ export default function HomePage() {
     if (!loaded) return <section className="launcher"><p role="status">Loading your library…</p></section>;
     if (!sources.length) return <section className="launcher"><h1>Add your first source</h1><p>Follow RSS feeds, YouTube channels or podcasts to build a session.</p><button className="btn" onClick={() => nav("/sections")}>Go to Library</button><HowItWorks defaultOpen/></section>;
     return <>{building && <SessionBuilding detail={`${building.minutes} min · ${contentLabel(building).toLowerCase()}`} />}<section className={`launcher ${custom ? "launcher-custom" : ""}`} onPointerDown={pointerDown} onPointerMove={pointerMove} onPointerUp={pointerUp} onPointerCancel={() => { press.current = null; }}>
-        <header className="launcher-head"><h1>{custom ? "Custom session" : "New session"}</h1></header>
+        <header className="launcher-head"><h1>{custom ? setup.mix ? "Mix" : "Custom session" : "New session"}</h1></header>
         {error && <p className="launcher-error" role="alert">{error}</p>}
         {!custom ? <>
             <div className="launcher-starters">
                 {homePresets.map((preset) => <div className={`launcher-starter ${preset.id === data.defaultId ? "is-default" : ""}`} key={preset.id}>
                     <button className="launcher-starter-start" aria-label={`Start ${preset.name}`} disabled={busy || !hasSupply(preset.setup) || invalidSetup(preset.setup)} onClick={() => begin(preset.setup)}>
-                        <span><strong>{preset.name}</strong><small>{preset.setup.minutes} min · {scopeLabel(preset.setup)}</small></span><ArrowRight size={21}/>
+                        <span><strong>{preset.name}</strong><small>{preset.setup.mix ? setupLabel(preset.setup) : `${preset.setup.minutes} min · ${scopeLabel(preset.setup)}`}</small></span><ArrowRight size={21}/>
                     </button>
                     <button className="launcher-starter-edit" aria-label={`Customize ${preset.name}`} onClick={() => { setError(""); setSetup(preset.setup); setCustom(true); }}><SlidersHorizontal size={19}/></button>
                 </div>)}
             </div>
             <div className="launcher-secondary">
-                <button className="launcher-custom-action" onClick={() => { setError(""); setCustom(true); }}><Plus size={19}/><span>Custom session</span></button>
+                <button className="launcher-custom-action" onClick={() => { setError(""); setSetup((value) => ({ ...value, mix: undefined, contentTypes: [...contentTypes] })); setCustom(true); }}><Plus size={19}/><span>Custom session</span></button>
                 <button className="launcher-manage" aria-label="Manage presets" onClick={() => setSheet("presets")}><MoreHorizontal size={19}/>Presets</button>
                 {recent.length > 0 && <button className="launcher-manage" aria-label="Recent sessions" onClick={() => setSheet("recent")}>Recent</button>}
             </div>
             {!sources.some((source) => (source.unseen_count ?? 0) > 0) && <p className="launcher-meta">No new items. Add or refresh sources in Library.</p>}
+        </> : setup.mix ? <>
+            {durationControl}
+            <MixFormats mix={setup.mix} onChange={(mix) => setSetup({ ...setup, mix, contentTypes: mixContentTypes(mix) })}/>
+            <div className="launcher-custom-actions"><MixSectionsRow mix={setup.mix} sections={sections} onOpen={() => setSheet("mix-sections")}/>
+            <button className="launcher-save-link" disabled={!setup.contentTypes.length} onClick={() => setSave({ setup })}><Bookmark size={16}/>Save mix</button></div>
+            {setup.contentTypes.includes("short") && <ShortsModeToggle enabled={shortsMode} onChange={setShortsMode} />}
         </> : <>
-            <fieldset className="launcher-group"><legend>Duration</legend><div className="launcher-options">{prefs.presets.slice(0, 4).map((minutes) => <button key={minutes} aria-pressed={setup.minutes === minutes} onClick={() => setSetup({ ...setup, minutes })}>{minutes} min</button>)}</div><label className="launcher-duration">Minutes<input type="number" min={5} max={120} value={setup.minutes} onChange={(event) => setSetup({ ...setup, minutes: Math.round(Math.max(5, Math.min(120, Number(event.target.value) || 5))) })}/></label></fieldset>
+            {durationControl}
             <label className="launcher-field">Scope<select value={setup.sections.length === 0 ? "" : setup.sections.length === 1 ? setup.sections[0] : "__multiple"} onChange={(event) => setSetup({ ...setup, sections: event.target.value ? [event.target.value] : [], excluded: [] })}><option value="">Everything</option>{sections.map((section) => <option key={section.slug} value={section.slug}>{section.name}</option>)}{setup.sections.length > 1 && <option value="__multiple">{setup.sections.length} sections</option>}</select></label>
             <fieldset className="launcher-group" aria-describedby="content-types-help"><legend>Content</legend><div className="launcher-options launcher-content-options">{contentTypes.map((type) => <button key={type} aria-pressed={setup.contentTypes.includes(type)} onClick={() => setSetup({ ...setup, contentTypes: contentTypes.filter((candidate) => candidate === type ? !setup.contentTypes.includes(type) : setup.contentTypes.includes(candidate)) })}>{contentTypeLabel[type]}</button>)}</div><p id="content-types-help" className="launcher-meta">{setup.contentTypes.length ? "Articles includes audio. Choose any combination." : "Choose at least one content type."}</p></fieldset>
             {setup.contentTypes.includes("short") && <ShortsModeToggle enabled={shortsMode} onChange={setShortsMode} />}
             <div className="launcher-custom-actions"><button className="launcher-advanced" onClick={() => setSheet("advanced")}><SlidersHorizontal size={17}/>Topics and sections<ChevronRight size={17}/></button>
             <button className="launcher-save-link" disabled={!setup.contentTypes.length} onClick={() => setSave({ setup })}><Bookmark size={16}/>Save preset</button></div>
+            <button className="launcher-advanced" onClick={startMix}><Shuffle size={17}/>Mix every format by share<ChevronRight size={17}/></button>
             {!hasSupply(setup) && <p className="launcher-meta">No new items in this scope.</p>}
         </>}
-        {sheet && <BottomSheet open kicker={sheet === "advanced" ? "Session options" : sheet === "recent" ? "Recent sessions" : "Presets"} onClose={() => setSheet(null)}><div className="launcher-sheet-body">
-            {sheet === "advanced" ? <>
+        {sheet && <BottomSheet open kicker={sheet === "advanced" ? "Session options" : sheet === "mix-sections" ? "Mix sections" : sheet === "recent" ? "Recent sessions" : "Presets"} onClose={() => setSheet(null)}><div className="launcher-sheet-body">
+            {sheet === "mix-sections" && setup.mix ? <>
+                <MixSections mix={setup.mix} sections={sections} onChange={(mix) => setSetup({ ...setup, mix })}/>
+                <button className="btn" onClick={() => setSheet(null)}>Done</button>
+            </> : sheet === "advanced" ? <>
                 <h3>Sections</h3><label className="launcher-check"><input type="checkbox" checked={!setup.sections.length} onChange={() => setSetup({ ...setup, sections: [], excluded: [] })}/>Everything</label>
                 {sections.map((section) => <label className="launcher-check" key={section.slug}><input type="checkbox" checked={setup.sections.includes(section.slug)} onChange={() => setSetup({ ...setup, sections: setup.sections.includes(section.slug) ? setup.sections.filter((slug) => slug !== section.slug) : [...setup.sections, section.slug], excluded: [] })}/>{section.name}</label>)}
                 <h3>Topics</h3>{scopedTopics.map((topic) => <label className="launcher-check" key={topic.slug}><input type="checkbox" checked={!setup.excluded.includes(topic.slug)} onChange={() => setSetup({ ...setup, excluded: setup.excluded.includes(topic.slug) ? setup.excluded.filter((slug) => slug !== topic.slug) : [...setup.excluded, topic.slug] })}/>{topic.name}</label>)}
                 <button className="btn" onClick={() => setSheet(null)}>Done</button>
-            </> : sheet === "presets" ? <><p className="launcher-meta">Saved on this device for your account.</p>{data.presets.map((preset) => <div className="launcher-preset" key={preset.id}><button className="launcher-row" disabled={busy || !hasSupply(preset.setup) || invalidSetup(preset.setup)} onClick={() => begin(preset.setup)}><span><strong>{preset.name}{preset.id === data.defaultId ? " · Default" : ""}</strong><small>{setupLabel(preset.setup)}</small></span><ArrowRight size={18}/></button><div className="launcher-preset-actions"><button onClick={() => { setSheet(null); setSetup(preset.setup); setCustom(true); }}>Customize</button><button onClick={() => setSave({ setup: preset.setup, preset })}>Rename</button>{preset.id !== data.defaultId && <button onClick={() => updateData({ ...data, defaultId: preset.id })}>Make default</button>}<button onClick={() => updateData({ ...data, presets: data.presets.filter((p) => p.id !== preset.id), defaultId: data.defaultId === preset.id ? data.presets.find((p) => p.id !== preset.id)?.id ?? "" : data.defaultId })}>Remove</button></div></div>)}<button className="btn" onClick={() => { setSheet(null); setCustom(true); }}>Custom session</button></> : <>{suggestion && <div className="launcher-suggestion"><button onClick={() => setSave({ setup: suggestion })}>Used twice. Save as preset?</button><button className="icon-btn" aria-label="Dismiss preset suggestion" onClick={() => updateData({ ...data, dismissed: [...data.dismissed, setupKey(suggestion)] })}><X size={16}/></button></div>}{recent.length ? recent.map((value) => <div className="launcher-recent" key={setupKey(value)}><button className="launcher-row" onClick={() => { setSheet(null); setSetup(value); setCustom(true); }}><span><strong>{value.minutes} min {contentLabel(value).toLowerCase()}</strong><small>{setupLabel(value)}</small></span><ChevronRight size={18}/></button><button className="icon-btn" aria-label={`Save ${value.minutes} minute session as preset`} onClick={() => setSave({ setup: value })}><Bookmark size={18}/></button></div>) : <p>No unsaved sessions.</p>}</>}
+            </> : sheet === "presets" ? <><p className="launcher-meta">Saved on this device for your account.</p>{data.presets.map((preset) => <div className="launcher-preset" key={preset.id}><button className="launcher-row" disabled={busy || !hasSupply(preset.setup) || invalidSetup(preset.setup)} onClick={() => begin(preset.setup)}><span><strong>{preset.name}{preset.id === data.defaultId ? " · Default" : ""}</strong><small>{setupLabel(preset.setup)}</small></span><ArrowRight size={18}/></button><div className="launcher-preset-actions"><button onClick={() => { setSheet(null); setSetup(preset.setup); setCustom(true); }}>Customize</button><button onClick={() => setSave({ setup: preset.setup, preset })}>Rename</button>{preset.id !== data.defaultId && <button onClick={() => updateData({ ...data, defaultId: preset.id })}>Make default</button>}<button onClick={() => updateData({ ...data, presets: data.presets.filter((p) => p.id !== preset.id), defaultId: data.defaultId === preset.id ? data.presets.find((p) => p.id !== preset.id)?.id ?? "" : data.defaultId })}>Remove</button></div></div>)}<button className="btn" onClick={() => { setSheet(null); setCustom(true); }}>Custom session</button><button className="launcher-save-link" onClick={startMix}><Shuffle size={16}/>New mix</button></> : <>{suggestion && <div className="launcher-suggestion"><button onClick={() => setSave({ setup: suggestion })}>Used twice. Save as preset?</button><button className="icon-btn" aria-label="Dismiss preset suggestion" onClick={() => updateData({ ...data, dismissed: [...data.dismissed, setupKey(suggestion)] })}><X size={16}/></button></div>}{recent.length ? recent.map((value) => <div className="launcher-recent" key={setupKey(value)}><button className="launcher-row" onClick={() => { setSheet(null); setSetup(value); setCustom(true); }}><span><strong>{value.minutes} min {contentLabel(value).toLowerCase()}</strong><small>{setupLabel(value)}</small></span><ChevronRight size={18}/></button><button className="icon-btn" aria-label={`Save ${value.minutes} minute session as preset`} onClick={() => setSave({ setup: value })}><Bookmark size={18}/></button></div>) : <p>No unsaved sessions.</p>}</>}
         </div></BottomSheet>}
         {save && <SavePresetDialog setup={save.setup} name={save.preset?.name} editId={save.preset?.id} onClose={() => setSave(null)}/>}
     </section></>;

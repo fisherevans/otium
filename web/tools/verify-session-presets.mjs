@@ -169,6 +169,31 @@ for (const [media, includeShorts, selected] of mappings) {
     storeSessionPresets(4, { ...migrated, presets: [] });
     assert.equal(repeatSuggestion(loadSessionPresets(4)), null);
 }
+// #201 mixes: several saved mixes round-trip, keep their own keys, and do not
+// disturb the keys of setups without a mix.
+{
+    const { defaultMix, mixLabel, mixContentTypes } = module;
+    const mixSetup = (formats, sections = {}) => ({ ...defaultSetup(), minutes: 30, contentTypes: mixContentTypes({ formats, sections }), mix: { formats, sections } });
+    const morning = mixSetup({ article: 70, post: 20, short: 10 }, { news: 2, videos: 0 });
+    const evening = mixSetup({ article: 10, short: 30, long: 60 });
+    assert.deepEqual(morning.contentTypes, ['article', 'short'], 'posts map to the article content type');
+    assert.equal(saveSessionPreset(40, morning, 'Morning'), true);
+    assert.equal(saveSessionPreset(40, evening, 'Evening'), true);
+    const saved = loadSessionPresets(40, 'news').presets.filter((p) => p.setup.mix);
+    assert.deepEqual(saved.map((p) => [p.name, p.setup]), [['Morning', morning], ['Evening', evening]]);
+    assert.notEqual(setupKey(morning), setupKey(evening));
+    assert.equal(setupKey({ ...defaultSetup(), contentTypes: ['article'] }), JSON.stringify([10, [], [], ['article']]), 'plain setups keep their key');
+    assert.equal(mixLabel(defaultMix()), 'Articles 40% · Long videos 30% · Shorts 20% · Posts 10%');
+    recordSessionSetup(40, 'mix-1', morning);
+    recordSessionSetup(40, 'mix-2', morning);
+    assert.deepEqual(getSessionSetup(40, 'mix-2'), morning);
+    assert.equal(loadSessionPresets(40).lastKey, setupKey(morning), 'a mix key survives the reload normalization');
+    const sectionsStripped = saveSessionPreset(40, { ...morning, sections: ['news'] }, 'Scoped');
+    assert.equal(sectionsStripped, true);
+    assert.deepEqual(loadSessionPresets(40).presets.find((p) => p.name === 'Scoped').setup.sections, [], 'a mix spans every section');
+    assert.equal(saveSessionPreset(40, mixSetup({ article: 0 }), 'Empty'), false, 'a mix needs one share');
+    assert.equal(saveSessionPreset(40, mixSetup({ podcasts: 10 }), 'Bad'), false, 'unknown formats are rejected');
+}
 const shortsOnly = { ...defaultSetup(), contentTypes: ['short'] };
 assert.equal(saveSessionPreset(5, shortsOnly, 'Short break', true), true);
 assert.deepEqual(loadSessionPresets(5).presets.find(p => p.name === 'Short break').setup, shortsOnly);
@@ -192,4 +217,4 @@ assert.deepEqual(loadSessionPresets(25, 'actual-news-slug'), unwrittenMigration,
 assert.equal(saveSessionPreset(1, setup, 'Fail'), false);
 localStorage.getItem = () => { throw new Error('Storage disabled'); };
 assert.deepEqual(loadSessionPresets(26, 'actual-news-slug'), initialPresets('actual-news-slug'));
-console.log('Session presets: News/Shorts/Long starters, one-time stock migration, preserved edits/defaults/history/deletions, legacy content migration, account isolation, repeat suggestions, bounded history, corrupt and unavailable storage PASS');
+console.log('Session presets: News/Shorts/Long starters, one-time stock migration, preserved edits/defaults/history/deletions, legacy content migration, account isolation, repeat suggestions, bounded history, corrupt and unavailable storage, saved mixes PASS');

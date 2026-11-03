@@ -46,7 +46,11 @@ Server layout:
   no selectivity, no skip penalty** - representation alone shapes how much of a
   session each source occupies, so a session is a relaxing, representative sample.
   `build.go` holds the shared article helpers. **This is the core; keep source
-  allocation and article ranking independent.**
+  allocation and article ranking independent.** `mix.go` (#201) adds an optional
+  level above it: a mix picks the FORMAT for the next slot by share of session
+  time (midpoint rule, long videos charged by length), then the format's pool
+  picks a source by representation x section weight. Posts are derived from the
+  Bluesky source kind, not a media type. The no-mix path is pinned by a golden test.
 - `internal/server/handler` - thin HTTP handlers.
 - `internal/server/middleware` - auth gate (OIDC session or dev bypass).
 - `internal/oidc` - confidential OIDC client of auth.fisher.sh (copied from

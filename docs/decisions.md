@@ -171,3 +171,25 @@ A batch of changes from living in the app, not a redesign. The reasoning worth k
   engine. That keeps it on the right side of the "no librarian tooling" non-goal - it
   reduces noise in the finite session, it doesn't turn otium into an inbox with filters.
   The card's `···` menu just surfaces the item's own categories as one-tap mutes.
+
+## Mixes: format shares are shares of time, above representation (#201)
+
+A session mix gives each format (Articles, Posts, Shorts, Long videos) a share and each
+section a weight. The format decision sits **above** source allocation: the engine picks
+the format for the next slot, then a source within that format by representation, with
+the section weight multiplied into representation. Representation is still the only
+thing that shapes how often a source is picked; the mix only decides which pool the
+pick comes from.
+
+Shares are **shares of session time**, not of slots, because a slot-based share would
+let one 40-minute video count the same as one Short. The next slot goes to the format
+whose candidate, counted at its midpoint, leaves it furthest below its share of the time
+queued so far. The midpoint keeps every prefix of the queue close to target (sessions
+are consumed from the head) without letting a long video jump the queue. The
+consequence to know: a video longer than its share of the whole session falls past the
+session's end.
+
+**Posts are a derived format** (source kind `bluesky`), not a new `media_type`. Adding a
+content type would have changed what the existing Articles toggle and saved presets
+select; deriving it keeps every existing filter byte-for-byte and needs no migration.
+If more social kinds arrive, they join `postSourceKinds` in `session/mix.go`.

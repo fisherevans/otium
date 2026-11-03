@@ -5,6 +5,10 @@
 // Explicit session selection. Articles includes audio and all non-video media;
 // long includes live and videos without a short-video classification.
 export type SessionContentType = "article" | "long" | "short";
+// A session mix (#201): relative format shares of session time, and section
+// weights that scale source representation (absent = 1, 0 = off).
+export type MixFormat = "article" | "post" | "short" | "long";
+export interface SessionMix { formats: Partial<Record<MixFormat, number>>; sections: Record<string, number> }
 
 export interface Me {
   id: number;
@@ -619,8 +623,8 @@ export const api = {
   // Durable sessions (#67 + #69). createSession builds + stores the queue for a
   // single duration; currentSession resumes the active one (204 -> undefined);
   // updateSession advances the cursor or ends it.
-  createSession: (durationMin: number, themes: string[], sections: string[] = [], contentTypes?: SessionContentType[]) =>
-    req<SessionResponse>("POST", "/sessions", { duration_min: durationMin, themes, sections, ...(contentTypes ? { content_types: contentTypes } : {}) }),
+  createSession: (durationMin: number, themes: string[], sections: string[] = [], contentTypes?: SessionContentType[], mix?: SessionMix) =>
+    req<SessionResponse>("POST", "/sessions", { duration_min: durationMin, themes, sections, ...(mix ? { mix } : contentTypes ? { content_types: contentTypes } : {}) }),
   currentSession: () => req<SessionResponse | undefined>("GET", "/sessions/current"),
   updateSession: (id: string, patch: { cursor?: number; status?: "ended"; extend_min?: number }) =>
     req<{ ok: boolean }>("PATCH", `/sessions/${id}`, patch),
