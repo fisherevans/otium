@@ -167,6 +167,12 @@ type Item struct {
 	// from the YouTube API player embedHtml. Drives vertical-vs-landscape layout
 	// independent of the short/long duration bucket. 0 = unknown (client defaults).
 	AspectRatio float64 `json:"aspect_ratio"`
+	// Platform engagement (#197): counts on the post's own platform. HasEngagement
+	// marks an ingest that carries them, so an upsert refreshes the stored counts.
+	Likes         int  `json:"likes,omitempty"`
+	Reposts       int  `json:"reposts,omitempty"`
+	Replies       int  `json:"replies,omitempty"`
+	HasEngagement bool `json:"-"`
 	// Categories are the item's RSS <category> tags (#142). Populated on the card
 	// so the "filter this out" menu can offer each one; also drives category-based
 	// auto-archive. Only new (post-#142) items carry these. Omitted when empty.

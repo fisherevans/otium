@@ -6,6 +6,7 @@ package feeds
 
 import (
 	"context"
+	"errors"
 	"html"
 	"log/slog"
 	"strconv"
@@ -15,21 +16,25 @@ import (
 	"github.com/mmcdole/gofeed"
 
 	"github.com/fisherevans/otium/internal/server/media"
+	"github.com/fisherevans/otium/internal/server/social"
 	"github.com/fisherevans/otium/internal/server/store"
 	"github.com/fisherevans/otium/internal/server/youtube"
 )
+
+var errBadBlueskySource = errors.New("not a Bluesky source: feed_url should be bsky:<did>")
 
 type Ingester struct {
 	db     *store.DB
 	parser *gofeed.Parser
 	log    *slog.Logger
 	yt     *youtube.Client // nil unless a Data API key is configured
+	soc    *social.Client  // Bluesky posts and Substack engagement (#197); keyless
 }
 
 func NewIngester(db *store.DB, log *slog.Logger) *Ingester {
 	p := gofeed.NewParser()
 	p.UserAgent = "otium/0.1 (+https://otium.fisher.sh)"
-	return &Ingester{db: db, parser: p, log: log}
+	return &Ingester{db: db, parser: p, log: log, soc: social.New()}
 }
 
 // SetYouTube enables the API-native ongoing fetch for youtube sources. When set,
@@ -47,6 +52,9 @@ func (ing *Ingester) FetchSource(ctx context.Context, s store.Source) (int, erro
 			return n, err
 		}
 		// Not a resolvable channel feed - fall through to RSS parsing.
+	}
+	if s.Kind == "bluesky" {
+		return ing.fetchBluesky(ctx, s)
 	}
 
 	fctx, cancel := context.WithTimeout(ctx, 30*time.Second)
@@ -84,8 +92,69 @@ func (ing *Ingester) FetchSource(ctx context.Context, s store.Source) (int, erro
 			fresh++
 		}
 	}
+	if s.Kind == "substack" {
+		ing.refreshSubstackEngagement(ctx, s)
+	}
 	_ = ing.db.MarkFetched(ctx, s.ID, "")
 	return fresh, nil
+}
+
+// fetchBluesky pulls an account's own recent posts (#197) with their like,
+// repost and reply counts. Counts on posts already stored are refreshed too,
+// since they keep growing after the post first arrives.
+func (ing *Ingester) fetchBluesky(ctx context.Context, s store.Source) (int, error) {
+	did := social.BskyActor(s.FeedURL)
+	if did == "" {
+		err := errBadBlueskySource
+		_ = ing.db.MarkFetched(ctx, s.ID, err.Error())
+		return 0, err
+	}
+	fctx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	defer cancel()
+	posts, err := ing.soc.FetchBluesky(fctx, did, 50)
+	if err != nil {
+		_ = ing.db.MarkFetched(ctx, s.ID, err.Error())
+		return 0, err
+	}
+	fresh := 0
+	for _, p := range posts {
+		it := &store.Item{
+			SourceID: s.ID, ExternalID: p.ExternalID, URL: p.URL, Title: p.Title, Summary: p.Summary,
+			Content: p.ContentHTML, Author: p.Author, ThumbnailURL: p.ThumbnailURL, MediaType: p.MediaType,
+			PublishedAt: p.PublishedAt, ContentSource: store.ContentSourceRSS,
+			Likes: p.Engagement.Likes, Reposts: p.Engagement.Reposts, Replies: p.Engagement.Replies, HasEngagement: true,
+		}
+		created, err := ing.db.UpsertItem(ctx, it)
+		if err != nil {
+			ing.log.Warn("upsert bluesky post failed", "source", s.Title, "err", err)
+			continue
+		}
+		if created {
+			fresh++
+		}
+	}
+	_ = ing.db.MarkFetched(ctx, s.ID, "")
+	return fresh, nil
+}
+
+// refreshSubstackEngagement layers Substack's reaction/restack/comment counts
+// onto the publication's items (#197). Best effort: the RSS content is what
+// matters, so a failure here is logged, not recorded as a fetch error.
+func (ing *Ingester) refreshSubstackEngagement(ctx context.Context, s store.Source) {
+	fctx, cancel := context.WithTimeout(ctx, 20*time.Second)
+	defer cancel()
+	eng, err := ing.soc.SubstackEngagement(fctx, s.FeedURL)
+	if err != nil {
+		ing.log.Warn("substack engagement failed", "source", s.Title, "err", err)
+		return
+	}
+	counts := make(map[string][3]int, len(eng))
+	for u, e := range eng {
+		counts[u] = [3]int{e.Likes, e.Reposts, e.Replies}
+	}
+	if _, err := ing.db.SetItemEngagementByURL(ctx, s.ID, counts, social.NormalizeURL); err != nil {
+		ing.log.Warn("substack engagement store failed", "source", s.Title, "err", err)
+	}
 }
 
 // fetchYouTube pulls a youtube source's latest uploads via the Data API. The bool
@@ -380,4 +449,43 @@ func stripTags(s string) string {
 		}
 	}
 	return strings.Join(strings.Fields(b.String()), " ")
+}
+
+// ResolveSocial turns what a person pastes for a Bluesky, Substack or Medium
+// source (#197) into a feed URL, name and avatar, checking the feed is real.
+func (ing *Ingester) ResolveSocial(ctx context.Context, kind, input string) (*social.Resolved, error) {
+	ctx, cancel := context.WithTimeout(ctx, 20*time.Second)
+	defer cancel()
+	switch kind {
+	case "bluesky":
+		return ing.soc.ResolveBluesky(ctx, input)
+	case "substack":
+		host := social.SubstackHost(input)
+		if host == "" {
+			return nil, errors.New("that doesn't look like a Substack publication")
+		}
+		return ing.peekFeed(ctx, kind, "https://"+host+"/feed", "https://"+host)
+	case "medium":
+		feedURL := social.MediumFeedURL(input)
+		if feedURL == "" {
+			return nil, errors.New("that doesn't look like a Medium profile or publication")
+		}
+		return ing.peekFeed(ctx, kind, feedURL, strings.Replace(feedURL, "/feed", "", 1))
+	}
+	return nil, errors.New("unknown source type " + kind)
+}
+
+func (ing *Ingester) peekFeed(ctx context.Context, kind, feedURL, home string) (*social.Resolved, error) {
+	feed, err := ing.parser.ParseURLWithContext(feedURL, ctx)
+	if err != nil {
+		return nil, errors.New("couldn't read " + feedURL + ": " + err.Error())
+	}
+	r := &social.Resolved{Kind: kind, FeedURL: feedURL, Title: strings.TrimSpace(feed.Title), HomeURL: home}
+	if feed.Image != nil {
+		r.IconURL = feed.Image.URL
+	}
+	if feed.Link != "" {
+		r.HomeURL = strings.SplitN(feed.Link, "?", 2)[0] // Medium tags its links with ?source=rss
+	}
+	return r, nil
 }

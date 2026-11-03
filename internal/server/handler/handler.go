@@ -60,6 +60,24 @@ func (h *Handler) Config(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// ResolveSocial resolves a Bluesky handle, Substack publication or Medium
+// profile to a feed, name and avatar for the add-source wizard (#197).
+func (h *Handler) ResolveSocial(w http.ResponseWriter, r *http.Request) {
+	var body struct {
+		Kind  string `json:"kind"`
+		Input string `json:"input"`
+	}
+	if !decode(w, r, &body) {
+		return
+	}
+	res, err := h.ing.ResolveSocial(r.Context(), body.Kind, body.Input)
+	if err != nil {
+		badRequest(w, err.Error())
+		return
+	}
+	writeJSON(w, http.StatusOK, res)
+}
+
 // ResolveYouTube resolves a channel URL / @handle / id / name to a canonical
 // channel identity, so the add-source UI can confirm the right channel before
 // creating the source (#126).
@@ -522,9 +540,9 @@ func (h *Handler) UpdateSource(w http.ResponseWriter, r *http.Request) {
 // length preference is a 400.
 func normalizeScoringConfig(c session.ScoringConfig) (string, error) {
 	switch c.Direction {
-	case "", "newest", "oldest", "random":
+	case "", "newest", "oldest", "random", "popular":
 	default:
-		return "", fmt.Errorf("scoring direction must be newest, oldest, or random")
+		return "", fmt.Errorf("scoring direction must be newest, oldest, random or popular")
 	}
 	if c.Length != nil {
 		switch c.Length.Prefer {

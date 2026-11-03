@@ -5,6 +5,7 @@ import { type Bucket } from "@/lib/represent";
 import { Dialog } from "@/components/Dialog";
 import { ArchiveChoice } from "@/components/ArchiveChoice";
 import { RepresentationPicker } from "@/components/RepresentationPicker";
+import { ordersFor, type Direction } from "@/lib/articleOrder";
 
 // AddSourceWizard (#127): a three-step add-source flow.
 //   1. pick the source type
@@ -14,7 +15,18 @@ import { RepresentationPicker } from "@/components/RepresentationPicker";
 //      archive rule, article order/length, keywords), then create.
 // The source is created with the chosen identifier, attached to the topic, then
 // patched with any non-default options in one follow-up call.
-type Kind = "rss" | "youtube" | "podcast";
+type Kind = "rss" | "youtube" | "podcast" | "bluesky" | "substack" | "medium";
+type Social = "bluesky" | "substack" | "medium";
+type Resolved = { kind: string; feed_url: string; title: string; icon_url: string; home_url: string };
+
+// #197: the social kinds resolve what a person pastes (a handle, a profile link)
+// to a feed on the server, so step 2 is a lookup with a preview, not a feed URL.
+const SOCIAL: Record<Social, { name: string; sub: string; label: string; placeholder: string }> = {
+  bluesky: { name: "Bluesky", sub: "posts from an account", label: "Handle or profile link", placeholder: "name.bsky.social" },
+  substack: { name: "Substack", sub: "a newsletter", label: "Publication name or link", placeholder: "name.substack.com" },
+  medium: { name: "Medium", sub: "a writer or publication", label: "Profile or publication link", placeholder: "medium.com/@name" },
+};
+const isSocial = (k: Kind): k is Social => k in SOCIAL;
 type YtResult = { channel_id: string; title: string; thumbnail: string; description: string; feed_url: string; channel_url: string };
 
 export function AddSourceWizard({
@@ -41,6 +53,8 @@ export function AddSourceWizard({
   const [ytResults, setYtResults] = useState<YtResult[] | null>(null);
   const [ytSearching, setYtSearching] = useState(false);
   const [ytSelected, setYtSelected] = useState<YtResult | null>(null);
+  const [resolved, setResolved] = useState<Resolved | null>(null);
+  const [resolving, setResolving] = useState(false);
 
   // step 3
   const [name, setName] = useState("");
@@ -49,7 +63,7 @@ export function AddSourceWizard({
   const [archiveDays, setArchiveDays] = useState(0);
   const [keepCount, setKeepCount] = useState(0);
   const [combine, setCombine] = useState<"and" | "or">("and");
-  const [direction, setDirection] = useState<"newest" | "oldest" | "random">("newest");
+  const [direction, setDirection] = useState<Direction>("newest");
   const [lengthPrefer, setLengthPrefer] = useState<"longer" | "shorter" | null>(null);
   const [keywords, setKeywords] = useState("");
   const [adding, setAdding] = useState(false);
@@ -63,6 +77,7 @@ export function AddSourceWizard({
     setYtQuery("");
     setYtResults(null);
     setYtSelected(null);
+    setResolved(null);
     setName("");
     setImportAll(true);
     setBucket("normal");
@@ -82,7 +97,33 @@ export function AddSourceWizard({
   function pickKind(k: Kind) {
     setKind(k);
     setErr("");
+    setResolved(null);
+    setUrl("");
+    // A Bluesky account posts many small things a day: start it on the busy-source
+    // defaults (#197) - the best of the last three days, not the latest few.
+    if (k === "bluesky") {
+      setDirection("popular");
+      setArchiveDays(3);
+    } else {
+      setDirection("newest");
+      setArchiveDays(0);
+    }
     setStep(2);
+  }
+
+  async function resolveSocial() {
+    const q = url.trim();
+    if (!q || resolving) return;
+    setResolving(true);
+    setErr("");
+    setResolved(null);
+    try {
+      setResolved(await api.resolveSocial(kind, q));
+    } catch (e: any) {
+      setErr(String(e.message ?? e).replace(/^Error:\s*/, ""));
+    } finally {
+      setResolving(false);
+    }
   }
 
   async function ytSearch() {
@@ -105,6 +146,9 @@ export function AddSourceWizard({
     if (kind === "youtube") {
       if (!ytSelected) return;
       setName(ytSelected.title);
+    } else if (isSocial(kind)) {
+      if (!resolved) return;
+      setName(resolved.title);
     } else {
       if (!url.trim()) return;
     }
@@ -121,10 +165,12 @@ export function AddSourceWizard({
       if (createdId.current === null) {
         const created = await api.createSource({
           kind,
-          title: name.trim() || (isYt && ytSelected ? ytSelected.title : url),
+          title: name.trim() || (isYt && ytSelected ? ytSelected.title : resolved?.title || url),
           ...(isYt && ytSelected
             ? { channel_id: ytSelected.channel_id, icon_url: ytSelected.thumbnail, import_backlog: importAll }
-            : { feed_url: url.trim() }),
+            : isSocial(kind) && resolved
+              ? { feed_url: resolved.feed_url, icon_url: resolved.icon_url }
+              : { feed_url: url.trim() }),
         });
         createdId.current = created.id;
       }
@@ -182,6 +228,13 @@ export function AddSourceWizard({
               <span className="dlg-name">Podcast</span>
               <span className="dlg-sub">audio feed URL</span>
             </button>
+            {(Object.keys(SOCIAL) as Social[]).map((k) => (
+              <button key={k} className="dlg-opt" onClick={() => pickKind(k)}>
+                <span className="dlg-radio" aria-hidden />
+                <span className="dlg-name">{SOCIAL[k].name}</span>
+                <span className="dlg-sub">{SOCIAL[k].sub}</span>
+              </button>
+            ))}
           </div>
         </>
       )}
@@ -236,7 +289,51 @@ export function AddSourceWizard({
         </>
       )}
 
-      {step === 2 && kind !== "youtube" && (
+      {step === 2 && isSocial(kind) && (
+        <>
+          <div className="dlg-sub">{SOCIAL[kind].label}</div>
+          <div className="yt-resolve-row">
+            <input
+              className="field"
+              placeholder={SOCIAL[kind].placeholder}
+              value={url}
+              autoFocus
+              autoCapitalize="none"
+              autoCorrect="off"
+              onChange={(e) => { setUrl(e.target.value); setResolved(null); }}
+              onKeyDown={(e) => e.key === "Enter" && resolveSocial()}
+            />
+            <button className="btn ghost" onClick={resolveSocial} disabled={resolving || !url.trim()}>
+              {resolving ? "…" : "Find"}
+            </button>
+          </div>
+          {resolved && (
+            <div className="yt-results">
+              <div className="yt-result sel">
+                <div className="yt-result-select">
+                  {resolved.icon_url ? <img className="yt-result-av" src={resolved.icon_url} alt="" /> : <span className="yt-result-av ph" />}
+                  <div className="yt-result-body">
+                    <div className="yt-result-title">{resolved.title}</div>
+                  </div>
+                </div>
+                <a className="yt-result-open" href={resolved.home_url} target="_blank" rel="noreferrer">
+                  Open <ExternalLink size={14} className="inline-icon" aria-hidden />
+                </a>
+              </div>
+            </div>
+          )}
+          <div className="dlg-actions wiz-actions">
+            <button className="btn ghost" onClick={() => setStep(1)}>
+              Back
+            </button>
+            <button className="btn" onClick={toStep3} disabled={!resolved}>
+              Next
+            </button>
+          </div>
+        </>
+      )}
+
+      {step === 2 && kind !== "youtube" && !isSocial(kind) && (
         <>
           <div className="dlg-sub">Feed URL</div>
           <input
@@ -291,13 +388,11 @@ export function AddSourceWizard({
 
           <div className="dlg-sub">Article order</div>
           <div className="dlg-opts">
-            {(["newest", "oldest", "random"] as const).map((d) => (
-              <button key={d} className={`dlg-opt ${direction === d ? "on" : ""}`} onClick={() => setDirection(d)}>
+            {ordersFor(kind).map((o) => (
+              <button key={o.value} className={`dlg-opt ${direction === o.value ? "on" : ""}`} onClick={() => setDirection(o.value)}>
                 <span className="dlg-radio" aria-hidden />
-                <span className="dlg-name">{d === "newest" ? "Newest first" : d === "oldest" ? "Oldest first" : "Random"}</span>
-                <span className="dlg-sub">
-                  {d === "newest" ? "reverse chronological" : d === "oldest" ? "work through the backlog" : "shuffled by age"}
-                </span>
+                <span className="dlg-name">{o.name}</span>
+                <span className="dlg-sub">{o.sub}</span>
               </button>
             ))}
           </div>

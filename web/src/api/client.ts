@@ -88,7 +88,7 @@ export interface Source {
 // ScoringConfig (#124): per-source article ordering. direction shapes the age
 // facet; length optionally layers a duration preference. Undefined/empty = newest.
 export interface ScoringConfig {
-  direction?: "newest" | "oldest" | "random";
+  direction?: "newest" | "oldest" | "random" | "popular"; // popular: platform engagement velocity (#197)
   length?: { prefer: "longer" | "shorter" } | null;
 }
 
@@ -575,6 +575,9 @@ export const api = {
   importBacklog: (id: number) => req<{ ok: boolean }>("POST", `/sources/${id}/import-backlog`, {}),
   // #126: server capability flags (e.g. whether YouTube-native sources can be created).
   getConfig: () => req<{ youtube_available: boolean }>("GET", "/config"),
+  // #197: resolve a Bluesky handle, Substack publication or Medium profile.
+  resolveSocial: (kind: string, input: string) =>
+    req<{ kind: string; feed_url: string; title: string; icon_url: string; home_url: string }>("POST", "/sources/resolve-social", { kind, input }),
   // #126: resolve a channel URL / @handle / id / name to a canonical channel identity.
   resolveYouTube: (input: string) =>
     req<{ channel_id: string; title: string; thumbnail: string; feed_url: string }>("POST", "/sources/resolve-youtube", { input }),

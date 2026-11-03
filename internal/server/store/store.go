@@ -206,6 +206,14 @@ func migrate(sdb *sql.DB) error {
 	if err := ensureColumn(sdb, "sources", "scoring_config", `ALTER TABLE sources ADD COLUMN scoring_config TEXT NOT NULL DEFAULT ''`); err != nil {
 		return err
 	}
+	// Platform engagement (#197): likes / reposts / replies a post got on its own
+	// platform (Bluesky, Substack), refreshed on every fetch. Feeds the "popular"
+	// article order; zero for sources that don't expose counts.
+	for _, col := range []string{"likes", "reposts", "replies"} {
+		if err := ensureColumn(sdb, "items", col, `ALTER TABLE items ADD COLUMN `+col+` INTEGER NOT NULL DEFAULT 0`); err != nil {
+			return err
+		}
+	}
 	// Backlog-import count cursor (#124): videos walked so far, for the keep-latest-N
 	// import bound. Additive for DBs whose source_import predates the column.
 	if err := ensureColumn(sdb, "source_import", "seen", `ALTER TABLE source_import ADD COLUMN seen INTEGER NOT NULL DEFAULT 0`); err != nil {
@@ -1233,8 +1241,19 @@ func (db *DB) UpsertItem(ctx context.Context, it *Item) (bool, error) {
 	if err != nil {
 		return false, err
 	}
+	created := false
 	if n, _ := res.RowsAffected(); n > 0 {
-		return true, nil // genuinely new insert
+		created = true // genuinely new insert
+	}
+	if it.HasEngagement {
+		if _, err := db.sql.ExecContext(ctx,
+			`UPDATE items SET likes = ?, reposts = ?, replies = ? WHERE source_id = ? AND external_id = ?`,
+			it.Likes, it.Reposts, it.Replies, it.SourceID, it.ExternalID); err != nil {
+			return created, err
+		}
+	}
+	if created {
+		return true, nil
 	}
 	// Existing row: backfill content only when it's empty and we actually have a
 	// body to write. The topic shipped it, so mark it 'rss' in the same update -
@@ -1427,7 +1446,7 @@ func candidateCols(content, rank string) string {
 	             COALESCE((SELECT f.half_life_days FROM topics f WHERE f.id = s.topic_id), 0) AS topic_half_life,
 	             COALESCE((SELECT f.archive_after_days FROM topics f WHERE f.id = s.topic_id), 0) AS topic_archive_after,
 	             s.archive_keep_count, s.archive_combine, s.scoring_config,
-	             ` + rank + ` AS recency_rank`
+	             ` + rank + ` AS recency_rank, i.likes, i.reposts, i.replies`
 }
 
 const (
@@ -1499,7 +1518,8 @@ func scanCandidates(rows *sql.Rows, windowDays int) ([]Candidate, error) {
 			&c.MediaType, &c.DurationSec, &c.AspectRatio, &cats, &pub, &fetched,
 			&c.SourceTitle, &c.SourceIconURL, &c.SourceWeight, &c.PerSessionCap, &c.SourceHalfLifeDays, &c.SourceArchiveAfterDays, &c.SourceArchiveKeywords, &c.SourceArchiveCategories,
 			&winCount, &winSpan, &halfLife, &c.TopicArchiveAfterDays,
-			&c.SourceArchiveKeepCount, &c.SourceArchiveCombine, &c.ScoringConfig, &c.RecencyRank); err != nil {
+			&c.SourceArchiveKeepCount, &c.SourceArchiveCombine, &c.ScoringConfig, &c.RecencyRank,
+			&c.Likes, &c.Reposts, &c.Replies); err != nil {
 			return nil, err
 		}
 		c.Categories = splitCategories(cats)
@@ -2218,4 +2238,38 @@ func splitInts(s string) []int64 {
 		}
 	}
 	return out
+}
+
+// SetItemEngagementByURL refreshes platform counts (#197) for a source's items
+// matched by URL, for platforms whose counts come from a separate API (Substack).
+// norm maps a stored item URL to the key the counts are keyed by.
+func (db *DB) SetItemEngagementByURL(ctx context.Context, sourceID int64, counts map[string][3]int, norm func(string) string) (int, error) {
+	rows, err := db.sql.QueryContext(ctx, `SELECT id, url FROM items WHERE source_id = ?`, sourceID)
+	if err != nil {
+		return 0, err
+	}
+	type hit struct {
+		id int64
+		c  [3]int
+	}
+	var hits []hit
+	for rows.Next() {
+		var id int64
+		var u string
+		if err := rows.Scan(&id, &u); err != nil {
+			rows.Close()
+			return 0, err
+		}
+		if c, ok := counts[norm(u)]; ok {
+			hits = append(hits, hit{id, c})
+		}
+	}
+	rows.Close()
+	for _, h := range hits {
+		if _, err := db.sql.ExecContext(ctx, `UPDATE items SET likes = ?, reposts = ?, replies = ? WHERE id = ?`,
+			h.c[0], h.c[1], h.c[2], h.id); err != nil {
+			return 0, err
+		}
+	}
+	return len(hits), nil
 }

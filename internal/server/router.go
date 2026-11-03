@@ -57,6 +57,7 @@ func NewRouter(h *handler.Handler, authMiddleware func(http.Handler) http.Handle
 			// search for a channel to pick from in the add-source wizard.
 			r.Post("/sources/resolve-youtube", h.ResolveYouTube)
 			r.Post("/sources/search-youtube", h.SearchYouTube)
+			r.Post("/sources/resolve-social", h.ResolveSocial) // #197: Bluesky / Substack / Medium
 
 			r.Get("/topics", h.ListTopics)
 			r.Post("/topics", h.CreateTopic)

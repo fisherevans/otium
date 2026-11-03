@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { Pencil, Settings, Copy, Check, Mail, Ban, EyeOff, ArrowLeft, ArrowRight } from "lucide-react";
 import { api, parseScoring, type Topic, type Source, type SourceItem, type SourceStats, type ScoringConfig } from "@/api/client";
+import { ordersFor, type Direction } from "@/lib/articleOrder";
 import { bucketOf, REP_LEVEL, REP_PROSE, REP_LABEL, compareToAverage, type Bucket } from "@/lib/represent";
 import { RepresentationPicker } from "@/components/RepresentationPicker";
 import { resolveSourceArchive, itemEligible } from "@/lib/archive";
@@ -220,7 +221,7 @@ export default function SourcePage() {
     if (!await saveChange(() => api.updateSource(sourceId, { scoring_config: next }))) return;
     reload();
   }
-  function setDirection(d: "newest" | "oldest" | "random") {
+  function setDirection(d: Direction) {
     saveScoring({ ...scoring, direction: d });
   }
   function setLengthPrefer(p: "longer" | "shorter" | null) {
@@ -514,17 +515,15 @@ export default function SourcePage() {
 
         <div className="dlg-sub">Article order</div>
         <div className="dlg-opts">
-          {(["newest", "oldest", "random"] as const).map((d) => (
+          {ordersFor(source?.kind ?? "").map((o) => (
             <button
-              key={d}
-              className={`dlg-opt ${(scoring.direction ?? "newest") === d ? "on" : ""}`}
-              onClick={() => setDirection(d)}
+              key={o.value}
+              className={`dlg-opt ${(scoring.direction ?? "newest") === o.value ? "on" : ""}`}
+              onClick={() => setDirection(o.value)}
             >
               <span className="dlg-radio" aria-hidden />
-              <span className="dlg-name">{d === "newest" ? "Newest first" : d === "oldest" ? "Oldest first" : "Random"}</span>
-              <span className="dlg-sub">
-                {d === "newest" ? "reverse chronological" : d === "oldest" ? "work through the backlog" : "shuffled by age"}
-              </span>
+              <span className="dlg-name">{o.name}</span>
+              <span className="dlg-sub">{o.sub}</span>
             </button>
           ))}
         </div>

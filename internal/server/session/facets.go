@@ -3,6 +3,7 @@ package session
 import (
 	"encoding/json"
 	"hash/fnv"
+	"math"
 	"sort"
 	"time"
 
@@ -24,7 +25,8 @@ import (
 // ScoringConfig is a source's per-article scoring, stored as JSON in
 // sources.scoring_config. Zero value = default (newest, no facets).
 type ScoringConfig struct {
-	// Direction shapes the age facet: "" / "newest" (default), "oldest", "random".
+	// Direction shapes the age facet: "" / "newest" (default), "oldest", "random",
+	// or "popular" (#197), which ranks by platform engagement velocity instead.
 	Direction string `json:"direction,omitempty"`
 	// Length, when set, layers a duration preference on top of the age facet.
 	Length *LengthFacet `json:"length,omitempty"`
@@ -38,6 +40,12 @@ type LengthFacet struct {
 }
 
 const (
+	// Popular order (#197). popularGravity is how hard age discounts engagement
+	// (Hacker News uses 1.8; lower keeps a day-old hit in the running longer).
+	// popularFloor keeps a post nobody has engaged with yet in the pool.
+	popularGravity = 1.5
+	popularFloor   = 0.05
+
 	// lengthMidpointSec is where the length facet crosses ~0.5 - a 10-minute item is
 	// "medium". lengthFloor keeps the shortest items in the running (down-weighted).
 	lengthMidpointSec = 600.0
@@ -88,10 +96,17 @@ func orderSource(cs []store.Candidate, cfg ScoringConfig, seed int64, now time.T
 		return t.Sub(oldest).Seconds() / span
 	}
 
+	var pop map[int64]float64
+	if cfg.Direction == "popular" {
+		pop = popularScores(cs, now)
+	}
+
 	scores := make(map[int64]float64, len(cs))
 	for _, c := range cs {
 		var age float64
 		switch cfg.Direction {
+		case "popular":
+			age = pop[c.ID]
 		case "oldest":
 			age = 1 - ageNorm(c.PublishedAt)
 		case "random":
@@ -157,4 +172,44 @@ func putInt64(b []byte, v int64) {
 	for i := 0; i < 8; i++ {
 		b[i] = byte(u >> (8 * i))
 	}
+}
+
+// popularScores ranks a source's eligible posts by engagement velocity (#197):
+// weighted engagement over a power of age, the Hacker News shape. Reposts count
+// double because they spread a post; replies count once (an argument is still
+// attention). The result is normalized to the set's best post and floored, so
+// a brand-new post with no engagement yet is down-weighted, never dropped, and
+// the score decays with age on its own - no separate recency facet is needed.
+func popularScores(cs []store.Candidate, now time.Time) map[int64]float64 {
+	raw := make(map[int64]float64, len(cs))
+	max := 0.0
+	for _, c := range cs {
+		v := PopularityVelocity(c.Likes, c.Reposts, c.Replies, now.Sub(c.PublishedAt))
+		raw[c.ID] = v
+		if v > max {
+			max = v
+		}
+	}
+	out := make(map[int64]float64, len(cs))
+	for id, v := range raw {
+		s := 1.0
+		if max > 0 {
+			s = v / max
+		}
+		if s < popularFloor {
+			s = popularFloor
+		}
+		out[id] = s
+	}
+	return out
+}
+
+// PopularityVelocity is the unnormalized popular-order score for one post.
+func PopularityVelocity(likes, reposts, replies int, age time.Duration) float64 {
+	hours := age.Hours()
+	if hours < 0 {
+		hours = 0
+	}
+	eng := float64(likes + 2*reposts + replies + 1)
+	return eng / math.Pow(hours+2, popularGravity)
 }
