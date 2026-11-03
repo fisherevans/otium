@@ -27,6 +27,9 @@ function pic(w: number, h: number, tone: "light" | "dark" = "light"): string {
 const AVATAR = pic(400, 400, "dark");
 
 const NOW = "2026-08-16T12:00:00Z";
+
+const OTM_TEXT =
+  "Struggling to figure out if an election story is true or false? Check out the election rumor rundown from the Center for an Informed Public and listen to our conversation with co-founder @katestarbird.bsky.social on this week\u2019s show. lnk.to/onthemedia/b...";
 function ago(days: number): string {
   return new Date(Date.parse(NOW) - days * 86400_000).toISOString();
 }
@@ -488,6 +491,169 @@ export const FIXTURES: Fixture[] = [
       source_icon_url: AVATAR,
       topic: { name: "Tech Press", slug: "tech-press", color: "#5f6f8f", icon: "" },
     }),
+  },
+  // #207: posts with their structured body - links from facets, a compact link
+  // card, pictures, a quoted post, and a thread deep enough to give way.
+  {
+    key: "bsky-otm",
+    section: "News",
+    label: "Bluesky post · mention + shortened link + link card",
+    note: "#207, Fisher's On the Media post: the shortened lnk.to link and the mention must be live links, and the link card is compact (its description goes before the text is trimmed).",
+    sel: sel({
+      item: item({
+        id: 40,
+        source_kind: "bluesky",
+        post: true,
+        url: "https://bsky.app/profile/onthemedia.bsky.social/post/3mzfxog3uyf23",
+        title: "Struggling to figure out if an election story is true or false? Check out the election rumor rundown from the Center for an Informed Public and listen to our…",
+        text: OTM_TEXT,
+        content: "<p>body</p>",
+        thumbnail_url: pic(400, 400),
+        likes: 10,
+        reposts: 5,
+        replies: 0,
+        published_at: ago(0.125),
+        post_body: {
+          author: { name: "On the Media", handle: "onthemedia.bsky.social", avatar: AVATAR, url: "https://bsky.app/profile/onthemedia.bsky.social" },
+          segments: [
+            { text: OTM_TEXT.slice(0, OTM_TEXT.indexOf("@")) },
+            { text: "@katestarbird.bsky.social", kind: "mention", href: "https://bsky.app/profile/did:plc:h3t5rqlvuaorq42yckpijirj" },
+            { text: " on this week\u2019s show. " },
+            { text: "lnk.to/onthemedia/b...", kind: "link", href: "https://lnk.to/onthemedia/bluesky" },
+          ],
+          link: {
+            uri: "https://lnk.to/onthemedia/bluesky",
+            title: "On the Media",
+            description: "The Peabody Award-winning On the Media podcast is your guide to examining how the media sausage is made. Hosts Brooke Gladstone and Micah Loewinger examine threats to free speech and government transparency.",
+            thumb: pic(400, 400),
+            domain: "lnk.to",
+          },
+        },
+      }),
+      source_title: "On the Media",
+      source_icon_url: AVATAR,
+      topic: { name: "Media", slug: "media", color: "#5f6f8f", icon: "" },
+    }),
+  },
+  {
+    key: "bsky-images",
+    section: "Tech",
+    label: "Bluesky post · two pictures · hashtag · replies",
+    note: "#207: two pictures side by side under the solver's hero cap; the replies give way before the pictures shrink to their floor.",
+    sel: sel({
+      item: item({
+        id: 41,
+        source_kind: "bluesky",
+        post: true,
+        url: "https://bsky.app/profile/maggie.bsky.social/post/3img",
+        title: "NEW: I talked to an epileptologist and surgeon who said the device is being marketed far past what the evidence supports.",
+        text: "NEW: I talked to an epileptologist and surgeon who said the device is being marketed far past what the evidence supports. #health",
+        content: "<p>body</p>",
+        thumbnail_url: pic(1200, 900),
+        likes: 68,
+        reposts: 9,
+        replies: 4,
+        published_at: ago(0.5),
+        post_body: {
+          author: { name: "Maggie Harrison Dupr\u00e9", handle: "mharrisondupre.bsky.social", avatar: AVATAR },
+          segments: [
+            { text: "NEW: I talked to an epileptologist and surgeon who said the device is being marketed far past what the evidence supports. " },
+            { text: "#health", kind: "tag", href: "https://bsky.app/hashtag/health" },
+          ],
+          images: [
+            { thumb: pic(1200, 900), alt: "A device on a table", aspect: 1.333 },
+            { thumb: pic(900, 1200, "dark"), alt: "A screenshot of an ad", aspect: 0.75 },
+          ],
+        },
+      }),
+      source_title: "Maggie Harrison Dupr\u00e9",
+      source_icon_url: AVATAR,
+      topic: { name: "Tech Press", slug: "tech-press", color: "#5f6f8f", icon: "" },
+    }),
+    conversation: conv("bluesky", { likes: 68, reposts: 7, replies: 4, quotes: 2 }, [
+      reply("Ruth Allen", 12, "This is the part of the story that should worry regulators most: nobody is checking the claims after launch."),
+      reply("Theo", 3, "Great reporting, thank you for doing this."),
+    ]),
+  },
+  {
+    key: "bsky-quoted",
+    section: "Tech",
+    label: "Bluesky post · quotes a post with a link card",
+    note: "#207: the quoted post comes with the post (no wait for the conversation) and sits inset, clamped to four lines on the card.",
+    sel: sel({
+      item: item({
+        id: 42,
+        source_kind: "bluesky",
+        post: true,
+        url: "https://bsky.app/profile/jason.bsky.social/post/3quo",
+        title: "the idea of some random guy making his chatbot write a press release about how his chatbot is a bad employee",
+        text: "the idea of some random guy making his chatbot write a press release about how his chatbot is a bad employee then emailing it to a bunch of journalists is still cracking me up",
+        content: "<p>body</p>",
+        likes: 110,
+        reposts: 20,
+        replies: 3,
+        published_at: ago(0.4),
+        post_body: {
+          author: { name: "Jason Koebler", handle: "jasonkoebler.bsky.social", avatar: AVATAR },
+          segments: [{ text: "the idea of some random guy making his chatbot write a press release about how his chatbot is a bad employee then emailing it to a bunch of journalists is still cracking me up" }],
+          quote: {
+            author: { name: "404 Media", handle: "404media.co", avatar: AVATAR },
+            segments: [
+              { text: "A man had his AI agent send journalists a press release accusing the agent of misconduct. We read all " },
+              { text: "40 pages", kind: "link", href: "https://www.404media.co/x" },
+              { text: " so you don't have to." },
+            ],
+            url: "https://bsky.app/profile/404media.co/post/3q",
+            published_at: ago(0.6),
+            media: "link",
+          },
+        },
+      }),
+      source_title: "Jason Koebler",
+      source_icon_url: AVATAR,
+      topic: { name: "Tech Press", slug: "tech-press", color: "#5f6f8f", icon: "" },
+    }),
+    conversation: conv("bluesky", { likes: 110, reposts: 20, replies: 3, quotes: 0 }, [
+      reply("Reader", 4, "Genuinely the best thing in my inbox this week."),
+    ]),
+  },
+  {
+    key: "bsky-thread",
+    section: "Tech",
+    label: "Bluesky post · picture · 212 replies, nested",
+    note: "#207: a reply-heavy post. Two replies on the card on a thread line, the rest one tap away; the reader nests replies to replies.",
+    sel: sel({
+      item: item({
+        id: 43,
+        source_kind: "bluesky",
+        post: true,
+        url: "https://bsky.app/profile/jason.bsky.social/post/3thr",
+        title: "this story is extremely wild, major investigation from our team",
+        text: "this story is extremely wild, major investigation from our team that took months. read it here: 404media.co/the-story...",
+        content: "<p>body</p>",
+        thumbnail_url: pic(1200, 675),
+        likes: 2459,
+        reposts: 640,
+        replies: 212,
+        published_at: ago(1),
+        post_body: {
+          author: { name: "Jason Koebler", handle: "jasonkoebler.bsky.social", avatar: AVATAR },
+          segments: [
+            { text: "this story is extremely wild, major investigation from our team that took months. read it here: " },
+            { text: "404media.co/the-story...", kind: "link", href: "https://www.404media.co/the-story-in-full/" },
+          ],
+          images: [{ thumb: pic(1200, 675), alt: "A screenshot of the story", aspect: 1.778 }],
+        },
+      }),
+      source_title: "Jason Koebler",
+      source_icon_url: AVATAR,
+      topic: { name: "Tech Press", slug: "tech-press", color: "#5f6f8f", icon: "" },
+    }),
+    conversation: conv("bluesky", { likes: 2459, reposts: 590, replies: 212, quotes: 50 }, [
+      { ...reply("Dana Whitfield", 410, "The detail about the contractor invoices is going to be the part that sticks. That is a paper trail, not a vibe."), children: [reply("Jason Koebler", 120, "yes, and there is more of it coming")] },
+      reply("mit1975eecs", 98, "Months of work and it shows. Subscribed."),
+      reply("a bezoar", 2, "Link for anyone who missed it."),
+    ]),
   },
   {
     key: "substack-comments",

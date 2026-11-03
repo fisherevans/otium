@@ -179,6 +179,46 @@ export interface Item {
   // whole post, and `title` is only its first line for lists and messages.
   post?: boolean;
   text?: string;
+  // #207: the structured post - text as segments with their links, and what is
+  // attached. Absent for posts stored before #207 until their source is fetched.
+  post_body?: PostBody;
+  // #197: counts on the item's own platform, as of its last fetch.
+  likes?: number;
+  reposts?: number;
+  replies?: number;
+}
+
+// --- social posts (#207) ---
+// A post's text split by its rich-text annotations on the server (Bluesky facets
+// index UTF-8 bytes). Concatenated, the segments' text is the post's text. An
+// href is always an http(s) URL; anything else arrives as plain text.
+export interface PostSegment {
+  text: string;
+  kind?: "link" | "mention" | "tag";
+  href?: string;
+}
+
+export interface PostAuthor {
+  name: string;
+  handle?: string;
+  avatar?: string;
+  url?: string;
+}
+
+export interface PostBody {
+  author: PostAuthor;
+  segments: PostSegment[];
+  images?: { thumb: string; full?: string; alt?: string; aspect?: number }[];
+  link?: { uri: string; title?: string; description?: string; thumb?: string; domain?: string };
+  video?: { thumb?: string; aspect?: number };
+  quote?: {
+    author: PostAuthor;
+    segments: PostSegment[];
+    url?: string;
+    published_at?: string;
+    media?: "image" | "video" | "link";
+    thumb?: string;
+  };
 }
 
 // SourceItem is an item plus the user's current engagement state on it (#120):
@@ -776,11 +816,15 @@ export interface ConversationComment {
   handle?: string;
   avatar_url?: string;
   text: string;
+  // #207: the text with its links, when it has any (Bluesky).
+  segments?: PostSegment[];
   url?: string;
   likes: number;
   replies: number;
   media?: "image" | "video" | "link";
   published_at: string;
+  // #207: replies to this reply, most-liked first (Bluesky).
+  children?: ConversationComment[];
 }
 
 export interface Conversation {

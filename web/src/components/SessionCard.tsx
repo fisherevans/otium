@@ -9,7 +9,8 @@ import { TopicPill, CardSource, SourceAvatar, Byline, Blurb, Media } from "@/com
 import { InlineMedia, type MediaPosition } from "@/components/InlineMedia";
 import { ShareActions } from "@/components/ReaderActions";
 import { isMedia, isVertical, videoAspect } from "@/lib/render";
-import { isPost, postMediaURL, postText } from "@/lib/posts";
+import { isPost, postBody, postCounts } from "@/lib/posts";
+import { CardThread, PostCard } from "@/components/PostView";
 import { PlatformMark } from "@/components/PlatformMark";
 import "./session-afterglow.css";
 import { relTime } from "@/lib/format";
@@ -298,7 +299,7 @@ export function primaryFor(
   item: Item,
   render: ItemRender,
 ): { label: string; Icon: typeof BookOpen; action: "content" | "external" } {
-  if (render === "full_text") return { label: "Read", Icon: BookOpen, action: "content" };
+  if (render === "full_text") return { label: item.post ? "View post" : "Read", Icon: BookOpen, action: "content" };
   if (item.media_type === "short" || item.media_type === "long" || item.media_type === "live")
     return { label: "Watch", Icon: Play, action: "content" };
   if (item.media_type === "audio") return { label: "Listen", Icon: Play, action: "content" };
@@ -364,7 +365,14 @@ export const SessionCard = forwardRef<HTMLDivElement, SessionCardProps>(function
   // size; the author's avatar stays small in the credit, and only a real attached
   // picture is media.
   const post = isPost(it.item) && !isMedia(it.item);
-  const mediaItem = post ? { ...it.item, thumbnail_url: postMediaURL(it.item, it.source_icon_url) } : it.item;
+  // #207: a Bluesky post is drawn as a post - its own card, author on top, links
+  // working, attachments, the engagement row, then its replies as a thread.
+  const bskyPost = post && it.item.source_kind === "bluesky";
+  const body = post ? postBody(it.item, it.source_title, it.source_icon_url) : null;
+  if (body && !body.quote && conv?.quoted) {
+    const q = conv.quoted;
+    body.quote = { author: { name: q.author, handle: q.handle, avatar: q.avatar_url }, segments: q.segments ?? [{ text: q.text }], url: q.url, published_at: q.published_at, media: q.media };
+  }
   const age = compactShort ? relTime(it.item.published_at || it.item.fetched_at) : "";
 
   return (
@@ -422,12 +430,9 @@ export const SessionCard = forwardRef<HTMLDivElement, SessionCardProps>(function
           ) : null
         }
       />
-      {post ? (
-        <>
-          {/* A post reads author first, like every social app; then the text. */}
-          {hierarchy === "taxonomy-credit" && <CardCredit sel={it} onSource={() => onSource(it)} />}
-          <p className="card-post">{postText(it.item)}</p>
-        </>
+      {post && body ? (
+        <PostCard body={body} publishedAt={it.item.published_at || it.item.fetched_at} url={it.item.url}
+          counts={postCounts(it.item, conv)} onAuthor={() => onSource(it)} />
       ) : (
         <>
           <h3 className="card-title">{it.item.title}</h3>
@@ -485,15 +490,18 @@ export const SessionCard = forwardRef<HTMLDivElement, SessionCardProps>(function
           />
         </div>
       ) : (
-        <>
-          <Media item={mediaItem} />
-          {!compactShort && !post && <Blurb item={it.item} />}
-        </>
+        !post && (
+          <>
+            <Media item={it.item} />
+            {!compactShort && <Blurb item={it.item} />}
+          </>
+        )
       )}
 
       {/* #200: a post's top replies sit under it; a landscape long video's top
           comments sit under the player. Shorts use the overlay. */}
-      {conv && !compactShort && inlineConversation(it.item) && (activeMedia || !isMedia(it.item)) && (
+      {conv && bskyPost && <CardThread conv={conv} onMore={onConversation ? () => onConversation(it) : undefined} />}
+      {conv && !bskyPost && !compactShort && inlineConversation(it.item) && (activeMedia || !isMedia(it.item)) && (
         <CardConversation conv={conv} onMore={onConversation ? () => onConversation(it) : undefined} />
       )}
 

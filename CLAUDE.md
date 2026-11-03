@@ -101,7 +101,10 @@ Measure with full-screen Shorts too (`--shorts-mode --immersive` in the lab, the
 default in the app): it pads every ordinary card clear of floating chrome, and the
 solver must hold that padding back when it centres (#205). Social posts (`item.post`,
 from `store.PostKinds`) render as text posts, not headlines: `.card-post`, trimmed by
-the solver's last knob, never an avatar as hero (`lib/posts.ts`).
+the solver's last knob, never an avatar as hero (`lib/posts.ts`). A Bluesky post renders
+from its structured `post_body` (#207, `components/PostView.tsx`, server
+`internal/server/richtext`): facets are applied on the server by UTF-8 byte offset into
+link segments, so the client never computes offsets; `.bp-link-desc` is a solver knob.
 
 `web/src/lab/README.md` has the full loop, the fixture list, and the specificity
 trap that bites every time (several old `global.css` rules match the card's at

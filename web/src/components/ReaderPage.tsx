@@ -11,7 +11,9 @@ import "./session-afterglow.css";
 import { Overlay, usePresence } from "./Overlay";
 import { ReaderConversation } from "./Conversation";
 import { PlatformMark } from "./PlatformMark";
-import { headline, isPost } from "@/lib/posts";
+import { headline, isPost, postBody, postCounts } from "@/lib/posts";
+import { PostCard, ReaderThread } from "./PostView";
+import { useConversationState } from "@/lib/conversation";
 
 // Shared full-page article reader. Overlay owns its history entry so each
 // origin keeps its own list, selection, and scroll position.
@@ -312,6 +314,9 @@ export function ReaderPage({
   }, [open, mounted, itemId]);
 
   const post = !!item && isPost(item);
+  // #207: a post opens as the post - its card with the engagement row under it -
+  // then every reply threaded, then quotes, then Bluesky. No article body.
+  const postConv = useConversationState(post ? item : null, open && post);
   const readEst = useMemo(() => (body ? readTime(body.html.replace(/<[^>]+>/g, " ")) : ""), [body]);
 
   // #149: tapping an image in the article opens the full-screen zoomable viewer.
@@ -322,7 +327,7 @@ export function ReaderPage({
   useEffect(() => { if (!open) setViewerSrc(null); }, [open]);
   const onBodyClick = useCallback((e: ReactMouseEvent) => {
     const t = e.target as HTMLElement;
-    if (t.tagName === "IMG") {
+    if (t.tagName === "IMG" && !t.closest("a, .bp-head, .bp-reply, .bp-quote")) {
       const src = (t as HTMLImageElement).currentSrc || (t as HTMLImageElement).src;
       if (src) {
         e.preventDefault();
@@ -405,8 +410,23 @@ export function ReaderPage({
       </div>
 
       <div className={`readerpage-body ${post ? "rp-post" : ""}`} ref={scrollRef} onScroll={onScroll}>
-        {/* #205: a post has no headline; it opens as its author, then its text. */}
-        {!post && <h1 className="rp-title">{item.title}</h1>}
+        {post ? (
+          <div className="rp-postview" onClick={onBodyClick}>
+            <PostCard body={postBody(item, sourceTitle ?? item.author)} publishedAt={item.published_at || item.fetched_at}
+              url={item.url} counts={postCounts(item, postConv.conv)} full />
+            <ReaderThread conv={postConv.conv} url={item.url} status={postConv.status} />
+            <div className="rp-foot">
+              {onSave && (
+                <button className="reader-open" onClick={onSave}>
+                  <Bookmark size={15} strokeWidth={1.75} aria-hidden />
+                  Save
+                </button>
+              )}
+            </div>
+            {onNext && <p className="reader-next-cue">Swipe up for the next item</p>}
+          </div>
+        ) : (<>
+        <h1 className="rp-title">{item.title}</h1>
         <div className="rp-meta">
           {(() => {
             // #2: omit the author when it just repeats the source.
@@ -459,6 +479,7 @@ export function ReaderPage({
             {onNext && <p className="reader-next-cue">Swipe up for the next item</p>}
           </>
         )}
+        </>)}
       </div>
 
       <ContextInstrument mode="reader" eyebrow="Reading" label={progress >= .96 ? (post ? "End of post" : "End of article") : progress > .7 ? "Near the end" : sourceTitle || (post ? "Post" : "Article")}

@@ -1,4 +1,4 @@
-import type { Item } from "@/api/client";
+import type { Conversation, Item, PostBody } from "@/api/client";
 
 // Social posts (#205). A Bluesky post (X later, #198) has no headline: its text
 // is the content and its author's avatar is identity, not a picture. The server
@@ -41,4 +41,29 @@ export function postMediaURL(item: Item, avatarURL?: string): string {
   const u = item.thumbnail_url;
   if (!u || u === avatarURL || u.includes("/img/avatar/")) return "";
   return u;
+}
+
+/**
+ * The structured post to render (#207). The server sends `post_body` for posts
+ * fetched since #207; an older one is rebuilt from what the item has - its text,
+ * the source as author, its picture - so every post renders through one path.
+ */
+export function postBody(item: Item, sourceTitle: string, sourceIcon?: string): PostBody {
+  if (item.post_body) {
+    const b = item.post_body;
+    return { ...b, author: { ...b.author, name: b.author.name || sourceTitle, avatar: b.author.avatar || sourceIcon } };
+  }
+  const pic = postMediaURL(item, sourceIcon);
+  return {
+    author: { name: sourceTitle || item.author, avatar: sourceIcon },
+    segments: [{ text: postText(item) }],
+    images: pic ? [{ thumb: pic }] : undefined,
+  };
+}
+
+/** Engagement for the post's row: live conversation counts when loaded, else
+ *  the counts stored at the last fetch (reposts there already include quotes). */
+export function postCounts(item: Item, conv?: Conversation | null): { replies: number; reposts: number; likes: number } {
+  if (conv) return { replies: conv.counts.replies, reposts: conv.counts.reposts + conv.counts.quotes, likes: conv.counts.likes };
+  return { replies: item.replies ?? 0, reposts: item.reposts ?? 0, likes: item.likes ?? 0 };
 }

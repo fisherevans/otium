@@ -55,6 +55,12 @@ short local-news card that must centre with full-screen Shorts on and off),
 and `bsky-link-avatar` (a link card whose picture is a profile avatar, which must
 never become the hero). `bsky-image` and `bsky-quote` are posts now too.
 
+#207 added structured posts (`post_body`): `bsky-otm` (Fisher's On the Media post -
+a mention, a display-shortened link and a link card whose description must not take
+over), `bsky-images` (two pictures and a hashtag), `bsky-quoted` (a quote that arrives with
+the post, not the conversation) and `bsky-thread` (212 replies, nested in the reader).
+`measure` fails a post link without an http(s) target and a link card over 130px tall.
+
 The Shorts mode switch uses the real compact card and solver. Portrait, square
 and landscape short videos exercise its contained frame, compact creator/date
 and Details control. A long portrait video verifies that geometry alone does
