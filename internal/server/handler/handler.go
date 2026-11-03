@@ -34,6 +34,7 @@ type Handler struct {
 	ytImport bool               // YouTube backlog import enabled (an API key is configured)
 	yt       *youtube.Client    // nil unless a Data API key is configured
 	video    *videofile.Fetcher // nil disables video file downloads (#180)
+	share    SharingConfig      // Discord sharing (#195); zero value = off
 }
 
 func New(db *store.DB, ing *feeds.Ingester, log *slog.Logger) *Handler {

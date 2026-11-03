@@ -1,6 +1,8 @@
 import { Dialog } from "./Dialog";
 import { useState } from "react";
-import { ExternalLink, Bookmark, Link2, Share2, Check } from "lucide-react";
+import { ExternalLink, Bookmark, Link2, Share2, Check, Send } from "lucide-react";
+import { SharePicker } from "./SharePicker";
+import { useShareAvailable } from "@/lib/sharing";
 import type { Item } from "@/api/client";
 import { canWebShare, copyText, shareOrCopy } from "@/lib/share";
 
@@ -41,7 +43,11 @@ export function ManualCopy({ url, onClose }: { url: string; onClose: () => void 
 
 // ShareActions renders the visible Copy link + Share pair. `labeled` shows text
 // beside the icons (reader header); the default is icon-only (tight rows).
-export function ShareActions({ item, labeled, compact = false }: { item: Item; labeled?: boolean; compact?: boolean }) {
+// `discord` adds Send on Discord (#195) where there is room for it: the reader,
+// not the session card, whose layout is solved at runtime.
+export function ShareActions({ item, labeled, compact = false, discord = false }: { item: Item; labeled?: boolean; compact?: boolean; discord?: boolean }) {
+  const shareOn = useShareAvailable() && discord;
+  const [sending, setSending] = useState(false);
   const [toast, setToast] = useState("");
   const [manual, setManual] = useState(false);
   const nativeShare = canWebShare();
@@ -74,6 +80,13 @@ export function ShareActions({ item, labeled, compact = false }: { item: Item; l
           {labeled && <span>Share</span>}
         </button>
       )}
+      {shareOn && (
+        <button className={cls} onClick={() => setSending(true)} aria-label="Send on Discord">
+          <Send size={18} strokeWidth={1.75} aria-hidden />
+          {labeled && <span>Send</span>}
+        </button>
+      )}
+      {shareOn && <SharePicker item={sending ? item : null} open={sending} onClose={() => setSending(false)} />}
       {manual && <ManualCopy url={item.url} onClose={() => setManual(false)} />}
       {toast && (
         <div className="toast over-sheet">

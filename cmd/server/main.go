@@ -17,6 +17,7 @@ import (
 
 	"github.com/fisherevans/otium/internal/oidc"
 	"github.com/fisherevans/otium/internal/server"
+	"github.com/fisherevans/otium/internal/server/discord"
 	"github.com/fisherevans/otium/internal/server/enrich"
 	"github.com/fisherevans/otium/internal/server/feeds"
 	"github.com/fisherevans/otium/internal/server/handler"
@@ -101,6 +102,24 @@ func main() {
 	} else {
 		authMiddleware = middleware.RequireAuth(resolveSession)
 	}
+
+	secret := []byte(cfg.SessionSecret)
+	if len(secret) == 0 {
+		secret = []byte("otium-dev-share-secret") // dev only: prod always has OTIUM_SESSION_SECRET
+	}
+	h.SetSharing(handler.SharingConfig{
+		Discord: discord.New(discord.Config{
+			ClientID:     cfg.DiscordClientID,
+			ClientSecret: cfg.DiscordClientSecret,
+			BotToken:     cfg.DiscordBotToken,
+			RedirectURL:  strings.TrimRight(cfg.ShareBaseURL, "/") + "/s/callback",
+			GuildID:      cfg.DiscordGuildID,
+			APIBase:      os.Getenv("OTIUM_DISCORD_API_BASE"), // local fakes only
+		}),
+		PublicBaseURL: cfg.ShareBaseURL,
+		OwnerName:     cfg.ShareOwnerName,
+		Secret:        secret,
+	})
 
 	router := server.NewRouter(h, authMiddleware, authn)
 	srv := &http.Server{

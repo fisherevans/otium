@@ -1,0 +1,37 @@
+/* Sharing (#195): the Send on Discord sheet and the Sharing settings screen. */
+.share-title { -webkit-line-clamp: 2; display: -webkit-box; -webkit-box-orient: vertical; overflow: hidden; }
+.share-target { display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0; margin-left: 10px; }
+.share-nick { overflow-wrap: anywhere; }
+.share-sub { font-family: var(--grot); font-size: 13px; color: var(--ink-mute); display: inline-flex; align-items: center; gap: 4px; flex-wrap: wrap; }
+.share-warn { color: var(--bad); }
+.share-note { display: flex; flex-direction: column; gap: 6px; margin-top: 14px; }
+.share-note textarea { resize: vertical; min-height: 64px; font-size: 16px; }
+.share-actions { display: flex; gap: 10px; justify-content: flex-end; margin-top: 16px; flex-wrap: wrap; }
+.share-actions .btn { min-height: 44px; }
+.share-empty { display: flex; flex-direction: column; gap: 14px; align-items: flex-start; }
+.share-results { display: flex; flex-direction: column; gap: 10px; }
+.share-result { display: flex; gap: 10px; align-items: flex-start; font-size: 16px; }
+.share-result svg { flex: none; margin-top: 2px; }
+.share-result.ok svg { color: var(--good); }
+.share-result.bad svg { color: var(--bad); }
+.share-why { color: var(--ink-soft); font-size: 14px; display: block; }
+
+.sharing-page h2 { font-family: var(--grot); font-size: 13px; letter-spacing: .06em; text-transform: uppercase; color: var(--ink-mute); margin: 28px 0 6px; font-weight: 600; }
+.sharing-intro { color: var(--ink-soft); margin: 4px 0 0; }
+.sharing-row { border-top: 1px solid var(--hair); padding: 14px 0; }
+.sharing-row-head { display: flex; align-items: center; gap: 12px; width: 100%; background: none; border: none; padding: 0; text-align: left; color: inherit; min-height: 44px; }
+.sharing-row-head .share-target { margin-left: 0; }
+.sharing-row-head .share-nick { font-family: var(--serif); font-size: 18px; }
+.sharing-detail { margin-top: 12px; display: flex; flex-direction: column; gap: 12px; }
+.sharing-detail .field { font-size: 16px; }
+.sharing-buttons { display: flex; gap: 8px; flex-wrap: wrap; }
+.sharing-buttons .btn { min-height: 44px; }
+.sharing-link { font-family: var(--mono); font-size: 13px; background: var(--paper-2); border-radius: 8px; padding: 10px 12px; overflow-wrap: anywhere; user-select: all; }
+.sharing-add { display: flex; flex-direction: column; gap: 10px; border-top: 1px solid var(--hair); padding: 14px 0; }
+.sharing-add select { font-size: 16px; }
+.sharing-sent { list-style: none; margin: 0; padding: 0; font-size: 15px; }
+.sharing-sent li { padding: 6px 0; border-top: 1px solid var(--hair); }
+.sharing-sent li:first-child { border-top: 0; }
+.sharing-sent a { color: inherit; }
+.sharing-sent .share-sub { display: block; }
+.linklike { background: none; border: none; padding: 0; color: inherit; text-decoration: underline; font: inherit; cursor: pointer; }

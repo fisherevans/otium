@@ -391,7 +391,7 @@ export function ReaderPage({
           <button className="rp-act" onClick={onOpen} aria-label="Open original">
             <ExternalLink size={18} strokeWidth={1.75} aria-hidden />
           </button>
-          <ShareActions item={item} />
+          <ShareActions item={item} discord />
         </div>
         </div>
         <div className={`rp-revealbar ${revealed ? "in" : ""}`} aria-hidden={!revealed}>
@@ -461,7 +461,7 @@ export function ReaderPage({
         <div className="sheet-rows">
           {onSave && <button className="sheet-row" onClick={() => { setMenuOpen(false); onSave(); }}><span>Save to collection</span><Bookmark size={18} aria-hidden /></button>}
           <button className="sheet-row" onClick={onOpen}><span>Open original</span><ExternalLink size={18} aria-hidden /></button>
-          <ShareActions item={item} labeled />
+          <ShareActions item={item} labeled discord />
         </div>
       </BottomSheet>
 

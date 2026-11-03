@@ -20,6 +20,7 @@ import CollectionsPage from "@/pages/CollectionsPage";
 import ImportPage from "@/pages/ImportPage";
 import InsightsPage from "@/pages/InsightsPage";
 import SettingsPage from "@/pages/SettingsPage";
+import SharingPage from "@/pages/SharingPage";
 // --- #83 personal-history page ---
 import HistoryPage from "@/pages/HistoryPage";
 // --- end #83 ---
@@ -138,6 +139,7 @@ function AppShell() {
           <Route path="/history" element={<HistoryPage />} /> {/* #83: personal shown-vs-engaged history */}
           <Route path="/insights" element={<InsightsPage />} />
           <Route path="/settings" element={<SettingsPage />} /> {/* #68: preferences (fast-scroll check-in) */}
+          <Route path="/settings/sharing" element={<SharingPage />} /> {/* #195: Discord friends and channels */}
           <Route path="/settings/appearance" element={<AppearancePage />} /> {/* #80/#81/#82: appearance + live preview */}
           <Route path="/import" element={<ImportPage />} />
         </Routes>

@@ -471,6 +471,54 @@ async function req<T>(method: string, path: string, body?: unknown, keepalive = 
   return (await res.json()) as T;
 }
 
+// Sharing (#195): Discord friends (DM) and server channels, by nickname.
+export type ShareTargetStatus = "pending" | "connected" | "failing";
+export interface ShareTarget {
+  id: number;
+  kind: "friend" | "channel";
+  nickname: string;
+  discord_user_id?: string;
+  discord_name?: string;
+  guild_id?: string;
+  guild_name?: string;
+  channel_name?: string;
+  status: ShareTargetStatus;
+  last_error?: string;
+  created_at: string;
+  connected_at?: string;
+  last_shared_at?: string;
+  share_count: number;
+  connect_url?: string; // a pending friend's one-time link
+}
+export interface ShareStatus {
+  available: boolean;
+  invite_url?: string;
+  history_url?: string;
+}
+export interface DiscordGuild {
+  id: string;
+  name: string;
+  channels: { id: string; name: string; category?: string }[];
+}
+export interface ShareResult {
+  target_id: number;
+  nickname: string;
+  ok: boolean;
+  error?: string;
+}
+export interface SentShare {
+  id: number;
+  item_id?: number;
+  url: string;
+  title: string;
+  source_name: string;
+  thumbnail_url: string;
+  media_type: string;
+  note: string;
+  created_at: string;
+  deliveries: { target_id: number; nickname: string; kind: string; error?: string; sent_at: string }[];
+}
+
 export const api = {
   me: () => req<Me>("GET", "/users/me"),
 
@@ -634,6 +682,20 @@ export const api = {
     req<{ ok: boolean }>("POST", `/collections/${id}/items`, { item_id: itemId }),
   removeFromCollection: (id: number, itemId: number) =>
     req<{ ok: boolean }>("DELETE", `/collections/${id}/items/${itemId}`),
+
+  // Sharing (#195).
+  shareStatus: () => req<ShareStatus>("GET", "/share/status"),
+  shareTargets: () => req<ShareTarget[]>("GET", "/share/targets"),
+  addShareFriend: (nickname: string) => req<ShareTarget>("POST", "/share/friends", { nickname }),
+  addShareChannel: (body: { nickname: string; guild_id: string; guild_name: string; channel_id: string; channel_name: string }) =>
+    req<ShareTarget>("POST", "/share/channels", body),
+  renameShareTarget: (id: number, nickname: string) => req<ShareTarget>("PATCH", `/share/targets/${id}`, { nickname }),
+  deleteShareTarget: (id: number) => req<{ ok: boolean }>("DELETE", `/share/targets/${id}`),
+  newConnectLink: (id: number) => req<ShareTarget>("POST", `/share/targets/${id}/connect-link`),
+  discordChannels: () => req<DiscordGuild[]>("GET", "/share/discord-channels"),
+  shareItem: (itemId: number, targetIds: number[], note: string) =>
+    req<{ share_id: number; results: ShareResult[] }>("POST", `/items/${itemId}/share`, { target_ids: targetIds, note }),
+  sentShares: (targetId?: number) => req<SentShare[]>("GET", `/shares${targetId ? `?target_id=${targetId}` : ""}`),
 
   // Import: parse sends the raw upload (text OR a file Blob - a zip must go as
   // bytes, not text) so the server can unzip / parse it directly.

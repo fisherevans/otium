@@ -47,6 +47,18 @@ type Config struct {
 	// leaves the endpoint answering 503.
 	YtDlp          string
 	YtDlpJSRuntime string
+
+	// Discord sharing (#195). Off unless the bot token and client id are set.
+	DiscordClientID     string
+	DiscordClientSecret string
+	DiscordBotToken     string
+	// DiscordGuildID is the server a connecting friend is added to so the bot
+	// may DM them.
+	DiscordGuildID string
+	// ShareBaseURL is the public host for the friend-facing /s/* pages.
+	ShareBaseURL string
+	// ShareOwnerName signs shares ("Fisher shared ...").
+	ShareOwnerName string
 }
 
 func LoadConfig() (*Config, error) {
@@ -84,6 +96,13 @@ func LoadConfig() (*Config, error) {
 	}
 
 	cfg.YouTubeAPIKey = os.Getenv("OTIUM_YOUTUBE_API_KEY")
+
+	cfg.DiscordClientID = os.Getenv("OTIUM_DISCORD_CLIENT_ID")
+	cfg.DiscordClientSecret = os.Getenv("OTIUM_DISCORD_CLIENT_SECRET")
+	cfg.DiscordBotToken = os.Getenv("OTIUM_DISCORD_BOT_TOKEN")
+	cfg.DiscordGuildID = os.Getenv("OTIUM_DISCORD_GUILD_ID")
+	cfg.ShareBaseURL = os.Getenv("OTIUM_SHARE_BASE_URL")
+	cfg.ShareOwnerName = os.Getenv("OTIUM_SHARE_OWNER_NAME")
 	cfg.DevUser = os.Getenv("OTIUM_DEV_USER")
 
 	cfg.OIDCIssuer = os.Getenv("OTIUM_OIDC_ISSUER")

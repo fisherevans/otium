@@ -36,6 +36,16 @@ func NewRouter(h *handler.Handler, authMiddleware func(http.Handler) http.Handle
 		r.Get("/auth/logout", authn.Logout)
 	}
 
+	// Friend-facing share pages (#195): public, Discord-identified, and the only
+	// paths share.fisher.sh routes here. They read nothing but share history.
+	r.Route("/s", func(r chi.Router) {
+		r.Get("/", h.ShareHome)
+		r.Get("/login", h.ShareSignIn)
+		r.Get("/logout", h.ShareSignOut)
+		r.Get("/callback", h.ShareCallback)
+		r.Get("/c/{token}", h.ShareConnect)
+	})
+
 	r.Route("/api/v1", func(r chi.Router) {
 		r.Group(func(r chi.Router) {
 			r.Use(authMiddleware)
@@ -101,6 +111,7 @@ func NewRouter(h *handler.Handler, authMiddleware func(http.Handler) http.Handle
 			r.Post("/items/{id}/read", h.ItemRead) // #135: active read/watch time
 			r.Get("/items/{id}/video", h.ItemVideo)
 			r.Post("/client-metrics", h.ClientMetrics)     // #182: device timing records, logged only        // #180: a Short as an MP4 to save or share
+			r.Post("/items/{id}/share", h.ShareItem)       // #195: send to Discord friends/channels
 			r.Post("/items/{id}/filter", h.FilterFromItem) // #142: mute a category / add a keyword from the card
 			r.Post("/fetch", h.FetchNow)
 
@@ -116,6 +127,17 @@ func NewRouter(h *handler.Handler, authMiddleware func(http.Handler) http.Handle
 			// styling. PUT merges a JSON patch; never read by the ranker.
 			r.Get("/preferences", h.GetPreferences)
 			r.Put("/preferences", h.UpdatePreferences)
+
+			// Sharing (#195): Discord friends and channels, and the owner's sent log.
+			r.Get("/share/status", h.ShareStatus)
+			r.Get("/share/targets", h.ListShareTargets)
+			r.Post("/share/friends", h.CreateShareFriend)
+			r.Post("/share/channels", h.CreateShareChannel)
+			r.Patch("/share/targets/{id}", h.RenameShareTarget)
+			r.Delete("/share/targets/{id}", h.DeleteShareTarget)
+			r.Post("/share/targets/{id}/connect-link", h.NewShareConnectLink)
+			r.Get("/share/discord-channels", h.DiscordChannels)
+			r.Get("/shares", h.ListShares)
 
 			r.Post("/import/parse", h.ParseImport)
 			r.Post("/import/commit", h.CommitImport)

@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useBack } from "@/lib/navigation";
 import { api, type Settings } from "@/api/client";
+import { useShareAvailable } from "@/lib/sharing";
 
 // Settings (#68). A lightweight preferences surface, reachable from the library's
 // Manage sheet. One toggle today: the fast-scroll check-in. The copy is
@@ -12,6 +13,7 @@ import { api, type Settings } from "@/api/client";
 export default function SettingsPage() {
   const nav = useNavigate();
   const back = useBack("/you");
+  const shareOn = useShareAvailable();
   const [saved, setSaved] = useState(false);
   const [settings, setSettings] = useState<Settings | null>(null);
   const [err, setErr] = useState("");
@@ -105,6 +107,19 @@ export default function SettingsPage() {
           <ChevronRight size={18} className="inline-icon" aria-hidden />
         </span>
       </button>
+
+      {/* Sharing (#195): Discord friends and channels to send items to. */}
+      {shareOn && (
+        <button className="settings-link" onClick={() => nav("/settings/sharing")}>
+          <div className="settings-copy">
+            <b>Sharing</b>
+            <span>Friends and Discord channels you can send videos and articles to.</span>
+          </div>
+          <span className="settings-link-chev" aria-hidden>
+            <ChevronRight size={18} className="inline-icon" aria-hidden />
+          </span>
+        </button>
+      )}
 
       {settings && (
         <div className="settings-list">

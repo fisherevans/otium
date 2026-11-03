@@ -339,3 +339,60 @@ CREATE TABLE IF NOT EXISTS collection_items (
 );
 
 CREATE INDEX IF NOT EXISTS idx_collection_items_item ON collection_items(item_id);
+
+-- Sharing (#195). A share target is a Discord friend (DM) or a server channel,
+-- named by a nickname only the owner sees. A friend starts `pending` with a
+-- one-time connect token and becomes `connected` once they approve the Discord
+-- app; `failing` means the last send to it was refused.
+CREATE TABLE IF NOT EXISTS share_targets (
+    id                 INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id            INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    kind               TEXT NOT NULL,                 -- friend | channel
+    nickname           TEXT NOT NULL,
+    discord_user_id    TEXT NOT NULL DEFAULT '',
+    discord_name       TEXT NOT NULL DEFAULT '',      -- the friend's Discord display name
+    guild_id           TEXT NOT NULL DEFAULT '',
+    guild_name         TEXT NOT NULL DEFAULT '',
+    channel_id         TEXT NOT NULL DEFAULT '',      -- the channel, or a friend's DM once opened
+    channel_name       TEXT NOT NULL DEFAULT '',
+    connect_token      TEXT NOT NULL DEFAULT '',
+    connect_expires_at TEXT NOT NULL DEFAULT '',
+    status             TEXT NOT NULL DEFAULT 'pending', -- pending | connected | failing
+    last_error         TEXT NOT NULL DEFAULT '',
+    created_at         TEXT NOT NULL DEFAULT (datetime('now')),
+    connected_at       TEXT NOT NULL DEFAULT ''
+);
+
+CREATE INDEX IF NOT EXISTS idx_share_targets_user ON share_targets(user_id);
+CREATE INDEX IF NOT EXISTS idx_share_targets_discord ON share_targets(discord_user_id);
+
+-- One share of one item to one or more targets. The item's url/title/etc. are
+-- copied so a friend's history survives the item being archived. stream_key is
+-- the sorted friend target ids it went to ("3,7"): a friend's history groups
+-- shares into streams by who else received them.
+CREATE TABLE IF NOT EXISTS shares (
+    id            INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id       INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    item_id       INTEGER REFERENCES items(id) ON DELETE SET NULL,
+    url           TEXT NOT NULL,
+    title         TEXT NOT NULL DEFAULT '',
+    source_name   TEXT NOT NULL DEFAULT '',
+    thumbnail_url TEXT NOT NULL DEFAULT '',
+    media_type    TEXT NOT NULL DEFAULT '',
+    note          TEXT NOT NULL DEFAULT '',
+    stream_key    TEXT NOT NULL DEFAULT '',
+    created_at    TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE INDEX IF NOT EXISTS idx_shares_user_at ON shares(user_id, created_at DESC);
+
+CREATE TABLE IF NOT EXISTS share_deliveries (
+    share_id           INTEGER NOT NULL REFERENCES shares(id) ON DELETE CASCADE,
+    target_id          INTEGER NOT NULL REFERENCES share_targets(id) ON DELETE CASCADE,
+    discord_message_id TEXT NOT NULL DEFAULT '',
+    error              TEXT NOT NULL DEFAULT '',
+    sent_at            TEXT NOT NULL DEFAULT (datetime('now')),
+    PRIMARY KEY (share_id, target_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_share_deliveries_target ON share_deliveries(target_id);

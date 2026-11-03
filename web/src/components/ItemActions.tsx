@@ -1,10 +1,12 @@
-import { ChevronRight, Download, ExternalLink, Info, Link2, Share2, Tv, Bookmark, BookOpen, Check } from "lucide-react";
+import { ChevronRight, Send, Download, ExternalLink, Info, Link2, Share2, Tv, Bookmark, BookOpen, Check } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { api, type Item, type Selected, type Source } from "@/api/client";
 import { BottomSheet } from "./BottomSheet";
 import { ManualCopy } from "./ReaderActions";
 import { ShortsModeToggle } from "./ShortsModeToggle";
+import { SharePicker } from "./SharePicker";
+import { useShareAvailable } from "@/lib/sharing";
 import { canWebShare, copyText, shareOrCopy } from "@/lib/share";
 import { isMedia } from "@/lib/render";
 import { parseYouTubeId } from "@/lib/youtube";
@@ -57,6 +59,8 @@ export function ItemActions({
   const [source, setSource] = useState<Source | null>(null);
   const [toast, setToast] = useState("");
   const [manual, setManual] = useState(false);
+  const shareOn = useShareAvailable();
+  const [shareItem, setShareItem] = useState<Item | null>(null);
 
   useEffect(() => {
     if (!open || !sourceId) return;
@@ -89,6 +93,7 @@ export function ItemActions({
   }
 
   return (
+    <>
     <BottomSheet open={open} onClose={onClose} kicker={selected?.source_title ?? "Item"}>
       <div className="ia-title">{item.title}</div>
       {status && <p className="ia-sub">{status}</p>}
@@ -96,6 +101,11 @@ export function ItemActions({
       {clip && <VideoFileActions item={item} />}
 
       <div className="sheet-rows">
+        {shareOn && (
+          <button className="sheet-row" onClick={() => { onClose(); setShareItem(item); }}>
+            <span className="sheet-row-label"><Send size={18} aria-hidden /> Send on Discord</span>
+          </button>
+        )}
         {canWebShare() && (
           <button className="sheet-row" onClick={shareLink}>
             <span className="sheet-row-label"><Share2 size={18} aria-hidden /> Share link</span>
@@ -169,6 +179,8 @@ export function ItemActions({
       {manual && <ManualCopy url={item.url} onClose={() => setManual(false)} />}
       {toast && <div className="toast over-sheet"><Check size={15} strokeWidth={2} aria-hidden /> {toast}</div>}
     </BottomSheet>
+    <SharePicker item={shareItem} open={shareItem !== null} onClose={() => setShareItem(null)} />
+    </>
   );
 }
 
