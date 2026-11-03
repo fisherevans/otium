@@ -121,7 +121,9 @@ func main() {
 		Secret:        secret,
 	})
 
-	router := server.NewRouter(h, authMiddleware, authn)
+	// #202: the recommender's bearer token, acting as the ingest user.
+	agentMiddleware := middleware.AgentToken(db, os.Getenv("OTIUM_AGENT_TOKEN"), ingestUser(cfg))
+	router := server.NewRouter(h, authMiddleware, agentMiddleware, authn)
 	srv := &http.Server{
 		Addr:         fmt.Sprintf(":%d", cfg.Port),
 		Handler:      router,

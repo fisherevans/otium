@@ -12,7 +12,7 @@ import (
 
 // NewRouter wires the HTTP surface: health, the OIDC /auth/* flow (ungated),
 // and the authenticated /api/v1 tree.
-func NewRouter(h *handler.Handler, authMiddleware func(http.Handler) http.Handler, authn *oidc.Service) http.Handler {
+func NewRouter(h *handler.Handler, authMiddleware, agentMiddleware func(http.Handler) http.Handler, authn *oidc.Service) http.Handler {
 	r := chi.NewRouter()
 	r.Use(chimw.RequestID)
 	r.Use(chimw.RealIP)
@@ -47,6 +47,14 @@ func NewRouter(h *handler.Handler, authMiddleware func(http.Handler) http.Handle
 	})
 
 	r.Route("/api/v1", func(r chi.Router) {
+		// The agent API (#202): a static bearer token, acting as the owner, for the
+		// devbox recommender only. Nothing else accepts the token.
+		r.Group(func(r chi.Router) {
+			r.Use(agentMiddleware)
+			r.Get("/agent/profile", h.AgentProfile)
+			r.Post("/agent/suggestions", h.AgentSuggest)
+		})
+
 		r.Group(func(r chi.Router) {
 			r.Use(authMiddleware)
 
@@ -139,6 +147,10 @@ func NewRouter(h *handler.Handler, authMiddleware func(http.Handler) http.Handle
 			r.Post("/share/targets/{id}/connect-link", h.NewShareConnectLink)
 			r.Get("/share/discord-channels", h.DiscordChannels)
 			r.Get("/shares", h.ListShares)
+
+			// Follow recommendations (#202).
+			r.Get("/suggestions", h.ListSuggestions)
+			r.Post("/suggestions/{id}/{action}", h.SuggestionAction)
 
 			r.Post("/import/parse", h.ParseImport)
 			r.Post("/import/commit", h.CommitImport)

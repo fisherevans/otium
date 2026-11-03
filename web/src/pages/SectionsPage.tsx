@@ -141,6 +141,7 @@ export default function SectionsPage() {
       <div className="library-primary">
         <button className="btn" disabled={sections === null} onClick={() => { setFormError(""); setDestination(topics[0]?.slug ?? "new"); setDestinationOpen(true); }}><Plus size={18} aria-hidden /> Add source</button>
         <button className="btn ghost" onClick={() => nav("/import")}>Import</button>
+        <button className="btn ghost" onClick={() => nav("/suggestions")}>Suggestions</button>
       </div>
       <button className="intent-link" aria-expanded={organizing} onClick={() => setOrganizing((v) => !v)}>Organize library</button>
       {organizing && <div className="mgmt-actions library-organize">

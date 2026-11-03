@@ -396,3 +396,26 @@ CREATE TABLE IF NOT EXISTS share_deliveries (
 );
 
 CREATE INDEX IF NOT EXISTS idx_share_deliveries_target ON share_deliveries(target_id);
+
+-- Follow recommendations (#202). Written by the devbox recommender through the
+-- agent API; a row becomes a real source only when it is tried (state 'trial') or
+-- seeded as a confident trial. Dismissed rows stay so the same feed is never
+-- suggested twice. status: pending | trial | followed | dismissed.
+CREATE TABLE IF NOT EXISTS suggestions (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id     INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    kind        TEXT NOT NULL,
+    feed_url    TEXT NOT NULL,
+    title       TEXT NOT NULL,
+    icon_url    TEXT NOT NULL DEFAULT '',
+    home_url    TEXT NOT NULL DEFAULT '',
+    reason      TEXT NOT NULL DEFAULT '',
+    confidence  REAL NOT NULL DEFAULT 0,
+    seed        TEXT NOT NULL DEFAULT '',      -- the source it was found through
+    topic_slug  TEXT NOT NULL DEFAULT '',      -- where a trial lands
+    status      TEXT NOT NULL DEFAULT 'pending',
+    source_id   INTEGER REFERENCES sources(id) ON DELETE SET NULL,
+    created_at  TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at  TEXT NOT NULL DEFAULT (datetime('now')),
+    UNIQUE (user_id, feed_url)
+);
