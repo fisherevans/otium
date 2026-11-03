@@ -38,9 +38,11 @@ const APP = arg("app");
 const SHOTS = arg("shots");
 const SESSION = arg("session");
 const SHORTS_MODE = argv.includes("--shorts-mode");
-// #205: full-screen Shorts pads every other card clear of floating chrome. In the
-// lab this is a knob; in the app it is the stored viewing choice, on by default.
-const IMMERSIVE = argv.includes("--immersive");
+// #205/#206: the session's one view is full screen: the header floats and every
+// ordinary card is padded clear of it. The lab keeps a knob for comparison; this
+// instrument measures what ships, so it is always on (`--immersive` is accepted
+// for old command lines, `--framed` measures the retired pill layout).
+const IMMERSIVE = !argv.includes("--framed");
 // --app only: force Shorts mode on or off for the pass ("on" is the default).
 const VIEWING = arg("viewing");
 const sessionSnapshot = SESSION ? JSON.parse(readFileSync(resolve(SESSION), "utf8")) : null;
@@ -186,11 +188,15 @@ function record(where, m) {
   if (m.error || m.endCard) return;
   const { actions, ...cols } = m; // the action row is checked, not tabulated
   rows.push({ where, ...cols });
-  if (m.compact && !m.fullScreenShort) {
-    if (!actions.includes("Details")) problems.push(`${where}: compact card is missing Details`);
+  // A full-screen Short is covered by verify-shorts-playback; it has neither the
+  // compact footer checked here nor an ordinary action row.
+  if (m.compact && m.fullScreenShort) { /* skip */ }
+  else if (m.compact) {
+    // #206: the compact card's ··· opens item and session actions (which link to Details).
+    if (!actions.includes("Item and session actions")) problems.push(`${where}: compact card is missing its actions ···`);
     if (m.mediaAspectError > 0.01) problems.push(`${where}: compact video aspect was distorted`);
     if (!m.compactChromeHidden) problems.push(`${where}: ordinary card chrome remains in compact mode`);
-    if (!m.detailsReachable) problems.push(`${where}: Details is smaller than its touch target`);
+    if (!m.detailsReachable) problems.push(`${where}: the actions ··· is smaller than its touch target`);
   } else if (actions && !actions.includes("Save")) problems.push(`${where}: action row is missing Save - ${actions}`);
   if (m.overflow > 0) problems.push(`${where}: content overflows by ${m.overflow}px`);
   if (Math.abs(m.offCentre) > 4) problems.push(`${where}: card is ${m.offCentre}px off centre (above ${m.above}, below ${m.below})`);

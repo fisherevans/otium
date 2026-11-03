@@ -31,7 +31,9 @@ for (const [engine,browserType] of [['chromium',chromium],['webkit',webkit]].fil
   await page.goto(base+'/session/afterglow-test');
   await page.locator('.afterglow-card:not(.away) .card-title').filter({hasText:items[0].item.title}).waitFor();
   await page.waitForTimeout(700);
-  assert.equal(await page.locator('.context-instrument-wrap').count(),1);
+  // #206: a session has no bottom pill; its time phrase and actions are in the top bar.
+  assert.equal(await page.locator('.context-instrument-wrap').count(),0);
+  assert.equal(await page.locator('.topbar-status').innerText(),'Session in progress');
   assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);
   await page.screenshot({path:`${shotDir}/${engine}-session.png`});
   // Holding a hero opens its full image and does not open the article.
@@ -45,11 +47,11 @@ for (const [engine,browserType] of [['chromium',chromium],['webkit',webkit]].fil
   await page.locator('.reader-body').waitFor();await page.waitForTimeout(1100);
   await page.screenshot({path:`${shotDir}/${engine}-reader.png`});
   await page.getByRole('button',{name:'Back',exact:true}).click();await page.waitForTimeout(350);
-  await page.getByRole('button',{name:'Next',exact:true}).click();await page.waitForTimeout(700);
+  await page.getByRole('button',{name:'Item and session actions',exact:true}).click();await page.getByRole('button',{name:'Next item',exact:true}).click();await page.waitForTimeout(700);
   assert.equal(await page.locator('.afterglow-card:not(.away)').getAttribute('data-idx'),'1');
-  await page.getByRole('button',{name:'Next',exact:true}).click();await page.waitForTimeout(700);
+  await page.getByRole('button',{name:'Item and session actions',exact:true}).click();await page.getByRole('button',{name:'Next item',exact:true}).click();await page.waitForTimeout(700);
   await page.waitForFunction(()=>document.querySelector('.afterglow-card:not(.away)')?.dataset.idx==='2');
-  await page.getByRole('button',{name:'Article and session actions'}).click();
+  await page.getByRole('button',{name:'Item and session actions',exact:true}).click();
   await page.getByRole('button',{name:'End session',exact:true}).click();
   await page.getByRole('heading',{name:'Session complete'}).waitFor();
   assert.equal(ended,true);
@@ -105,33 +107,47 @@ for (const [engine,browserType] of [['chromium',chromium],['webkit',webkit]].fil
     ['slow',[[70,400],[70,280]],{slow:true}],['cancel',[[70,400],[70,280]],{cancel:true}],
     ['multi',[[70,400],[70,280]],{multi:true}],['selection',[[70,400],[70,280]],{selection:true}],
   ]) {await syntheticGesture(points,options);assert.equal(await page.locator('.readerpage').count(),1,label+' does not advance');}
+  // #206: the pull tracks the finger from the first pixel, the next card follows it, and a cancel springs back.
+  const tracked=await page.evaluate(()=>{const target=document.querySelector('.reader-body p');const stage=document.querySelector('.stage');const before=stage.scrollTop;
+    const send=(type,y,end)=>{const touch={identifier:21,target,clientX:70,clientY:y};const event=new Event(type,{bubbles:true,cancelable:true});Object.defineProperties(event,{touches:{value:end?[]:[touch]},changedTouches:{value:[touch]}});target.dispatchEvent(event);return event;};
+    send('touchstart',400);const first=send('touchmove',397);const move=send('touchmove',370);
+    const result={prevented:first.defaultPrevented&&move.defaultPrevented,transform:document.querySelector('.readerpage').style.transform,follow:stage.scrollTop-before};
+    send('touchcancel',370,true);return result;});
+  assert.equal(tracked.prevented,true,'the pull owns the gesture from its first move (no rubber band)');
+  assert.match(tracked.transform,/-30px/,'the page follows the finger');
+  assert.equal(Math.round(tracked.follow),30,'the next card follows the page');
+  await page.waitForTimeout(450);
+  assert.equal(await page.locator('.readerpage').evaluate(e=>e.style.transform),'','a cancelled pull springs back');
+  assert.equal(await page.locator('.readerpage').count(),1,'a cancelled pull does not advance');
   if(engine==='chromium') {
     const cdp=await page.context().newCDPSession(page);
     await cdp.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[{x:150,y:300}]});
     for(let y=280;y>=160;y-=20){await cdp.send('Input.dispatchTouchEvent',{type:'touchMove',touchPoints:[{x:150,y}]});await page.waitForTimeout(20);}
     await cdp.send('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]});
-  } else await syntheticGesture([[150,430],[150,290]]);
+  } else await syntheticGesture([[150,450],[150,250]]); // #206: no timing in a synthetic burst, so it commits by distance (a quarter of the screen)
   await page.waitForTimeout(700);
   assert.equal(await page.locator('.readerpage').count(),0,'bottom-start forceful swipe returns to feed');
   assert.equal(await page.locator('.afterglow-card:not(.away)').getAttribute('data-idx'),'3','reader swipe advances one item');
   await page.evaluate(()=>{document.documentElement.dataset.theme='dark';});await page.evaluate(()=>document.fonts.ready);await page.waitForTimeout(400);
-  assert.equal(await page.locator('.instrument-action').evaluate(e=>getComputedStyle(e).color),'rgb(37, 33, 25)');
+  // #206: no pill in a session; the top bar's controls take the dark ink.
+  assert.equal(await page.locator('.topbar .shell-icon').first().evaluate(e=>getComputedStyle(e).color),await page.evaluate(()=>getComputedStyle(document.body).color));
   await page.screenshot({path:`${shotDir}/${engine}-dark.png`});
   await page.evaluate(()=>{localStorage.setItem('otium-presentation','eink');});await page.reload();await page.locator('.afterglow-card:not(.away)').waitFor();await page.waitForTimeout(500);
   assert.equal(await page.locator('html').getAttribute('data-presentation'),'eink');
   assert.match(await page.locator('.afterglow-card:not(.away) .media img').evaluate(e=>getComputedStyle(e).filter),/grayscale/);
-  assert.equal(await page.locator('.context-instrument').evaluate(e=>getComputedStyle(e).animationDuration),'0s');
+  // #206: the session has no pill; its main view's entrance must be immediate on e-ink.
+  assert.equal(await page.locator('main.content-session').evaluate(e=>getComputedStyle(e).animationDuration),'0s');
   await page.screenshot({path:`${shotDir}/${engine}-eink.png`});
   const pcm=Buffer.alloc(8000*2);for(let sample=0;sample<8000;sample++)pcm.writeInt16LE(Math.round(Math.sin(sample/8000*Math.PI*880)*3000),sample*2);
   const wav=Buffer.alloc(44);wav.write('RIFF');wav.writeUInt32LE(36+pcm.length,4);wav.write('WAVEfmt ',8);wav.writeUInt32LE(16,16);wav.writeUInt16LE(1,20);wav.writeUInt16LE(1,22);wav.writeUInt32LE(8000,24);wav.writeUInt32LE(16000,28);wav.writeUInt16LE(2,32);wav.writeUInt16LE(16,34);wav.write('data',36);wav.writeUInt32LE(pcm.length,40);
   items[3].item.media_type='audio';items[3].item.url='data:audio/wav;base64,'+Buffer.concat([wav,pcm]).toString('base64');
   await page.reload();await page.locator('audio').waitFor();await page.locator('audio').evaluate(audio=>audio.play());await page.waitForTimeout(400);
   assert.ok(await page.locator('audio').evaluate(audio=>audio.currentTime>0),'real native audio playback');
-  await page.getByRole('button',{name:'Article and session actions'}).click();await page.getByRole('button',{name:'End session',exact:true}).click();
+  await page.getByRole('button',{name:'Item and session actions',exact:true}).click();await page.getByRole('button',{name:'End session',exact:true}).click();
   await page.getByRole('button',{name:'Review session',exact:true}).first().click();await page.getByRole('heading',{name:'Review session'}).waitFor();
   assert.match(await page.locator('.session-review-stats').innerText(),/Audio played\s+1/);
   items[3].item.media_type='article';items[3].item.url='https://example.com/article-104';
   assert.deepEqual(errors,[]);
-  console.log(`${engine}: hold image, broad open, Back/Next, seen-only review, frozen stats, failed/successful saves, reload, extension, 320px, seven gesture guards, bottom continuation, dark/e-ink and native audio playback PASS`);
+  console.log(`${engine}: hold image, broad open, Back/Next, seen-only review, frozen stats, failed/successful saves, reload, extension, 320px, seven gesture guards, finger-tracking pull and spring-back, bottom continuation, dark/e-ink and native audio playback PASS`);
  } finally { await browser.close(); }
 }

@@ -1,7 +1,7 @@
 import { forwardRef, type PointerEvent as ReactPointerEvent } from "react";
 import { ShortsMeta, ShortsQuietControls } from "./ShortsQuietControls";
 import type { ShortsBus } from "@/lib/shortsBus";
-import { Bookmark, BookOpen, Play, ExternalLink, MoreHorizontal, ChevronRight, Maximize2, Minimize2 } from "lucide-react";
+import { Bookmark, BookOpen, Play, ExternalLink, MoreHorizontal, ChevronRight } from "lucide-react";
 import type { Conversation, Item, ItemRender, Selected } from "@/api/client";
 import { CardConversation, ShortsCommentsButton } from "@/components/Conversation";
 import { inlineConversation, useConversation } from "@/lib/conversation";
@@ -71,8 +71,6 @@ export interface SessionCardProps {
   onSave: (sel: Selected) => void;
   onSource: (sel: Selected) => void;
   onMenu: () => void;
-  // #180: the Shorts footer's Details opens provenance, not actions.
-  onDetails?: () => void;
   onFirstPlay?: (sel: Selected, explicit: boolean) => void;
   /** Video-first presentation applies only to short videos. */
   shortsMode?: boolean;
@@ -80,9 +78,6 @@ export interface SessionCardProps {
   // #182: this card's slot currently hosts the shared player; its footer
   // carries the live sound/CC/time controls from the bus.
   hostsPlayer?: boolean;
-  // #184: full-screen Shorts, toggled from this card's footer.
-  immersive?: boolean;
-  onImmersiveChange?: (value: boolean) => void;
   // #191: point at the sound control once, at the start of a session.
   soundHint?: boolean;
   onSoundHintDone?: () => void;
@@ -316,13 +311,10 @@ export const SessionCard = forwardRef<HTMLDivElement, SessionCardProps>(function
     onSave,
     onSource,
     onMenu,
-    onDetails,
     onFirstPlay,
     shortsMode = false,
     persistentShorts = false,
     hostsPlayer = false,
-    immersive = false,
-    onImmersiveChange,
     soundHint = false,
     onSoundHintDone,
     shortsBus,
@@ -514,16 +506,11 @@ export const SessionCard = forwardRef<HTMLDivElement, SessionCardProps>(function
           </button>
           {hostsPlayer && shortsBus && <ShortsQuietControls bus={shortsBus} hint={soundHint} onHintDone={onSoundHintDone} />}
           {focused && onConversation && <ShortsCommentsButton conv={conv} onOpen={() => onConversation(it)} />}
-          {hostsPlayer && onImmersiveChange && (
-            <button type="button" className="shorts-quiet-btn" onClick={() => onImmersiveChange(!immersive)}
-              aria-label={immersive ? "Exit full screen" : "Full screen"} aria-pressed={immersive} data-on={immersive}>
-              {immersive ? <Minimize2 size={18} strokeWidth={1.7} aria-hidden /> : <Maximize2 size={18} strokeWidth={1.7} aria-hidden />}
-            </button>
-          )}
-          <button className="shorts-details" type="button" onClick={immersive ? onMenu : (onDetails ?? onMenu)} disabled={!focused}
-            aria-label={immersive ? "Article and session actions" : "Details"}>
+          {/* #206: the same ··· as the session's top bar, which steps aside over
+              a Short: item and session actions, linking to Details. */}
+          <button className="shorts-details" type="button" onClick={onMenu} disabled={!focused}
+            aria-label="Item and session actions">
             <MoreHorizontal size={18} aria-hidden />
-            <span className="shorts-details-label">Details</span>
           </button>
         </div>
       )}

@@ -57,7 +57,7 @@ never become the hero). `bsky-image` and `bsky-quote` are posts now too.
 
 The Shorts mode switch uses the real compact card and solver. Portrait, square
 and landscape short videos exercise its contained frame, compact creator/date
-and Details control. A long portrait video verifies that geometry alone does
+and the ··· that opens item and session actions (#206). A long portrait video verifies that geometry alone does
 not activate this mode.
 
 ## Measuring
@@ -75,7 +75,6 @@ sandboxes that ship a preinstalled binary, not a normal-machine requirement).
 ```sh
 npm run measure -- --lab dist-lab/lab-standalone.html      # design against this
 npm run measure -- --lab dist-lab/lab-standalone.html --shorts-mode
-npm run measure -- --lab dist-lab/lab-standalone.html --shorts-mode --immersive
 npm run measure -- --app http://localhost:5173             # verify what ships
 npm run measure -- --lab dist-lab/lab-standalone.html --shots /tmp/cards
 ```
@@ -88,13 +87,15 @@ rhythm, the resolved title size, the media's size and share of the card, any
 overflow, and whether the actions are reachable. It exits non-zero if anything
 clipped, so it can gate a change.
 
-`--immersive` is the lab's "full screen" knob: the header floats over the reel and
-ordinary cards are padded clear of it by the same rule the app uses (#205 - this
-rule once dropped the centring pad, and every article in a session with Shorts
-sat at the top). Shorts themselves are not drawn edge to edge in the lab. In the
-app, full screen is the stored default for sessions with Shorts; `--viewing
-on|off` sets Shorts mode for an `--app` pass, and full-screen Shorts skip the
-compact-card checks (verify-shorts-playback covers that geometry).
+The lab's "full screen" knob is on by default: since #206 it is the only session
+view (the header floats over the reel, there is no bottom pill, and ordinary cards
+are padded clear of the chrome by the same rule the app uses - #205, when this rule
+once dropped the centring pad and every article in a session with Shorts sat at
+the top). `measure` always measures it; `--framed` measures the retired pill layout
+for comparison, and `--immersive` is accepted as a no-op. Shorts themselves are not
+drawn edge to edge in the lab. `--viewing on|off` sets Shorts mode for an `--app`
+pass, and full-screen Shorts skip the compact-card checks (verify-shorts-playback
+covers that geometry).
 
 `--app` needs the Go server and a seeded database (see the repo `CLAUDE.md`), and
 walks a real session rather than fixtures. Both modes cover 412, 390, 375 and

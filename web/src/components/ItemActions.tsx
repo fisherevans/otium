@@ -11,10 +11,10 @@ import { canWebShare, copyText, shareOrCopy } from "@/lib/share";
 import { isMedia } from "@/lib/render";
 import { parseYouTubeId } from "@/lib/youtube";
 
-// What to do with the current session item, and where to go from it (#180): the
-// pill's ··· opens this. Share the clip itself or its link, download it, open it
+// What to do with the current session item, and where to go from it (#180): each
+// card's ··· opens this (#206: there is no pill). Share the clip itself or its link, download it, open it
 // or its channel on YouTube, jump to the source in Otium, save it; then session
-// controls (Shorts mode, End session). Where the item came from and why it
+// controls (Next item, Shorts mode, End session). Where the item came from and why it
 // surfaced is ItemDetails, a separate sheet. Nothing here emits an engagement
 // event.
 export function ItemActions({
@@ -30,8 +30,7 @@ export function ItemActions({
   onShortsModeChange,
   nativeControls,
   onNativeControls,
-  immersive,
-  onImmersiveChange,
+  onNext,
   status,
 }: {
   selected: Selected | null;
@@ -48,9 +47,9 @@ export function ItemActions({
   // here from the row under the video.
   nativeControls?: boolean;
   onNativeControls?: () => void;
-  immersive?: boolean;
-  onImmersiveChange?: (value: boolean) => void;
-  // #186: the session's time phrase, when the pill that usually shows it is hidden.
+  // #206: the non-gesture way to advance; swipe is the primary one.
+  onNext?: () => void;
+  // #186: the session's time phrase (the pill that used to carry it is gone).
   status?: string;
 }) {
   const nav = useNavigate();
@@ -149,20 +148,14 @@ export function ItemActions({
         )}
       </div>
 
-      {(onShortsModeChange || onEnd || onNativeControls || onImmersiveChange) && (
+      {(onShortsModeChange || onEnd || onNativeControls || onNext) && (
         <div className="sheet-rows">
+          {onNext && <button className="sheet-row" onClick={onNext}><span>Next item</span><ChevronRight size={18} className="sheet-chev inline-icon" aria-hidden /></button>}
           {onShortsModeChange && <ShortsModeToggle enabled={shortsMode ?? false} onChange={onShortsModeChange} />}
           {status && (
             <button className="sheet-row" onClick={() => { onClose(); window.dispatchEvent(new Event("otium:app-menu")); }}>
               <span>Library, Saved and settings</span>
               <ChevronRight size={18} className="sheet-chev inline-icon" aria-hidden />
-            </button>
-          )}
-          {immersive !== undefined && onImmersiveChange && (
-            <button className="sheet-row" role="switch" aria-checked={immersive} aria-label="Full-screen Shorts"
-              onClick={() => onImmersiveChange(!immersive)}>
-              <span>Full-screen Shorts</span>
-              <span className="shorts-mode-state">{immersive ? "On" : "Off"}</span>
             </button>
           )}
           {onNativeControls && (

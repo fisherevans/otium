@@ -27,9 +27,10 @@ export interface LayoutOptions {
   /** Use the compact, video-first card for short videos only. */
   shortsMode: boolean;
   /**
-   * Full-screen Shorts (#184): the reel fills the screen and the header floats
-   * over it, so every other card is padded clear of the chrome. The lab models
-   * that padding for ordinary cards (#205); a Short itself is not drawn edge to edge.
+   * Full screen (#184; the only session view since #206): the reel fills the
+   * screen and the header floats over it, with no bottom pill, so every ordinary
+   * card is padded clear of the chrome. The lab models that padding (#205); a
+   * Short itself is not drawn edge to edge. Off draws the retired framed layout.
    */
   immersive: boolean;
   /** Run the budget solver after paint (sizes media from leftover space). */
@@ -200,6 +201,7 @@ export const OPT_EINK: LayoutOptions = {
  */
 export const OPT_PROTOTYPE: LayoutOptions = {
   ...DEFAULT_LAYOUT,
+  immersive: true,
   solve: true,
   title: "ramp",
   hero: "cap",

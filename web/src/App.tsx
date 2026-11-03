@@ -59,11 +59,6 @@ function AppShell() {
   const [typeMenu, setTypeMenu] = useState(false);
   const [resumeId, setResumeId] = useState<string | null>(null);
   useEffect(() => {
-    const openMenu = () => setMenu(true);
-    window.addEventListener("otium:app-menu", openMenu);
-    return () => window.removeEventListener("otium:app-menu", openMenu);
-  }, []);
-  useEffect(() => {
     if (loading || unauthenticated || pathname.startsWith("/session")) return;
     let live = true;
     api.currentSession().then(session => { if (live) setResumeId(session?.session_id || null); }).catch(() => {});
@@ -75,6 +70,12 @@ function AppShell() {
   const back = useBack((location.state as { returnTo?: string } | null)?.returnTo || parent);
   const go = (path: string) => { setMenu(false); setTypeMenu(false); nav(path, { state: { returnTo: pathname + location.search + location.hash } }); };
   const focused = pathname.startsWith("/session"); // #67: session is /session/:id, full-screen focused mode
+  // #206: a session has no bottom pill. What it carried moves into this bar,
+  // published by SessionPage through the instrument context: the time phrase,
+  // and the ··· that opens the item and session actions (which link back to
+  // this app menu).
+  const sessionStatus = focused ? override?.label || "" : "";
+  const sessionMenu = focused ? override?.onMenu : undefined;
 
   // #152: a 401 makes the API client auto-redirect to /auth/login (which bounces
   // through Google and usually returns signed-in). So "unauthenticated" almost always
@@ -112,9 +113,12 @@ function AppShell() {
     <div className={`app ${focused ? "focused" : ""}`}>
       <header className={`topbar ${focused ? "session" : ""}`}>
         <Link to="/" aria-label="Otium home"><Brand /></Link>
+        {sessionStatus && <span className="topbar-status">{sessionStatus}</span>}
         <span className="topbar-right">
-          {focused && <button className="chrome-btn" onClick={() => go("/sections")}>Library</button>}
-          <button className="shell-icon" onClick={() => setMenu(true)} aria-label="App menu"><MoreHorizontal size={23} /></button>
+          {focused && <button className="shell-icon" onClick={() => go("/sections")} aria-label="Library"><Library size={21} /></button>}
+          {sessionMenu
+            ? <button className="shell-icon" onClick={sessionMenu} aria-label={override?.menuLabel || "Item and session actions"}><MoreHorizontal size={23} /></button>
+            : <button className="shell-icon" onClick={() => setMenu(true)} aria-label="App menu"><MoreHorizontal size={23} /></button>}
           <button className="font-button" onClick={() => setTypeMenu(true)} aria-label="Type and appearance">Aa</button>
         </span>
       </header>
@@ -153,7 +157,7 @@ function AppShell() {
         onLabel: () => setMenu(true),
         action: { label: pathname === "/" ? "Library" : "Back", onClick: () => pathname === "/" ? go("/sections") : back(), icon: pathname === "/" ? <Library size={18} /> : <ArrowLeft size={18} /> },
       })} />}
-      <BottomSheet open={menu} onClose={() => setMenu(false)} kicker="Otium">
+      <BottomSheet open={menu} onClose={() => setMenu(false)} kicker={sessionStatus ? `Session · ${sessionStatus}` : "Otium"}>
         <div className="shell-menu">
           {!focused && resumeId && <button onClick={() => go(`/session/${resumeId}`)}><Play size={21}/><span>Return to session</span><ChevronRight size={18}/></button>}
           {[["/", "New session", BookOpen], ["/sections", "Library", Library], ["/saved", "Saved", Bookmark], ["/you", "Your Otium", User]].map(([path, label, Glyph]) => {
@@ -162,7 +166,7 @@ function AppShell() {
           })}
           {/* #186: full-screen Shorts hide the header's Aa; it lives here too. */}
           {focused && <button onClick={() => { setMenu(false); setTypeMenu(true); }}><span className="font-button">Aa</span><span>Type and appearance</span><ChevronRight size={18} /></button>}
-          {focused && <button onClick={() => { setMenu(false); window.dispatchEvent(new CustomEvent("otium:request-end", { detail: { ack: () => {} } })); }}><ArrowLeft size={21} /><span>End session</span></button>}
+          {focused && sessionStatus && sessionStatus !== "Session complete" && <button onClick={() => { setMenu(false); window.dispatchEvent(new CustomEvent("otium:request-end", { detail: { ack: () => {} } })); }}><ArrowLeft size={21} /><span>End session</span></button>}
         </div>
       </BottomSheet>
       <BottomSheet open={typeMenu} onClose={() => setTypeMenu(false)} kicker="Type and appearance">

@@ -111,7 +111,9 @@ for (const [name, engine] of Object.entries({ chromium, webkit }).filter(([name]
             async function advanceUntilCheckin() {
                 let advanced = 0;
                 while (advanced < 10 && !await checkin.count()) {
-                    await page.getByRole('button', { name: 'Next', exact: true }).click();
+                    // #206: no Next button; Next item in the actions sheet is the non-gesture path.
+                    await page.getByRole('button', { name: 'Item and session actions', exact: true }).click();
+                    await page.getByRole('button', { name: 'Next item', exact: true }).click();
                     await page.waitForTimeout(400);
                     advanced++;
                 }
@@ -133,7 +135,7 @@ for (const [name, engine] of Object.entries({ chromium, webkit }).filter(([name]
         await scenario('long article details sheet scrolls to working final controls', async (page, state) => {
             await page.goto(`${base}/session/surface-test`);
             // #180: filters live in Details (provenance), reached from the actions sheet.
-            await page.getByRole('button', { name: 'Article and session actions', exact: true }).click();
+            await page.getByRole('button', { name: 'Item and session actions', exact: true }).click();
             await page.getByRole('dialog', { name: source.title, exact: true }).getByRole('button', { name: /Post details/ }).click();
             const menu = page.getByRole('dialog', { name: 'Details', exact: true });
             const sheet = menu.locator('.sheet');
@@ -156,7 +158,7 @@ for (const [name, engine] of Object.entries({ chromium, webkit }).filter(([name]
             assert.deepEqual(state.filters, [{ categories: [], keywords: ['notices'] }]);
             await menu.getByRole('button', { name: 'Close', exact: true }).click();
             await menu.waitFor({ state: 'detached' });
-            assert.equal(await page.getByRole('button', { name: 'Next', exact: true }).count(), 1);
+            assert.equal(await page.locator('.context-instrument').count(), 0, 'sessions have no bottom pill (#206)');
         });
 
         await scenario('collection video and audio keep a working contextual Back', async (page, state) => {
