@@ -170,4 +170,3 @@ func (db *DB) EngagementBySource(ctx context.Context, userID int64, sinceDays in
 	}
 	return out, rows.Err()
 }
-
