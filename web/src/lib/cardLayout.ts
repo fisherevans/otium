@@ -174,6 +174,7 @@ export function solveCard(vars: HTMLElement, reel: HTMLElement, card: HTMLElemen
   vars.style.removeProperty("--card-frame-h");
   vars.style.removeProperty("--card-center-pad");
   vars.removeAttribute("data-solved-blurb");
+  vars.removeAttribute("data-solved-conv");
   if (frame) frame.style.removeProperty("height");
   if (!opts.solve) return [];
 
@@ -245,10 +246,15 @@ export function solveCard(vars: HTMLElement, reel: HTMLElement, card: HTMLElemen
 
   // Give-order. Video cards have almost nothing to yield because the frame
   // already absorbs the slack; article cards yield some image space and type before dropping the excerpt.
+  // #200: a card's replies are secondary to the post itself, so they go before
+  // the excerpt (a post's own text) and after the first type steps. The "more"
+  // link always stays. Both knobs are no-ops on a card without replies.
   const knobs: [string, () => boolean][] = frame
     ? [
         ["title 21px", () => step(1)],
+        ["second reply dropped", () => trimConv("one")],
         ["title 19px", () => step(2)],
+        ["replies dropped", () => trimConv("off")],
         ["title 17px", () => step(3)],
         ["title 16px", () => step(4)],
       ]
@@ -257,6 +263,8 @@ export function solveCard(vars: HTMLElement, reel: HTMLElement, card: HTMLElemen
         ["title 21px", () => step(1)],
         ["hero cap 26%", () => setCap(0.26)],
         ["title 19px", () => step(2)],
+        ["second reply dropped", () => trimConv("one")],
+        ["replies dropped", () => trimConv("off")],
         ["excerpt dropped", () => dropBlurb()],
         ["title 17px", () => step(3)],
         ["hero cap 18%", () => setCap(0.18)],
@@ -271,6 +279,13 @@ export function solveCard(vars: HTMLElement, reel: HTMLElement, card: HTMLElemen
   function setCap(v: number) {
     if (opts.hero !== "cap" || cap <= v) return false;
     cap = v;
+    return true;
+  }
+  function trimConv(to: "one" | "off") {
+    const replies = card.querySelectorAll(".cv-card-replies > .cv-row").length;
+    const now = vars.getAttribute("data-solved-conv");
+    if (replies === 0 || now === "off" || now === to || (to === "one" && replies < 2)) return false;
+    vars.setAttribute("data-solved-conv", to);
     return true;
   }
   function dropBlurb() {
@@ -294,7 +309,10 @@ export function solveCard(vars: HTMLElement, reel: HTMLElement, card: HTMLElemen
         over = contentHeight(card) - budget;
       }
     }
-    if (over <= 0) break;
+    // #200: a video's comments must not shrink the player to make room for
+    // themselves. While any are visible and the frame is below its natural
+    // height, keep stepping, which gives the comments up before the video.
+    if (over <= 0 && !(frame && squeezedByConv(card, frame, budget))) break;
     const next = knobs.find(([, fn]) => fn());
     if (!next) break;
     gaveUp.push(next[0]);
@@ -309,7 +327,7 @@ export function solveCard(vars: HTMLElement, reel: HTMLElement, card: HTMLElemen
     const colW2 = columnWidth();
     const maxH = audioArt ? Math.min(132, colW2) : (ar2 < 1 ? colW2 * opts.mediaWidth : colW2) / ar2;
     for (let i = 0; i < 6; i++) {
-      const actions = card.querySelector<HTMLElement>(".im-actions, .card-callout");
+      const actions = bottomRow(card);
       if (!actions) break;
       // rects are transform-scaled; offsetHeight is not, so derive the factor
       const k = frame.offsetHeight ? frame.getBoundingClientRect().height / frame.offsetHeight : 1;
@@ -336,7 +354,7 @@ export function solveCard(vars: HTMLElement, reel: HTMLElement, card: HTMLElemen
   // The bottom gap is held back before splitting, so a media card that already
   // drove its clearance to `bottomGap` gets a pad of 0 and is left alone.
   if (opts.align === "center") {
-    const actions = card.querySelector<HTMLElement>(".im-actions, .card-callout");
+    const actions = bottomRow(card);
     // NOT budget - contentHeight(card): `.snap` carries min-height:100%, so a card
     // that fits measures exactly the budget however little it holds, and the slack
     // reads as zero every time. Measure to the last thing on the card instead.
@@ -360,6 +378,34 @@ export function solveCard(vars: HTMLElement, reel: HTMLElement, card: HTMLElemen
     }
   }
   return gaveUp;
+}
+
+/**
+ * True when visible comments would not fit beside a landscape frame at its
+ * natural size. Measured with the frame put back to natural height, because the
+ * frame's working height inside the loop is not a reliable signal.
+ */
+function squeezedByConv(card: HTMLElement, frame: HTMLElement, budget: number): boolean {
+  const visible = Array.from(card.querySelectorAll<HTMLElement>(".cv-card-replies > .cv-row")).some((r) => r.offsetParent !== null);
+  if (!visible) return false;
+  const ar = parseFloat(getComputedStyle(frame).getPropertyValue("--ar")) || 0;
+  if (ar < 1) return false;
+  const prev = frame.style.height;
+  frame.style.height = `${Math.round((frame.parentElement?.clientWidth ?? 0) / ar)}px`;
+  const over = contentHeight(card) - budget;
+  frame.style.height = prev;
+  return over > 0;
+}
+
+/**
+ * The card's lowest row: the action row, or a long video's comments (#200),
+ * which sit under the player's actions. Clearance and centring measure to it.
+ */
+function bottomRow(card: HTMLElement): HTMLElement | null {
+  const rows = Array.from(card.querySelectorAll<HTMLElement>(".im-actions, .card-callout, .card-conv"));
+  let best: HTMLElement | null = null;
+  for (const r of rows) if (!best || r.getBoundingClientRect().bottom > best.getBoundingClientRect().bottom) best = r;
+  return best;
 }
 
 /**

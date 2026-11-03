@@ -2,7 +2,9 @@ import { forwardRef, type PointerEvent as ReactPointerEvent } from "react";
 import { ShortsMeta, ShortsQuietControls } from "./ShortsQuietControls";
 import type { ShortsBus } from "@/lib/shortsBus";
 import { Bookmark, BookOpen, Play, ExternalLink, MoreHorizontal, ChevronRight, Maximize2, Minimize2 } from "lucide-react";
-import type { Item, ItemRender, Selected } from "@/api/client";
+import type { Conversation, Item, ItemRender, Selected } from "@/api/client";
+import { CardConversation, ShortsCommentsButton } from "@/components/Conversation";
+import { inlineConversation, useConversation } from "@/lib/conversation";
 import { TopicPill, CardSource, SourceAvatar, Byline, Blurb, Media } from "@/components/CardParts";
 import { InlineMedia, type MediaPosition } from "@/components/InlineMedia";
 import { ShareActions } from "@/components/ReaderActions";
@@ -106,6 +108,13 @@ export interface SessionCardProps {
   sectionName?: string;
   /** Where the ··· menu sits. Defaults to what ships today. */
   menuPlacement?: MenuPlacement;
+  /**
+   * #200: the conversation around the item. Omitted = fetch it live (the focused
+   * card asks; any card shows what is cached); the lab passes a fixture or null.
+   */
+  conversation?: Conversation | null;
+  /** Open the rest of the conversation: the reader for posts, the overlay for video. */
+  onConversation?: (sel: Selected) => void;
 }
 
 /** The hierarchy block. Every variant renders the same three facts, differently. */
@@ -326,10 +335,14 @@ export const SessionCard = forwardRef<HTMLDivElement, SessionCardProps>(function
     hierarchy = "pill",
     sectionName,
     menuPlacement = "top",
+    conversation,
+    onConversation,
   },
   ref,
 ) {
   const it = sel;
+  const liveConv = useConversation(conversation === undefined ? sel.item : null, focused);
+  const conv = conversation === undefined ? liveConv : conversation;
   const primary = primaryFor(it.item, render);
   // Media on the focused card plays inline (no modal); off-screen cards stay
   // lightweight thumbnails. A vertical frame gets the compact chrome layout.
@@ -456,6 +469,12 @@ export const SessionCard = forwardRef<HTMLDivElement, SessionCardProps>(function
         </>
       )}
 
+      {/* #200: a post's top replies sit under it; a landscape long video's top
+          comments sit under the player. Shorts use the overlay. */}
+      {conv && !compactShort && inlineConversation(it.item) && (activeMedia || !isMedia(it.item)) && (
+        <CardConversation conv={conv} onMore={onConversation ? () => onConversation(it) : undefined} />
+      )}
+
       {compactShort && (
         <div
           className="shorts-card-footer"
@@ -472,6 +491,7 @@ export const SessionCard = forwardRef<HTMLDivElement, SessionCardProps>(function
             </span>
           </button>
           {hostsPlayer && shortsBus && <ShortsQuietControls bus={shortsBus} hint={soundHint} onHintDone={onSoundHintDone} />}
+          {focused && onConversation && <ShortsCommentsButton conv={conv} onOpen={() => onConversation(it)} />}
           {hostsPlayer && onImmersiveChange && (
             <button type="button" className="shorts-quiet-btn" onClick={() => onImmersiveChange(!immersive)}
               aria-label={immersive ? "Exit full screen" : "Full screen"} aria-pressed={immersive} data-on={immersive}>

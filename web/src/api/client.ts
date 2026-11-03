@@ -717,4 +717,32 @@ export const api = {
       sources,
       create_topics_from_folders: createTopicsFromFolders,
     }),
+
+  // #200: replies, quotes and comments around an item. undefined = none to fetch.
+  itemConversation: (id: number) => req<Conversation | undefined>("GET", `/items/${id}/conversation`),
 };
+
+// --- conversation (#200) ---
+// The public conversation around an item, fetched on demand. All text is plain
+// text from another site: render it as React text, never as HTML.
+export interface ConversationComment {
+  author: string;
+  handle?: string;
+  avatar_url?: string;
+  text: string;
+  url?: string;
+  likes: number;
+  replies: number;
+  media?: "image" | "video" | "link";
+  published_at: string;
+}
+
+export interface Conversation {
+  platform: "bluesky" | "substack" | "youtube";
+  url?: string;
+  counts: { likes: number; reposts: number; replies: number; quotes: number; views?: number };
+  replies: ConversationComment[];
+  quotes: ConversationComment[];
+  quoted?: ConversationComment;
+  fetched_at: string;
+}

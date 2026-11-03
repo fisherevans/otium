@@ -9,6 +9,7 @@ import { ContextInstrument } from "./ContextInstrument";
 import { BottomSheet } from "./BottomSheet";
 import "./session-afterglow.css";
 import { Overlay, usePresence } from "./Overlay";
+import { ReaderConversation } from "./Conversation";
 
 // Shared full-page article reader. Overlay owns its history entry so each
 // origin keeps its own list, selection, and scroll position.
@@ -437,6 +438,8 @@ export function ReaderPage({
         ) : (
           <>
             {articleBody}
+            {/* #200: replies most-liked first, then quotes, then the platform. */}
+            <ReaderConversation item={item} />
             <div className="rp-foot">
               {onSave && (
                 <button className="reader-open" onClick={onSave}>
