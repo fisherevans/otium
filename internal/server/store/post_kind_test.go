@@ -114,3 +114,46 @@ func TestPostTextFromBody(t *testing.T) {
 		})
 	}
 }
+
+// TestPostReingestUpdates pins #207: a Bluesky post stored before the structured
+// body existed gains it, and its derived columns follow, on the next fetch; an
+// unchanged post is not rewritten.
+func TestPostReingestUpdates(t *testing.T) {
+	db, uid := newTestDB(t)
+	ctx := context.Background()
+	s, err := db.CreateSource(ctx, &Source{UserID: uid, Kind: "bluesky", Title: "OTM", FeedURL: "bsky:did:plc:x", State: "followed", Weight: 1})
+	if err != nil {
+		t.Fatal(err)
+	}
+	old := &Item{SourceID: s.ID, ExternalID: "at://p", URL: "u", Title: "Old", Content: "<p>Old</p>", ContentSource: ContentSourceRSS, PublishedAt: time.Now().UTC()}
+	if _, err := db.UpsertItem(ctx, old); err != nil {
+		t.Fatal(err)
+	}
+	pj := `{"author":{"name":"OTM"},"segments":[{"text":"New "},{"text":"lnk.to/x...","kind":"link","href":"https://lnk.to/x/full"}]}`
+	re := &Item{SourceID: s.ID, ExternalID: "at://p", URL: "u", Title: "New lnk.to/x...", Content: `<p>New <a href="https://lnk.to/x/full">lnk.to/x...</a></p>`,
+		ThumbnailURL: "https://t", PostJSON: pj, PublishedAt: time.Now().UTC()}
+	created, err := db.UpsertItem(ctx, re)
+	if err != nil || created {
+		t.Fatalf("re-ingest created=%v err=%v", created, err)
+	}
+	var id int64
+	if err := db.sql.QueryRowContext(ctx, `SELECT id FROM items WHERE external_id = 'at://p'`).Scan(&id); err != nil {
+		t.Fatal(err)
+	}
+	got, err := db.GetItem(ctx, uid, id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.PostBody == nil || len(got.PostBody.Segments) != 2 || got.PostBody.Segments[1].Href != "https://lnk.to/x/full" {
+		t.Fatalf("post body = %+v", got.PostBody)
+	}
+	if got.Title != "New lnk.to/x..." || got.ThumbnailURL != "https://t" || got.Text != "New lnk.to/x..." {
+		t.Fatalf("derived columns not refreshed: %+v", got)
+	}
+	// A body without the structured post still yields its text, links stripped.
+	got.PostBody = nil
+	got.RefreshPostText()
+	if got.Text != "New lnk.to/x..." {
+		t.Fatalf("text from body = %q", got.Text)
+	}
+}

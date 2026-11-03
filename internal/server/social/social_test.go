@@ -100,3 +100,44 @@ func TestPostRemainder(t *testing.T) {
 		})
 	}
 }
+
+// TestBskyToPostFacets pins #207 on Fisher's On the Media post: the shortened
+// link in the text goes to the facet's real URL, the mention links to the
+// profile, and the link card is a structured card, not body text.
+func TestBskyToPostFacets(t *testing.T) {
+	raw := `{"uri":"at://did:plc:qjoddtmp5jxzkzvt3hoqz3tt/app.bsky.feed.post/3mzfxog3uyf23",
+	  "author":{"did":"did:plc:qjoddtmp5jxzkzvt3hoqz3tt","handle":"onthemedia.bsky.social","displayName":"On the Media","avatar":"https://cdn.bsky.app/img/avatar/plain/x"},
+	  "record":{"text":"Struggling to figure out if an election story is true or false? Check out the election rumor rundown from the Center for an Informed Public and listen to our conversation with co-founder @katestarbird.bsky.social on this week’s show. lnk.to/onthemedia/b...",
+	    "createdAt":"2026-11-03T13:40:42.163144Z",
+	    "facets":[{"features":[{"$type":"app.bsky.richtext.facet#mention","did":"did:plc:h3t5rqlvuaorq42yckpijirj"}],"index":{"byteEnd":212,"byteStart":187}},
+	              {"features":[{"$type":"app.bsky.richtext.facet#link","uri":"https://lnk.to/onthemedia/bluesky"}],"index":{"byteEnd":258,"byteStart":236}}]},
+	  "embed":{"$type":"app.bsky.embed.external#view","external":{"uri":"https://lnk.to/onthemedia/bluesky","title":"On the Media","description":"The Peabody Award-winning On the Media podcast...","thumb":"https://cdn.bsky.app/img/feed_thumbnail/plain/x"}},
+	  "likeCount":10,"repostCount":5,"replyCount":0,"quoteCount":0}`
+	var p bskyPost
+	if err := json.Unmarshal([]byte(raw), &p); err != nil {
+		t.Fatal(err)
+	}
+	got, ok := bskyToPost(p)
+	if !ok || got.Body == nil {
+		t.Fatal("not converted")
+	}
+	segs := got.Body.Segments
+	if len(segs) != 4 || segs[3].Href != "https://lnk.to/onthemedia/bluesky" || segs[3].Text != "lnk.to/onthemedia/b..." {
+		t.Fatalf("segments = %+v", segs)
+	}
+	if segs[1].Kind != "mention" || segs[1].Href != "https://bsky.app/profile/did:plc:h3t5rqlvuaorq42yckpijirj" {
+		t.Fatalf("mention = %+v", segs[1])
+	}
+	if l := got.Body.Link; l == nil || l.Domain != "lnk.to" || l.Title != "On the Media" {
+		t.Fatalf("link card = %+v", got.Body.Link)
+	}
+	if got.Body.Author.Handle != "onthemedia.bsky.social" || got.Body.Author.Avatar == "" {
+		t.Fatalf("author = %+v", got.Body.Author)
+	}
+	if !strings.Contains(got.ContentHTML, `<a href="https://lnk.to/onthemedia/bluesky">lnk.to/onthemedia/b...</a>`) {
+		t.Fatalf("body link = %q", got.ContentHTML)
+	}
+	if !strings.HasPrefix(got.Title, "Struggling to figure out") {
+		t.Fatalf("title = %q", got.Title)
+	}
+}

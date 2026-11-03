@@ -2,8 +2,11 @@ package store
 
 import (
 	"html"
+	"regexp"
 	"strings"
 	"time"
+
+	"github.com/fisherevans/otium/internal/server/richtext"
 )
 
 // User is an authenticated account. Single-tenant in practice, but everything
@@ -193,6 +196,12 @@ type Item struct {
 	// Text is a post's whole text, rebuilt from the stored title (its first line)
 	// and summary (the rest). Empty for anything that is not a post.
 	Text string `json:"text,omitempty"`
+	// PostBody is the structured post (#207): its text as segments with working
+	// links, its images, link card, video and quoted post. Nil for anything that is
+	// not a post and for a post stored before #207 until its source is fetched
+	// again. PostJSON is its stored form, set by ingest for UpsertItem.
+	PostBody *richtext.Post `json:"post_body,omitempty"`
+	PostJSON string         `json:"-"`
 }
 
 // PostKinds are the source kinds whose items are social posts rather than
@@ -200,17 +209,26 @@ type Item struct {
 // it becomes a source kind (#198).
 var PostKinds = map[string]bool{"bluesky": true}
 
-// SetSourceKind records the item's source kind and derives Post and Text from it.
-func (it *Item) SetSourceKind(kind string) {
+// SetSourceKind records the item's source kind and stored post (post_json), and
+// derives Post, PostBody and Text from them.
+func (it *Item) SetSourceKind(kind, postJSON string) {
 	it.SourceKind = kind
 	it.Post = PostKinds[kind]
+	if it.Post {
+		it.PostBody = richtext.Unmarshal(postJSON)
+	}
 	it.RefreshPostText()
 }
 
-// RefreshPostText sets a post's Text: from the body when it is loaded (exact,
-// paragraph breaks kept), else from the stored title and summary.
+// RefreshPostText sets a post's Text: from the structured post when there is one,
+// else from the body when it is loaded (exact, paragraph breaks kept), else from
+// the stored title and summary.
 func (it *Item) RefreshPostText() {
 	if !it.Post {
+		return
+	}
+	if it.PostBody != nil {
+		it.Text = strings.TrimSpace(it.PostBody.Text())
 		return
 	}
 	if t := postTextFromBody(it.Content); t != "" {
@@ -219,6 +237,8 @@ func (it *Item) RefreshPostText() {
 	}
 	it.Text = PostText(it.Title, it.Summary)
 }
+
+var tagRE = regexp.MustCompile(`<[^>]+>`)
 
 // postTextFromBody reads a post's text back out of the body ingest wrote: the
 // first paragraph, escaped, with <br> for line breaks. A post with no text starts
@@ -235,7 +255,9 @@ func postTextFromBody(body string) string {
 	if strings.HasPrefix(first, "<") {
 		return ""
 	}
-	return strings.TrimSpace(html.UnescapeString(strings.ReplaceAll(first, "<br>", "\n")))
+	first = strings.ReplaceAll(first, "<br>", "\n")
+	first = tagRE.ReplaceAllString(first, "") // #207: facet links
+	return strings.TrimSpace(html.UnescapeString(first))
 }
 
 // Headline is the one line that names an item in a list or a message: its title,

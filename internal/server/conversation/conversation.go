@@ -24,6 +24,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/fisherevans/otium/internal/server/richtext"
 )
 
 // Platforms. Empty means the item has no conversation otium can fetch.
@@ -44,15 +46,21 @@ type Counts struct {
 
 // Comment is one reply, quote or comment. Text is plain text, never HTML.
 type Comment struct {
-	Author      string    `json:"author"`
-	Handle      string    `json:"handle,omitempty"`
-	AvatarURL   string    `json:"avatar_url,omitempty"`
-	Text        string    `json:"text"`
-	URL         string    `json:"url,omitempty"`
-	Likes       int       `json:"likes"`
-	Replies     int       `json:"replies"`
-	Media       string    `json:"media,omitempty"` // image | video | link: something the text does not show
-	PublishedAt time.Time `json:"published_at"`
+	Author    string `json:"author"`
+	Handle    string `json:"handle,omitempty"`
+	AvatarURL string `json:"avatar_url,omitempty"`
+	Text      string `json:"text"`
+	// Segments is Text with its links (#207), when it has any: concatenated, the
+	// segments' text is Text. Bluesky only.
+	Segments    []richtext.Segment `json:"segments,omitempty"`
+	URL         string             `json:"url,omitempty"`
+	Likes       int                `json:"likes"`
+	Replies     int                `json:"replies"`
+	Media       string             `json:"media,omitempty"` // image | video | link: something the text does not show
+	PublishedAt time.Time          `json:"published_at"`
+	// Children are the replies to this reply (#207), most-liked first, as deep as
+	// the platform gave them. Bluesky only.
+	Children []Comment `json:"children,omitempty"`
 }
 
 // Conversation is what GET /items/{id}/conversation returns.

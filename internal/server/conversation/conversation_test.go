@@ -67,7 +67,16 @@ const bskyThread = `{"thread":{"$type":"app.bsky.feed.defs#threadViewPost",
   {"$type":"app.bsky.feed.defs#notFoundPost","uri":"at://gone"},
   {"$type":"app.bsky.feed.defs#threadViewPost","post":{"uri":"at://did:plc:d/app.bsky.feed.post/3r2","author":{"handle":"dee.test","displayName":"Dee"},
    "record":{"text":"<script>alert(1)</script> great","createdAt":"2026-11-02T12:00:00Z"},"likeCount":40,"replyCount":2,
-   "embed":{"$type":"app.bsky.embed.external#view","external":{"uri":"https://x"}}}}
+   "embed":{"$type":"app.bsky.embed.external#view","external":{"uri":"https://x"}}},
+   "replies":[
+    {"$type":"app.bsky.feed.defs#threadViewPost","post":{"uri":"at://did:plc:g/app.bsky.feed.post/3c1","author":{"handle":"gus.test"},
+     "record":{"text":"meh too","createdAt":"2026-11-02T12:30:00Z"},"likeCount":1}},
+    {"$type":"app.bsky.feed.defs#threadViewPost","post":{"uri":"at://did:plc:h/app.bsky.feed.post/3c2","author":{"handle":"hal.test","displayName":"Hal"},
+     "record":{"text":"\u2019 see x.test/a...","createdAt":"2026-11-02T12:40:00Z",
+      "facets":[{"index":{"byteStart":8,"byteEnd":19},"features":[{"$type":"app.bsky.richtext.facet#link","uri":"https://x.test/a/full"}]}]},"likeCount":5},
+     "replies":[{"$type":"app.bsky.feed.defs#threadViewPost","post":{"uri":"at://did:plc:a/app.bsky.feed.post/3c3","author":{"handle":"alice.bsky.social"},
+      "record":{"text":"deep","createdAt":"2026-11-02T12:50:00Z"},"likeCount":0}}]}
+   ]}
  ]}}`
 
 const bskyQuotes = `{"uri":"at://did:plc:a/app.bsky.feed.post/3root","posts":[
@@ -109,6 +118,20 @@ func TestBluesky(t *testing.T) {
 	// Remote text stays raw text; the client renders it as text, never HTML.
 	if c.Replies[0].Text != "<script>alert(1)</script> great" || c.Replies[0].Media != "link" {
 		t.Fatalf("reply 0 = %+v", c.Replies[0])
+	}
+	// #207: replies nest, most-liked first at every level, with their links.
+	kids := c.Replies[0].Children
+	if len(kids) != 2 || kids[0].Author != "Hal" || kids[1].Author != "gus.test" || len(c.Replies[1].Children) != 0 {
+		t.Fatalf("children = %+v", kids)
+	}
+	if len(kids[0].Children) != 1 || kids[0].Children[0].Text != "deep" {
+		t.Fatalf("grandchildren = %+v", kids[0].Children)
+	}
+	if segs := kids[0].Segments; len(segs) != 2 || segs[1].Text != "x.test/a..." || segs[1].Href != "https://x.test/a/full" {
+		t.Fatalf("child segments = %+v", segs)
+	}
+	if c.Replies[0].Segments != nil {
+		t.Fatalf("a reply without links should carry no segments: %+v", c.Replies[0].Segments)
 	}
 	if c.Replies[0].URL != "https://bsky.app/profile/dee.test/post/3r2" {
 		t.Fatalf("reply url = %q", c.Replies[0].URL)

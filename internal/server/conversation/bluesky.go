@@ -3,56 +3,22 @@ package conversation
 import (
 	"context"
 	"net/url"
+	"strconv"
 	"strings"
 	"sync"
+
+	"github.com/fisherevans/otium/internal/server/richtext"
 )
 
-type bskyAuthor struct {
-	Handle      string `json:"handle"`
-	DisplayName string `json:"displayName"`
-	Avatar      string `json:"avatar"`
-}
-
-type bskyEmbedView struct {
-	Type   string `json:"$type"`
-	Images []any  `json:"images"`
-	// record#view: the quoted post (or a not-found/blocked stub).
-	Record *bskyRecordView `json:"record"`
-	// recordWithMedia#view nests the media beside the record.
-	Media    *bskyEmbedView `json:"media"`
-	External *struct {
-		URI string `json:"uri"`
-	} `json:"external"`
-	Playlist string `json:"playlist"` // video
-}
-
-// bskyRecordView is app.bsky.embed.record#viewRecord, or the inner "record"
-// of a recordWithMedia#view (which wraps one more level).
-type bskyRecordView struct {
-	Type   string          `json:"$type"`
-	URI    string          `json:"uri"`
-	Author bskyAuthor      `json:"author"`
-	Value  bskyRecord      `json:"value"`
-	Record *bskyRecordView `json:"record"` // recordWithMedia: record.record
-	Likes  int             `json:"likeCount"`
-	Reply  int             `json:"replyCount"`
-	Embeds []bskyEmbedView `json:"embeds"`
-}
-
-type bskyRecord struct {
-	Text      string `json:"text"`
-	CreatedAt string `json:"createdAt"`
-}
-
 type bskyPostView struct {
-	URI         string         `json:"uri"`
-	Author      bskyAuthor     `json:"author"`
-	Record      bskyRecord     `json:"record"`
-	Embed       *bskyEmbedView `json:"embed"`
-	LikeCount   int            `json:"likeCount"`
-	RepostCount int            `json:"repostCount"`
-	ReplyCount  int            `json:"replyCount"`
-	QuoteCount  int            `json:"quoteCount"`
+	URI         string                  `json:"uri"`
+	Author      richtext.BskyAuthor     `json:"author"`
+	Record      richtext.BskyRecord     `json:"record"`
+	Embed       *richtext.BskyEmbedView `json:"embed"`
+	LikeCount   int                     `json:"likeCount"`
+	RepostCount int                     `json:"repostCount"`
+	ReplyCount  int                     `json:"replyCount"`
+	QuoteCount  int                     `json:"quoteCount"`
 }
 
 type bskyThreadNode struct {
@@ -61,14 +27,16 @@ type bskyThreadNode struct {
 	Replies []bskyThreadNode `json:"replies"`
 }
 
+// threadDepth is how deep the reply tree is fetched (#207): a reply, the replies
+// to it, and one more level - enough to read a thread as a thread without
+// pulling a whole pile-on.
+const threadDepth = 3
+
+// maxChildren caps the replies kept under any one reply; the rest are on Bluesky.
+const maxChildren = 6
+
 // BskyPostURL is the post's web address: https://bsky.app/profile/<handle>/post/<rkey>.
-func BskyPostURL(handle, uri string) string {
-	rkey := uri[strings.LastIndex(uri, "/")+1:]
-	if handle == "" || rkey == "" {
-		return ""
-	}
-	return "https://bsky.app/profile/" + handle + "/post/" + rkey
-}
+func BskyPostURL(handle, uri string) string { return richtext.BskyPostURL(handle, uri) }
 
 func (s *Service) bluesky(ctx context.Context, uri string) (*Conversation, error) {
 	var thread struct {
@@ -85,7 +53,7 @@ func (s *Service) bluesky(ctx context.Context, uri string) (*Conversation, error
 		q := url.Values{"uri": {uri}, "limit": {"25"}}
 		qErr = s.getJSON(ctx, s.cfg.BskyBase+"/app.bsky.feed.getQuotes?"+q.Encode(), &quotes)
 	}()
-	q := url.Values{"uri": {uri}, "depth": {"1"}, "parentHeight": {"0"}}
+	q := url.Values{"uri": {uri}, "depth": {strconv.Itoa(threadDepth)}, "parentHeight": {"0"}}
 	err := s.getJSON(ctx, s.cfg.BskyBase+"/app.bsky.feed.getPostThread?"+q.Encode(), &thread)
 	wg.Wait()
 	if err != nil {
@@ -99,13 +67,7 @@ func (s *Service) bluesky(ctx context.Context, uri string) (*Conversation, error
 		URL:    BskyPostURL(p.Author.Handle, p.URI),
 		Counts: Counts{Likes: p.LikeCount, Reposts: p.RepostCount, Replies: p.ReplyCount, Quotes: p.QuoteCount},
 	}
-	for _, n := range thread.Thread.Replies {
-		if n.Post == nil || !strings.HasSuffix(n.Type, "#threadViewPost") {
-			continue // notFoundPost / blockedPost
-		}
-		conv.Replies = append(conv.Replies, bskyComment(*n.Post))
-	}
-	mostLiked(conv.Replies)
+	conv.Replies = bskyReplies(thread.Thread.Replies, threadDepth)
 	// Quotes are secondary: a failure there still shows the replies.
 	if qErr == nil {
 		for _, qp := range quotes.Posts {
@@ -117,22 +79,45 @@ func (s *Service) bluesky(ctx context.Context, uri string) (*Conversation, error
 	return conv, nil
 }
 
+// bskyReplies turns a thread level into comments, most-liked first at every
+// level, nesting the replies to each down to depth.
+func bskyReplies(nodes []bskyThreadNode, depth int) []Comment {
+	var out []Comment
+	for _, n := range nodes {
+		if n.Post == nil || !strings.HasSuffix(n.Type, "#threadViewPost") {
+			continue // notFoundPost / blockedPost
+		}
+		c := bskyComment(*n.Post)
+		if depth > 1 && len(n.Replies) > 0 {
+			c.Children = bskyReplies(n.Replies, depth-1)
+			if len(c.Children) > maxChildren {
+				c.Children = c.Children[:maxChildren]
+			}
+		}
+		out = append(out, c)
+	}
+	mostLiked(out)
+	return out
+}
+
 func bskyComment(p bskyPostView) Comment {
+	body := richtext.BskyPost(p.Author, p.Record, p.Embed)
 	return Comment{
 		Author:      firstNonEmpty(p.Author.DisplayName, p.Author.Handle),
 		Handle:      p.Author.Handle,
 		AvatarURL:   p.Author.Avatar,
 		Text:        clipText(p.Record.Text, 1200),
+		Segments:    clipSegments(body.Segments, 1200),
 		URL:         BskyPostURL(p.Author.Handle, p.URI),
 		Likes:       p.LikeCount,
 		Replies:     p.ReplyCount,
-		Media:       bskyMedia(p.Embed),
+		Media:       bskyMedia(body),
 		PublishedAt: parseTime(p.Record.CreatedAt),
 	}
 }
 
 // bskyQuoted extracts the post an embed quotes, if any.
-func bskyQuoted(e *bskyEmbedView) *Comment {
+func bskyQuoted(e *richtext.BskyEmbedView) *Comment {
 	if e == nil || e.Record == nil {
 		return nil
 	}
@@ -145,13 +130,14 @@ func bskyQuoted(e *bskyEmbedView) *Comment {
 	}
 	media := ""
 	if len(r.Embeds) > 0 {
-		media = bskyMedia(&r.Embeds[0])
+		media = bskyMedia(richtext.BskyPost(r.Author, richtext.BskyRecord{}, &r.Embeds[0]))
 	}
 	return &Comment{
 		Author:      firstNonEmpty(r.Author.DisplayName, r.Author.Handle),
 		Handle:      r.Author.Handle,
 		AvatarURL:   r.Author.Avatar,
 		Text:        clipText(r.Value.Text, 1200),
+		Segments:    clipSegments(richtext.Segments(r.Value.Text, r.Value.Facets), 1200),
 		URL:         BskyPostURL(r.Author.Handle, r.URI),
 		Likes:       r.Likes,
 		Replies:     r.Reply,
@@ -160,22 +146,35 @@ func bskyQuoted(e *bskyEmbedView) *Comment {
 	}
 }
 
-func bskyMedia(e *bskyEmbedView) string {
-	if e == nil {
+// bskyMedia names what a post carries beyond its text.
+func bskyMedia(p *richtext.Post) string {
+	switch {
+	case len(p.Images) > 0:
+		return "image"
+	case p.Video != nil:
+		return "video"
+	case p.Link != nil:
+		return "link"
+	case p.Quote != nil:
 		return ""
 	}
-	if e.Media != nil {
-		return bskyMedia(e.Media)
-	}
-	switch {
-	case len(e.Images) > 0:
-		return "image"
-	case e.Playlist != "":
-		return "video"
-	case e.External != nil:
-		return "link"
-	}
 	return ""
+}
+
+// clipSegments keeps segments only when they carry a link and the text fits
+// unclipped; otherwise the plain clipped Text is all a client needs.
+func clipSegments(segs []richtext.Segment, n int) []richtext.Segment {
+	linked := false
+	for _, s := range segs {
+		if s.Href != "" {
+			linked = true
+			break
+		}
+	}
+	if !linked || len([]rune(strings.TrimSpace(richtext.Plain(segs)))) > n {
+		return nil
+	}
+	return segs
 }
 
 func firstNonEmpty(vals ...string) string {
