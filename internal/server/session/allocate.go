@@ -217,22 +217,21 @@ func (p *sourcePool) live() ([]int64, float64) {
 	return ids, totalW
 }
 
-// empty reports whether every source is exhausted.
-func (p *sourcePool) empty() bool {
-	for _, cs := range p.bySource {
-		if len(cs) > 0 {
-			return false
-		}
-	}
-	return true
-}
-
 // next picks a source weighted-random by its weight and takes that source's next
 // article. ok is false when the pool is exhausted.
 func (p *sourcePool) next(rng *rand.Rand) (Selected, bool) {
+	sid, ok := p.roll(rng)
+	if !ok {
+		return Selected{}, false
+	}
+	return p.take(sid), true
+}
+
+// roll picks a source weighted-random by its weight without consuming anything.
+func (p *sourcePool) roll(rng *rand.Rand) (int64, bool) {
 	ids, totalW := p.live()
 	if len(ids) == 0 {
-		return Selected{}, false
+		return 0, false
 	}
 	roll := rng.Float64() * totalW
 	pick := ids[len(ids)-1]
@@ -244,13 +243,18 @@ func (p *sourcePool) next(rng *rand.Rand) (Selected, bool) {
 			break
 		}
 	}
-	cs := p.bySource[pick]
+	return pick, true
+}
+
+// take consumes and returns the source's next article.
+func (p *sourcePool) take(sid int64) Selected {
+	cs := p.bySource[sid]
 	sel := selectedFrom(cs[0], p.now)
 	if s, ok := p.facetScore[cs[0].ID]; ok {
 		sel.Score = round2(s) // non-default scoring: report the facet product, not freshness
 	}
-	p.bySource[pick] = cs[1:]
-	return sel, true
+	p.bySource[sid] = cs[1:]
+	return sel
 }
 
 // selectedFrom builds the Selected view for one allocated article. The article

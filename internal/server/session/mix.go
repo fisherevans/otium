@@ -9,26 +9,29 @@ import (
 )
 
 // Mixed feeds (#201). A mix adds one level above source allocation: it decides
-// which FORMAT fills the next slot, then the format's own source pool picks a
-// source by representation exactly as Allocate does. Section weights scale the
+// which FORMAT fills the next slot, then takes an item from a source in that
+// format picked by representation, as Allocate does. Section weights scale the
 // representation of every source in that section, so "more News" means News
 // sources are picked more often inside whichever format is being filled.
 //
 // Shares are shares of session TIME, not of slots. Each pick charges its format
 // the item's expected time (Cost): a 20-minute video uses twenty minutes of the
-// video share, a Short about one. The next slot goes to the format whose next
-// item, counted at its midpoint, leaves it furthest below its share of the time
-// queued so far (the next item's cost is the representation-weighted mean of the
-// format's source heads, since the source roll happens after the format pick):
+// video share, a Short about one. Each slot rolls a source in every format that
+// still has items, so the rule sees each candidate's real length, then goes to
+// the format whose candidate, counted at its midpoint, leaves it furthest below
+// its share of the time queued so far:
 //
-//	pick f minimizing (used[f] + cost(next item of f)/2) / share[f]
+//	pick f minimizing (used[f] + cost(candidate of f)/2) / share[f]
 //
-// Counting the next item at its midpoint keeps every prefix of the queue within
-// half an item of the target, so a long video neither jumps the queue nor starves
-// waiting for the other formats to accumulate its full length. Exact ties (the
-// first slot when costs and shares match) are broken by a weighted roll on share. A format with no eligible items
-// drops out, and the remaining shares renormalize implicitly because the rule
-// compares ratios. The default (no mix) path never reaches this file.
+// The winner's roll is taken; the other rolls are discarded. Counting at the
+// midpoint keeps every prefix of the queue within about half an item of the
+// target, so a long video neither jumps the queue nor waits for the other
+// formats to accumulate its full length. A video longer than its format's share
+// of the whole session therefore lands past the session's end, and because every
+// slot re-rolls, a shorter video from another source can take the slot instead.
+// Exact ties are broken by a weighted roll on share. A format with no eligible
+// items drops out and the remaining shares renormalize implicitly, because the
+// rule compares ratios. The default (no mix) path never reaches this file.
 
 // Format is a session-mix format. "post" is derived from the source kind
 // (Bluesky), not stored on the item: posts keep media_type 'article', so every
@@ -140,11 +143,11 @@ func AllocateMix(pool []store.Candidate, facts map[int64]store.SourceFacts, mix 
 	out := make([]Selected, 0, maxItems)
 	var picks []MixPick
 	for len(out) < maxItems && total < budgetSec {
-		format, ok := nextFormat(pools, mix, used, rng)
+		format, sid, ok := nextFormat(pools, mix, used, rng)
 		if !ok {
 			break
 		}
-		sel, _ := pools[format].next(rng)
+		sel := pools[format].take(sid)
 		cost := Cost(candidateOf(sel), format)
 		used[format] += cost
 		total += cost
@@ -154,27 +157,33 @@ func AllocateMix(pool []store.Candidate, facts map[int64]store.SourceFacts, mix 
 	return out, picks
 }
 
-// nextFormat applies the midpoint rule over formats that still have items.
-func nextFormat(pools map[Format]*sourcePool, mix Mix, used map[Format]float64, rng *rand.Rand) (Format, bool) {
+// nextFormat rolls a source in every format that still has items, then applies
+// the midpoint rule using each rolled item's real cost. It returns the chosen
+// format and its rolled source; the other rolls are discarded.
+func nextFormat(pools map[Format]*sourcePool, mix Mix, used map[Format]float64, rng *rand.Rand) (Format, int64, bool) {
 	type cand struct {
 		f     Format
+		sid   int64
 		ratio float64
 	}
 	var cs []cand
 	for _, f := range Formats {
 		p := pools[f]
-		if p == nil || p.empty() {
+		if p == nil {
 			continue
 		}
-		share := mix.Formats[f]
-		cs = append(cs, cand{f, (used[f] + p.typicalCost(f)/2) / share})
+		sid, ok := p.roll(rng)
+		if !ok {
+			continue
+		}
+		cost := Cost(p.bySource[sid][0], f)
+		cs = append(cs, cand{f, sid, (used[f] + cost/2) / mix.Formats[f]})
 	}
 	if len(cs) == 0 {
-		return "", false
+		return "", 0, false
 	}
 	sort.SliceStable(cs, func(i, j int) bool { return cs[i].ratio < cs[j].ratio })
-	// Formats tied with the lowest ratio (always the case for the first slot when
-	// costs match) share the slot by a weighted roll on share.
+	// Exact ties share the slot by a weighted roll on share.
 	tied := cs[:1]
 	for _, c := range cs[1:] {
 		if c.ratio-cs[0].ratio > 1e-9 {
@@ -183,7 +192,7 @@ func nextFormat(pools map[Format]*sourcePool, mix Mix, used map[Format]float64, 
 		tied = append(tied, c)
 	}
 	if len(tied) == 1 {
-		return tied[0].f, true
+		return tied[0].f, tied[0].sid, true
 	}
 	var sum float64
 	for _, c := range tied {
@@ -193,24 +202,11 @@ func nextFormat(pools map[Format]*sourcePool, mix Mix, used map[Format]float64, 
 	for _, c := range tied {
 		roll -= mix.Formats[c.f]
 		if roll < 0 {
-			return c.f, true
+			return c.f, c.sid, true
 		}
 	}
-	return tied[len(tied)-1].f, true
-}
-
-// typicalCost is the representation-weighted mean cost of each source's next
-// item: the expected cost of whatever the next roll returns.
-func (p *sourcePool) typicalCost(f Format) float64 {
-	ids, w := p.live() // sorted, so the float sum is deterministic
-	if w == 0 {
-		return 0
-	}
-	var sum float64
-	for _, sid := range ids {
-		sum += Cost(p.bySource[sid][0], f) * p.repr[sid]
-	}
-	return sum / w
+	last := tied[len(tied)-1]
+	return last.f, last.sid, true
 }
 
 // candidateOf rebuilds the cost-relevant fields of an allocated item.
