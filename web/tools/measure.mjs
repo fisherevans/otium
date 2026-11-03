@@ -79,6 +79,7 @@ const ALL_FIXTURES = [
   "short-square", "short-wide", "long-vertical",
   "bsky-quote", "bsky-image", "substack-comments", "video-wide-comments",
   "news-vtdigger", "bsky-text-short", "bsky-text-long", "bsky-link-avatar",
+  "bsky-otm", "bsky-images", "bsky-quoted", "bsky-thread",
 ];
 const FIXTURES = (arg("fixtures") ? String(arg("fixtures")).split(",") : ALL_FIXTURES).map((s) => s.trim());
 
@@ -110,7 +111,7 @@ function readCard() {
   // Half-leading: a text row carries (lineHeight - fontSize) / 2 of empty space
   // above and below its glyphs, so equal MARGINS do not read as equal GAPS.
   const half = (el) => {
-    if (!el) return 0;
+    if (!el || el.classList.contains("bsky-post")) return 0; // #207: a box, not a line
     const cs = getComputedStyle(el);
     const fs = parseFloat(cs.fontSize);
     const lh = parseFloat(cs.lineHeight) || fs * 1.2;
@@ -120,6 +121,8 @@ function readCard() {
   const first = compact ? card.querySelector(".im-frame") : card.querySelector(".card-hier, .card-title");
   const title = card.querySelector(".card-title, .card-post");
   const post = card.querySelector(".card-post");
+  // #207: a post's text sits inside its own card; the card is the header row.
+  const postBox = card.querySelector(".bsky-post");
   const credit = card.querySelector(".card-credit");
   const tax = card.querySelector(".ch-tax");
   const actions = card.querySelector(".shorts-card-footer, .im-actions, .card-callout");
@@ -142,7 +145,7 @@ function readCard() {
   const topReserve = parseFloat(cs.paddingTop) - centerPad;
   const bottomReserve = Math.max(16, parseFloat(cs.paddingBottom));
   // Rows in DOM order: an article is title then credit, a post credit then text.
-  const order = [tax, title, credit].filter(Boolean).sort((a, b) => (a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING ? -1 : 1));
+  const order = [tax, postBox ?? title, credit].filter(Boolean).sort((a, b) => (a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING ? -1 : 1));
   const rows = [...order, media].filter(Boolean);
 
   return {
@@ -165,7 +168,11 @@ function readCard() {
     rhythm: rows.slice(1).map((b, i) => gap(rows[i], b)).filter((v) => v !== null).join("/"),
     postLines: post ? Math.round(R(post).height / parseFloat(getComputedStyle(post).lineHeight)) : "-",
     postClamped: post ? post.scrollHeight > post.clientHeight + 1 : "-",
-    avatarHero: !!post && !!card.querySelector(".media img") && card.querySelector(".media img").getAttribute("src") === (card.querySelector(".card-credit img.src-avatar")?.getAttribute("src") ?? "-"),
+    avatarHero: !!post && [...card.querySelectorAll(".media img, .bp-images img")].some((im) =>
+      im.getAttribute("src") === (card.querySelector(".card-credit img.src-avatar, .bp-head img.bp-avatar")?.getAttribute("src") ?? "-")),
+    // #207: a post's links must be live, and a link card must stay compact.
+    deadLinks: [...card.querySelectorAll(".card-post a")].filter((a) => !/^https?:/.test(a.getAttribute("href") || "")).length,
+    linkCard: card.querySelector(".bp-linkcard") ? Math.round(R(card.querySelector(".bp-linkcard")).height) : "-",
     media: media ? `${Math.round(R(media).width)}x${Math.round(R(media).height)} (${Math.round((R(media).height / card.offsetHeight) * 100)}%)` : "-",
     overflow: Math.max(0, card.scrollHeight - card.clientHeight),
     horizontalOverflow: Math.max(0, card.scrollWidth - card.clientWidth),
@@ -201,6 +208,8 @@ function record(where, m) {
   if (m.overflow > 0) problems.push(`${where}: content overflows by ${m.overflow}px`);
   if (Math.abs(m.offCentre) > 4) problems.push(`${where}: card is ${m.offCentre}px off centre (above ${m.above}, below ${m.below})`);
   if (m.avatarHero) problems.push(`${where}: a post shows its author's avatar as the hero`);
+  if (m.deadLinks > 0) problems.push(`${where}: ${m.deadLinks} post link(s) without an http(s) target`);
+  if (typeof m.linkCard === "number" && m.linkCard > 130) problems.push(`${where}: link card is ${m.linkCard}px tall, not compact`);
   if (m.compact && m.horizontalOverflow > 0) problems.push(`${where}: content overflows horizontally by ${m.horizontalOverflow}px`);
   if (!m.actionsInView) problems.push(`${where}: action row is out of reach`);
 }

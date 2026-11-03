@@ -16,6 +16,7 @@ import (
 	"github.com/mmcdole/gofeed"
 
 	"github.com/fisherevans/otium/internal/server/media"
+	"github.com/fisherevans/otium/internal/server/richtext"
 	"github.com/fisherevans/otium/internal/server/social"
 	"github.com/fisherevans/otium/internal/server/store"
 	"github.com/fisherevans/otium/internal/server/youtube"
@@ -123,6 +124,7 @@ func (ing *Ingester) fetchBluesky(ctx context.Context, s store.Source) (int, err
 			Content: p.ContentHTML, Author: p.Author, ThumbnailURL: p.ThumbnailURL, MediaType: p.MediaType,
 			PublishedAt: p.PublishedAt, ContentSource: store.ContentSourceRSS,
 			Likes: p.Engagement.Likes, Reposts: p.Engagement.Reposts, Replies: p.Engagement.Replies, HasEngagement: true,
+			PostJSON: richtext.Marshal(p.Body),
 		}
 		created, err := ing.db.UpsertItem(ctx, it)
 		if err != nil {

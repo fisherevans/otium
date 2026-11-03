@@ -16,6 +16,8 @@ import (
 	"net/url"
 	"strings"
 	"time"
+
+	"github.com/fisherevans/otium/internal/server/richtext"
 )
 
 const bskyBase = "https://public.api.bsky.app/xrpc"
@@ -59,6 +61,8 @@ type Post struct {
 	MediaType    string
 	PublishedAt  time.Time
 	Engagement   Engagement
+	// Body is the structured post (#207), for kinds that are posts; nil otherwise.
+	Body *richtext.Post
 }
 
 // ---- Bluesky ----------------------------------------------------------------
@@ -128,38 +132,14 @@ type bskyFeed struct {
 }
 
 type bskyPost struct {
-	URI    string `json:"uri"`
-	Author struct {
-		Handle      string `json:"handle"`
-		DisplayName string `json:"displayName"`
-	} `json:"author"`
-	Record struct {
-		Text      string `json:"text"`
-		CreatedAt string `json:"createdAt"`
-	} `json:"record"`
-	Embed       *bskyEmbed `json:"embed"`
-	LikeCount   int        `json:"likeCount"`
-	RepostCount int        `json:"repostCount"`
-	ReplyCount  int        `json:"replyCount"`
-	QuoteCount  int        `json:"quoteCount"`
-}
-
-type bskyEmbed struct {
-	Type   string `json:"$type"`
-	Images []struct {
-		Thumb    string `json:"thumb"`
-		Fullsize string `json:"fullsize"`
-		Alt      string `json:"alt"`
-	} `json:"images"`
-	External *struct {
-		URI         string `json:"uri"`
-		Title       string `json:"title"`
-		Description string `json:"description"`
-		Thumb       string `json:"thumb"`
-	} `json:"external"`
-	Thumbnail string `json:"thumbnail"` // video
-	// recordWithMedia nests the media part.
-	Media *bskyEmbed `json:"media"`
+	URI         string                  `json:"uri"`
+	Author      richtext.BskyAuthor     `json:"author"`
+	Record      richtext.BskyRecord     `json:"record"`
+	Embed       *richtext.BskyEmbedView `json:"embed"`
+	LikeCount   int                     `json:"likeCount"`
+	RepostCount int                     `json:"repostCount"`
+	ReplyCount  int                     `json:"replyCount"`
+	QuoteCount  int                     `json:"quoteCount"`
 }
 
 // FetchBluesky returns the actor's own recent posts (no reposts, no replies).
@@ -181,6 +161,10 @@ func (c *Client) FetchBluesky(ctx context.Context, did string, limit int) ([]Pos
 	return out, nil
 }
 
+// bskyToPost shapes a post view into an item (#197, #207). The structured post
+// (Body: text segments with their links, images, link card, video, quoted post)
+// is what the client renders; the title, summary and HTML body are derived from
+// it for everything that reads an item as an article - lists, Discord, search.
 func bskyToPost(p bskyPost) (Post, bool) {
 	rkey := p.URI[strings.LastIndex(p.URI, "/")+1:]
 	if rkey == "" {
@@ -190,53 +174,46 @@ func bskyToPost(p bskyPost) (Post, bool) {
 	if err != nil {
 		created = time.Now().UTC()
 	}
-	text := strings.TrimSpace(p.Record.Text)
+	body := richtext.BskyPost(p.Author, p.Record, p.Embed)
+	text := strings.TrimSpace(body.Text())
 	post := Post{
-		ExternalID:  p.URI,
-		URL:         "https://bsky.app/profile/" + p.Author.Handle + "/post/" + rkey,
-		Author:      firstNonEmpty(p.Author.DisplayName, p.Author.Handle),
-		PublishedAt: created.UTC(),
-		MediaType:   "article",
-		Engagement:  Engagement{Likes: p.LikeCount, Reposts: p.RepostCount + p.QuoteCount, Replies: p.ReplyCount},
+		ExternalID:   p.URI,
+		URL:          "https://bsky.app/profile/" + p.Author.Handle + "/post/" + rkey,
+		Author:       firstNonEmpty(p.Author.DisplayName, p.Author.Handle),
+		PublishedAt:  created.UTC(),
+		MediaType:    "article",
+		Engagement:   Engagement{Likes: p.LikeCount, Reposts: p.RepostCount + p.QuoteCount, Replies: p.ReplyCount},
+		Body:         body,
+		ThumbnailURL: body.Picture(),
 	}
 
-	var body strings.Builder
+	var h strings.Builder
 	if text != "" {
-		body.WriteString("<p>" + strings.ReplaceAll(html.EscapeString(text), "\n", "<br>") + "</p>")
+		h.WriteString("<p>" + richtext.HTML(body.Segments) + "</p>")
 	}
-	e := p.Embed
-	if e != nil && e.Media != nil {
-		e = e.Media
+	for _, im := range body.Images {
+		h.WriteString(`<p><img src="` + html.EscapeString(im.Full) + `" alt="` + html.EscapeString(im.Alt) + `"></p>`)
 	}
 	linkTitle := ""
-	if e != nil {
-		for _, im := range e.Images {
-			if post.ThumbnailURL == "" {
-				post.ThumbnailURL = im.Thumb
-			}
-			body.WriteString(`<p><img src="` + html.EscapeString(firstNonEmpty(im.Fullsize, im.Thumb)) + `" alt="` + html.EscapeString(im.Alt) + `"></p>`)
+	if x := body.Link; x != nil {
+		linkTitle = x.Title
+		h.WriteString(`<p><a href="` + html.EscapeString(x.URI) + `">` + html.EscapeString(firstNonEmpty(x.Title, x.URI)) + `</a>`)
+		if x.Description != "" {
+			h.WriteString("<br>" + html.EscapeString(x.Description))
 		}
-		if x := e.External; x != nil {
-			linkTitle = x.Title
-			if post.ThumbnailURL == "" {
-				post.ThumbnailURL = x.Thumb
-			}
-			body.WriteString(`<p><a href="` + html.EscapeString(x.URI) + `">` + html.EscapeString(firstNonEmpty(x.Title, x.URI)) + `</a>`)
-			if x.Description != "" {
-				body.WriteString("<br>" + html.EscapeString(x.Description))
-			}
-			body.WriteString("</p>")
+		h.WriteString("</p>")
+	}
+	if v := body.Video; v != nil {
+		if v.Thumb != "" {
+			h.WriteString(`<p><img src="` + html.EscapeString(v.Thumb) + `" alt="Video"></p>`)
 		}
-		if e.Thumbnail != "" && post.ThumbnailURL == "" {
-			post.ThumbnailURL = e.Thumbnail
-			body.WriteString(`<p><img src="` + html.EscapeString(e.Thumbnail) + `" alt="Video"></p><p><a href="` + post.URL + `">Watch on Bluesky</a></p>`)
-		}
+		h.WriteString(`<p><a href="` + html.EscapeString(post.URL) + `">Watch on Bluesky</a></p>`)
 	}
 	// A post has no headline. The text is the headline; a link-only post borrows the
 	// link's title so the card is never blank.
 	post.Title = PostTitle(firstNonEmpty(text, linkTitle, "Post by "+post.Author))
 	post.Summary = postRemainder(text, post.Title)
-	post.ContentHTML = body.String()
+	post.ContentHTML = h.String()
 	return post, true
 }
 

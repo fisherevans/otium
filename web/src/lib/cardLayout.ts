@@ -101,7 +101,8 @@ export function contentHeight(card: HTMLElement): number {
  */
 export function applyRhythm(card: HTMLElement, rhythm: number) {
   const halfLead = (el: HTMLElement | null) => {
-    if (!el) return 0;
+    // #207: a post's card is a box, not a line of text: no half-leading.
+    if (!el || el.classList.contains("bsky-post")) return 0;
     const cs = getComputedStyle(el);
     const fs = parseFloat(cs.fontSize) || 0;
     const lh = parseFloat(cs.lineHeight) || fs * 1.2;
@@ -112,7 +113,8 @@ export function applyRhythm(card: HTMLElement, rhythm: number) {
   const rows = q(".card-hier .ch-rows");
   const tax = q(".card-hier .ch-tax");
   const creator = rows && rows.children.length > 1 ? (rows.children[rows.children.length - 1] as HTMLElement) : null;
-  const title = q(".card-title, .card-post");
+  // #207: a post's rows sit inside its own card, so the card is the row.
+  const title = q(".card-title, .bsky-post, .card-post");
   const credit = q(".card-credit");
   const media = q(".card-media, .media, .wave");
 
@@ -179,6 +181,8 @@ export function solveCard(vars: HTMLElement, reel: HTMLElement, card: HTMLElemen
   vars.style.removeProperty("--card-center-pad");
   vars.removeAttribute("data-solved-blurb");
   vars.removeAttribute("data-solved-conv");
+  vars.removeAttribute("data-solved-linkdesc");
+  vars.removeAttribute("data-solved-quote");
   vars.style.removeProperty("--card-post-lines");
   if (frame) frame.style.removeProperty("height");
   if (!opts.solve) return [];
@@ -258,15 +262,21 @@ export function solveCard(vars: HTMLElement, reel: HTMLElement, card: HTMLElemen
   // #205: a post's text is the card, so everything else gives way first - the
   // picture steps down, the replies go - and only then is the text trimmed, to
   // exactly what fits. Its size never steps: a post is read, not scanned.
+  // #207: a post is drawn with its thread, so its picture steps all the way down
+  // before the last reply goes; then the link card's description and a quoted
+  // post's text, and only then the post's own text, which is what it says.
   const postEl = card.querySelector<HTMLElement>(".card-post");
   const knobs: [string, () => boolean][] = postEl && !frame
     ? [
         ["hero cap 34%", () => setCap(0.34)],
         ["second reply dropped", () => trimConv("one")],
         ["hero cap 26%", () => setCap(0.26)],
-        ["replies dropped", () => trimConv("off")],
         ["hero cap 18%", () => setCap(0.18)],
+        ["replies dropped", () => trimConv("off")],
+        ["link description dropped", () => dropLinkDesc()],
+        ["quote to 2 lines", () => trimQuote("short")],
         ["post trimmed", () => trimPost()],
+        ["quote text dropped", () => trimQuote("off")],
       ]
     : frame
     ? [
@@ -313,6 +323,17 @@ export function solveCard(vars: HTMLElement, reel: HTMLElement, card: HTMLElemen
     const lh = parseFloat(getComputedStyle(postEl).lineHeight) || 26;
     const lines = Math.max(2, Math.floor((postEl.offsetHeight - over - 2) / lh));
     vars.style.setProperty("--card-post-lines", String(lines));
+    return true;
+  }
+  function dropLinkDesc() {
+    if (!card.querySelector(".bp-link-desc") || vars.getAttribute("data-solved-linkdesc") === "off") return false;
+    vars.setAttribute("data-solved-linkdesc", "off");
+    return true;
+  }
+  function trimQuote(to: "short" | "off") {
+    const now = vars.getAttribute("data-solved-quote");
+    if (!card.querySelector(".bp-quote-text") || now === to || now === "off") return false;
+    vars.setAttribute("data-solved-quote", to);
     return true;
   }
   function dropBlurb() {

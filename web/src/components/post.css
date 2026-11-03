@@ -1,0 +1,144 @@
+/* #207: a Bluesky post drawn as a post. A card with the author on top, the text
+   with working links, its attachments, the engagement row, and its replies on a
+   thread line. Brand blue only on the platform mark and the links; everything
+   else stays in the paper palette, and e-ink/dark get their own values. */
+
+:root { --bsky: #0a7aff; --bsky-link: #1764c8; }
+:root[data-theme="dark"] { --bsky: #4f9dff; --bsky-link: #7fb5ff; }
+:root[data-presentation="eink"] { --bsky: var(--ink); --bsky-link: var(--ink); }
+
+.bsky-post {
+    flex: 0 0 auto;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding: 12px 14px 4px;
+    border: 1px solid var(--rule);
+    border-radius: 16px;
+    background: color-mix(in srgb, var(--paper) 55%, #fff);
+    color: var(--ink);
+}
+:root[data-theme="dark"] .bsky-post { background: var(--paper-2); }
+:root[data-presentation="eink"] .bsky-post { background: var(--paper); }
+
+/* Header: avatar, name, @handle and time, and the platform mark on the right. */
+.bp-head { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.bp-author {
+    flex: 1; min-width: 0; display: flex; align-items: center; gap: 10px;
+    min-height: 44px; margin: -2px 0; padding: 0; border: 0; background: none;
+    color: inherit; text-align: left; text-decoration: none; cursor: pointer;
+    font-family: var(--grot, system-ui, sans-serif);
+}
+.bp-who { min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.bp-name { font-size: 15px; font-weight: 650; line-height: 1.25; color: var(--ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bp-sub { font-size: 13px; line-height: 1.25; color: var(--ink-mute); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bp-avatar { flex: 0 0 auto; border-radius: 50%; object-fit: cover; background: var(--paper-3); display: inline-grid; place-items: center; }
+.bp-avatar-lg { width: 40px; height: 40px; }
+.bp-avatar-sm { width: 24px; height: 24px; font-size: 11px; }
+.bp-mono { font-family: var(--grot, system-ui, sans-serif); font-weight: 600; color: var(--ink-soft); font-size: 15px; }
+.bp-avatar-sm.bp-mono { font-size: 11px; }
+.bp-platform { flex: 0 0 auto; display: inline-grid; place-items: center; width: 28px; height: 28px; color: var(--bsky); }
+.bp-platform .platform-mark { color: var(--bsky); margin: 0; vertical-align: 0; }
+
+/* The text. Links read as links: Bluesky blue, no underline until pressed. */
+.bp-link { color: var(--bsky-link); text-decoration: none; overflow-wrap: anywhere; }
+.bp-link:hover, .bp-link:active { text-decoration: underline; text-underline-offset: 2px; }
+:root[data-presentation="eink"] .bp-link { text-decoration: underline; }
+
+/* On the card the text keeps the reading face and size the solver expects
+   (session-afterglow.css owns .card-post); here only its place in the post. */
+:is(.stage, .lab-reel, .appearance-card-frame) .snap.afterglow-card .bsky-post .card-post { margin: 0; }
+
+/* Pictures: one at its own shape up to the solver's cap, two side by side,
+   three or four in a grid. */
+.bp-images { display: grid; gap: 4px; border-radius: 12px; overflow: hidden; }
+.bp-images img { display: block; width: 100%; height: 100%; object-fit: cover; background: var(--paper-3); }
+.bp-images-1 img { height: auto; max-height: var(--card-hero-cap, 420px); object-fit: cover; }
+.bp-images-2 { grid-template-columns: 1fr 1fr; height: min(var(--card-hero-cap, 260px), 52vw); }
+.bp-images-3, .bp-images-4 { grid-template-columns: 1fr 1fr; grid-template-rows: 1fr 1fr; height: min(var(--card-hero-cap, 320px), 62vw); }
+.bp-images-3 img:first-child { grid-row: span 2; }
+.bp-full .bp-images-1 img { max-height: 70vh; object-fit: contain; }
+.bp-full .bp-images-2 { height: 52vw; max-height: 340px; }
+.bp-full .bp-images-3, .bp-full .bp-images-4 { height: 62vw; max-height: 420px; }
+
+.bp-video { position: relative; display: block; border-radius: 12px; overflow: hidden; background: var(--paper-3); }
+.bp-video img { display: block; width: 100%; max-height: var(--card-hero-cap, 360px); object-fit: cover; }
+.bp-video-blank { display: block; aspect-ratio: 16 / 9; }
+.bp-play { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); width: 48px; height: 48px; border-radius: 50%; display: grid; place-items: center; background: color-mix(in srgb, #000 55%, transparent); color: #fff; }
+
+/* The external link card: compact, the whole card is the link. */
+.bp-linkcard {
+    display: flex; align-items: stretch; min-width: 0; min-height: 64px;
+    border: 1px solid var(--rule); border-radius: 12px; overflow: hidden;
+    color: inherit; text-decoration: none; background: var(--paper);
+}
+.bp-link-thumb { flex: 0 0 auto; width: 76px; align-self: stretch; min-height: 64px; object-fit: cover; background: var(--paper-3); border-right: 1px solid var(--hair); }
+.bp-link-text { flex: 1; min-width: 0; display: flex; flex-direction: column; justify-content: center; gap: 2px; padding: 8px 12px; font-family: var(--grot, system-ui, sans-serif); }
+.bp-link-title { font-size: 14px; font-weight: 600; line-height: 1.3; color: var(--ink); display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
+.bp-link-desc { font-size: 13px; line-height: 1.35; color: var(--ink-soft); display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
+.bp-link-domain { font-size: 12px; line-height: 1.3; color: var(--ink-mute); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bp-full .bp-link-desc { -webkit-line-clamp: 3; }
+.bp-full .bp-link-thumb { width: 96px; }
+/* The solver gives the description up before it trims the post (lib/cardLayout). */
+[data-solved-linkdesc="off"] .bp-link-desc { display: none; }
+
+/* A quoted post, inset. */
+.bp-quote { display: flex; flex-direction: column; gap: 4px; min-width: 0; padding: 9px 12px; border: 1px solid var(--rule); border-radius: 12px; color: inherit; text-decoration: none; }
+.bp-quote-head { display: flex; align-items: center; gap: 6px; min-width: 0; font-family: var(--grot, system-ui, sans-serif); }
+.bp-quote-head .bp-name { font-size: 13px; }
+.bp-quote-head .bp-when { font-size: 12px; color: var(--ink-mute); white-space: nowrap; }
+.bp-quote-text { font-family: var(--reading, 'Newsreader', Georgia, serif); font-size: 15px; line-height: 1.38; white-space: pre-line; overflow-wrap: anywhere; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 4; overflow: hidden; }
+.bp-full .bp-quote-text { -webkit-line-clamp: none; display: block; }
+.bp-quote-media { font-family: var(--grot, system-ui, sans-serif); font-size: 12px; color: var(--ink-mute); }
+
+/* Replies, reposts, likes: Bluesky's row, quiet and not interactive. */
+.bp-engagement { display: flex; align-items: center; gap: 28px; min-height: 36px; font-family: var(--grot, system-ui, sans-serif); font-size: 13px; color: var(--ink-mute); font-variant-numeric: tabular-nums; }
+.bp-count { display: inline-flex; align-items: center; gap: 6px; min-width: 40px; }
+
+/* The thread: replies hang off the post on a line, indented under its avatar. */
+.bp-thread { margin-top: 0; gap: 4px; }
+.bp-thread .cv-card-replies { position: relative; margin-left: 33px; padding: 10px 0 0 0; border-left: 0; gap: 10px; }
+.bp-thread .cv-card-replies::before { content: ""; position: absolute; left: -15px; top: 0; bottom: 12px; width: 2px; border-radius: 1px; background: var(--hair); }
+.bp-reply { display: flex; align-items: flex-start; gap: 8px; }
+.bp-reply > .bp-avatar { margin-top: 1px; }
+.bp-reply-main { flex: 1; min-width: 0; }
+.bp-thread .cv-more { margin-left: 33px; }
+.bp-children { margin: 10px 0 0; padding: 0 0 0 12px; border-left: 2px solid var(--hair); gap: 12px; }
+
+/* The reader. The post opens in its card, then the thread. */
+.rp-postview { display: flex; flex-direction: column; }
+.rp-postview .bsky-post { padding: 14px 16px 6px; }
+.rp-postview .bp-text {
+    margin: 0;
+    font-family: var(--pref-reader-font-family, var(--reading, 'Newsreader', Georgia, serif));
+    font-size: calc(var(--pref-reader-font-size, 17px) + 2px);
+    line-height: 1.45;
+    white-space: pre-line;
+    overflow-wrap: anywhere;
+}
+.bp-reader-thread { margin-top: 22px; }
+.bp-thread-list { gap: 16px; }
+.bp-reader-thread .bp-thread-list > .bp-reply + .bp-reply { border-top: 1px solid var(--hair); padding-top: 14px; }
+.bp-reader-thread .cv-text { font-size: 16px; }
+.cv-section .bp-children > .cv-row + .cv-row { border-top: 0; padding-top: 0; }
+
+/* "N more replies" counts what the solver left showing. */
+.bp-thread .bp-more-one, .bp-thread .bp-more-none { display: none; }
+[data-solved-conv="one"] .bp-thread .bp-more-all, [data-solved-conv="off"] .bp-thread .bp-more-all { display: none; }
+[data-solved-conv="one"] .bp-thread .bp-more-one, [data-solved-conv="off"] .bp-thread .bp-more-none { display: inline; }
+
+/* With no reply showing, the link is not part of a thread: no indent. */
+[data-solved-conv="off"] .bp-thread .cv-more, .bp-thread > .cv-more:first-child { margin-left: 0; }
+/* Tall pictures (screenshots of text) read from the top when capped. */
+.bp-images img { object-position: center top; }
+/* The reader has room for the full date. */
+.bp-full .bp-sub { white-space: normal; }
+/* The reply's link to Bluesky rides its header row, keeping a 44px target. */
+.bp-reply-open { min-width: 44px; min-height: 36px; margin: -10px -12px -10px 0; flex: 0 0 auto; }
+.bp-reply .cv-head .cv-likes + .bp-reply-open { margin-left: 0; }
+.bp-reply .cv-head > .bp-reply-open:not(.cv-likes + .bp-reply-open) { margin-left: auto; }
+
+/* A quoted post shortens, then loses its text, after the link description. */
+[data-solved-quote="short"] .bp-quote-text { -webkit-line-clamp: 2; }
+[data-solved-quote="off"] .bp-quote-text { display: none; }
