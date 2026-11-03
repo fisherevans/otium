@@ -357,3 +357,20 @@ func TestTopicsForSourcesCarriesSection(t *testing.T) {
 		t.Fatal("a topicless source must stay absent so the card renders source-only")
 	}
 }
+
+func TestCleanTitle(t *testing.T) {
+	tests := []struct{ in, want string }{
+		{"Tbone &amp; Solo", "Tbone & Solo"},
+		{"It&#39;s Fine", "It's Fine"},
+		{"&quot;Quoted&quot;", `"Quoted"`},
+		{"Plain & simple", "Plain & simple"},
+		{"  padded  ", "padded"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.in, func(t *testing.T) {
+			if got := CleanTitle(tt.in); got != tt.want {
+				t.Fatalf("CleanTitle(%q) = %q, want %q", tt.in, got, tt.want)
+			}
+		})
+	}
+}

@@ -9,6 +9,7 @@ import (
 	"database/sql"
 	_ "embed"
 	"fmt"
+	"html"
 	"math"
 	"strconv"
 	"strings"
@@ -172,6 +173,9 @@ func renameLegacyConcepts(sdb *sql.DB) error {
 // SQLite has no ADD COLUMN IF NOT EXISTS, so each add is guarded on
 // pragma_table_info. Every migration here must be safe to run on every boot.
 func migrate(sdb *sql.DB) error {
+	if err := unescapeSourceTitles(sdb); err != nil {
+		return err
+	}
 	if err := ensureColumn(sdb, "topics", "icon", `ALTER TABLE topics ADD COLUMN icon TEXT NOT NULL DEFAULT ''`); err != nil {
 		return err
 	}
@@ -932,6 +936,7 @@ func (db *DB) AssignSourceTopic(ctx context.Context, sourceID, topicID int64) er
 // (user, feed_url) already exists. created reports whether a new row was made,
 // so import can report "N added, M already followed".
 func (db *DB) CreateSourceImport(ctx context.Context, s *Source) (id int64, created bool, err error) {
+	s.Title = CleanTitle(s.Title)
 	res, err := db.sql.ExecContext(ctx,
 		`INSERT INTO sources (user_id, kind, title, feed_url, homepage_url, weight, state)
 		 VALUES (?, ?, ?, ?, ?, ?, 'followed')
@@ -1047,6 +1052,7 @@ func scanSource(r rowScanner) (*Source, error) {
 }
 
 func (db *DB) CreateSource(ctx context.Context, s *Source) (*Source, error) {
+	s.Title = CleanTitle(s.Title)
 	res, err := db.sql.ExecContext(ctx,
 		`INSERT INTO sources (user_id, kind, title, feed_url, homepage_url, icon_url, weight, state, per_session_cap)
 		 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
@@ -1101,7 +1107,7 @@ func (db *DB) UpdateSource(ctx context.Context, userID, id int64, p SourcePatch)
 		set("half_life_days", *p.HalfLifeDays)
 	}
 	if p.Title != nil {
-		set("title", *p.Title)
+		set("title", CleanTitle(*p.Title))
 	}
 	// Session engine v2 (#115/#118): Archive-After window + auto-archive keywords.
 	if p.ArchiveAfterDays != nil {
@@ -2389,4 +2395,44 @@ func (db *DB) UnclassifiedForms(ctx context.Context, limit int) ([]FormRow, erro
 func (db *DB) SetItemForm(ctx context.Context, id int64, form, postJSON string) error {
 	_, err := db.sql.ExecContext(ctx, `UPDATE items SET form = ?, post_json = ? WHERE id = ?`, form, postJSON, id)
 	return err
+}
+
+// CleanTitle decodes HTML entities in a display name. YouTube's search and
+// channel APIs return names like "Tbone &amp; Solo", and they were stored as-is.
+func CleanTitle(s string) string { return strings.TrimSpace(html.UnescapeString(s)) }
+
+// unescapeSourceTitles repairs source names saved before CleanTitle existed.
+// Idempotent: a clean name decodes to itself.
+func unescapeSourceTitles(sdb *sql.DB) error {
+	ctx := context.Background()
+	var n int
+	if err := sdb.QueryRowContext(ctx, `SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='sources'`).Scan(&n); err != nil || n == 0 {
+		return err
+	}
+	rows, err := sdb.QueryContext(ctx, `SELECT id, title FROM sources WHERE title LIKE '%&%;%'`)
+	if err != nil {
+		return err
+	}
+	type fix struct {
+		id    int64
+		title string
+	}
+	var fixes []fix
+	for rows.Next() {
+		var f fix
+		if err := rows.Scan(&f.id, &f.title); err != nil {
+			rows.Close()
+			return err
+		}
+		if clean := CleanTitle(f.title); clean != f.title {
+			fixes = append(fixes, fix{f.id, clean})
+		}
+	}
+	rows.Close()
+	for _, f := range fixes {
+		if _, err := sdb.ExecContext(ctx, `UPDATE sources SET title = ? WHERE id = ?`, f.title, f.id); err != nil {
+			return err
+		}
+	}
+	return nil
 }
