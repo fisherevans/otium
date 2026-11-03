@@ -1,0 +1,13 @@
+/* Suggestions (#202). */
+.sugg-intro { color: var(--ink-soft); margin: 4px 0 0; }
+.sugg-h { font-family: var(--grot); font-size: 13px; letter-spacing: .06em; text-transform: uppercase; color: var(--ink-mute); margin: 28px 0 4px; font-weight: 600; }
+.sugg-row { border-top: 1px solid var(--hair); padding: 16px 0; }
+.sugg-head { display: flex; align-items: center; gap: 12px; }
+.sugg-av { width: 40px; height: 40px; border-radius: 50%; object-fit: cover; flex: none; background: var(--paper-3); }
+.sugg-id { flex: 1; min-width: 0; }
+.sugg-name { font-family: var(--serif); font-size: 18px; overflow-wrap: anywhere; }
+.sugg-meta { font-family: var(--grot); font-size: 13px; color: var(--ink-mute); }
+.sugg-open { color: var(--ink-mute); display: inline-flex; padding: 12px; margin: -12px -12px -12px 0; }
+.sugg-reason { margin: 10px 0 0; color: var(--ink-soft); font-size: 16px; line-height: 1.45; }
+.sugg-actions { display: flex; gap: 10px; margin-top: 12px; flex-wrap: wrap; }
+.sugg-actions .btn { min-height: 44px; width: auto; flex: 1 1 0; margin: 0; }

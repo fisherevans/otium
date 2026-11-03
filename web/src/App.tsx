@@ -20,6 +20,7 @@ import CollectionsPage from "@/pages/CollectionsPage";
 import ImportPage from "@/pages/ImportPage";
 import InsightsPage from "@/pages/InsightsPage";
 import SettingsPage from "@/pages/SettingsPage";
+import SuggestionsPage from "@/pages/SuggestionsPage";
 import SharingPage from "@/pages/SharingPage";
 // --- #83 personal-history page ---
 import HistoryPage from "@/pages/HistoryPage";
@@ -69,8 +70,8 @@ function AppShell() {
     return () => { live = false; };
   }, [pathname, menu, loading, unauthenticated]);
   useEffect(() => { setMenu(false); setTypeMenu(false); }, [pathname]);
-  const pageName = pathname === "/" ? "New session" : pathname.startsWith("/settings/appearance") ? "Appearance" : pathname.startsWith("/settings") ? "Settings" : pathname.startsWith("/import") ? "Import" : pathname.startsWith("/insights") ? "Insights" : pathname.startsWith("/you") ? "Your Otium" : /^\/(saved|collections)/.test(pathname) ? "Saved" : pathname.startsWith("/history") ? "History" : "Library";
-  const parent = pathname.endsWith("/articles") ? pathname.replace(/\/articles$/, "") : /^\/(sources|topics)\//.test(pathname) || pathname === "/import" ? "/sections" : pathname.startsWith("/settings") || pathname === "/insights" || pathname === "/history" ? "/you" : "/";
+  const pageName = pathname === "/" ? "New session" : pathname.startsWith("/settings/appearance") ? "Appearance" : pathname.startsWith("/settings") ? "Settings" : pathname.startsWith("/import") ? "Import" : pathname.startsWith("/suggestions") ? "Suggestions" : pathname.startsWith("/insights") ? "Insights" : pathname.startsWith("/you") ? "Your Otium" : /^\/(saved|collections)/.test(pathname) ? "Saved" : pathname.startsWith("/history") ? "History" : "Library";
+  const parent = pathname.endsWith("/articles") ? pathname.replace(/\/articles$/, "") : /^\/(sources|topics)\//.test(pathname) || pathname === "/import" || pathname === "/suggestions" ? "/sections" : pathname.startsWith("/settings") || pathname === "/insights" || pathname === "/history" ? "/you" : "/";
   const back = useBack((location.state as { returnTo?: string } | null)?.returnTo || parent);
   const go = (path: string) => { setMenu(false); setTypeMenu(false); nav(path, { state: { returnTo: pathname + location.search + location.hash } }); };
   const focused = pathname.startsWith("/session"); // #67: session is /session/:id, full-screen focused mode
@@ -141,6 +142,7 @@ function AppShell() {
           <Route path="/settings" element={<SettingsPage />} /> {/* #68: preferences (fast-scroll check-in) */}
           <Route path="/settings/sharing" element={<SharingPage />} /> {/* #195: Discord friends and channels */}
           <Route path="/settings/appearance" element={<AppearancePage />} /> {/* #80/#81/#82: appearance + live preview */}
+          <Route path="/suggestions" element={<SuggestionsPage />} /> {/* #202: follow recommendations */}
           <Route path="/import" element={<ImportPage />} />
         </Routes>
       </main>

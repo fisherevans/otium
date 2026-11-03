@@ -3,8 +3,10 @@ package middleware
 
 import (
 	"context"
+	"crypto/subtle"
 	"log/slog"
 	"net/http"
+	"strings"
 
 	"github.com/fisherevans/otium/internal/server/store"
 )
@@ -83,4 +85,26 @@ func jsonError(w http.ResponseWriter, status int, code, msg string) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
 	_, _ = w.Write([]byte(`{"code":"` + code + `","message":"` + msg + `"}`))
+}
+
+// AgentToken gates the narrow agent API (#202) on a static bearer token, acting
+// as the given user. Only the routes mounted under it accept the token; the rest
+// of the API stays browser-session only. An empty token disables the routes.
+func AgentToken(db *store.DB, token, username string) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			got := strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")
+			if token == "" || username == "" || subtle.ConstantTimeCompare([]byte(got), []byte(token)) != 1 {
+				jsonError(w, http.StatusUnauthorized, "unauthorized", "missing or bad agent token")
+				return
+			}
+			user, err := db.UpsertUserByUsername(r.Context(), username, "")
+			if err != nil {
+				jsonError(w, http.StatusInternalServerError, "server_error", "could not resolve agent user")
+				return
+			}
+			identity := &Identity{UserID: user.ID, Username: username}
+			next.ServeHTTP(w, r.WithContext(context.WithValue(r.Context(), identityKey, identity)))
+		})
+	}
 }

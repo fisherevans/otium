@@ -523,6 +523,25 @@ export interface SentShare {
   deliveries: { target_id: number; nickname: string; kind: string; error?: string; sent_at: string }[];
 }
 
+// Follow recommendations (#202).
+export interface Suggestion {
+  id: number;
+  kind: string;
+  feed_url: string;
+  title: string;
+  icon_url: string;
+  home_url: string;
+  reason: string;
+  confidence: number;
+  seed: string;
+  topic_slug: string;
+  status: "pending" | "trial" | "followed" | "dismissed";
+  source_id?: number;
+  created_at: string;
+  shown?: number;
+  opened?: number;
+}
+
 export const api = {
   me: () => req<Me>("GET", "/users/me"),
 
@@ -703,6 +722,10 @@ export const api = {
   shareItem: (itemId: number, targetIds: number[], note: string) =>
     req<{ share_id: number; results: ShareResult[] }>("POST", `/items/${itemId}/share`, { target_ids: targetIds, note }),
   sentShares: (targetId?: number) => req<SentShare[]>("GET", `/shares${targetId ? `?target_id=${targetId}` : ""}`),
+
+  // Follow recommendations (#202).
+  suggestions: () => req<Suggestion[]>("GET", "/suggestions"),
+  suggestionAction: (id: number, action: "try" | "keep" | "dismiss") => req<{ ok: boolean }>("POST", `/suggestions/${id}/${action}`),
 
   // Import: parse sends the raw upload (text OR a file Blob - a zip must go as
   // bytes, not text) so the server can unzip / parse it directly.
