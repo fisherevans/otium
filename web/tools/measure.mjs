@@ -170,7 +170,7 @@ function readCard() {
     actionsInView: actions ? R(actions).bottom <= R(card).bottom + 1 : true,
     mediaAspectError: compact && media ? Math.abs(R(media).width / R(media).height - Number(getComputedStyle(media).getPropertyValue("--ar"))) : 0,
     compactChromeHidden: !compact || !card.querySelector(".card-title, .card-hier, .card-byline, .card-blurb, .im-actions"),
-    detailsReachable: !compact || !!details && R(details).width >= 44 && R(details).height >= 44,
+    detailsReachable: !compact || !!details && Math.round(R(details).width) >= 44 && Math.round(R(details).height) >= 44, // rounded: the lab frame is scaled
     actions: actions ? [...actions.children].map((c) => c.getAttribute("aria-label") || c.textContent.trim()).join(" ") : "-",
   };
 }
