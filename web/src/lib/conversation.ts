@@ -121,12 +121,12 @@ export function moreLabel(c: Conversation, shown: number): string {
 //
 // The reader keeps the conversation going as you scroll. The first answer
 // carries the first page of replies (and quotes) and `cursors` for the rest; the
-// reader asks for the next page in order - replies, then quotes, then who
-// reposted - when its end comes near (an IntersectionObserver), and a reply cut
+// reader asks for the next page in order - replies, then quotes - when its end comes near (an IntersectionObserver), and a reply cut
 // off at the fetched depth loads its own replies when tapped. One request at a
 // time; a failure stops and offers Retry, never spins.
 
-const PAGE_ORDER = ["replies", "quotes", "reposts"] as const;
+// #210: who reposted is not shown (Fisher: useless), so it is never paged.
+const PAGE_ORDER = ["replies", "quotes"] as const;
 type PagedKind = (typeof PAGE_ORDER)[number];
 
 export interface ConversationPages {
@@ -233,7 +233,8 @@ interface PagesState {
 }
 
 function initial(conv: Conversation | null): PagesState {
-  const queue: Partial<Record<PagedKind, string>> = { ...(conv?.cursors ?? {}) };
+  const { reposts: _ignored, ...cursors } = conv?.cursors ?? {};
+  const queue: Partial<Record<PagedKind, string>> = cursors;
   const s: PagesState = { replies: conv?.replies ?? [], quotes: conv?.quotes ?? [], reposts: [], next: null, queue };
   return { ...s, next: nextIn(queue) };
 }
@@ -245,7 +246,7 @@ function nextIn(queue: Partial<Record<PagedKind, string>>): PagesState["next"] {
 
 function advance(s: PagesState, kind: ConversationPageKind, cursor: string | undefined, items: ConversationComment[], people: ConversationPerson[]): PagesState {
   const queue = { ...s.queue };
-  if (kind === "replies" || kind === "quotes" || kind === "reposts") {
+  if (kind === "replies" || kind === "quotes") {
     if (cursor) queue[kind] = cursor;
     else delete queue[kind];
   }

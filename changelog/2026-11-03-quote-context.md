@@ -52,3 +52,10 @@ attachment. He also asked to play a post's video without leaving for Bluesky.
   is the native `<video>` with Bluesky's playlist.
 
 Issue: #210.
+
+## Follow-up: no "Reposted by" list (v0.98.1)
+
+The reader no longer pages or shows who reposted a post. Fisher: "I do not care to see
+the list of people who reposted it." A list of names says nothing about the post, and
+loading it held the pull-to-next until it ended. The server no longer advertises a
+reposts cursor; the repost count stays in the counts row.

@@ -215,12 +215,6 @@ button.bp-video { width: 100%; padding: 0; border: 0; cursor: pointer; font: inh
 }
 .bp-expand:disabled { color: var(--ink-mute); cursor: default; }
 
-/* Who reposted: one quiet, wrapping line of small avatars and names. */
-.bp-people { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 6px 14px; }
-.bp-person { display: inline-flex; align-items: center; gap: 6px; min-height: 32px; color: var(--ink-mute); text-decoration: none; font-family: var(--grot, system-ui, sans-serif); font-size: 13px; }
-.bp-person span { max-width: 14em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.bp-reposts .bp-avatar-sm { width: 20px; height: 20px; }
-
 /* Paging: a quiet line, never a spinner. */
 .cv-sentinel { height: 1px; }
 .cv-paging { margin: 14px 0 0; font-family: var(--grot, system-ui, sans-serif); font-size: 13px; color: var(--ink-mute); text-align: center; }

@@ -97,8 +97,8 @@ func TestBlueskyPaging(t *testing.T) {
 	if len(first.Quotes) != QuotesPage || first.Cursors[KindQuotes] != "25" {
 		t.Fatalf("first quotes: %d, cursors %v", len(first.Quotes), first.Cursors)
 	}
-	if c, ok := first.Cursors[KindReposts]; !ok || c != "" {
-		t.Fatalf("reposts cursor = %q %v", c, ok)
+	if c, ok := first.Cursors[KindReposts]; ok {
+		t.Fatalf("reposts cursor offered: %q", c)
 	}
 	// A reply with more children than a page shows, and one cut off at depth.
 	r0, r1 := first.Replies[0], first.Replies[1]

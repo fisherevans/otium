@@ -79,9 +79,8 @@ func firstPage(full *Conversation) *Conversation {
 	if full.quotesCursor != "" {
 		c.Cursors[KindQuotes] = full.quotesCursor
 	}
-	if full.Platform == Bluesky && full.Counts.Reposts > 0 {
-		c.Cursors[KindReposts] = ""
-	}
+	// #210: who reposted is no longer offered; the reader does not show it.
+	// More(kind "reposts") still answers for any caller that asks.
 	if len(c.Cursors) == 0 {
 		c.Cursors = nil
 	}

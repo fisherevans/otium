@@ -1,6 +1,6 @@
 import { Fragment, useEffect, useRef, useState, type ReactNode, type SyntheticEvent } from "react";
 import { ChevronRight, ExternalLink, Heart, MessageCircle, Play, Quote as QuoteIcon, Repeat2 } from "lucide-react";
-import type { Conversation, ConversationComment, ConversationPerson, Item, PostAuthor, PostBody, PostImage, PostLink, PostQuote, PostSegment, PostVideo } from "@/api/client";
+import type { Conversation, ConversationComment, Item, PostAuthor, PostBody, PostImage, PostLink, PostQuote, PostSegment, PostVideo } from "@/api/client";
 import { compactCount, moreLabel, platformName, useConversationPages } from "@/lib/conversation";
 import { fmtDate, relTime } from "@/lib/format";
 import { PlatformMark } from "./PlatformMark";
@@ -489,25 +489,9 @@ export function CardThread({ conv, onMore }: { conv: Conversation; onMore?: () =
   );
 }
 
-/** The people who reposted, as one quiet, wrapping line of names. */
-function Reposters({ people }: { people: ConversationPerson[] }) {
-  return (
-    <ul className="bp-people" aria-label="Reposted by">
-      {people.map((p, i) => (
-        <li key={p.handle || p.url || i}>
-          <a className="bp-person" href={p.url} {...linkProps}>
-            <Avatar author={{ name: p.name, avatar: p.avatar_url }} size="sm" />
-            <span>{p.name}</span>
-          </a>
-        </li>
-      ))}
-    </ul>
-  );
-}
-
 /**
  * The reader's conversation under a post or an article (#200, #207, #209):
- * replies threaded, then quotes, then who reposted, then the platform - and it
+ * replies threaded, then quotes, then the platform (#210: not who reposted) - and it
  * keeps going as you scroll. The next page loads as its end comes near; while a
  * page is due the reader's pull-to-next stays off (`onPending`), so the pull only
  * engages once there is nothing more to load.
@@ -536,7 +520,7 @@ export function ReaderThread({
   const sentinel = useRef<HTMLDivElement | null>(null);
   const more: Expander = { expand: pages.expand, expanding: pages.expanding, platform: conv?.platform ?? platform };
   const pending = status === "loading" || (pages.hasMore && pages.status !== "error");
-  const anything = pages.replies.length > 0 || pages.quotes.length > 0 || pages.reposts.length > 0;
+  const anything = pages.replies.length > 0 || pages.quotes.length > 0;
 
   useEffect(() => {
     onPending?.(pending);
@@ -547,7 +531,7 @@ export function ReaderThread({
   // Re-observed after every page, so a short page that leaves the end in view
   // asks for the next one too.
   const { hasMore, status: pageStatus, loadMore } = pages;
-  const shown = pages.replies.length + pages.quotes.length + pages.reposts.length;
+  const shown = pages.replies.length + pages.quotes.length;
   useEffect(() => {
     const el = sentinel.current;
     if (!el || !hasMore || pageStatus !== "idle" || typeof IntersectionObserver === "undefined") return;
@@ -571,12 +555,6 @@ export function ReaderThread({
         <section className="cv-section">
           <h2 className="cv-heading">Quotes</h2>
           <ol className="cv-list bp-thread-list">{pages.quotes.map((c, i) => <ThreadReply key={c.id || i} c={c} depth={0} full />)}</ol>
-        </section>
-      )}
-      {pages.reposts.length > 0 && (
-        <section className="cv-section bp-reposts">
-          <h2 className="cv-heading">Reposted by</h2>
-          <Reposters people={pages.reposts} />
         </section>
       )}
       {conv && !anything && !pages.hasMore && <p className="cv-empty">No {bsky ? "replies" : "comments"} yet.</p>}
