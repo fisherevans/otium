@@ -70,3 +70,7 @@ input:not([type="range"]):not([type="checkbox"]):not([type="radio"]), textarea, 
 .src-rss-copy, .va-title, .va-explore, .va-filter { min-height: 44px; min-width: 44px; }
 
 .share-act, .head-act, .sheet-x, .dlg-x, .im-ctltoggle { min-width: 44px; min-height: 44px; display: inline-flex; align-items: center; justify-content: center; }
+
+/* #214: keep embedded HDR video at standard range, so it does not dim the
+   interface around it. Chromium honours this; Safari did not as of 2026-11. */
+iframe, video { dynamic-range-limit: standard; }
