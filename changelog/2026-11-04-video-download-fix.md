@@ -14,4 +14,10 @@ faults lined up:
   did: fetch the file with the app's session, check it is a video, then save the blob.
   A failure shows its message on the row. Share and Download reuse one fetched file.
 
+**Follow-up, same day: no Download on iPhone.** In the installed iPhone app, saving the
+blob opened a full-screen file preview with no back button; the only way out was closing
+the app. Where the browser can share files, Download is now hidden and Save or share is
+the one path - the share sheet already offers Save Video and Save to Files. Download
+remains for browsers that can't share files (desktop).
+
 The server still honours `?download=1` for anyone using the URL directly.

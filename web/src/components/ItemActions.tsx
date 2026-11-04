@@ -216,7 +216,7 @@ function VideoFileActions({ item }: { item: Item }) {
     const files = [f];
     if (typeof navigator.share !== "function" || !navigator.canShare?.({ files })) {
       setState("ready");
-      setMessage("This browser can't share files. Use Download video.");
+      setMessage("This browser can't share files.");
       return;
     }
     try {
@@ -226,7 +226,7 @@ function VideoFileActions({ item }: { item: Item }) {
       setState("ready");
       const reason = e instanceof DOMException ? e.name : "";
       if (reason === "NotAllowedError") setMessage("Video ready. Tap Share video to open the share sheet.");
-      else if (reason !== "AbortError") setMessage("Couldn't open the share sheet. Try again, or use Download video.");
+      else if (reason !== "AbortError") setMessage("Couldn't open the share sheet. Try again.");
     }
   }
 
@@ -252,14 +252,30 @@ function VideoFileActions({ item }: { item: Item }) {
           {busy === "share" ? "Preparing video…" : state === "ready" ? "Share video" : "Save or share video"}
         </span>
       </button>
-      <button className="sheet-row" onClick={download} disabled={loading} aria-busy={busy === "download"}>
-        <span className="sheet-row-label"><Download size={18} aria-hidden />
-          {busy === "download" ? "Preparing video…" : "Download video"}
-        </span>
-      </button>
-      <p className="ia-sub" role="status">{message || "Save or share opens the share sheet. Choose Save Video for Photos."}</p>
+      {!canShareFiles() && (
+        <button className="sheet-row" onClick={download} disabled={loading} aria-busy={busy === "download"}>
+          <span className="sheet-row-label"><Download size={18} aria-hidden />
+            {busy === "download" ? "Preparing video…" : "Download video"}
+          </span>
+        </button>
+      )}
+      <p className="ia-sub" role="status">{message || (canShareFiles()
+        ? "Opens the share sheet. Choose Save Video for Photos, or Save to Files."
+        : "Save or share opens the share sheet. Choose Save Video for Photos.")}</p>
     </div>
   );
+}
+
+// Where the share sheet takes files (iPhone), it is the only save path: a
+// download in the installed app opens a full-screen preview with no way back
+// but closing the app (#211). Download is for browsers that can't share files.
+function canShareFiles() {
+  if (typeof navigator.share !== "function" || typeof navigator.canShare !== "function") return false;
+  try {
+    return navigator.canShare({ files: [new File([], "video.mp4", { type: "video/mp4" })] });
+  } catch {
+    return false;
+  }
 }
 
 function fileName(title: string) {

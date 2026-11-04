@@ -528,18 +528,23 @@ for (const [name, engine] of Object.entries({ chromium, webkit }).filter(([name]
             for (const name of ['Next item', 'End session', 'Library, Saved and settings'])
                 assert.equal(await sheet.getByRole('button', { name, exact: true }).count(), 0, `no session control in actions: ${name}`);
             assert.equal(await sheet.getByText('Explore score').count(), 0, 'no provenance in actions');
+            // No file sharing in this browser: Download saves the fetched file.
+            if (!(await page.evaluate(() => typeof navigator.canShare === 'function' && navigator.canShare({ files: [new File([], 'v.mp4', { type: 'video/mp4' })] })))) {
+                const [dl] = await Promise.all([page.waitForEvent('download'), sheet.getByRole('button', { name: 'Download video' }).click()]);
+                assert.equal(dl.suggestedFilename(), 'Synthetic clip 1.mp4');
+                assert.equal(state.videoFetches, 1, 'download fetched the file once');
+            }
             await page.evaluate(() => {
                 Object.defineProperty(navigator, 'canShare', { configurable: true, value: data => Array.isArray(data?.files) });
                 Object.defineProperty(navigator, 'share', { configurable: true, value: async data => { window.__shared = data.files.map(f => [f.name, f.type, f.size]); } });
             });
-            await sheet.getByRole('button', { name: 'Save or share video' }).click();
+            await sheet.getByRole('button', { name: /^(Save or share|Share) video$/ }).click();
             await page.waitForFunction(() => window.__shared);
             assert.deepEqual(await page.evaluate(() => window.__shared), [['Synthetic clip 1.mp4', 'video/mp4', 2048]]);
             await sheet.getByRole('button', { name: 'Share video' }).click();
             assert.equal(state.videoFetches, 1, 'a second share reuses the fetched file');
-            const [dl] = await Promise.all([page.waitForEvent('download'), sheet.getByRole('button', { name: 'Download video' }).click()]);
-            assert.equal(dl.suggestedFilename(), 'Synthetic clip 1.mp4');
-            assert.equal(state.videoFetches, 1, 'download reuses the fetched file');
+            await close(); await menu();
+            assert.equal(await sheet.getByRole('button', { name: 'Download video' }).count(), 0, 'no Download where the share sheet takes files: it traps an installed iPhone app (#211)');
             await sheet.getByRole('button', { name: /Post details/ }).click();
             await page.waitForFunction(() => document.querySelector('dialog[open]')?.textContent.includes('Explore score'));
             const details = page.locator('dialog[open]');
