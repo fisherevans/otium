@@ -24,7 +24,7 @@ You leads with Settings, Appearance, Insights, Engagement and Reading history. R
 
 ## Sound before the first Short (#213)
 
-The first time a session in Shorts mode reaches a Short, a full card covers it: "The next one plays sound", with Keep audio off (a crossed-out speaker) and Keep audio on (a speaker with waves), and below them Skip videos this session. The card waits for a tap and never chooses on its own; the last choice on this device is highlighted so the eye lands there first, and the card can still be read. The tap starts the clip from the beginning with that sound. It asks once per session; the speaker in the clip's bar changes it afterwards. Skip videos removes the rest of the session's videos (also offered in session controls while videos remain), and the session continues with its articles and posts. Long videos and audio never autoplay, so they never get the card.
+The first time a session in Shorts mode reaches a Short, a full card covers it: "Sound for videos", with Sound off (a crossed-out speaker) on the left and Sound on (a speaker with waves) on the right, always in those places, and below them Skip videos this session. The card waits for a tap and never chooses on its own; the last choice on this device is highlighted so the eye lands there first, and the card can still be read. The tap starts the clip from the beginning with that sound. It asks once per session; the speaker in the clip's bar changes it afterwards. Skip videos removes the rest of the session's videos (also offered in session controls while videos remain), and the session continues with its articles and posts. Long videos and audio never autoplay, so they never get the card.
 
 ## Likes and engagement (#196)
 

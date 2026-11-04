@@ -35,22 +35,20 @@
 .sound-gate-choice[data-default] { border: 2px solid var(--accent); background: var(--paper); color: var(--ink); box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 16%, transparent); }
 .sound-gate-choice:disabled { opacity: .55; cursor: default; }
 .sound-gate-choice:active:not(:disabled) { transform: scale(.98); }
-.sound-gate-note { margin: 16px 4px 0; font: 14px/1.45 var(--grot, system-ui); color: var(--ink-mute); }
 .sound-gate-skip {
     width: 100%;
     margin-top: 26px;
-    padding: 14px 4px;
-    min-height: 52px;
+    padding: 18px 4px;
+    min-height: 60px;
     display: flex;
     align-items: center;
+    justify-content: center;
     gap: 12px;
     border: 0;
     border-top: 1px solid var(--rule);
     background: none;
     color: var(--ink);
-    font: 16px var(--reading, Georgia, serif);
-    text-align: left;
+    font: 19px var(--reading, Georgia, serif);
     cursor: pointer;
 }
 .sound-gate-skip svg { color: var(--ink-soft); flex: 0 0 auto; }
-.sound-gate-skip small { display: block; font: 13px var(--grot, system-ui); color: var(--ink-mute); }

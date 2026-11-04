@@ -19,3 +19,8 @@ session**.
 
 Also fixed on the way: `useSessionPlayback` merged updates into the render's stale value,
 so two updates in one tap (the card's answer, then the player's sound report) lost the first.
+
+**Copy pass, same day (Fisher).** The title is "Sound for videos" (eyebrow "Videos up next");
+"The next one plays sound" read like nothing a UI would say. The choices are Sound off and
+Sound on, fixed left and right with only the highlight moving. The line under them and the
+skip row's subtitle are gone; Skip videos this session is larger and centred.
