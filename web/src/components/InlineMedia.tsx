@@ -231,37 +231,12 @@ export function InlineMedia({
       (!topDialog || topDialog.contains(root));
   }
   function setSound(value: boolean, deliberate = false) {
-    if (deliberate) clearSoundFallback();
     sound.current = value;
     setSoundMuted(value);
     if (deliberate && latest.current.autoPlay) latest.current.onMutedChange?.(value);
     const player = playerRef.current;
     if (value) player?.mute?.(); else player?.unMute?.();
   }
-  // #214: iOS refuses sound outside a tap, so coming back to the app (or from the
-  // share sheet) restarts the clip muted. That fallback must not stick: the first
-  // tap afterwards, anywhere, puts the saved choice back, inside that tap.
-  const soundFallback = useRef<null | ((e: Event) => void)>(null);
-  function awaitGestureForSound() {
-    if (soundFallback.current || latest.current.muted) return;
-    const restore = (e: Event) => {
-      // A tap on a sound control is its own choice; let it decide.
-      if ((e.target as Element | null)?.closest?.(".shorts-quiet-btn, .im-sound")) return;
-      clearSoundFallback();
-      if (!latest.current.muted && sound.current) setSound(false);
-    };
-    soundFallback.current = restore;
-    document.addEventListener("touchend", restore, true);
-    document.addEventListener("click", restore, true);
-  }
-  function clearSoundFallback() {
-    const restore = soundFallback.current;
-    if (!restore) return;
-    soundFallback.current = null;
-    document.removeEventListener("touchend", restore, true);
-    document.removeEventListener("click", restore, true);
-  }
-  useEffect(() => clearSoundFallback, []);
   function requestPlay(explicit = false) {
     if (!ready.current || !available()) return;
     explicitIntent.current = explicitIntent.current || explicit;
@@ -425,13 +400,10 @@ export function InlineMedia({
           onAutoplayBlocked: () => {
             if (cancelled || playerRef.current !== player || !currentVideo() || !available()) return;
             reportPlaying(false);
-            if (!sound.current && latest.current.autoPlay) {
-              // Browser fallback affects this attempt, never the saved sound choice:
-              // the next tap anywhere restores it (#214).
-              setSound(true);
-              awaitGestureForSound();
-              requestPlay();
-            } else setBlocked(true);
+            // #214: iOS refused to start (or resume, coming back to the app) with
+            // sound. Never fall back to playing muted: stay paused and let the
+            // next tap on the clip play it, with sound, inside that tap.
+            setBlocked(true);
           },
           onError: () => {
             if (cancelled || playerRef.current !== player || !currentVideo()) return;
@@ -537,9 +509,6 @@ export function InlineMedia({
   const DOUBLE_TAP_MS = 300;
   const lastTap = useRef<{ t: number; x: number; y: number } | null>(null);
   function tap(e: ReactPointerEvent) {
-    // #214: sound is waiting for a tap; this tap is for that (the document
-    // listener restores it in this gesture), not for play/pause.
-    if (soundFallback.current) return;
     const prev = lastTap.current;
     const double = !!prev && e.timeStamp - prev.t < DOUBLE_TAP_MS &&
       Math.abs(e.clientX - prev.x) < 40 && Math.abs(e.clientY - prev.y) < 40;
@@ -662,7 +631,7 @@ export function InlineMedia({
               </>
             )}
             {(blocked || failed) && <div className="im-playback-message" role="status">
-              {failed ? <>Video unavailable here.<button onClick={onOpenOriginal}>Open original</button></> : "Tap the video to play"}
+              {failed ? <>Video unavailable here.<button onClick={onOpenOriginal}>Open original</button></> : (soundMuted ? "Tap the video to play" : "Tap the video to play with sound")}
             </div>}
           </div>
         ) : audio ? (
