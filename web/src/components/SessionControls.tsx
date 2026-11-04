@@ -1,4 +1,4 @@
-import { ChevronRight } from "lucide-react";
+import { ChevronRight, VideoOff } from "lucide-react";
 import { BottomSheet } from "./BottomSheet";
 
 // Session controls (#208): what you can do with the session as a whole. Opened by
@@ -12,12 +12,15 @@ export function SessionControls({
   onClose,
   onNext,
   onEnd,
+  onSkipVideos,
 }: {
   open: boolean;
   status: string;
   onClose: () => void;
   onNext?: () => void;
   onEnd: () => void;
+  // #213: shown while videos remain ahead in the queue.
+  onSkipVideos?: () => void;
 }) {
   return (
     <BottomSheet open={open} onClose={onClose} kicker="Session controls">
@@ -27,6 +30,11 @@ export function SessionControls({
           <button className="sheet-row" onClick={onNext}>
             <span>Next item</span>
             <ChevronRight size={18} className="sheet-chev inline-icon" aria-hidden />
+          </button>
+        )}
+        {onSkipVideos && (
+          <button className="sheet-row" onClick={onSkipVideos}>
+            <span className="sheet-row-label"><VideoOff size={18} aria-hidden /> Skip videos this session</span>
           </button>
         )}
         <button className="sheet-row" onClick={() => { onClose(); window.dispatchEvent(new Event("otium:app-menu")); }}>

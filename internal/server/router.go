@@ -116,6 +116,7 @@ func NewRouter(h *handler.Handler, authMiddleware, agentMiddleware func(http.Han
 			r.Post("/sessions", h.CreateSession)
 			r.Get("/sessions/current", h.CurrentSession)
 			r.Patch("/sessions/{id}", h.UpdateSession)
+			r.Post("/sessions/{id}/skip-videos", h.SkipSessionVideos) // #213
 			// On-demand full-text (#98): fetch + readability-extract the article body
 			// for teaser-only topics, cached into items.content. Powers #96's actions.
 			r.Get("/items/{id}/content", h.ItemContent)

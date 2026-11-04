@@ -22,6 +22,10 @@ Library leads with Add source and Import. Adding chooses a topic, or creates one
 
 You leads with Settings, Appearance, Insights, Engagement and Reading history. Reading activity is an explicit disclosure. There are no streaks, badges or engagement targets.
 
+## Sound before the first Short (#213)
+
+The first time a session in Shorts mode reaches a Short, a full card covers it: "The next one plays sound", with Keep audio off (a crossed-out speaker) and Keep audio on (a speaker with waves), and below them Skip videos this session. The card waits for a tap and never chooses on its own; the last choice on this device is highlighted so the eye lands there first, and the card can still be read. The tap starts the clip from the beginning with that sound. It asks once per session; the speaker in the clip's bar changes it afterwards. Skip videos removes the rest of the session's videos (also offered in session controls while videos remain), and the session continues with its articles and posts. Long videos and audio never autoplay, so they never get the card.
+
 ## Likes and engagement (#196)
 
 A like is a quiet signal, not a feature: double-tap a card or a playing video to like it, double-tap again to undo, and a heart blooms where the finger was with "Liked" or "Like removed". The ··· sheet and the reader carry Like and "Didn't like this one", each undone by tapping it again. A liked card shows a small filled heart in its action row (or the Short's bar), which undoes the like; an unliked card shows nothing, so there is no new chrome until there is a like. There is no Favorites list (#142's lesson stands). A dislike records the preference and nothing else: it never mutes, archives or unsubscribes. On an article or post the single tap that opens the reader waits 280 ms for a possible second tap; on a video the first tap toggles playback at once (iOS only unmutes inside the tap) and a second one undoes it before liking.

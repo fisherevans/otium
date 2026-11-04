@@ -450,9 +450,19 @@ export function InlineMedia({
   }
 
   // #182: the card footer's quiet controls read and drive this player.
-  const controls = useRef({ toggleSound, toggleCaptions: () => {}, toggleNative: () => {} });
+  const controls = useRef({ toggleSound, toggleCaptions: () => {}, toggleNative: () => {}, start: (_muted: boolean) => {} });
   controls.current = {
     toggleSound,
+    start: (muted: boolean) => {
+      // The caller is lifting what held playback, in this same tap; the next
+      // render confirms it.
+      latest.current.active = true;
+      explicitIntent.current = true;
+      setUserPaused(false);
+      setSound(muted, true);
+      playerRef.current?.seekTo?.(0, true);
+      requestPlay(true);
+    },
     toggleCaptions: () => onCaptionsChange?.(!captions),
     toggleNative: () => { explicitIntent.current = true; setNativeControls((v) => !v); },
   };
@@ -462,6 +472,7 @@ export function InlineMedia({
       toggleSound: () => controls.current.toggleSound(),
       toggleCaptions: () => controls.current.toggleCaptions(),
       toggleNative: () => controls.current.toggleNative(),
+      start: (muted: boolean) => controls.current.start(muted),
     });
     return () => bus.bind(null);
   }, [bus]);

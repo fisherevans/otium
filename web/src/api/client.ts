@@ -774,6 +774,8 @@ export const api = {
     if (!inflightCurrent) inflightCurrent = req<SessionResponse | undefined>("GET", "/sessions/current").finally(() => { inflightCurrent = null; });
     return inflightCurrent;
   },
+  // #213: drop the rest of the session's videos from position `from` on.
+  skipSessionVideos: (id: string, from: number) => req<SessionResponse>("POST", `/sessions/${id}/skip-videos`, { from }),
   updateSession: (id: string, patch: { cursor?: number; status?: "ended"; extend_min?: number }) =>
     req<{ ok: boolean }>("PATCH", `/sessions/${id}`, patch),
   // On-demand full-text (#98): the best reader body for an item, fetched +

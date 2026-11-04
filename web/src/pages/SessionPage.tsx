@@ -20,7 +20,8 @@ import { SessionCard } from "@/components/SessionCard";
 import type { MediaPosition } from "@/components/InlineMedia";
 import { SessionShortsPlayer } from "@/components/SessionShortsPlayer";
 import { SessionBuilding } from "@/components/SessionBuilding";
-import { useSessionPlayback } from "@/lib/sessionPlayback";
+import { rememberSoundDefault, soundDefaultMuted, useSessionPlayback } from "@/lib/sessionPlayback";
+import { SoundGate } from "@/components/SoundGate";
 import { useShortsMode } from "@/lib/shortsMode";
 import * as perf from "@/lib/perf";
 import { createShortsBus } from "@/lib/shortsBus";
@@ -708,28 +709,34 @@ export default function SessionPage() {
     onMenu: live && !atEnd ? () => setMenuOpen(true) : undefined, menuLabel: "Actions for this item",
     onLabel: live ? () => setControlsOpen(true) : undefined });
 
-  // #191: once per session (in this tab), the first muted Short points at the
-  // sound control. It leaves after a few seconds, on a tap, on sound on, or when
-  // the player moves on.
-  const [soundHint, setSoundHint] = useState<number | null>(null);
-  const hostedShort = shortsMode && !review && items[playerIdx]?.item.media_type === "short";
-  useEffect(() => {
-    if (!hostedShort || !playback.muted || !id) return;
-    const key = `otium:sound-hint:${id}`;
-    try { if (sessionStorage.getItem(key)) return; } catch { return; }
-    const at = playerIdx;
-    const show = window.setTimeout(() => {
-      try { sessionStorage.setItem(key, "1"); } catch { /* still show once here */ }
-      setSoundHint(at);
-    }, 900);
-    return () => window.clearTimeout(show);
-  }, [hostedShort, playerIdx, playback.muted, id]);
-  useEffect(() => {
-    if (soundHint === null) return;
-    if (!playback.muted || playerIdx !== soundHint) { setSoundHint(null); return; }
-    const hide = window.setTimeout(() => setSoundHint(null), 6000);
-    return () => window.clearTimeout(hide);
-  }, [soundHint, playback.muted, playerIdx]);
+  // #213: the sound card. The first time this session reaches a Short in Shorts
+  // mode it covers the clip and holds playback until a tap; the tap is the play.
+  const gateOn = shortsMode && !review && !loading && !playback.asked && !atEnd && cur?.item.media_type === "short";
+  const [gateDefaultMuted] = useState(soundDefaultMuted);
+  const [skipError, setSkipError] = useState("");
+  function chooseSound(muted: boolean) {
+    playback.answer(muted);
+    rememberSoundDefault(muted);
+    shortsBus.controls.start(muted);
+  }
+  // Drops the rest of the session's videos on the server, so a resume keeps them
+  // out; the card now on screen is the next article or post.
+  async function skipVideos() {
+    setSkipError("");
+    setControlsOpen(false);
+    try {
+      const s = await api.skipSessionVideos(id, current);
+      playback.answer(true);
+      setItems(s.items);
+      const at = Math.min(s.cursor, s.items.length);
+      prevIdx.current = at;
+      setCurrent(at);
+      setPlayerIdx(at);
+    } catch (e: any) {
+      setSkipError(`Could not skip videos: ${String(e.message ?? e)}`);
+    }
+  }
+  const videosAhead = !review && items.slice(current).some(({ item }) => item.media_type === "short" || item.media_type === "long" || item.media_type === "live");
 
 
   // The in-app content surface (#51). Retain the item through the close
@@ -964,7 +971,7 @@ export default function SessionPage() {
   // reader is open (they own their own keys) or while typing.
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
-      if (content || menuOpen || controlsOpen || detailsOpen || breakdown || saveItem || sourceSel || checkin || review) return;
+      if (content || menuOpen || controlsOpen || detailsOpen || breakdown || saveItem || sourceSel || checkin || review || gateOn) return;
       const t = e.target as HTMLElement | null;
       if (t?.closest("input,textarea,select,button,a,[contenteditable]")) return;
       if (e.key.startsWith("Arrow") || e.key === "j" || e.key === "k") perf.noteTrigger("key");
@@ -1015,7 +1022,7 @@ export default function SessionPage() {
   const focusedShort = shortsMode && hosted?.item.media_type === "short" && playerIdx < visibleCount && !review ? hosted : null;
   if (focusedShort) lastShort.current = focusedShort;
   const short = lastShort.current;
-  const playbackActive = !content && !menuOpen && !controlsOpen && !detailsOpen && !convSel && !breakdown && !saveItem && !sourceSel && !checkin && !review;
+  const playbackActive = !content && !menuOpen && !controlsOpen && !detailsOpen && !convSel && !breakdown && !saveItem && !sourceSel && !checkin && !review && !gateOn;
 
   const shownItems = overIdx !== null ? items.slice(0, visibleCount) : items;
 
@@ -1054,11 +1061,9 @@ export default function SessionPage() {
             shortsMode={shortsMode}
             persistentShorts
             hostsPlayer={!!focusedShort && i === playerIdx}
-            soundHint={soundHint === i}
-            onSoundHintDone={() => setSoundHint(null)}
             shortsBus={shortsBus}
             shortsPosition={shortsPosition}
-            playbackActive={i === current && !content && !menuOpen && !controlsOpen && !detailsOpen && !convSel && !breakdown && !saveItem && !sourceSel && !checkin && !review}
+            playbackActive={i === current && !content && !menuOpen && !controlsOpen && !detailsOpen && !convSel && !breakdown && !saveItem && !sourceSel && !checkin && !review && !gateOn}
             muted={playback.muted}
             onMutedChange={playback.setMuted}
             onPlaybackChange={(playing) => {
@@ -1177,7 +1182,11 @@ export default function SessionPage() {
         onSignal={cur && !atEnd && !review ? (next) => setSignal(cur.item.id, next) : undefined}
       />
 
+      {gateOn && <SoundGate highlightMuted={gateDefaultMuted} ready={playerIdx === current} error={skipError}
+        onChoose={chooseSound} onSkipVideos={() => void skipVideos()} />}
+
       <SessionControls
+        onSkipVideos={videosAhead ? () => void skipVideos() : undefined}
         open={controlsOpen && !review}
         status={status}
         onClose={() => setControlsOpen(false)}

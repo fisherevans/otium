@@ -19,6 +19,10 @@ export interface ShortsControls {
     toggleSound(): void;
     toggleCaptions(): void;
     toggleNative(): void;
+    // #213: the sound card's tap. Plays the clip from the start, muted or with
+    // sound, inside the tap (iOS only allows sound there), even though the card
+    // was holding playback until now.
+    start(muted: boolean): void;
 }
 
 export interface ShortsBus {
@@ -52,6 +56,7 @@ export function createShortsBus(): ShortsBus {
             toggleSound: () => bound?.toggleSound(),
             toggleCaptions: () => bound?.toggleCaptions(),
             toggleNative: () => bound?.toggleNative(),
+            start: (muted) => bound?.start(muted),
         },
         bind(controls) { bound = controls; },
     };

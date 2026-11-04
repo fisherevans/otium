@@ -2436,3 +2436,60 @@ func unescapeSourceTitles(sdb *sql.DB) error {
 	}
 	return nil
 }
+
+// SkipSessionVideos drops every video (short, long, live) from the session's
+// queue at or after position from, and sets the cursor to from, so the item
+// now there is the next non-video (#213). Earlier positions are untouched: the
+// queue up to here is what was already seen. Returns the session after the
+// change, or nil if it is not the user's active session.
+func (db *DB) SkipSessionVideos(ctx context.Context, userID int64, id string, from int) (*Session, error) {
+	s, err := db.GetSession(ctx, userID, id)
+	if err != nil || s == nil || s.Status != "active" {
+		return nil, err
+	}
+	if from < 0 {
+		from = 0
+	}
+	if from > len(s.ItemIDs) {
+		from = len(s.ItemIDs)
+	}
+	tail := s.ItemIDs[from:]
+	video := map[int64]bool{}
+	if len(tail) > 0 {
+		args := make([]any, len(tail))
+		for i, v := range tail {
+			args[i] = v
+		}
+		rows, err := db.sql.QueryContext(ctx,
+			`SELECT id FROM items WHERE media_type IN ('short', 'long', 'live') AND id IN (?`+strings.Repeat(",?", len(tail)-1)+`)`, args...)
+		if err != nil {
+			return nil, err
+		}
+		for rows.Next() {
+			var v int64
+			if err := rows.Scan(&v); err != nil {
+				rows.Close()
+				return nil, err
+			}
+			video[v] = true
+		}
+		rows.Close()
+	}
+	kept := append([]int64{}, s.ItemIDs[:from]...)
+	for _, v := range tail {
+		if !video[v] {
+			kept = append(kept, v)
+		}
+	}
+	csv := make([]string, len(kept))
+	for i, v := range kept {
+		csv[i] = strconv.FormatInt(v, 10)
+	}
+	if _, err := db.sql.ExecContext(ctx,
+		`UPDATE sessions SET item_ids=?, cursor=? WHERE id=? AND user_id=? AND status='active'`,
+		strings.Join(csv, ","), from, id, userID); err != nil {
+		return nil, err
+	}
+	s.ItemIDs, s.Cursor = kept, from
+	return s, nil
+}

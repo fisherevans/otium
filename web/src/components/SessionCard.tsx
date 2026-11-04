@@ -84,9 +84,6 @@ export interface SessionCardProps {
   // #182: this card's slot currently hosts the shared player; its footer
   // carries the live sound/CC/time controls from the bus.
   hostsPlayer?: boolean;
-  // #191: point at the sound control once, at the start of a session.
-  soundHint?: boolean;
-  onSoundHintDone?: () => void;
   shortsBus?: ShortsBus;
   shortsPosition?: React.RefObject<MediaPosition | null>;
   playbackActive?: boolean;
@@ -328,8 +325,6 @@ export const SessionCard = forwardRef<HTMLDivElement, SessionCardProps>(function
     shortsMode = false,
     persistentShorts = false,
     hostsPlayer = false,
-    soundHint = false,
-    onSoundHintDone,
     shortsBus,
     shortsPosition,
     playbackActive = true,
@@ -538,7 +533,7 @@ export const SessionCard = forwardRef<HTMLDivElement, SessionCardProps>(function
               <ShortsMeta bus={hostsPlayer ? shortsBus : undefined} age={age} duration={it.item.duration_sec} />
             </span>
           </button>
-          {hostsPlayer && shortsBus && <ShortsQuietControls bus={shortsBus} hint={soundHint} onHintDone={onSoundHintDone} />}
+          {hostsPlayer && shortsBus && <ShortsQuietControls bus={shortsBus} />}
           {focused && onConversation && <ShortsCommentsButton conv={conv} onOpen={() => onConversation(it)} />}
           {/* #196: liked by double tap; shown only once liked, tap to undo. */}
           {signal === "like" && onLike && (

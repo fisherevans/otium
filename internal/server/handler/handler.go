@@ -783,6 +783,34 @@ func (h *Handler) CurrentSession(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, sessionPayload(s.ID, s.DurationMin, s.Cursor, s.Themes, items))
 }
 
+// SkipSessionVideos drops the rest of the session's videos from position
+// `from` on (#213: "Skip videos this session" on the sound card) and returns the
+// session as CurrentSession does, so the client re-renders the shorter queue.
+func (h *Handler) SkipSessionVideos(w http.ResponseWriter, r *http.Request) {
+	uid := userID(r)
+	var body struct {
+		From int `json:"from"`
+	}
+	if !decode(w, r, &body) {
+		return
+	}
+	s, err := h.db.SkipSessionVideos(r.Context(), uid, chi.URLParam(r, "id"), body.From)
+	if err != nil {
+		serverError(w, h.log, "skip session videos", err)
+		return
+	}
+	if s == nil {
+		writeJSON(w, http.StatusConflict, map[string]string{"message": "This session has ended."})
+		return
+	}
+	items, err := h.rehydrateSession(r.Context(), uid, s.ItemIDs)
+	if err != nil {
+		serverError(w, h.log, "rehydrate session", err)
+		return
+	}
+	writeJSON(w, http.StatusOK, sessionPayload(s.ID, s.DurationMin, s.Cursor, s.Themes, items))
+}
+
 // UpdateSession advances the cursor and/or ends the session (#67). Both fields
 // are optional; a cursor write after the session ended is a harmless no-op.
 func (h *Handler) UpdateSession(w http.ResponseWriter, r *http.Request) {
