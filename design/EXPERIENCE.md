@@ -20,7 +20,13 @@ New session leads with direct starts for News (10 minutes of articles in the New
 
 Library leads with Add source and Import. Adding chooses a topic, or creates one inside a section, before identifying the source. Organization is secondary. Source and topic edits keep the dialog and draft open on failure. A partially created source can finish setup on retry without duplicating it.
 
-You leads with Settings, Appearance, Insights and Reading history. Reading activity is an explicit disclosure. There are no streaks, badges or engagement targets.
+You leads with Settings, Appearance, Insights, Engagement and Reading history. Reading activity is an explicit disclosure. There are no streaks, badges or engagement targets.
+
+## Likes and engagement (#196)
+
+A like is a quiet signal, not a feature: double-tap a card or a playing video to like it, double-tap again to undo, and a heart blooms where the finger was with "Liked" or "Like removed". The ··· sheet and the reader carry Like and "Didn't like this one", each undone by tapping it again. A liked card shows a small filled heart in its action row (or the Short's bar), which undoes the like; an unliked card shows nothing, so there is no new chrome until there is a like. There is no Favorites list (#142's lesson stands). A dislike records the preference and nothing else: it never mutes, archives or unsubscribes. On an article or post the single tap that opens the reader waits 280 ms for a possible second tap; on a video the first tap toggles playback at once (iOS only unmutes inside the tap) and a second one undoes it before liking.
+
+Otium records each view of an item (time on screen in the foreground, opened, reading or playing time, a video's length, furthest point, pauses, seeks, resumes and whether it finished, an article's scroll depth) and every like and dislike with what the item was about at the time. Engagement (from You) reads it back per channel or per tag over 7, 30 or 90 days, ordered by most shown, most skipped or most liked, and a channel row opens its source page. It is for Fisher deciding what to keep following. None of it ranks a session or acts on its own; automatic playback is recorded as playback, never as an open.
 
 ## Shared secondary surfaces
 

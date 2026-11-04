@@ -175,8 +175,9 @@ type ItemView struct {
 	ScrollDepth float64   `json:"scroll_depth"`
 }
 
-// InstantSkipMs is the on-screen time under which a view that opened and played
-// nothing counts as an instant skip.
+// InstantSkipMs is the on-screen time under which a view that was not opened
+// counts as an instant skip. Autoplay does not count as opening: a Short starts
+// on its own, and flicking past it in half a second is still a skip.
 const InstantSkipMs = 1000
 
 // RecordItemView stores (or replaces, by view key) a view of one of the user's
@@ -198,7 +199,7 @@ func (db *DB) RecordItemView(ctx context.Context, userID, itemID int64, v ItemVi
 	if v.VideoLenSec > 0 && v.MaxPosSec >= v.VideoLenSec*0.95 {
 		v.Completed = true
 	}
-	instant := v.DwellMs < InstantSkipMs && !v.Opened && v.ActiveMs == 0 && v.Plays == 0
+	instant := v.DwellMs < InstantSkipMs && !v.Opened
 	_, err = db.sql.ExecContext(ctx,
 		`INSERT INTO item_views (user_id, view_key, item_id, session_id, source_id, source_title, media_type, tags,
 		   shown_at, dwell_ms, opened, external, instant_skip, active_ms, video_len_sec, max_pos_sec,

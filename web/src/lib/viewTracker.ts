@@ -80,6 +80,9 @@ export function createViewTracker() {
     end() {
       // A card scrolled straight through (a resume jump, a fast fling) was
       // never really on screen; it is not a view.
+      // Leaving a playing clip pauses it just before focus moves; that is the
+      // leaving, not a pause.
+      if (live?.pausedByState && Date.now() - live.pausedAt < 500) live.pauses = Math.max(0, live.pauses - 1);
       if (live && (Date.now() - live.startedAt >= MIN_VIEW_MS || live.opened || live.plays > 0)) send(live);
       live = null;
     },
@@ -122,6 +125,9 @@ export function createViewTracker() {
     watch(itemId: number, state: number, at: number, total: number) {
       const v = current(itemId);
       if (!v) return;
+      // Loading a clip into the shared player reports PAUSED at 0 before it
+      // ever plays; nothing has been paused until something has played.
+      if (state === PAUSED && v.plays === 0) return;
       const now = Date.now();
       if (total > 0) v.video_len_sec = Math.round(total * 10) / 10;
       if (Number.isFinite(at) && at > v.max_pos_sec) v.max_pos_sec = Math.round(at * 10) / 10;

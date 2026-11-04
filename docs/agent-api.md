@@ -11,6 +11,7 @@ curl -H "Authorization: Bearer $TOKEN" https://otium.fisher.sh/api/v1/agent/pres
 | Route | What |
 | --- | --- |
 | `GET /agent/profile?days=90` | Engagement per followed/trial source, the topic list, and existing suggestions (#202). |
+| `GET /agent/engagement?by=source\|tag&days=30` | Per-channel or per-tag rollup of views, opens, instant skips, median watch fraction, likes, dislikes, shares and saves (#196). `from`/`to` (YYYY-MM-DD, inclusive) instead of `days` for a fixed range. |
 | `POST /agent/suggestions` | Add follow suggestions; `trial: true` starts one as a trial source (#202). |
 | `GET /agent/presets` | Saved session presets and mixes, the default id (#203). |
 | `PUT /agent/presets/{id}` | Create or replace one preset; `?default=1` also makes it the default. |

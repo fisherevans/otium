@@ -124,7 +124,7 @@ equal specificity and win on source order).
 ## Agent API
 
 Agents manage Otium through `/api/v1/agent/*` with a bearer token: engagement profile,
-follow suggestions, and saved presets/mixes. Contract: [docs/agent-api.md](docs/agent-api.md).
+the per-channel / per-tag engagement rollup (#196), follow suggestions, and saved presets/mixes. Contract: [docs/agent-api.md](docs/agent-api.md).
 New user-facing configuration belongs on the server and on this API, not only in
 localStorage (Fisher, 2026-11-03, #203).
 
@@ -143,8 +143,15 @@ localStorage (Fisher, 2026-11-03, #203).
   Dev proxy and prod nginx both do the split.
 - Explicit signals drive curation - like / skip / open / weight only. The one
   allowed *implicit* read is pace: fast-flicking may trigger a **visible
-  check-in**, never a silent re-rank or engagement surveillance (EXPERIENCE.md
-  principle 3).
+  check-in**, never a silent re-rank (EXPERIENCE.md principle 3).
+- Engagement records (#196: `item_signals`, `item_views`, `/engagement`) are
+  Fisher's own descriptive history, read back on the Engagement page and the
+  agent API. The session engine never reads them and nothing acts automatically
+  on them; re-weighting from them is a separate, explicit future change (#21, #24).
+  The client tracker is `lib/viewTracker.ts`: one view per focus, running totals
+  under a view key so re-sends replace. YouTube reports PAUSED at 0 while loading
+  a clip into the shared Shorts player and pauses a clip as focus leaves it; the
+  tracker ignores both, so check it against real players after changing playback.
 
 ## Issue lifecycle
 
