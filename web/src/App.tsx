@@ -19,6 +19,7 @@ import SessionPage from "@/pages/SessionPage";
 import CollectionsPage from "@/pages/CollectionsPage";
 import ImportPage from "@/pages/ImportPage";
 import InsightsPage from "@/pages/InsightsPage";
+import EngagementPage from "@/pages/EngagementPage";
 import SettingsPage from "@/pages/SettingsPage";
 import SuggestionsPage from "@/pages/SuggestionsPage";
 import SharingPage from "@/pages/SharingPage";
@@ -152,6 +153,7 @@ function AppShell() {
           <Route path="/collections" element={<CollectionsPage />} />
           <Route path="/history" element={<HistoryPage />} /> {/* #83: personal shown-vs-engaged history */}
           <Route path="/insights" element={<InsightsPage />} />
+          <Route path="/engagement" element={<EngagementPage />} /> {/* #196: per-channel / per-tag engagement */}
           <Route path="/settings" element={<SettingsPage />} /> {/* #68: preferences (fast-scroll check-in) */}
           <Route path="/settings/sharing" element={<SharingPage />} /> {/* #195: Discord friends and channels */}
           <Route path="/settings/appearance" element={<AppearancePage />} /> {/* #80/#81/#82: appearance + live preview */}

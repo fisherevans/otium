@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type UIEvent, type SyntheticEvent, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent } from "react";
-import { ChevronLeft, ExternalLink, Bookmark } from "lucide-react";
-import { api, type Item, type ItemContent } from "@/api/client";
+import { ChevronLeft, ExternalLink, Bookmark, Heart, ThumbsDown } from "lucide-react";
+import { api, type Item, type ItemContent, type ItemSignal } from "@/api/client";
 import { renderSummary } from "@/lib/html";
 import { fmtDate, readTime, authorRedundant } from "@/lib/format";
 import { ShareActions } from "./ReaderActions";
@@ -44,6 +44,9 @@ export function ReaderPage({
   onSave,
   onNext,
   onNextDrag,
+  signal,
+  onSignal,
+  onScrollDepth,
 }: {
   item: Item | null;
   sourceTitle?: string;
@@ -56,6 +59,10 @@ export function ReaderPage({
   // #206: the end-of-article pull, in px of upward travel, so the feed behind can
   // move with it (the next card follows the page up); null when it springs back.
   onNextDrag?: (offset: number | null) => void;
+  // #196: like/dislike, and how far down the page has been seen (0..1).
+  signal?: ItemSignal;
+  onSignal?: (signal: ItemSignal) => void;
+  onScrollDepth?: (fraction: number) => void;
 }) {
   const previousItem = useRef(currentItem);
   if (currentItem) previousItem.current = currentItem;
@@ -390,8 +397,20 @@ export function ReaderPage({
     [body?.html, onBodyClick, onBodyError],
   );
 
+  function reportDepth(el: HTMLElement) {
+    if (el.scrollHeight > 0) onScrollDepth?.(Math.min(1, (el.scrollTop + el.clientHeight) / el.scrollHeight));
+  }
+  // A page that fits on screen is fully seen without scrolling.
+  useEffect(() => {
+    if (!open || state !== "ready") return;
+    const raf = requestAnimationFrame(() => { if (scrollRef.current) reportDepth(scrollRef.current); });
+    return () => cancelAnimationFrame(raf);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, state, body, item?.id]);
+
   function onScroll(e: UIEvent<HTMLDivElement>) {
     const el = e.currentTarget;
+    reportDepth(el);
     const y = el.scrollTop;
     const max = el.scrollHeight - el.clientHeight;
     setProgress(max > 0 ? Math.min(1, Math.max(0, y / max)) : 0);
@@ -422,6 +441,12 @@ export function ReaderPage({
         <span className="rp-section-label">{post ? "Post" : "Article"}</span>
         {readEst && !post && <span className="rp-readtime">{readEst}</span>}
         <div className="rp-actions">
+          {onSignal && (
+            <button className={`rp-act like-act ${signal === "like" ? "on" : ""}`} onClick={() => onSignal(signal === "like" ? "" : "like")}
+              aria-pressed={signal === "like"} aria-label={signal === "like" ? "Liked, tap to undo" : "Like"}>
+              <Heart size={18} strokeWidth={1.75} fill={signal === "like" ? "currentColor" : "none"} aria-hidden />
+            </button>
+          )}
           {onSave && (
             <button className="rp-act" onClick={onSave} aria-label="Save">
               <Bookmark size={18} strokeWidth={1.75} aria-hidden />
@@ -523,6 +548,8 @@ export function ReaderPage({
         action={{ label: "Back", onClick: onClose, icon: <ChevronLeft size={18} aria-hidden /> }} />
       <BottomSheet open={menuOpen} onClose={() => setMenuOpen(false)} kicker="Article actions">
         <div className="sheet-rows">
+          {onSignal && <button className="sheet-row" aria-pressed={signal === "like"} onClick={() => onSignal(signal === "like" ? "" : "like")}><span>{signal === "like" ? "Liked - tap to undo" : "Like"}</span><Heart size={18} fill={signal === "like" ? "currentColor" : "none"} aria-hidden /></button>}
+          {onSignal && <button className="sheet-row" aria-pressed={signal === "dislike"} onClick={() => onSignal(signal === "dislike" ? "" : "dislike")}><span>{signal === "dislike" ? "Didn't like this - tap to undo" : "Didn't like this one"}</span><ThumbsDown size={18} fill={signal === "dislike" ? "currentColor" : "none"} aria-hidden /></button>}
           {onSave && <button className="sheet-row" onClick={() => { setMenuOpen(false); onSave(); }}><span>Save to collection</span><Bookmark size={18} aria-hidden /></button>}
           <button className="sheet-row" onClick={onOpen}><span>Open original</span><ExternalLink size={18} aria-hidden /></button>
           <ShareActions item={item} labeled discord />

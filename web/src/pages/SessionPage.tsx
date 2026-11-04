@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import { useNavigate, useParams, useLocation } from "react-router-dom";
-import { api, type Item, type ItemContent, type ItemRender, type Selected } from "@/api/client";
+import { api, type Item, type ItemContent, type ItemRender, type ItemSignal, type Selected } from "@/api/client";
 import { ItemActions } from "@/components/ItemActions";
 import { SessionControls } from "@/components/SessionControls";
 import { ItemDetails } from "@/components/ItemDetails";
@@ -25,6 +25,8 @@ import { useShortsMode } from "@/lib/shortsMode";
 import * as perf from "@/lib/perf";
 import { createShortsBus } from "@/lib/shortsBus";
 import { hasPlayer, nativeOn, toggleNative } from "@/lib/playerControls";
+import { createViewTracker } from "@/lib/viewTracker";
+import { LikeBurst, type Burst } from "@/components/LikeBurst";
 import { cardRender, isMedia, isVideo } from "@/lib/render";
 import { usePreferences } from "@/context/PreferencesContext";
 import { SHIPPED_LAYOUT, SHIPPED_VARS, cardVars, solveWhenReady } from "@/lib/cardLayout";
@@ -84,6 +86,12 @@ export default function SessionPage() {
     playerCommit.current = window.setTimeout(() => commitPlayer.current(), delay);
   });
   const shortsBus = useRef(createShortsBus()).current;
+  // #196: one record per time an item holds focus, and the like/dislike per item
+  // (seeded from the queue, updated optimistically).
+  const views = useRef(createViewTracker()).current;
+  const [signals, setSignals] = useState<Record<number, ItemSignal>>({});
+  const [burst, setBurst] = useState<Burst | null>(null);
+  const clearBurst = useCallback(() => setBurst(null), []);
   // Where an in-flight smooth Next/Prev is heading; cleared when the reel settles.
   const scrollTarget = useRef<number | null>(null);
   // #206: while the reader's end-of-article pull is in progress, the reel behind
@@ -193,6 +201,7 @@ export default function SessionPage() {
   function finishSession() {
     if (reviewRef.current) return;
     stopRead();
+    views.end();
     const snapshot: SessionReviewData = {
       items: items.filter((sel, index, all) => shownIds.current.has(sel.item.id) && all.findIndex((entry) => entry.item.id === sel.item.id) === index),
       opened: [...opened.current], played: [...played.current], skipped: [...skippedIds.current], skips: skipCount.current,
@@ -302,6 +311,7 @@ export default function SessionPage() {
     awaySince.current = null;
     if (cached?.review && cached?.items?.length) {
       setItems(cached.items);
+      setSignals(Object.fromEntries((cached.items as Selected[]).filter((x) => x.item.signal).map((x) => [x.item.id, x.item.signal!])));
       setDuration(cached.duration);
       setThemes(cached.themes ?? []);
       setCurrent(cached.review.cursor);
@@ -321,6 +331,7 @@ export default function SessionPage() {
           return;
         }
         setItems(s.items);
+        setSignals(Object.fromEntries(s.items.filter((x) => x.item.signal).map((x) => [x.item.id, x.item.signal!])));
         setDuration(s.duration_min > 0 ? s.duration_min : 15);
         setThemes(s.themes ?? []);
         const start = Math.min(Math.max(0, s.cursor), Math.max(0, s.items.length - 1));
@@ -524,6 +535,7 @@ export default function SessionPage() {
           t.hiddenSince = null;
         }
       }
+      views.visibility(document.hidden);
       if (document.hidden) {
         if (awaySince.current === null) awaySince.current = Date.now();
       } else if (awaySince.current !== null) {
@@ -532,9 +544,9 @@ export default function SessionPage() {
       }
     }
     document.addEventListener("visibilitychange", onVis);
-    const save = () => persistActivity.current();
+    const save = () => { stopRead(); views.flush(); persistActivity.current(); };
     window.addEventListener("pagehide", save);
-    return () => { document.removeEventListener("visibilitychange", onVis); window.removeEventListener("pagehide", save); stopRead(); persistActivity.current(); };
+    return () => { document.removeEventListener("visibilitychange", onVis); window.removeEventListener("pagehide", save); stopRead(); views.end(); persistActivity.current(); };
   }, []);
 
   // #135: whenever the in-app reader clears (via any path - scrim, back button,
@@ -602,6 +614,9 @@ export default function SessionPage() {
           }
           prevIdx.current = idx;
           shownAt.current = Date.now(); // the newly-centered item starts its dwell now
+          // #196: the view of the card now in focus begins; the one it replaces is sent.
+          if (idx < visibleCount && items[idx]) views.start(items[idx].item.id, id);
+          else views.end();
           // Reaching the terminal end-card (#79) is the moment the session is
           // genuinely done: mark it ended server-side (idempotent). No nav.
           if (idx >= visibleCount) {
@@ -754,13 +769,47 @@ export default function SessionPage() {
     suppressClick.current = p.moved || Math.abs(dx) > 10 || Math.abs(dy) > 10;
     if (i === current && dx <= -SWIPE_DIST && Math.abs(dx) >= Math.abs(dy) * SWIPE_DOMINANCE) next();
   }
-  function cardClick(sel: Selected) {
+  // #196: a double tap on a card likes it (or undoes the like). The single tap's
+  // open waits DOUBLE_TAP_MS to see whether a second tap follows.
+  const DOUBLE_TAP_MS = 280;
+  const lastCardTap = useRef<{ id: number; t: number; x: number; y: number } | null>(null);
+  const pendingEngage = useRef(0);
+  useEffect(() => () => window.clearTimeout(pendingEngage.current), []);
+  function cardClick(sel: Selected, e: { clientX: number; clientY: number }) {
     press.current = null;
     if (suppressClick.current) {
       suppressClick.current = false;
       return;
     }
-    engage(sel);
+    const now = performance.now();
+    const prev = lastCardTap.current;
+    if (prev && prev.id === sel.item.id && now - prev.t < DOUBLE_TAP_MS &&
+      Math.abs(e.clientX - prev.x) < 40 && Math.abs(e.clientY - prev.y) < 40) {
+      window.clearTimeout(pendingEngage.current);
+      lastCardTap.current = null;
+      toggleLike(sel, e.clientX, e.clientY);
+      return;
+    }
+    lastCardTap.current = { id: sel.item.id, t: now, x: e.clientX, y: e.clientY };
+    window.clearTimeout(pendingEngage.current);
+    if (isMedia(sel.item)) return; // the media's own player owns its taps
+    pendingEngage.current = window.setTimeout(() => engage(sel), DOUBLE_TAP_MS);
+  }
+
+  // #196: like / dislike. Optimistic, rolled back if the server refuses. A like
+  // counts as engaging with the card (it resets the check-in streak); a dislike
+  // records the preference and changes nothing else.
+  function setSignal(itemId: number, next: ItemSignal) {
+    const prev = signals[itemId] ?? "";
+    if (prev === next) return;
+    setSignals((m) => ({ ...m, [itemId]: next }));
+    if (next === "like" && !reviewRef.current) engaged.current.add(itemId);
+    api.setSignal(itemId, next).catch(() => setSignals((m) => ({ ...m, [itemId]: prev })));
+  }
+  function toggleLike(sel: Selected, x?: number, y?: number) {
+    const liked = (signals[sel.item.id] ?? "") !== "like";
+    setSignal(sel.item.id, liked ? "like" : "");
+    if (x !== undefined && y !== undefined) setBurst({ key: Date.now(), x, y, liked });
   }
 
   // The content-aware primary engagement (#96). full_text -> reader page;
@@ -779,6 +828,7 @@ export default function SessionPage() {
   function recordOpen(sel: Selected) {
     if (reviewRef.current) return;
     engaged.current.add(sel.item.id);
+    views.opened(sel.item.id);
     if (!opened.current.has(sel.item.id)) {
       opened.current.add(sel.item.id);
       api.itemEvent(sel.item.id, "open", id).catch(() => {});
@@ -811,6 +861,7 @@ export default function SessionPage() {
     const ms = Math.max(0, Date.now() - t.openedAt - hidden);
     const bucket = t.kind === "video" ? "video" : t.kind === "audio" ? "audio" : "read";
     readMsByKind.current[bucket] += ms;
+    views.active(t.itemId, ms);
     api.recordRead(t.itemId, id ?? "", ms, false, t.kind).catch(() => {});
   }
   function openContent(sel: Selected) {
@@ -859,6 +910,7 @@ export default function SessionPage() {
   }
   function openExternal(sel: Selected) {
     recordOpen(sel);
+    views.opened(sel.item.id, true);
     // External read: engagement counted, duration unmeasured (excluded from averages).
     if (!reviewRef.current) api.recordRead(sel.item.id, id ?? "", 0, true, readKind(sel.item)).catch(() => {});
     window.open(sel.item.url, "_blank", "noopener");
@@ -1013,6 +1065,10 @@ export default function SessionPage() {
               if (playing) startRead(it);
               else if (readTimer.current?.itemId === it.item.id) stopRead();
             }}
+            signal={signals[it.item.id] ?? ""}
+            onLike={(s) => toggleLike(s)}
+            onWatch={(state, at, total) => views.watch(it.item.id, state, at, total)}
+            onDoubleTap={(x, y) => toggleLike(it, x, y)}
             render={renderOf(it.item)}
             hierarchy="taxonomy-credit"
             sectionName={it.topic?.section_name}
@@ -1040,7 +1096,7 @@ export default function SessionPage() {
             onPointerCancel={cardPointerCancel}
             onPointerMove={cardPointerMove}
             onPointerUp={(e) => cardPointerUp(e, i)}
-            onClick={() => cardClick(it)}
+            onClick={(e) => cardClick(it, e)}
           />
         ))}
         {/* Terminal end-card (#79). Reaching it is passive - the session is
@@ -1069,7 +1125,10 @@ export default function SessionPage() {
         onPlaybackChange={(playing) => {
           if (playing) startRead(short);
           else if (readTimer.current?.itemId === short.item.id) stopRead();
-        }} />}
+        }}
+        onWatch={(state, at, total) => views.watch(short.item.id, state, at, total)}
+        onDoubleTap={(x, y) => toggleLike(short, x, y)} />}
+      <LikeBurst burst={burst} onDone={clearBurst} />
 
       {review && <div className="session-ending">
         <Brand compact />
@@ -1114,6 +1173,8 @@ export default function SessionPage() {
           setMenuOpen(false);
           setDetailsOpen(true);
         }}
+        signal={cur && !atEnd ? signals[cur.item.id] ?? "" : ""}
+        onSignal={cur && !atEnd && !review ? (next) => setSignal(cur.item.id, next) : undefined}
       />
 
       <SessionControls
@@ -1153,6 +1214,9 @@ export default function SessionPage() {
         onSave={() => shown && setSaveItem(shown.item)}
         onNext={review ? undefined : readerNext}
         onNextDrag={review ? undefined : readerDrag}
+        signal={shown ? signals[shown.item.id] ?? "" : ""}
+        onSignal={shown ? (next) => setSignal(shown.item.id, next) : undefined}
+        onScrollDepth={(fraction) => { if (shown) views.scrollDepth(shown.item.id, fraction); }}
       />
 
       {/* Source context menu (#75): tapping the source name on a card opens this -

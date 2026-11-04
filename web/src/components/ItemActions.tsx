@@ -1,7 +1,7 @@
-import { ChevronRight, Send, Download, ExternalLink, Info, Link2, Share2, Tv, Bookmark, BookOpen, Check } from "lucide-react";
+import { ChevronRight, Send, Download, ExternalLink, Info, Link2, Share2, Tv, Bookmark, BookOpen, Check, Heart, ThumbsDown } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { api, type Item, type Selected, type Source } from "@/api/client";
+import { api, type Item, type ItemSignal, type Selected, type Source } from "@/api/client";
 import { BottomSheet } from "./BottomSheet";
 import { ManualCopy } from "./ReaderActions";
 import { ShortsModeToggle } from "./ShortsModeToggle";
@@ -18,7 +18,8 @@ import { parseYouTubeId } from "@/lib/youtube";
 // player controls and the Shorts mode switch. Session controls (Next item, End
 // session, the app menu) are SessionControls, opened from the session time phrase,
 // never this sheet. Where the item came from and why it surfaced is ItemDetails,
-// a separate sheet. Nothing here emits an engagement event.
+// a separate sheet. The only engagement it records is the like/dislike pair
+// (#196): quiet, undoable, and a dislike mutes nothing.
 export function ItemActions({
   selected,
   open,
@@ -31,6 +32,8 @@ export function ItemActions({
   onShortsModeChange,
   nativeControls,
   onNativeControls,
+  signal,
+  onSignal,
 }: {
   selected: Selected | null;
   open: boolean;
@@ -47,6 +50,8 @@ export function ItemActions({
   // here from the row under the video.
   nativeControls?: boolean;
   onNativeControls?: () => void;
+  signal?: ItemSignal;
+  onSignal?: (signal: ItemSignal) => void;
 }) {
   const nav = useNavigate();
   const item = selected?.item ?? null;
@@ -94,6 +99,19 @@ export function ItemActions({
       <div className="ia-title">{item.title}</div>
 
       {clip && <VideoFileActions item={item} />}
+
+      {onSignal && (
+        <div className="sheet-rows">
+          <button className="sheet-row" aria-pressed={signal === "like"} onClick={() => onSignal(signal === "like" ? "" : "like")}>
+            <span className="sheet-row-label"><Heart size={18} fill={signal === "like" ? "currentColor" : "none"} aria-hidden /> {signal === "like" ? "Liked" : "Like"}</span>
+            {signal === "like" && <span className="sheet-row-note">Tap to undo</span>}
+          </button>
+          <button className="sheet-row" aria-pressed={signal === "dislike"} onClick={() => onSignal(signal === "dislike" ? "" : "dislike")}>
+            <span className="sheet-row-label"><ThumbsDown size={18} fill={signal === "dislike" ? "currentColor" : "none"} aria-hidden /> {signal === "dislike" ? "Didn't like this" : "Didn't like this one"}</span>
+            {signal === "dislike" && <span className="sheet-row-note">Tap to undo</span>}
+          </button>
+        </div>
+      )}
 
       <div className="sheet-rows">
         {shareOn && (

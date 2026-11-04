@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Settings, Palette, PieChart, History, ChevronRight, Minus, Plus } from "lucide-react";
+import { Settings, Palette, PieChart, History, ChevronRight, Minus, Plus, Activity } from "lucide-react";
 import { api, type ReadingStats } from "@/api/client";
 
 function fmtMin(min: number): string {
@@ -25,6 +25,7 @@ const DESTS: Dest[] = [
   { icon: Settings, label: "Settings", desc: "Session behavior and playback.", to: "/settings" },
   { icon: Palette, label: "Appearance", desc: "Reader typography, cards, and session presets.", to: "/settings/appearance" },
   { icon: PieChart, label: "Insights", desc: "How your sources shape each session.", to: "/insights" },
+  { icon: Activity, label: "Engagement", desc: "What you open, watch, like and skip, by channel or tag.", to: "/engagement" },
   { icon: History, label: "Reading history", desc: "Return to articles you have seen or read.", to: "/saved?view=history" },
 ];
 

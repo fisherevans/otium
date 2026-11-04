@@ -59,6 +59,8 @@ export function InlineMedia({
   positionMemory,
   onPlaybackChange,
   controlsToggle = false,
+  onWatch,
+  onDoubleTap,
 }: {
   item: Item;
   onSave?: () => void;
@@ -86,6 +88,13 @@ export function InlineMedia({
   onCaptionsChange?: (captions: boolean) => void;
   positionMemory?: RefObject<MediaPosition | null>;
   onPlaybackChange?: (playing: boolean) => void;
+  // #196: every YouTube state change, and a playhead tick while playing, for the
+  // view's watch metrics (furthest point, pauses, seeks, finished).
+  onWatch?: (state: number, at: number, total: number) => void;
+  // #196: a second tap on the video within DOUBLE_TAP_MS. The first tap has
+  // already toggled playback (iOS only allows unmuting inside the tap), so the
+  // double tap toggles it back before reporting.
+  onDoubleTap?: (x: number, y: number) => void;
 }) {
   const [notes, setNotes] = useState(false);
   const [playing, setPlaying] = useState(false);
@@ -150,6 +159,7 @@ export function InlineMedia({
       const at = Number(p?.getCurrentTime?.()) || 0;
       const total = Number(p?.getDuration?.()) || item.duration_sec || 0;
       if (progressRef.current) progressRef.current.style.transform = `scaleX(${total > 0 ? Math.min(1, at / total) : 0})`;
+      if (playing) latest.current.onWatch?.(1, at, total);
       if (bus) { bus.set({ at: Math.floor(at), total: Math.round(total) }); return; }
       setClock((c) => (Math.floor(c.at) === Math.floor(at) && Math.round(c.total) === Math.round(total) ? c : { at, total }));
     };
@@ -158,8 +168,8 @@ export function InlineMedia({
     const timer = window.setInterval(read, 250);
     return () => window.clearInterval(timer);
   }, [playing, video, ytId, item.duration_sec, bus]);
-  const latest = useRef({ active, autoPlay, muted, captions, ytId, itemId: item.id, positionMemory, onFirstPlay, onPlaybackChange, onMutedChange });
-  latest.current = { active, autoPlay, muted, captions, ytId, itemId: item.id, positionMemory, onFirstPlay, onPlaybackChange, onMutedChange };
+  const latest = useRef({ active, autoPlay, muted, captions, ytId, itemId: item.id, positionMemory, onFirstPlay, onPlaybackChange, onMutedChange, onWatch, onDoubleTap });
+  latest.current = { active, autoPlay, muted, captions, ytId, itemId: item.id, positionMemory, onFirstPlay, onPlaybackChange, onMutedChange, onWatch, onDoubleTap };
   const loadedId = useRef<string | null>(null);
   const loadedItem = useRef(item.id);
 
@@ -372,6 +382,7 @@ export function InlineMedia({
           onStateChange: (e: any) => {
             if (cancelled || playerRef.current !== player || !currentVideo()) return;
             setYtState(e.data);
+            latest.current.onWatch?.(e.data, Number(player.getCurrentTime?.()), Number(player.getDuration?.()) || 0);
             if (e.data === YT.PlayerState.PLAYING) {
               if (!available()) { player.pauseVideo?.(); reportPlaying(false); return; }
               setBlocked(false);
@@ -483,6 +494,22 @@ export function InlineMedia({
   const SWIPE = 45; // px a flick must travel to navigate
   const FLICK_MS = 400; // a navigation flick must complete within this
   const g = useRef<{ id: number; x: number; y: number; t: number } | null>(null);
+  // #196: the last tap, to recognise a double tap (like). The first tap acts at
+  // once; a second one close by undoes it and reports the double tap.
+  const DOUBLE_TAP_MS = 300;
+  const lastTap = useRef<{ t: number; x: number; y: number } | null>(null);
+  function tap(e: ReactPointerEvent) {
+    const prev = lastTap.current;
+    const double = !!prev && e.timeStamp - prev.t < DOUBLE_TAP_MS &&
+      Math.abs(e.clientX - prev.x) < 40 && Math.abs(e.clientY - prev.y) < 40;
+    togglePlay();
+    if (double && latest.current.onDoubleTap) {
+      lastTap.current = null;
+      latest.current.onDoubleTap(e.clientX, e.clientY);
+      return;
+    }
+    lastTap.current = { t: e.timeStamp, x: e.clientX, y: e.clientY };
+  }
   function onDown(e: ReactPointerEvent) {
     g.current = null;
     if (!e.isPrimary || e.button !== 0 || (window.visualViewport?.scale ?? 1) > 1) return;
@@ -505,7 +532,7 @@ export function InlineMedia({
     const dt = e.timeStamp - d.t;
     // Notes mode: taps toggle play, vertical drags scroll the transcript (pan-y).
     if (notes) {
-      if (Math.abs(dx) < TAP_SLOP && Math.abs(dy) < TAP_SLOP) togglePlay();
+      if (Math.abs(dx) < TAP_SLOP && Math.abs(dy) < TAP_SLOP) tap(e);
       return;
     }
     // #182: on touch, vertical movement is the reel's native scroll (pan-y), which
@@ -517,7 +544,7 @@ export function InlineMedia({
     const dist = Math.max(Math.abs(dx), Math.abs(dy));
     const flick = dist >= SWIPE && dt <= FLICK_MS;
     if (!flick) {
-      togglePlay();
+      tap(e);
       return;
     }
     perf.noteTrigger("flick");

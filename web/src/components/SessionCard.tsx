@@ -1,8 +1,8 @@
-import { forwardRef, type PointerEvent as ReactPointerEvent } from "react";
+import { forwardRef, type PointerEvent as ReactPointerEvent, type MouseEvent as ReactMouseEvent } from "react";
 import { ShortsMeta, ShortsQuietControls } from "./ShortsQuietControls";
 import type { ShortsBus } from "@/lib/shortsBus";
-import { Bookmark, BookOpen, Play, ExternalLink, MoreHorizontal, ChevronRight, Timer } from "lucide-react";
-import type { Conversation, Item, ItemRender, Selected } from "@/api/client";
+import { Bookmark, BookOpen, Play, ExternalLink, MoreHorizontal, ChevronRight, Timer, Heart } from "lucide-react";
+import type { Conversation, Item, ItemRender, ItemSignal, Selected } from "@/api/client";
 import { ArticleConversation, CardConversation, ShortsCommentsButton } from "@/components/Conversation";
 import { inlineConversation, useConversation } from "@/lib/conversation";
 import { TopicPill, CardSource, SourceAvatar, Byline, Blurb, Media } from "@/components/CardParts";
@@ -13,6 +13,7 @@ import { isPost, postBody, postContext, postPlatform, postRowCounts, withQuoted 
 import { CardThread, PostCard } from "@/components/PostView";
 import { PlatformMark } from "@/components/PlatformMark";
 import "./session-afterglow.css";
+import "./like-burst.css";
 import { relTime } from "@/lib/format";
 
 // SessionCard is one item in the session reel, lifted out of SessionPage so the
@@ -92,6 +93,11 @@ export interface SessionCardProps {
   muted?: boolean;
   onMutedChange?: (muted: boolean) => void;
   onPlaybackChange?: (playing: boolean) => void;
+  // #196: like state and the quiet heart; video watch reports and double tap.
+  signal?: ItemSignal;
+  onLike?: (sel: Selected) => void;
+  onWatch?: (state: number, at: number, total: number) => void;
+  onDoubleTap?: (x: number, y: number) => void;
   onNext?: () => void;
   onPrev?: () => void;
   ytHistory?: boolean;
@@ -99,7 +105,7 @@ export interface SessionCardProps {
   onPointerMove?: (e: ReactPointerEvent) => void;
   onPointerCancel?: (e: ReactPointerEvent) => void;
   onPointerUp?: (e: ReactPointerEvent) => void;
-  onClick?: () => void;
+  onClick?: (e: ReactMouseEvent) => void;
   /** Defaults to what ships today. */
   hierarchy?: HierarchyStyle;
   /**
@@ -330,6 +336,10 @@ export const SessionCard = forwardRef<HTMLDivElement, SessionCardProps>(function
     muted = true,
     onMutedChange,
     onPlaybackChange,
+    signal,
+    onLike,
+    onWatch,
+    onDoubleTap,
     onNext,
     onPrev,
     ytHistory,
@@ -483,6 +493,8 @@ export const SessionCard = forwardRef<HTMLDivElement, SessionCardProps>(function
             onMutedChange={onMutedChange}
             positionMemory={it.item.media_type === "short" ? shortsPosition : undefined}
             onPlaybackChange={onPlaybackChange}
+            onWatch={onWatch}
+            onDoubleTap={onDoubleTap}
             onNext={onNext}
             onPrev={onPrev}
             ytHistory={ytHistory}
@@ -528,6 +540,12 @@ export const SessionCard = forwardRef<HTMLDivElement, SessionCardProps>(function
           </button>
           {hostsPlayer && shortsBus && <ShortsQuietControls bus={shortsBus} hint={soundHint} onHintDone={onSoundHintDone} />}
           {focused && onConversation && <ShortsCommentsButton conv={conv} onOpen={() => onConversation(it)} />}
+          {/* #196: liked by double tap; shown only once liked, tap to undo. */}
+          {signal === "like" && onLike && (
+            <button className="shorts-liked" type="button" onClick={() => onLike(it)} aria-pressed aria-label="Liked, tap to undo">
+              <Heart size={17} fill="currentColor" aria-hidden />
+            </button>
+          )}
           {/* #206/#208: the same ··· as the session's top bar, which steps aside
               over a Short: actions for this Short only. */}
           <button className="shorts-details" type="button" onClick={onMenu} disabled={!focused}
@@ -551,6 +569,12 @@ export const SessionCard = forwardRef<HTMLDivElement, SessionCardProps>(function
           <button className="callout-act" onClick={() => onSave(it)} aria-label="Save">
             <Bookmark size={18} strokeWidth={1.75} aria-hidden />
           </button>
+          {onLike && (
+            <button className={`callout-act like-act ${signal === "like" ? "on" : ""}`} onClick={() => onLike(it)}
+              aria-pressed={signal === "like"} aria-label={signal === "like" ? "Liked, tap to undo" : "Like"}>
+              <Heart size={18} strokeWidth={1.75} fill={signal === "like" ? "currentColor" : "none"} aria-hidden />
+            </button>
+          )}
           <ShareActions item={it.item} compact />
           {/* Same icon, same order as the media row - one action set everywhere. */}
           <button className="callout-act" onClick={() => onOpenExternal(it)} aria-label="Open original">

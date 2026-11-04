@@ -1,0 +1,22 @@
+/* #196: the engagement rollup. A plain list, one row per channel or tag. */
+.engagement-page .lib-filter + .lib-filter { margin-top: 6px; }
+.eng-list { list-style: none; margin: 14px 0 0; padding: 0; }
+.eng-list li { border-bottom: 1px solid var(--rule); }
+.eng-list li:last-child { border-bottom: 0; }
+.eng-row {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 12px 2px;
+    border: 0;
+    background: none;
+    color: var(--ink);
+    text-align: left;
+    min-height: 44px;
+}
+.eng-copy { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.eng-name { font: 500 17px/1.3 var(--reading, Georgia, serif); display: inline-flex; align-items: center; gap: 6px; overflow-wrap: anywhere; }
+.eng-facts { font: 400 13px/1.45 var(--grot, system-ui); color: var(--ink-mute); }
+.eng-signals { display: flex; gap: 14px; font: 400 13px/1.45 var(--grot, system-ui); color: var(--ink-soft); }
+.eng-signals span { display: inline-flex; align-items: center; gap: 4px; }

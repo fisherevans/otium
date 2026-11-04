@@ -152,6 +152,8 @@ export interface ReadingStats {
 
 export interface Item {
   id: number;
+  // #196: Fisher's like or dislike on this item, on session items only.
+  signal?: ItemSignal;
   source_id: number;
   url: string;
   title: string;
@@ -519,6 +521,54 @@ function handleAuth(status: number) {
 
 // keepalive lets a write fired while the page unloads (reload, pagehide) finish
 // instead of being cancelled - WebKit drops those otherwise.
+// Engagement (#196). A like or dislike is a quiet, undoable signal; a view is one
+// time an item was on screen, sent as running totals under a key minted when the
+// card took focus (so a re-send replaces). The rollup is descriptive only.
+export type ItemSignal = "like" | "dislike" | "";
+
+export interface ItemView {
+  view_key: string;
+  session_id: string;
+  shown_at: string;
+  dwell_ms: number;
+  opened: boolean;
+  external: boolean;
+  active_ms: number;
+  video_len_sec: number;
+  max_pos_sec: number;
+  plays: number;
+  pauses: number;
+  seeks: number;
+  resumed: boolean;
+  completed: boolean;
+  scroll_depth: number;
+}
+
+export interface EngagementRow {
+  key: string;
+  label: string;
+  kind?: string;
+  shown: number;
+  opened: number;
+  instant_skips: number;
+  videos: number;
+  median_watch?: number;
+  completed: number;
+  active_min: number;
+  dwell_min: number;
+  likes: number;
+  dislikes: number;
+  shares: number;
+  saves: number;
+}
+
+export interface EngagementReport {
+  from: string;
+  to: string;
+  by: "source" | "tag";
+  rows: EngagementRow[];
+}
+
 async function req<T>(method: string, path: string, body?: unknown, keepalive = false): Promise<T> {
   const res = await fetch(`/api/v1${path}`, {
     method,
@@ -742,6 +792,12 @@ export const api = {
   // from reading-time averages).
   recordRead: (id: number, sessionId: string, ms: number, external: boolean, kind: string) =>
     req<{ ok: boolean }>("POST", `/items/${id}/read`, { session_id: sessionId, ms, external, kind }, true),
+  setSignal: (id: number, signal: ItemSignal) =>
+    req<{ signal: ItemSignal }>("POST", `/items/${id}/signal`, { signal }),
+  recordView: (id: number, view: ItemView) =>
+    req<{ ok: boolean }>("POST", `/items/${id}/view`, view, true),
+  engagement: (days: number, by: "source" | "tag") =>
+    req<EngagementReport>("GET", `/engagement?days=${days}&by=${by}`),
   // #142: filter noise from an item's source straight from the card - mute one or
   // more of its RSS categories and/or add a title/summary keyword. Both append
   // (deduped) to that source's auto-archive blocklists; applies to future sessions.

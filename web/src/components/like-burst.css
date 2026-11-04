@@ -1,0 +1,44 @@
+/* #196: likes. The double-tap heart, and the quiet marks that show a like. */
+.like-burst {
+    position: fixed;
+    z-index: 60;
+    transform: translate(-50%, -50%);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    pointer-events: none;
+    color: var(--accent);
+    filter: drop-shadow(0 2px 10px color-mix(in srgb, var(--ink) 30%, transparent));
+    animation: like-burst 750ms ease-out forwards;
+}
+.like-burst.off { color: var(--ink-soft); }
+.like-burst-label {
+    font: 600 13px var(--grot, system-ui);
+    padding: 3px 10px;
+    border-radius: 12px;
+    background: color-mix(in srgb, var(--paper) 88%, transparent);
+    color: var(--ink);
+}
+@keyframes like-burst {
+    0% { opacity: 0; transform: translate(-50%, -50%) scale(.6); }
+    18% { opacity: 1; transform: translate(-50%, -50%) scale(1.08); }
+    30% { transform: translate(-50%, -50%) scale(1); }
+    75% { opacity: 1; }
+    100% { opacity: 0; transform: translate(-50%, -62%) scale(1); }
+}
+
+/* In a session the card's icon row is hidden (#208: actions live in ···), so a
+   like shows only once given: a filled heart, tap to undo. */
+:is(.stage, .lab-reel, .appearance-card-frame) .snap.afterglow-card .callout-act.like-act.on { display: inline-flex; margin-left: auto; }
+.like-act.on { color: var(--accent); }
+.shorts-liked {
+    flex: 0 0 auto;
+    min-width: 44px;
+    min-height: 44px;
+    display: grid;
+    place-items: center;
+    border: 0;
+    background: none;
+    color: var(--accent);
+}
