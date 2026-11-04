@@ -273,3 +273,5 @@ input[type="checkbox"],input[type="radio"] { accent-color: var(--accent); }
 .sheet-row-label { display: inline-flex; align-items: center; gap: 12px; }
 a.sheet-row { color: var(--ink); text-decoration: none; }
 .sheet-row:disabled { color: var(--ink-mute); }
+.sheet-row-text { display: flex; flex-direction: column; gap: 2px; text-align: left; }
+.sheet-row-text small { font: 13px/1.3 var(--grot, sans-serif); color: var(--ink-soft); }

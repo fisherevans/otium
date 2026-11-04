@@ -1,11 +1,12 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type RefObject, type PointerEvent as ReactPointerEvent } from "react";
-import { ExternalLink, Bookmark, FileText, ChevronUp, Play, SlidersHorizontal, MoreHorizontal, Volume2, VolumeX, Captions } from "lucide-react";
+import { ExternalLink, Bookmark, FileText, ChevronUp, Play, MoreHorizontal, Volume2, VolumeX, Captions } from "lucide-react";
 import type { Item } from "@/api/client";
 import { ShareActions } from "./ReaderActions";
 import { renderSummary } from "@/lib/html";
 import * as perf from "@/lib/perf";
 import { expectedStart, recordStart } from "@/lib/loadTiming";
 import { formatClock, type ShortsBus } from "@/lib/shortsBus";
+import { registerPlayer, setNativeOn } from "@/lib/playerControls";
 import { parseYouTubeId, loadYouTubeIframeAPI } from "@/lib/youtube";
 import "./shorts-mode.css";
 import { videoAspect, isVertical, isVideo } from "@/lib/render";
@@ -19,7 +20,8 @@ import { videoAspect, isVertical, isVideo } from "@/lib/render";
 // A transparent gesture overlay sits over the player and interprets tap-vs-swipe;
 // native inline controls are hidden (a full overlay would cover them anyway).
 //
-// A subtle toggle (#149) flips to YouTube's OWN controls when you want them -
+// The item's ··· sheet (#149, moved off the row under the video) flips to
+// YouTube's OWN controls when you want them -
 // scrubber, captions, quality, the YouTube link, and native fullscreen (which,
 // unlike our removed div-fullscreen, actually works on iOS because it's YouTube's
 // player doing it). The `controls` playerVar is fixed at construction and the
@@ -56,6 +58,7 @@ export function InlineMedia({
   onCaptionsChange,
   positionMemory,
   onPlaybackChange,
+  controlsToggle = false,
 }: {
   item: Item;
   onSave?: () => void;
@@ -64,6 +67,9 @@ export function InlineMedia({
   // Optional so the shipped placement stays untouched.
   onMenu?: () => void;
   onFirstPlay?: (explicit: boolean) => void;
+  // Where no ··· sheet can reach this player (the Player dialog), offer YouTube's
+  // controls as a labelled action instead.
+  controlsToggle?: boolean;
   onNext?: () => void;
   onPrev?: () => void;
   // #182: Shorts publish their state here and take sound/CC from the card footer.
@@ -137,6 +143,9 @@ export function InlineMedia({
   useEffect(() => {
     if (!video || !ytId) return;
     const read = () => {
+      // A player being rebuilt (YouTube controls on/off) has no playhead yet; keep
+      // the last reading rather than flashing back to the full length.
+      if (!ready.current) return;
       const p = playerRef.current;
       const at = Number(p?.getCurrentTime?.()) || 0;
       const total = Number(p?.getDuration?.()) || item.duration_sec || 0;
@@ -355,6 +364,7 @@ export function InlineMedia({
             if (loadedId.current !== latest.current.ytId) { selectVideo(); return; }
             const { at, playing: wasPlaying } = resume.current;
             restorePosition(at);
+            if (at > 0) setClock((c) => ({ at, total: Number(player.getDuration?.()) || c.total }));
             if (wasPlaying && available()) requestPlay();
             else sync.current();
           },
@@ -444,6 +454,14 @@ export function InlineMedia({
     });
     return () => bus.bind(null);
   }, [bus]);
+  useEffect(() => {
+    if (bus || !video || !ytId || compact) return;
+    return registerPlayer(item.id, () => controls.current.toggleNative());
+  }, [bus, video, ytId, compact, item.id]);
+  useEffect(() => {
+    setNativeOn(item.id, nativeControls);
+    return () => setNativeOn(item.id, false);
+  }, [item.id, nativeControls]);
   useEffect(() => {
     bus?.set({ itemId: item.id, muted: soundMuted, captions: !!captions, playing, native: nativeControls });
   }, [bus, item.id, soundMuted, captions, playing, nativeControls]);
@@ -603,15 +621,8 @@ export function InlineMedia({
             onClick={() => onCaptionsChange(!captions)} title="YouTube captions; text in the video stays visible">
             <Captions size={19} aria-hidden /><span>CC {captions ? "on" : "off"}</span>
           </button>}
-          <button type="button" className="im-control im-player-settings" aria-pressed={nativeControls}
-            onClick={() => { explicitIntent.current = true; setNativeControls(v => !v); }}
-            aria-label={nativeControls ? "Use simple controls" : "Use YouTube controls"}
-            title={nativeControls ? "Simple controls" : "YouTube controls"}>
-            <SlidersHorizontal size={18} aria-hidden /><span>Player</span>
-          </button>
-          {clock.total > 0 && <span className="im-time" aria-label={`${formatClock(clock.total - clock.at)} left of ${formatClock(clock.total)}`}>
-            <span className="im-time-left">{formatClock(Math.max(0, clock.total - clock.at))} left</span>
-            <span className="im-time-total">of {formatClock(clock.total)}</span>
+          {clock.total > 0 && <span className="im-time" aria-label={clock.at > 0 ? `${formatClock(clock.total - clock.at)} left of ${formatClock(clock.total)}` : `${formatClock(clock.total)} long`}>
+            {clock.at > 0 ? `${formatClock(Math.max(0, clock.total - clock.at))} left` : formatClock(clock.total)}
           </span>}
         </div>}
 
@@ -628,6 +639,12 @@ export function InlineMedia({
             </button>
           )}
           <ShareActions item={item} compact />
+          {controlsToggle && video && ytId && (
+            <button className={`im-act ${nativeControls ? "on" : ""}`} aria-pressed={nativeControls}
+              onClick={() => controls.current.toggleNative()}>
+              {nativeControls ? "Simple controls" : "YouTube controls"}
+            </button>
+          )}
           <button className="im-act im-orig" onClick={onOpenOriginal} aria-label={video ? "Open on YouTube" : "Open original"}>
             <ExternalLink size={18} strokeWidth={1.75} aria-hidden />
           </button>

@@ -24,6 +24,7 @@ import { useSessionPlayback } from "@/lib/sessionPlayback";
 import { useShortsMode } from "@/lib/shortsMode";
 import * as perf from "@/lib/perf";
 import { createShortsBus } from "@/lib/shortsBus";
+import { hasPlayer, nativeOn, toggleNative } from "@/lib/playerControls";
 import { cardRender, isMedia, isVideo } from "@/lib/render";
 import { usePreferences } from "@/context/PreferencesContext";
 import { SHIPPED_LAYOUT, SHIPPED_VARS, cardVars, solveWhenReady } from "@/lib/cardLayout";
@@ -1096,8 +1097,9 @@ export default function SessionPage() {
         open={menuOpen}
         shortsMode={shortsMode}
         onShortsModeChange={setShortsMode}
-        nativeControls={shortsBus.get().native}
-        onNativeControls={focusedShort && focusedShort === cur ? () => { setMenuOpen(false); shortsBus.controls.toggleNative(); } : undefined}
+        nativeControls={focusedShort && focusedShort === cur ? shortsBus.get().native : !!cur && nativeOn(cur.item.id)}
+        onNativeControls={focusedShort && focusedShort === cur ? () => { setMenuOpen(false); shortsBus.controls.toggleNative(); }
+          : cur && hasPlayer(cur.item.id) ? () => { setMenuOpen(false); toggleNative(cur.item.id); } : undefined}
         onClose={() => setMenuOpen(false)}
         onRead={() => {
           setMenuOpen(false);

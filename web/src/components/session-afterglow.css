@@ -150,3 +150,7 @@
 .readerpage-body.rp-post .rp-meta { font-size: 14px; margin-bottom: 14px; }
 .readerpage-body.rp-post .rp-meta .rp-source { color: var(--ink); font-weight: 600; }
 .lib-row .platform-mark { margin-left: 4px; }
+/* Landscape video runs edge to edge: the card's side padding is spent on the
+   frame, which is the one thing on the card worth the width. */
+:is(.stage, .lab-reel) .snap.afterglow-card:not(.shorts-card) .inline-media.h:not(.im-compact) .im-frame {
+    width: calc(100% + var(--card-gutter, 20px) * 2); margin-inline: calc(var(--card-gutter, 20px) * -1); border-radius: 0; }

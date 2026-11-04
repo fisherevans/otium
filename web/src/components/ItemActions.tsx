@@ -148,9 +148,11 @@ export function ItemActions({
         <div className="sheet-rows">
           {short && onShortsModeChange && <ShortsModeToggle enabled={shortsMode ?? false} onChange={onShortsModeChange} />}
           {onNativeControls && (
-            <button className="sheet-row" onClick={onNativeControls} aria-pressed={!!nativeControls}
-              aria-label={nativeControls ? "Use simple controls" : "Use YouTube controls"}>
-              <span>{nativeControls ? "Use simple controls" : "Use YouTube's player controls"}</span>
+            <button className="sheet-row" onClick={onNativeControls} aria-pressed={!!nativeControls}>
+              <span className="sheet-row-text">
+                <span>{nativeControls ? "Use simple controls" : "Use YouTube's player controls"}</span>
+                <small>{nativeControls ? "Tap to play, swipe to move on" : "Seek, quality and full screen"}</small>
+              </span>
               <ChevronRight size={18} className="sheet-chev inline-icon" aria-hidden />
             </button>
           )}

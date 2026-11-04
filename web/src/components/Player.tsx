@@ -40,7 +40,7 @@ export function Player({ item, sourceTitle, open, onClose, onOpenOriginal, onSav
         </div>
         <div className="readerpage-body reader-player-body">
           <h1 className="rp-title">{shown.title}</h1>
-          {open && <InlineMedia key={shown.id} item={shown} onSave={onSave ?? (() => setSaveItem(shown))} onOpenOriginal={onOpenOriginal} ytHistory={ytHistory} />}
+          {open && <InlineMedia key={shown.id} item={shown} onSave={onSave ?? (() => setSaveItem(shown))} onOpenOriginal={onOpenOriginal} ytHistory={ytHistory} controlsToggle />}
         </div>
         <ContextInstrument mode="reader" eyebrow={shown.media_type === "audio" ? "Audio" : "Video"} label={sourceTitle || "Player"}
           action={{ label: "Back", onClick: onClose, icon: <ChevronLeft size={18} aria-hidden /> }} />
