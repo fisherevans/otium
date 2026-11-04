@@ -903,6 +903,7 @@ func (h *Handler) buildSessionQueue(ctx context.Context, uid int64, durationMin 
 		return nil, err
 	}
 	h.attachTopics(ctx, uid, items)
+	h.attachSignals(ctx, uid, items)
 	return items, nil
 }
 
@@ -931,6 +932,7 @@ func (h *Handler) rehydrateSession(ctx context.Context, uid int64, itemIDs []int
 		out = append(out, session.SelectFor(c, now))
 	}
 	h.attachTopics(ctx, uid, out)
+	h.attachSignals(ctx, uid, out)
 	return out, nil
 }
 
@@ -1052,8 +1054,8 @@ func (h *Handler) ItemEvent(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusOK, map[string]any{"ok": true})
 		return
 	}
-	// Liking is retired (#142) - `like`/`unlike` are gone. The remaining explicit
-	// signals are open/skip/save/dismiss.
+	// Likes moved to their own signal (#196, POST /items/{id}/signal); this
+	// endpoint keeps open/skip/save/dismiss.
 	stateFor := map[string]string{
 		"open": "opened", "skip": "skipped",
 		"save": "saved", "dismiss": "dismissed",

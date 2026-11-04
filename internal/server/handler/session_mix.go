@@ -64,6 +64,7 @@ func (h *Handler) buildMixQueue(ctx context.Context, uid int64, durationMin int,
 		return nil, err
 	}
 	h.attachTopics(ctx, uid, items)
+	h.attachSignals(ctx, uid, items)
 	return items, nil
 }
 

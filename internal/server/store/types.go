@@ -206,6 +206,9 @@ type Item struct {
 	// PostJSON holds it as a post) or "article". Empty for other kinds; set only
 	// for UpsertItem.
 	Form string `json:"-"`
+	// Signal is Fisher's like or dislike on the item (#196), "" for neither.
+	// Read-only: filled on session items from item_signals.
+	Signal string `json:"signal,omitempty"`
 }
 
 // PostKinds are the source kinds whose items are social posts rather than

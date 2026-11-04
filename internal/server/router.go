@@ -57,6 +57,7 @@ func NewRouter(h *handler.Handler, authMiddleware, agentMiddleware func(http.Han
 			r.Get("/agent/presets", h.ListPresets)
 			r.Put("/agent/presets/{id}", h.PutPreset)
 			r.Delete("/agent/presets/{id}", h.DeletePreset)
+			r.Get("/agent/engagement", h.Engagement) // #196: per-channel / per-tag rollup
 		})
 
 		r.Group(func(r chi.Router) {
@@ -122,6 +123,10 @@ func NewRouter(h *handler.Handler, authMiddleware, agentMiddleware func(http.Han
 			// Dwell (#68): append-only engagement measurement, never into the ranker.
 			r.Post("/items/{id}/dwell", h.ItemDwell)
 			r.Post("/items/{id}/read", h.ItemRead) // #135: active read/watch time
+			// Engagement (#196): like/dislike, one record per view, and the rollup.
+			r.Post("/items/{id}/signal", h.ItemSignal)
+			r.Post("/items/{id}/view", h.ItemView)
+			r.Get("/engagement", h.Engagement)
 			r.Get("/items/{id}/video", h.ItemVideo)
 			r.Post("/client-metrics", h.ClientMetrics)     // #182: device timing records, logged only        // #180: a Short as an MP4 to save or share
 			r.Post("/items/{id}/share", h.ShareItem)       // #195: send to Discord friends/channels

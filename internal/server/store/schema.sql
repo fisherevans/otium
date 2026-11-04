@@ -434,3 +434,55 @@ CREATE TABLE IF NOT EXISTS session_presets (
     updated_at TEXT NOT NULL DEFAULT (datetime('now')),
     PRIMARY KEY (user_id, id)
 );
+
+-- Engagement (#196). Descriptive records Fisher reads back to decide what to keep
+-- following; nothing here feeds the session engine.
+--
+-- item_signals holds the current like/dislike per item; every change is also
+-- appended to `events` (like | unlike | dislike | undislike) so undo history is
+-- kept. context is a JSON snapshot of what the item was about when the signal
+-- was given (source, its title, media type, tags, duration), so a rollup
+-- survives the item or its source going away. No FK on item_id for that reason.
+CREATE TABLE IF NOT EXISTS item_signals (
+    user_id   INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    item_id   INTEGER NOT NULL,
+    signal    TEXT NOT NULL,                         -- like | dislike
+    source_id INTEGER,
+    context   TEXT NOT NULL DEFAULT '{}',
+    at        TEXT NOT NULL DEFAULT (datetime('now')),
+    PRIMARY KEY (user_id, item_id)
+);
+
+-- One row per time an item was on screen in a session. The client sends its
+-- running totals under a view_key it mints when the card takes focus, so a
+-- re-send (advance, then pagehide) replaces rather than double counts. Source
+-- and tags are snapshotted at write time for the same reason as item_signals.
+CREATE TABLE IF NOT EXISTS item_views (
+    id            INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id       INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    view_key      TEXT NOT NULL,
+    item_id       INTEGER NOT NULL,
+    session_id    TEXT NOT NULL DEFAULT '',
+    source_id     INTEGER,
+    source_title  TEXT NOT NULL DEFAULT '',
+    media_type    TEXT NOT NULL DEFAULT '',
+    tags          TEXT NOT NULL DEFAULT '',          -- newline-separated, lower-case
+    shown_at      TEXT NOT NULL,
+    dwell_ms      INTEGER NOT NULL DEFAULT 0,        -- time on screen
+    opened        INTEGER NOT NULL DEFAULT 0,        -- reader, explicit play, or open original
+    external      INTEGER NOT NULL DEFAULT 0,        -- opened outside Otium (unmeasured)
+    instant_skip  INTEGER NOT NULL DEFAULT 0,        -- under 1s on screen, nothing opened or played
+    active_ms     INTEGER NOT NULL DEFAULT 0,        -- foreground reading or playing time
+    video_len_sec REAL NOT NULL DEFAULT 0,
+    max_pos_sec   REAL NOT NULL DEFAULT 0,           -- furthest point reached in the video
+    plays         INTEGER NOT NULL DEFAULT 0,
+    pauses        INTEGER NOT NULL DEFAULT 0,
+    seeks         INTEGER NOT NULL DEFAULT 0,
+    resumed       INTEGER NOT NULL DEFAULT 0,        -- played again after pausing
+    completed     INTEGER NOT NULL DEFAULT 0,
+    scroll_depth  REAL NOT NULL DEFAULT 0,           -- 0..1, how far down the reader got
+    updated_at    TEXT NOT NULL DEFAULT (datetime('now')),
+    UNIQUE (user_id, view_key)
+);
+
+CREATE INDEX IF NOT EXISTS idx_item_views_user_shown ON item_views(user_id, shown_at);
