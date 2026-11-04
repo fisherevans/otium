@@ -198,7 +198,10 @@ func (f *Fetcher) download(id, path string) (string, error) {
 	args := []string{
 		"--ignore-config", "--no-playlist", "--no-progress", "--quiet", "--no-warnings",
 		"--cache-dir", filepath.Join(f.Dir, ".yt-dlp-cache"),
-		"--socket-timeout", "15", "--retries", "1",
+		// The pod has no IPv6 route; an AAAA googlevideo host fails with
+		// "Network unreachable" (otium#211).
+		"--force-ipv4",
+		"--socket-timeout", "15", "--retries", "3", "--fragment-retries", "3",
 		"--max-filesize", fmt.Sprint(maxBytes),
 		"--match-filters", fmt.Sprintf("!is_live & duration <= %d", MaxDurationSec),
 		"--format", "bv[ext=mp4][vcodec^=avc1][height<=720]+ba[ext=m4a][acodec^=mp4a]/b[ext=mp4][vcodec^=avc1][acodec^=mp4a]",

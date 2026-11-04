@@ -165,23 +165,28 @@ export function ItemActions({
   );
 }
 
-// Share the clip itself (#180). The server fetches the MP4 on first request
-// (several seconds), then serves it from cache. iOS only opens the share sheet
-// close to a tap, so a slow first fetch can leave the file ready but unshared -
-// the row then reads "Share video" and the next tap shares instantly. In the
-// share sheet, Save Video puts it in Photos.
+// Share or download the clip itself (#180). The server fetches the MP4 on first
+// request (several seconds), then serves it from cache. Both rows fetch it with
+// the app's session and check the response before handing it on: a plain link
+// left the PWA's cookies behind and saved whatever error page came back as the
+// "video" (#211). iOS only opens the share sheet close to a tap, so a slow first
+// fetch can leave the file ready but unshared - the row then reads "Share video"
+// and the next tap shares instantly. In the share sheet, Save Video puts it in
+// Photos.
 function VideoFileActions({ item }: { item: Item }) {
   const [state, setState] = useState<"idle" | "loading" | "ready" | "error">("idle");
+  const [busy, setBusy] = useState<"share" | "download" | null>(null);
   const [message, setMessage] = useState("");
   const file = useRef<File | null>(null);
-  useEffect(() => { file.current = null; setState("idle"); setMessage(""); }, [item.id]);
+  useEffect(() => { file.current = null; setState("idle"); setBusy(null); setMessage(""); }, [item.id]);
 
   const href = `/api/v1/items/${item.id}/video`;
   const name = fileName(item.title);
 
-  async function share() {
-    if (file.current) return shareFile(file.current);
+  async function load(kind: "share" | "download"): Promise<File | null> {
+    if (file.current) return file.current;
     setState("loading");
+    setBusy(kind);
     setMessage("");
     try {
       const res = await fetch(href);
@@ -190,14 +195,22 @@ function VideoFileActions({ item }: { item: Item }) {
         try { msg = (await res.json()).message || msg; } catch { /* keep default */ }
         throw new Error(msg);
       }
+      if (!(res.headers.get("Content-Type") || "").startsWith("video/")) throw new Error("Couldn't get this video.");
       const blob = await res.blob();
       file.current = new File([blob], name, { type: "video/mp4" });
+      return file.current;
     } catch (e) {
       setState("error");
       setMessage(e instanceof Error ? e.message : "Couldn't get this video.");
-      return;
+      return null;
+    } finally {
+      setBusy(null);
     }
-    await shareFile(file.current);
+  }
+
+  async function share() {
+    const f = await load("share");
+    if (f) await shareFile(f);
   }
   async function shareFile(f: File) {
     const files = [f];
@@ -217,16 +230,33 @@ function VideoFileActions({ item }: { item: Item }) {
     }
   }
 
+  async function download() {
+    const f = await load("download");
+    if (!f) return;
+    setState("ready");
+    const url = URL.createObjectURL(f);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = f.name;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 60_000);
+  }
+
+  const loading = state === "loading";
   return (
     <div className="sheet-rows">
-      <button className="sheet-row" onClick={share} disabled={state === "loading"} aria-busy={state === "loading"}>
+      <button className="sheet-row" onClick={share} disabled={loading} aria-busy={busy === "share"}>
         <span className="sheet-row-label"><Share2 size={18} aria-hidden />
-          {state === "loading" ? "Preparing video…" : state === "ready" ? "Share video" : "Save or share video"}
+          {busy === "share" ? "Preparing video…" : state === "ready" ? "Share video" : "Save or share video"}
         </span>
       </button>
-      <a className="sheet-row" href={`${href}?download=1`} download={name}>
-        <span className="sheet-row-label"><Download size={18} aria-hidden /> Download video</span>
-      </a>
+      <button className="sheet-row" onClick={download} disabled={loading} aria-busy={busy === "download"}>
+        <span className="sheet-row-label"><Download size={18} aria-hidden />
+          {busy === "download" ? "Preparing video…" : "Download video"}
+        </span>
+      </button>
       <p className="ia-sub" role="status">{message || "Save or share opens the share sheet. Choose Save Video for Photos."}</p>
     </div>
   );

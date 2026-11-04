@@ -520,7 +520,7 @@ for (const [name, engine] of Object.entries({ chromium, webkit }).filter(([name]
             const sheet = page.locator('dialog[open]');
             for (const name of ['Save or share video', 'Copy link', 'Open in YouTube', 'Post details'])
                 await sheet.getByRole('button', { name, exact: false }).first().waitFor({ timeout: 3000 }).catch(() => assert.fail(`actions: ${name}`));
-            assert.equal(await sheet.getByRole('link', { name: 'Download video' }).getAttribute('href'), '/api/v1/items/101/video?download=1');
+            assert.equal(await sheet.getByRole('link', { name: 'Download video' }).count(), 0, 'download is a fetched file, never a bare link (#211)');
             assert.equal(await sheet.getByRole('link', { name: 'Open channel on YouTube' }).getAttribute('href'), 'https://www.youtube.com/channel/UCsynthetic0000000000000');
             // #208: a Short's own menu carries Shorts mode (it applies to what is on
             // screen); session controls never appear in it.
@@ -537,6 +537,9 @@ for (const [name, engine] of Object.entries({ chromium, webkit }).filter(([name]
             assert.deepEqual(await page.evaluate(() => window.__shared), [['Synthetic clip 1.mp4', 'video/mp4', 2048]]);
             await sheet.getByRole('button', { name: 'Share video' }).click();
             assert.equal(state.videoFetches, 1, 'a second share reuses the fetched file');
+            const [dl] = await Promise.all([page.waitForEvent('download'), sheet.getByRole('button', { name: 'Download video' }).click()]);
+            assert.equal(dl.suggestedFilename(), 'Synthetic clip 1.mp4');
+            assert.equal(state.videoFetches, 1, 'download reuses the fetched file');
             await sheet.getByRole('button', { name: /Post details/ }).click();
             await page.waitForFunction(() => document.querySelector('dialog[open]')?.textContent.includes('Explore score'));
             const details = page.locator('dialog[open]');
