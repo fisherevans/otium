@@ -124,6 +124,22 @@ button.topbar-status svg { flex: 0 0 auto; opacity: .8; }
 :root[data-immersive=on] :is(.session-shorts-player .im-frame :is(iframe, .im-yt, .im-poster), .shorts-player-slot .im-slot-poster) {
   inset: auto; left: 50%; top: 0; transform: translateX(-50%);
   width: min(100cqw, calc(100cqh * 9 / 16)); height: calc(min(100cqw, calc(100cqh * 9 / 16)) * 16 / 9); }
+/* A landscape clip in the reel gets a box the shape of its picture, centred,
+   instead of the 9:16 Shorts box. YouTube draws its start-of-play chrome (title
+   bar, share / "more videos" / logo row) at the iframe's edges and keeps it up
+   for several seconds on iOS; the API can't hide or shorten it. So the iframe
+   bleeds --bleed past the picture at both ends and the mount clips it: the title
+   bar is always cut off. YouTube captions are drawn in that same bottom strip, so
+   with captions on the mount extends down over it (the bottom row shows below the
+   picture for those seconds, as before); with captions off it is cut off too. */
+:root[data-immersive=on] .session-shorts-player .inline-media.h .im-frame,
+:root[data-immersive=on] .shorts-player-slot .inline-media.h .im-frame { --clip-w: min(100cqw, calc(100cqh * var(--ar))); --clip-h: calc(var(--clip-w) / var(--ar)); --bleed: 110px; }
+:root[data-immersive=on] :is(.session-shorts-player .inline-media.h .im-frame :is(.im-yt-mount, .im-poster), .shorts-player-slot .inline-media.h .im-frame .im-slot-poster) {
+  inset: auto; left: 50%; top: calc(50% - var(--clip-h) / 2); transform: translateX(-50%); width: var(--clip-w); height: var(--clip-h); }
+:root[data-immersive=on] .session-shorts-player .inline-media.h .im-frame .im-yt-mount { overflow: hidden; }
+:root[data-immersive=on] .session-shorts-player .inline-media.h .im-frame[data-cc=on] .im-yt-mount { height: calc(var(--clip-h) + var(--bleed)); }
+:root[data-immersive=on] .session-shorts-player .inline-media.h .im-frame .im-yt-mount :is(iframe, .im-yt) {
+  inset: auto; left: 0; top: calc(-1 * var(--bleed)); transform: none; width: 100%; height: calc(var(--clip-h) + 2 * var(--bleed)); }
 :root[data-immersive=on] .session-shorts-player .im-progress { top: 0; bottom: auto; left: 0; right: 0; border-radius: 0; }
 /* #206: visibility (after the fade) takes the hidden bar out of the accessibility
    tree too, so its ··· never doubles the Short's own. */

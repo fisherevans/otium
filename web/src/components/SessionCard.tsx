@@ -453,7 +453,7 @@ export const SessionCard = forwardRef<HTMLDivElement, SessionCardProps>(function
         // The shared player floats over this slot while the card hosts it; the
         // poster underneath is what you see while scrolling in or out.
         <div className="card-media shorts-player-slot" aria-hidden="true">
-          <div className="inline-media im-compact"><div className="im-stage">
+          <div className={`inline-media im-compact ${isVertical(it.item) ? "v" : "h"}`}><div className="im-stage">
             <div className="im-frame" style={{ "--ar": String(videoAspect(it.item)) } as React.CSSProperties}>
               {/* The incoming clip's poster, framed exactly like the player's. */}
               <span className="im-slot-poster" style={it.item.thumbnail_url ? { backgroundImage: `url(${it.item.thumbnail_url})` } : undefined}>

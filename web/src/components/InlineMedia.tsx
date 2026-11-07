@@ -580,7 +580,7 @@ export function InlineMedia({
     <div ref={mediaRef} className={`inline-media ${vertical ? "v" : "h"} ${notes ? "notes" : ""} ${compact ? "im-compact" : ""}`}>
       <div className="im-stage">
         {video && ytId ? (
-          <div ref={frameRef} className="im-frame" style={frameStyle}>
+          <div ref={frameRef} className="im-frame" style={frameStyle} data-cc={captions ? "on" : "off"}>
             {/* Stable container; the YT iframe is appended imperatively inside it. */}
             <div ref={mountRef} className="im-yt-mount" />
             {/* Custom mode: our poster + gesture overlay keep the frame clean and give

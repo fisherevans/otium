@@ -174,6 +174,8 @@ for (const [name, engine] of Object.entries({ chromium, webkit }).filter(([name]
                     return json({ ok: true });
                 }
                 if (method === 'POST' && path === '/client-metrics') return route.fulfill({ status: 204, body: '' });
+                // #196: per-view engagement tracking.
+                if (method === 'POST' && /^\/items\/\d+\/view$/.test(path)) return json({ ok: true });
                 const event = path.match(/^\/items\/(\d+)\/(event|read|dwell)$/);
                 if (method === 'POST' && event) {
                     state[{ event: 'events', read: 'reads', dwell: 'dwells' }[event[2]]].push({ itemId: Number(event[1]), ...request.postDataJSON() });
@@ -636,5 +638,39 @@ for (const [name, engine] of Object.entries({ chromium, webkit }).filter(([name]
             await page.waitForFunction(() => document.querySelector('.afterglow-card:not(.away)')?.dataset.idx === '2');
             assert.equal(count('open'), 2, 'only the deliberate sound-on and Play count as opens; full screen, the veil and the hint add none');
         });
+        // A landscape clip in the reel is boxed to its picture, and the iframe bleeds past
+        // it so YouTube's start-of-play title bar (and, captions off, its bottom row) is
+        // clipped away. Captions on keeps the bottom strip, where YouTube draws them.
+        const wide = make(1); wide.item.aspect_ratio = 16 / 9;
+        await scenario('full screen: a landscape clip is boxed to its picture with YouTube chrome clipped', async ({ page, waitPlaying, advance }) => {
+            // #213: the session's first Short waits behind the sound card.
+            await page.getByRole('button', { name: 'Sound off', exact: true }).click();
+            await waitPlaying(true);
+            const geometry = () => page.evaluate(() => {
+                const box = el => { const r = document.querySelector(el).getBoundingClientRect(); return { top: r.top, bottom: r.bottom, width: r.width, height: r.height }; };
+                const p = '.session-shorts-player[data-active="true"] .im-frame';
+                return { frame: box(p), mount: box(`${p} .im-yt-mount`), video: box(`${p} iframe`), poster: box(`${p} .im-poster`), slot: box('.afterglow-card:not(.away) .im-slot-poster'),
+                    clip: getComputedStyle(document.querySelector(`${p} .im-yt-mount`)).overflow };
+            });
+            const near = (a, b, msg) => assert.ok(Math.abs(a - b) <= 1.5, `${msg}: ${a} vs ${b}`);
+            let g = await geometry();
+            const picture = g.frame.width * 9 / 16;
+            near(g.poster.height, picture, 'the poster is the shape of the picture');
+            near(g.slot.height, g.poster.height, 'the card poster matches the player poster');
+            near(g.poster.top - g.frame.top, g.frame.bottom - g.poster.bottom, 'the picture is centred');
+            assert.equal(g.clip, 'hidden', 'the mount clips the iframe');
+            near(g.mount.top, g.poster.top, 'the clip starts at the picture top');
+            near(g.mount.top - g.video.top, 110, 'the title bar strip is above the clip');
+            near(g.video.height, picture + 220, 'the iframe bleeds both ends');
+            near(g.mount.height, picture + 110, 'captions on (the default) keep the bottom strip');
+            await page.getByRole('button', { name: 'Captions', exact: true }).click();
+            await page.waitForFunction(() => document.querySelector('.session-shorts-player[data-active="true"] .im-frame')?.dataset.cc === 'off');
+            g = await geometry();
+            near(g.mount.height, picture, 'captions off clips the bottom row too');
+            await advance(1);
+            g = await geometry();
+            near(g.video.top, g.frame.top, 'a vertical Short goes back to the uncropped 9:16 box');
+            near(g.video.height, g.video.width * 16 / 9, 'fitted at 9:16');
+        }, { items: [wide, ...Array.from({ length: 9 }, (_, i) => make(i + 2))] });
     } finally { await browser.close(); }
 }
