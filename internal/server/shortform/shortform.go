@@ -217,7 +217,8 @@ func preview(n *html.Node) bool {
 func furniture(n *html.Node) bool {
 	if hasClass(n, "subscription-widget-wrap", "subscription-widget-wrap-editor", "subscription-widget",
 		"button-wrapper", "image-link-expand", "footnote-anchor", "footnote", "footnote-hovercard-target",
-		"captioned-button-wrap", "community-chat", "paywall-jump", "share-dialog") {
+		"captioned-button-wrap", "community-chat", "paywall-jump", "share-dialog",
+		"tmblr-alt-text-helper") {
 		return true
 	}
 	if n.DataAtom == atom.A && hasClass(n, "button") {
@@ -311,7 +312,7 @@ func (w *walker) text() string { return richtext.Plain(w.segs) }
 // paragraphs, a link that is only whitespace folded into the text.
 func (w *walker) segments() []richtext.Segment {
 	w.trimTrailing()
-	var out []richtext.Segment
+	out := []richtext.Segment{} // never null: clients map over it
 	for _, s := range w.segs {
 		if s.Href != "" && strings.TrimSpace(s.Text) == "" {
 			s.Href, s.Kind = "", ""

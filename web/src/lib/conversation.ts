@@ -94,7 +94,7 @@ export function hasConversation(c: Conversation | null | undefined): c is Conver
 }
 
 export function platformName(p: ConversationPlatform | string): string {
-  return p === "bluesky" ? "Bluesky" : p === "substack" ? "Substack" : p === "medium" ? "Medium" : p === "youtube" ? "YouTube" : "";
+  return p === "bluesky" ? "Bluesky" : p === "substack" ? "Substack" : p === "medium" ? "Medium" : p === "tumblr" ? "Tumblr" : p === "youtube" ? "YouTube" : "";
 }
 
 /** 1234 -> "1.2K", 1_250_000 -> "1.3M". */

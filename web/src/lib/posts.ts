@@ -80,10 +80,11 @@ export function postContext(item: Item, body: PostBody, sourceTitle?: string): s
   return sourceTitle.trim() !== body.author.name.trim() ? sourceTitle : undefined;
 }
 
-/** Whether the item's platform reports counts at all. Medium does not, so its
- *  posts and articles show no counts row rather than a row of zeros (#209). */
+/** Whether the item's platform reports counts at all. Medium and Tumblr's feed
+ *  do not, so their posts and articles show no counts row rather than a row of
+ *  zeros (#209, #216). */
 export function hasPlatformCounts(item: Item): boolean {
-  return item.source_kind !== "medium";
+  return item.source_kind !== "medium" && item.source_kind !== "tumblr";
 }
 
 /** Counts for a post's row, or null when the platform has none (#209). */

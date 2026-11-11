@@ -10,6 +10,7 @@ import (
 	"github.com/fisherevans/otium/internal/server/shortform"
 	"html"
 	"log/slog"
+	"net/url"
 	"strconv"
 	"strings"
 	"time"
@@ -91,7 +92,9 @@ func (ing *Ingester) FetchSource(ctx context.Context, s store.Source) (int, erro
 		if it == nil {
 			continue
 		}
-		if shortform.Kinds[s.Kind] {
+		if s.Kind == "tumblr" {
+			ClassifyTumblr(it, s)
+		} else if shortform.Kinds[s.Kind] {
 			var known *shortform.Known
 			if a, ok := archive[social.NormalizeURL(it.URL)]; ok {
 				known = &shortform.Known{Words: a.Words, Type: a.Type}
@@ -190,6 +193,65 @@ func ClassifyForm(it *store.Item, known *shortform.Known) {
 		return
 	}
 	it.Form, it.PostJSON = "post", richtext.Marshal(post)
+}
+
+// ClassifyTumblr shapes a Tumblr entry (#216): a post when shortform.Tumblr
+// says so, with the blog as its author, else an article. Either way the card's
+// picture comes from the body, since Tumblr's feed names none.
+func ClassifyTumblr(it *store.Item, s store.Source) {
+	// Tumblr escapes its titles twice ("i&amp;rsquo;ve"); gofeed undoes one.
+	it.Title = html.UnescapeString(it.Title)
+	it.Summary = html.UnescapeString(it.Summary)
+	author := firstNonEmpty(it.Author, s.Title)
+	post, _ := shortform.Tumblr(shortform.Input{Title: it.Title, Author: author, Body: it.Content})
+	if post == nil {
+		it.Form, it.PostJSON = "article", ""
+		if it.ThumbnailURL == "" {
+			it.ThumbnailURL = firstImage(it.Content)
+		}
+		return
+	}
+	host := social.TumblrHost(s.FeedURL)
+	if strings.HasSuffix(host, ".tumblr.com") {
+		post.Author.Handle = strings.TrimSuffix(host, ".tumblr.com")
+	}
+	post.Author.Avatar = s.IconURL
+	post.Author.URL = firstNonEmpty(s.HomepageURL, "https://"+host+"/")
+	if q := post.Quote; q != nil && q.Author.URL != "" {
+		if u, err := url.Parse(q.Author.URL); err == nil && u.Host != "" {
+			q.Author.Avatar = social.TumblrAvatar(strings.TrimPrefix(u.Host, "www."))
+		}
+	}
+	it.Author = author
+	it.Form, it.PostJSON = "post", richtext.Marshal(post)
+	if it.ThumbnailURL == "" {
+		it.ThumbnailURL = post.Picture()
+		if it.ThumbnailURL == "" && post.Quote != nil {
+			if len(post.Quote.Images) > 0 {
+				it.ThumbnailURL = post.Quote.Images[0].Thumb
+			} else if post.Quote.Video != nil {
+				it.ThumbnailURL = post.Quote.Video.Thumb
+			}
+		}
+	}
+}
+
+// firstImage is the src of the first <img> in an HTML body, or "".
+func firstImage(body string) string {
+	i := strings.Index(body, "<img")
+	if i < 0 {
+		return ""
+	}
+	rest := body[i:]
+	j := strings.Index(rest, `src="`)
+	if j < 0 {
+		return ""
+	}
+	rest = rest[j+5:]
+	if k := strings.IndexByte(rest, '"'); k > 0 {
+		return html.UnescapeString(rest[:k])
+	}
+	return ""
 }
 
 // BackfillForms classifies Substack and Medium items stored before #209 that no
@@ -528,6 +590,19 @@ func (ing *Ingester) ResolveSocial(ctx context.Context, kind, input string) (*so
 			return nil, errors.New("that doesn't look like a Medium profile or publication")
 		}
 		return ing.peekFeed(ctx, kind, feedURL, strings.Replace(feedURL, "/feed", "", 1))
+	case "tumblr":
+		host := social.TumblrHost(input)
+		if host == "" {
+			return nil, errors.New("that doesn't look like a Tumblr blog")
+		}
+		r, err := ing.peekFeed(ctx, kind, "https://"+host+"/rss", "https://"+host+"/")
+		if err != nil {
+			return nil, err
+		}
+		if r.IconURL == "" {
+			r.IconURL = social.TumblrAvatar(host)
+		}
+		return r, nil
 	}
 	return nil, errors.New("unknown source type " + kind)
 }

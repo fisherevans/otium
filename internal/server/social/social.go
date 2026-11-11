@@ -1,6 +1,6 @@
 // Package social resolves and fetches the "social" source kinds (#197): Bluesky
-// (native, through the public AppView API), Substack and Medium (RSS for content,
-// plus Substack's public post API for engagement counts).
+// (native, through the public AppView API), Substack, Medium and Tumblr (RSS for
+// content, plus Substack's public post API for engagement counts).
 //
 // Everything here is unauthenticated and read-only. A Client is safe for
 // concurrent use.
@@ -328,6 +328,49 @@ func MediumFeedURL(in string) string {
 		return "https://" + host + "/feed"
 	}
 	return "https://" + host + "/feed" // a custom-domain publication
+}
+
+// ---- Tumblr -----------------------------------------------------------------
+
+// TumblrHost turns a blog name, "@name", blog URL, tumblr.com/name link or post
+// link (#216) into the host that serves the blog's /rss: "name.tumblr.com", or a
+// custom domain as given.
+func TumblrHost(in string) string {
+	s := strings.TrimSpace(in)
+	if !strings.Contains(s, "://") {
+		if !strings.Contains(s, ".") && !strings.Contains(s, "/") {
+			s = strings.TrimPrefix(s, "@")
+			if s == "" {
+				return ""
+			}
+			return strings.ToLower(s) + ".tumblr.com"
+		}
+		s = "https://" + s
+	}
+	u, err := url.Parse(s)
+	if err != nil || u.Host == "" {
+		return ""
+	}
+	host := strings.ToLower(strings.TrimPrefix(u.Host, "www."))
+	if host == "tumblr.com" {
+		parts := strings.Split(strings.Trim(u.Path, "/"), "/")
+		if len(parts) >= 3 && parts[0] == "blog" && parts[1] == "view" {
+			parts = parts[2:] // tumblr.com/blog/view/name
+		}
+		switch name := strings.TrimPrefix(parts[0], "@"); name {
+		case "", "dashboard", "explore", "tagged", "search", "blog", "settings", "likes", "following":
+			return ""
+		default:
+			return strings.ToLower(name) + ".tumblr.com"
+		}
+	}
+	return host
+}
+
+// TumblrAvatar is a blog's avatar: the API's public avatar endpoint, which needs
+// no key and redirects to the current picture.
+func TumblrAvatar(host string) string {
+	return "https://api.tumblr.com/v2/blog/" + host + "/avatar/128"
 }
 
 // ---- helpers ----------------------------------------------------------------

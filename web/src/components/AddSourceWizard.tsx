@@ -15,8 +15,8 @@ import { ordersFor, type Direction } from "@/lib/articleOrder";
 //      archive rule, article order/length, keywords), then create.
 // The source is created with the chosen identifier, attached to the topic, then
 // patched with any non-default options in one follow-up call.
-type Kind = "rss" | "youtube" | "podcast" | "bluesky" | "substack" | "medium";
-type Social = "bluesky" | "substack" | "medium";
+type Kind = "rss" | "youtube" | "podcast" | "bluesky" | "substack" | "medium" | "tumblr";
+type Social = "bluesky" | "substack" | "medium" | "tumblr";
 type Resolved = { kind: string; feed_url: string; title: string; icon_url: string; home_url: string };
 
 // #197: the social kinds resolve what a person pastes (a handle, a profile link)
@@ -25,6 +25,7 @@ const SOCIAL: Record<Social, { name: string; sub: string; label: string; placeho
   bluesky: { name: "Bluesky", sub: "posts from an account", label: "Handle or profile link", placeholder: "name.bsky.social" },
   substack: { name: "Substack", sub: "a newsletter", label: "Publication name or link", placeholder: "name.substack.com" },
   medium: { name: "Medium", sub: "a writer or publication", label: "Profile or publication link", placeholder: "medium.com/@name" },
+  tumblr: { name: "Tumblr", sub: "a blog", label: "Blog name or link", placeholder: "name.tumblr.com" },
 };
 const isSocial = (k: Kind): k is Social => k in SOCIAL;
 type YtResult = { channel_id: string; title: string; thumbnail: string; description: string; feed_url: string; channel_url: string };

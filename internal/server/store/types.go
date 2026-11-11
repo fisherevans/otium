@@ -219,7 +219,7 @@ var PostKinds = map[string]bool{"bluesky": true}
 // ShortFormKinds are the source kinds whose items are posts only when ingest
 // classified them as short (#209): such an item has a stored post_json, an
 // article has none.
-var ShortFormKinds = map[string]bool{"substack": true, "medium": true}
+var ShortFormKinds = map[string]bool{"substack": true, "medium": true, "tumblr": true}
 
 // SetSourceKind records the item's source kind and stored post (post_json), and
 // derives Post, PostBody and Text from them.

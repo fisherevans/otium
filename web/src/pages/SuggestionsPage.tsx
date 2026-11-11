@@ -8,7 +8,7 @@ import "./suggestions.css";
 // each with the reason it gave. "Trying" ones are already in your sessions as
 // trial sources; keep them or drop them. "Suggested" ones are not in anything
 // until you try them. Nothing here is ever followed without a tap.
-const KIND: Record<string, string> = { bluesky: "Bluesky", substack: "Substack", medium: "Medium", youtube: "YouTube", rss: "Feed" };
+const KIND: Record<string, string> = { bluesky: "Bluesky", substack: "Substack", medium: "Medium", tumblr: "Tumblr", youtube: "YouTube", rss: "Feed" };
 
 export default function SuggestionsPage() {
   const back = useBack("/sections");

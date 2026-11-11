@@ -1,7 +1,7 @@
 import { Podcast, Rss } from "lucide-react";
 
 // PlatformMark (#205): the small mark beside a source's name that says where an
-// item comes from - an RSS feed, Bluesky, Substack, Medium, YouTube or a podcast -
+// item comes from - an RSS feed, Bluesky, Substack, Medium, Tumblr, YouTube or a podcast -
 // so a reporter's Bluesky post never reads like their outlet's article.
 //
 // Monochrome on purpose: it inherits the meta text's colour (currentColor) and
@@ -16,6 +16,7 @@ const LABEL: Record<string, string> = {
   bluesky: "Bluesky",
   substack: "Substack",
   medium: "Medium",
+  tumblr: "Tumblr",
 };
 
 /** The platform's name for a source kind, or "" for a kind with no mark. */
@@ -60,6 +61,13 @@ export function PlatformMark({ kind, size = 13 }: { kind?: string; size?: number
           <ellipse cx="7" cy="12" rx="5.5" ry="5.6" />
           <ellipse cx="16.2" cy="12" rx="2.7" ry="5.2" />
           <ellipse cx="21.2" cy="12" rx="1" ry="4.6" />
+        </svg>
+      );
+    case "tumblr":
+      return (
+        <svg {...common} viewBox="0 0 24 24" fill="currentColor">
+          <title>{label}</title>
+          <path d="M14.6 21c-2.9 0-5-1.5-5-5.1V10H7V6.9c2.9-.8 4.1-3.2 4.3-5.3h3v4.8h3.5V10h-3.5v4.9c0 1.5.8 2 2 2h1.7V21h-3.4Z" />
         </svg>
       );
   }

@@ -151,7 +151,8 @@ function playsHLS(): boolean {
 /**
  * A post's video (#210). The poster with a play button; a tap plays it right
  * there, with the platform's own controls, where the browser plays HLS (Safari
- * on iPhone does). Elsewhere, or with no playlist, the tap opens the post. It
+ * on iPhone does), or anywhere for a plain MP4 (Tumblr, #216). Elsewhere, or
+ * with neither, the tap opens the post. It
  * pauses when it scrolls out of view, and never starts on its own.
  */
 function VideoPoster({ video, url }: { video: PostVideo; url?: string }) {
@@ -160,7 +161,8 @@ function VideoPoster({ video, url }: { video: PostVideo; url?: string }) {
   // the solver laid out does not move.
   const [height, setHeight] = useState<number | undefined>();
   const ref = useRef<HTMLVideoElement | null>(null);
-  const inline = !!video.playlist && playsHLS();
+  const src = video.file || (video.playlist && playsHLS() ? video.playlist : "");
+  const inline = !!src;
   const box = video.aspect ? { aspectRatio: String(video.aspect) } : undefined;
 
   useEffect(() => {
@@ -173,10 +175,10 @@ function VideoPoster({ video, url }: { video: PostVideo; url?: string }) {
     return () => io.disconnect();
   }, [playing]);
 
-  if (playing && video.playlist) {
+  if (playing && src) {
     return (
       <div className="bp-video bp-video-playing" style={height ? { height } : box} onClick={stop} onPointerDown={stop} onPointerUp={stop}>
-        <video ref={ref} src={video.playlist} poster={video.thumb} controls playsInline autoPlay preload="auto" />
+        <video ref={ref} src={src} poster={video.thumb} controls playsInline autoPlay preload="auto" />
       </div>
     );
   }

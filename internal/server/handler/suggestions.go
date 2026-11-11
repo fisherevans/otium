@@ -97,7 +97,7 @@ func (h *Handler) AgentSuggest(w http.ResponseWriter, r *http.Request) {
 
 func validSuggestKind(k string) bool {
 	switch k {
-	case "bluesky", "substack", "medium", "youtube", "rss":
+	case "bluesky", "substack", "medium", "tumblr", "youtube", "rss":
 		return true
 	}
 	return false

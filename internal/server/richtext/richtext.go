@@ -187,6 +187,8 @@ type Video struct {
 	// Playlist is the video's HLS playlist (#210), played in place where the
 	// browser plays HLS (Safari on iPhone does natively).
 	Playlist string `json:"playlist,omitempty"`
+	// File is a plain MP4 (#216, Tumblr), which every browser plays in place.
+	File string `json:"file,omitempty"`
 }
 
 // Quote is what a post quotes, shown inset (#210): usually another post, with

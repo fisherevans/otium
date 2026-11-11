@@ -3,9 +3,9 @@
    thread line. Brand blue only on the platform mark and the links; everything
    else stays in the paper palette, and e-ink/dark get their own values. */
 
-:root { --bsky: #0a7aff; --bsky-link: #1764c8; --substack: #ff6719; }
-:root[data-theme="dark"] { --bsky: #4f9dff; --bsky-link: #7fb5ff; --substack: #ff8a4c; }
-:root[data-presentation="eink"] { --bsky: var(--ink); --bsky-link: var(--ink); --substack: var(--ink); }
+:root { --bsky: #0a7aff; --bsky-link: #1764c8; --substack: #ff6719; --tumblr: #001935; }
+:root[data-theme="dark"] { --bsky: #4f9dff; --bsky-link: #7fb5ff; --substack: #ff8a4c; --tumblr: #a9b8d0; }
+:root[data-presentation="eink"] { --bsky: var(--ink); --bsky-link: var(--ink); --substack: var(--ink); --tumblr: var(--ink); }
 
 .bsky-post {
     flex: 0 0 auto;
@@ -195,7 +195,8 @@ button.bp-video { width: 100%; padding: 0; border: 0; cursor: pointer; font: inh
    their own colour; their links read in the ink's link colour, not Bluesky's. */
 .bp-platform-substack, .bp-platform-substack .platform-mark { color: var(--substack); }
 .bp-platform-medium, .bp-platform-medium .platform-mark { color: var(--ink); }
-.bp-substack .bp-link, .bp-medium .bp-link { color: var(--ink); text-decoration: underline; text-decoration-color: var(--rule); text-underline-offset: 2px; }
+.bp-platform-tumblr, .bp-platform-tumblr .platform-mark { color: var(--tumblr); }
+.bp-substack .bp-link, .bp-medium .bp-link, .bp-tumblr .bp-link { color: var(--ink); text-decoration: underline; text-decoration-color: var(--rule); text-underline-offset: 2px; }
 
 /* A short post's own title, a line above its text. */
 .bp-title {

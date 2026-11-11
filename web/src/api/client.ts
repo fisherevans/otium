@@ -221,8 +221,9 @@ export interface PostBody {
 
 export interface PostImage { thumb: string; full?: string; alt?: string; aspect?: number }
 export interface PostLink { uri: string; title?: string; description?: string; thumb?: string; domain?: string }
-/** #210: `playlist` is the video's HLS playlist, played in place where the browser can. */
-export interface PostVideo { thumb?: string; aspect?: number; playlist?: string }
+/** #210: `playlist` is the video's HLS playlist, played in place where the browser can.
+ *  #216: `file` is a plain MP4 (Tumblr), played in place everywhere. */
+export interface PostVideo { thumb?: string; aspect?: number; playlist?: string; file?: string }
 
 /**
  * #210: what a post quotes, drawn inset the way an embedded or screenshotted post
