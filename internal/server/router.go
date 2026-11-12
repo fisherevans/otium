@@ -48,11 +48,12 @@ func NewRouter(h *handler.Handler, authMiddleware, agentMiddleware func(http.Han
 
 	r.Route("/api/v1", func(r chi.Router) {
 		// The agent API (#202): a static bearer token, acting as the owner, for the
-		// devbox recommender only. Nothing else accepts the token.
+		// devbox recommender and agents acting for him. Nothing else accepts the token.
 		r.Group(func(r chi.Router) {
 			r.Use(agentMiddleware)
 			r.Get("/agent/profile", h.AgentProfile)
 			r.Post("/agent/suggestions", h.AgentSuggest)
+			r.Post("/agent/sources/{id}/follow", h.AgentFollowSource) // #216
 			// Session presets and mixes (#203).
 			r.Get("/agent/presets", h.ListPresets)
 			r.Put("/agent/presets/{id}", h.PutPreset)

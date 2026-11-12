@@ -51,6 +51,9 @@ func (h *Handler) AgentProfile(w http.ResponseWriter, r *http.Request) {
 type agentSuggestion struct {
 	store.Suggestion
 	Trial bool `json:"trial"` // seed it as a trial source straight away
+	// Follow adds it as a followed source straight away (#216): for a source the
+	// owner asked an agent to add, not one the recommender proposes.
+	Follow bool `json:"follow"`
 }
 
 // AgentSuggest records new suggestions. Anything already followed or ever
@@ -63,7 +66,7 @@ func (h *Handler) AgentSuggest(w http.ResponseWriter, r *http.Request) {
 	if !decode(w, r, &body) {
 		return
 	}
-	var added, trials, skipped int
+	var added, trials, followed, skipped int
 	for _, s := range body.Suggestions {
 		if s.FeedURL == "" || s.Title == "" || !validSuggestKind(s.Kind) {
 			skipped++
@@ -84,15 +87,40 @@ func (h *Handler) AgentSuggest(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		added++
-		if s.Trial {
-			if _, err := h.startTrial(r.Context(), uid, id, &s.Suggestion); err != nil {
+		if s.Trial || s.Follow {
+			src, err := h.startTrial(r.Context(), uid, id, &s.Suggestion)
+			if err != nil {
 				h.log.Warn("seed trial failed", "feed", s.FeedURL, "err", err)
 				continue
 			}
-			trials++
+			if !s.Follow {
+				trials++
+				continue
+			}
+			if _, err := h.db.FollowSource(r.Context(), uid, src.ID); err != nil {
+				serverError(w, h.log, "follow source", err)
+				return
+			}
+			followed++
 		}
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"added": added, "trials": trials, "skipped": skipped})
+	writeJSON(w, http.StatusOK, map[string]any{"added": added, "trials": trials, "followed": followed, "skipped": skipped})
+}
+
+// AgentFollowSource makes an existing source a followed one (#216): what Keep
+// does for a trial in the app.
+func (h *Handler) AgentFollowSource(w http.ResponseWriter, r *http.Request) {
+	id, _ := strconv.ParseInt(chi.URLParam(r, "id"), 10, 64)
+	ok, err := h.db.FollowSource(r.Context(), userID(r), id)
+	if err != nil {
+		serverError(w, h.log, "follow source", err)
+		return
+	}
+	if !ok {
+		writeJSON(w, http.StatusNotFound, map[string]any{"code": "not_found", "message": "source not found"})
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
 }
 
 func validSuggestKind(k string) bool {

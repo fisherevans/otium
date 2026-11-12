@@ -33,3 +33,9 @@ to manage. If reblog noise becomes a problem, the API is the next step.
 **Fix along the way.** The shortform walker returned `"segments": null` for a post with no
 text, and `PostCard` crashed mapping over it. A reblog of a video with no comment hit
 this; a picture-only Substack post could have too. It now always returns a list.
+
+**Follow-up (v0.102.1).** The agent API could only add a source as a trial, so a blog
+Fisher asked an agent to follow landed as a trial that needed a tap on Keep. Agents now
+have the same verb as Keep: `POST /agent/sources/{id}/follow`. `POST /agent/suggestions`
+also takes `follow: true` to add a source as followed in one call, for when the owner asked
+for it; recommender proposals still go in as `trial`.

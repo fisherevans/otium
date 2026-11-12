@@ -53,6 +53,15 @@ func TestSuggestionsLifecycle(t *testing.T) {
 	if pending, _ := db.ListSuggestions(ctx, u.ID, "pending"); len(pending) != 0 {
 		t.Fatalf("pending should be empty, got %d", len(pending))
 	}
+	if ok, err := db.FollowSource(ctx, u.ID, src.ID); !ok || err != nil {
+		t.Fatalf("FollowSource = %v, %v", ok, err)
+	}
+	if got, _ := db.ListSuggestions(ctx, u.ID, "followed"); len(got) != 1 {
+		t.Fatalf("followed suggestions = %d, want 1", len(got))
+	}
+	if ok, _ := db.FollowSource(ctx, u.ID, src.ID+100); ok {
+		t.Fatal("FollowSource of an unknown source reported found")
+	}
 	eng, err := db.EngagementBySource(ctx, u.ID, 90)
 	if err != nil || len(eng) != 1 || eng[0].Title != "Followed" {
 		t.Fatalf("engagement = %+v, %v", eng, err)

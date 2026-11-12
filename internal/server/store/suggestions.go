@@ -117,6 +117,30 @@ func (db *DB) SetSourceState(ctx context.Context, userID, sourceID int64, state 
 	return err
 }
 
+// FollowSource makes a source a followed one, the way Keep does for a trial
+// (#216): the source and any suggestion that created it both become
+// "followed". It reports whether the user has that source.
+func (db *DB) FollowSource(ctx context.Context, userID, sourceID int64) (bool, error) {
+	tx, err := db.sql.BeginTx(ctx, nil)
+	if err != nil {
+		return false, err
+	}
+	defer tx.Rollback()
+	res, err := tx.ExecContext(ctx, `UPDATE sources SET state = 'followed' WHERE id = ? AND user_id = ?`, sourceID, userID)
+	if err != nil {
+		return false, err
+	}
+	if n, _ := res.RowsAffected(); n == 0 {
+		return false, nil
+	}
+	if _, err := tx.ExecContext(ctx,
+		`UPDATE suggestions SET status = 'followed', updated_at = datetime('now') WHERE source_id = ? AND user_id = ?`,
+		sourceID, userID); err != nil {
+		return false, err
+	}
+	return true, tx.Commit()
+}
+
 // SourceEngagement is one source's engagement summary, the recommender's input.
 type SourceEngagement struct {
 	SourceID int64   `json:"source_id"`
